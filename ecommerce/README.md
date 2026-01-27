@@ -49,24 +49,27 @@ ailang run --entry main --caps IO,AI --ai gemini-2-5-flash ecommerce/main.ail
 ailang run --entry main --caps IO,AI --ai-stub ecommerce/main.ail
 ```
 
-**Expected output** (with real AI provider):
+**Expected output** (with `--ai claude-haiku-4-5`; AI responses vary per run):
 ```
 === AILANG Ecommerce Demo ===
 
 1. Getting AI product recommendations...
-Recommendations: {
+Recommendations: ```json
+{
   "recommendations": [
     "Active Noise Cancelling Over-Ear Headphones with Premium Sound",
-    "Wireless Earbuds with Advanced Noise Isolation and Hi-Fi Audio",
-    "Professional Studio Headphones with Bluetooth and Noise Cancellation"
+    "Wireless Earbuds with Advanced Noise Cancellation and Hi-Fi Audio",
+    "Studio Monitor Bluetooth Headphones with Hybrid Noise Cancelling"
   ]
 }
+```
 
 2. Generating product description...
-Description: Experience effortless miles in our Ultra-Comfort Running Shoes.
-Engineered with premium breathable mesh, advanced gel cushioning, and
-specially designed arch support. Lightweight construction means less
-effort, more endurance.
+Description: Experience the perfect blend of performance and comfort.
+Our Ultra-Comfort Running Shoes feature advanced breathable mesh that
+keeps feet cool and dry during every stride. Engineered with premium
+gel cushioning technology, these lightweight runners absorb impact and
+reduce fatigue, while contoured arch support promotes proper alignment.
 
 3. Sample product data:
   - Laptop Pro: $1299.99
