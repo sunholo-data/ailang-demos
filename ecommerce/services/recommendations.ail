@@ -1,0 +1,52 @@
+module ecommerce/services/recommendations
+
+import std/ai (call)
+import std/json (encode, decode, jo, kv, js, ja, getString, getArray, filterStrings)
+import std/option (Some, None)
+import std/result (Ok, Err)
+
+-- AI-powered product recommendation service
+--
+-- Note: The caller (main.ail) controls the AI budget.
+-- Each function makes exactly 1 AI call.
+
+export func getProductRecommendations(
+  productName: string,
+  category: string,
+  userPreferences: string
+) -> string ! {AI} {
+  let prompt = "You are an ecommerce recommendation engine. " ++
+    "Given the product '" ++ productName ++ "' in category '" ++ category ++ "', " ++
+    "and user preferences: " ++ userPreferences ++ ". " ++
+    "Return a JSON array of 3 recommended product names. " ++
+    "Format: {\"recommendations\": [\"product1\", \"product2\", \"product3\"]}";
+  call(prompt)
+}
+
+export func generateProductDescription(
+  productName: string,
+  features: string
+) -> string ! {AI} {
+  let prompt = "Write a compelling product description for '" ++ productName ++ "'. " ++
+    "Key features: " ++ features ++ ". " ++
+    "Keep it under 100 words, engaging, and SEO-friendly.";
+  call(prompt)
+}
+
+export func analyzeReview(reviewText: string) -> string ! {AI} {
+  let prompt = "Analyze this product review and return JSON with sentiment (positive/negative/neutral) " ++
+    "and key points. Review: '" ++ reviewText ++ "'. " ++
+    "Format: {\"sentiment\": \"...\", \"key_points\": [\"...\", \"...\"]}";
+  call(prompt)
+}
+
+export func suggestPricing(
+  productName: string,
+  category: string,
+  competitorPrices: string
+) -> string ! {AI} {
+  let prompt = "Suggest an optimal price for '" ++ productName ++ "' in category '" ++ category ++ "'. " ++
+    "Competitor prices: " ++ competitorPrices ++ ". " ++
+    "Return JSON: {\"suggested_price\": <number>, \"reasoning\": \"...\"}";
+  call(prompt)
+}

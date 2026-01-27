@@ -1,0 +1,207 @@
+module ecommerce/services/ga4_queries
+
+-- GA4 BigQuery Query Helpers
+-- Pre-built SQL queries for the GA4 demo ecommerce dataset
+-- Dataset: bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*
+--
+-- Run tests: ailang test ecommerce/services/ga4_queries.ail
+
+-- The GA4 demo dataset table path
+export pure func ga4Table() -> string
+  tests [
+    ((), "`bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`")
+  ]
+{
+  "`bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`"
+}
+
+-- ============================================
+-- EVENT ANALYTICS QUERIES
+-- ============================================
+
+-- Get top events by count
+export pure func topEventsQuery(limit: int) -> string
+  tests [
+    (5, "SELECT event_name, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` GROUP BY event_name ORDER BY event_count DESC LIMIT 5"),
+    (10, "SELECT event_name, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` GROUP BY event_name ORDER BY event_count DESC LIMIT 10")
+  ]
+{
+  "SELECT event_name, COUNT(*) as event_count " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "GROUP BY event_name " ++
+  "ORDER BY event_count DESC " ++
+  "LIMIT " ++ show(limit)
+}
+
+-- Get event counts for a specific date range
+export pure func eventCountsByDateQuery(startDate: string, endDate: string) -> string
+  tests [
+    (("20201101", "20210131"), "SELECT event_date, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE _TABLE_SUFFIX BETWEEN '20201101' AND '20210131' GROUP BY event_date ORDER BY event_date")
+  ]
+{
+  "SELECT event_date, COUNT(*) as event_count " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE _TABLE_SUFFIX BETWEEN '" ++ startDate ++ "' AND '" ++ endDate ++ "' " ++
+  "GROUP BY event_date " ++
+  "ORDER BY event_date"
+}
+
+-- Get specific event trend over time
+export pure func eventTrendQuery(eventName: string) -> string
+  tests [
+    ("purchase", "SELECT event_date, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE event_name = 'purchase' GROUP BY event_date ORDER BY event_date")
+  ]
+{
+  "SELECT event_date, COUNT(*) as event_count " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE event_name = '" ++ eventName ++ "' " ++
+  "GROUP BY event_date " ++
+  "ORDER BY event_date"
+}
+
+-- ============================================
+-- PRODUCT ANALYTICS QUERIES
+-- ============================================
+
+-- Get top products by revenue
+export pure func topProductsByRevenueQuery(limit: int) -> string
+  tests [
+    (10, "SELECT items.item_name, SUM(items.item_revenue) as total_revenue, SUM(items.quantity) as total_quantity FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`, UNNEST(items) as items WHERE event_name = 'purchase' AND items.item_revenue IS NOT NULL GROUP BY items.item_name ORDER BY total_revenue DESC LIMIT 10")
+  ]
+{
+  "SELECT items.item_name, " ++
+  "SUM(items.item_revenue) as total_revenue, " ++
+  "SUM(items.quantity) as total_quantity " ++
+  "FROM " ++ ga4Table() ++ ", UNNEST(items) as items " ++
+  "WHERE event_name = 'purchase' AND items.item_revenue IS NOT NULL " ++
+  "GROUP BY items.item_name " ++
+  "ORDER BY total_revenue DESC " ++
+  "LIMIT " ++ show(limit)
+}
+
+-- Get revenue by product category
+export pure func revenueByCategoryQuery() -> string
+  tests [
+    ((), "SELECT items.item_category, SUM(items.item_revenue) as total_revenue, COUNT(DISTINCT items.item_id) as unique_products FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`, UNNEST(items) as items WHERE event_name = 'purchase' AND items.item_category IS NOT NULL GROUP BY items.item_category ORDER BY total_revenue DESC")
+  ]
+{
+  "SELECT items.item_category, " ++
+  "SUM(items.item_revenue) as total_revenue, " ++
+  "COUNT(DISTINCT items.item_id) as unique_products " ++
+  "FROM " ++ ga4Table() ++ ", UNNEST(items) as items " ++
+  "WHERE event_name = 'purchase' AND items.item_category IS NOT NULL " ++
+  "GROUP BY items.item_category " ++
+  "ORDER BY total_revenue DESC"
+}
+
+-- Get purchase funnel metrics
+export pure func purchaseFunnelQuery() -> string
+  tests [
+    ((), "SELECT COUNTIF(event_name = 'view_item') as views, COUNTIF(event_name = 'add_to_cart') as adds_to_cart, COUNTIF(event_name = 'begin_checkout') as checkouts, COUNTIF(event_name = 'purchase') as purchases FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`")
+  ]
+{
+  "SELECT " ++
+  "COUNTIF(event_name = 'view_item') as views, " ++
+  "COUNTIF(event_name = 'add_to_cart') as adds_to_cart, " ++
+  "COUNTIF(event_name = 'begin_checkout') as checkouts, " ++
+  "COUNTIF(event_name = 'purchase') as purchases " ++
+  "FROM " ++ ga4Table()
+}
+
+-- Get top product categories by views
+export pure func topCategoriesByViewsQuery(limit: int) -> string
+  tests [
+    (5, "SELECT items.item_category, COUNT(*) as view_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`, UNNEST(items) as items WHERE event_name = 'view_item' AND items.item_category IS NOT NULL GROUP BY items.item_category ORDER BY view_count DESC LIMIT 5")
+  ]
+{
+  "SELECT items.item_category, COUNT(*) as view_count " ++
+  "FROM " ++ ga4Table() ++ ", UNNEST(items) as items " ++
+  "WHERE event_name = 'view_item' AND items.item_category IS NOT NULL " ++
+  "GROUP BY items.item_category " ++
+  "ORDER BY view_count DESC " ++
+  "LIMIT " ++ show(limit)
+}
+
+-- ============================================
+-- USER ANALYTICS QUERIES
+-- ============================================
+
+-- Get user device breakdown
+export pure func deviceBreakdownQuery() -> string
+  tests [
+    ((), "SELECT device.category as device_type, COUNT(DISTINCT user_pseudo_id) as unique_users, COUNT(*) as total_events FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE device.category IS NOT NULL GROUP BY device.category ORDER BY unique_users DESC")
+  ]
+{
+  "SELECT device.category as device_type, " ++
+  "COUNT(DISTINCT user_pseudo_id) as unique_users, " ++
+  "COUNT(*) as total_events " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE device.category IS NOT NULL " ++
+  "GROUP BY device.category " ++
+  "ORDER BY unique_users DESC"
+}
+
+-- Get geographic distribution of users
+export pure func geoDistributionQuery(limit: int) -> string
+  tests [
+    (10, "SELECT geo.country, COUNT(DISTINCT user_pseudo_id) as unique_users, COUNT(*) as total_events FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE geo.country IS NOT NULL GROUP BY geo.country ORDER BY unique_users DESC LIMIT 10")
+  ]
+{
+  "SELECT geo.country, " ++
+  "COUNT(DISTINCT user_pseudo_id) as unique_users, " ++
+  "COUNT(*) as total_events " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE geo.country IS NOT NULL " ++
+  "GROUP BY geo.country " ++
+  "ORDER BY unique_users DESC " ++
+  "LIMIT " ++ show(limit)
+}
+
+-- Get browser breakdown
+export pure func browserBreakdownQuery() -> string
+  tests [
+    ((), "SELECT device.web_info.browser as browser, COUNT(DISTINCT user_pseudo_id) as unique_users FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE device.web_info.browser IS NOT NULL GROUP BY browser ORDER BY unique_users DESC LIMIT 10")
+  ]
+{
+  "SELECT device.web_info.browser as browser, " ++
+  "COUNT(DISTINCT user_pseudo_id) as unique_users " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE device.web_info.browser IS NOT NULL " ++
+  "GROUP BY browser " ++
+  "ORDER BY unique_users DESC " ++
+  "LIMIT 10"
+}
+
+-- Get session metrics summary
+export pure func sessionMetricsQuery() -> string
+  tests [
+    ((), "SELECT COUNT(DISTINCT user_pseudo_id) as total_users, COUNT(*) as total_events, COUNTIF(event_name = 'session_start') as total_sessions, COUNTIF(event_name = 'purchase') as total_purchases FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`")
+  ]
+{
+  "SELECT " ++
+  "COUNT(DISTINCT user_pseudo_id) as total_users, " ++
+  "COUNT(*) as total_events, " ++
+  "COUNTIF(event_name = 'session_start') as total_sessions, " ++
+  "COUNTIF(event_name = 'purchase') as total_purchases " ++
+  "FROM " ++ ga4Table()
+}
+
+-- ============================================
+-- COMBINED ANALYTICS QUERIES
+-- ============================================
+
+-- Get daily summary with key metrics
+export pure func dailySummaryQuery(startDate: string, endDate: string) -> string
+  tests [
+    (("20201101", "20210131"), "SELECT event_date, COUNT(DISTINCT user_pseudo_id) as unique_users, COUNT(*) as total_events, COUNTIF(event_name = 'purchase') as purchases FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE _TABLE_SUFFIX BETWEEN '20201101' AND '20210131' GROUP BY event_date ORDER BY event_date")
+  ]
+{
+  "SELECT event_date, " ++
+  "COUNT(DISTINCT user_pseudo_id) as unique_users, " ++
+  "COUNT(*) as total_events, " ++
+  "COUNTIF(event_name = 'purchase') as purchases " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "WHERE _TABLE_SUFFIX BETWEEN '" ++ startDate ++ "' AND '" ++ endDate ++ "' " ++
+  "GROUP BY event_date " ++
+  "ORDER BY event_date"
+}

@@ -1,0 +1,150 @@
+module ecommerce/bigquery_demo
+
+import std/result (Ok, Err)
+import std/fs (fileExists, readFile)
+import std/net (httpRequest)
+import std/json (decode, encode, getString, getNumber, getArray, jo, kv, js, jb, jnum)
+import std/option (isSome, getOrElse)
+import std/string (trim, split, length, substring)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import ecommerce/services/bigquery (query, QueryResult)
+import ecommerce/services/ga4_queries (
+  topEventsQuery,
+  topProductsByRevenueQuery,
+  revenueByCategoryQuery,
+  purchaseFunnelQuery,
+  deviceBreakdownQuery,
+  geoDistributionQuery,
+  sessionMetricsQuery
+)
+
+-- BigQuery GA4 Ecommerce Demo
+-- Demonstrates querying GA4 data using pure AILANG with ADC authentication
+-- Run: ailang run --entry main --caps IO,FS,Net ecommerce/bigquery_demo.ail
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=100  - Max 100 print operations
+--   FS @limit=10   - Max 10 file reads (getDefaultProject ~5 + getAccessToken ~3 + buffer)
+--   Net @limit=20  - Max 20 API calls (auth + queries)
+
+export func main() -> () ! {IO @limit=100, FS @limit=30, Net @limit=20} {
+  println("=== AILANG BigQuery GA4 Ecommerce Demo ===");
+  println("");
+  println("Detecting GCP project from gcloud config...");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      println("Using project: " ++ projectId);
+      println("");
+      println("Authenticating with Google Cloud ADC...");
+      authenticateAndRun(projectId)
+    },
+    Err(e) => println("Failed to get project: " ++ e)
+  }
+}
+
+func authenticateAndRun(projectId: string) -> () ! {IO, FS, Net} {
+  match getAccessToken() {
+    Ok(token) => runAllQueries(projectId, token),
+    Err(e) => println("Authentication failed: " ++ e)
+  }
+}
+
+func runAllQueries(projectId: string, token: string) -> () ! {IO, Net} {
+  println("Authentication successful!");
+  println("");
+
+  runEventAnalytics(projectId, token);
+  runProductAnalytics(projectId, token);
+  runUserAnalytics(projectId, token)
+}
+
+-- ============================================
+-- EVENT ANALYTICS
+-- ============================================
+
+func runEventAnalytics(projectId: string, token: string) -> () ! {IO, Net} {
+  println("=== EVENT ANALYTICS ===");
+  println("");
+
+  println("1. Top 10 Events by Count:");
+  runQuery(projectId, token, topEventsQuery(10));
+  println("")
+}
+
+-- ============================================
+-- PRODUCT ANALYTICS
+-- ============================================
+
+func runProductAnalytics(projectId: string, token: string) -> () ! {IO, Net} {
+  println("=== PRODUCT ANALYTICS ===");
+  println("");
+
+  println("2. Top 10 Products by Revenue:");
+  runQuery(projectId, token, topProductsByRevenueQuery(10));
+  println("");
+
+  println("3. Revenue by Category:");
+  runQuery(projectId, token, revenueByCategoryQuery());
+  println("");
+
+  println("4. Purchase Funnel:");
+  runQuery(projectId, token, purchaseFunnelQuery());
+  println("")
+}
+
+-- ============================================
+-- USER ANALYTICS
+-- ============================================
+
+func runUserAnalytics(projectId: string, token: string) -> () ! {IO, Net} {
+  println("=== USER ANALYTICS ===");
+  println("");
+
+  println("5. Device Breakdown:");
+  runQuery(projectId, token, deviceBreakdownQuery());
+  println("");
+
+  println("6. Top 10 Countries by Users:");
+  runQuery(projectId, token, geoDistributionQuery(10));
+  println("");
+
+  println("7. Session Metrics Summary:");
+  runQuery(projectId, token, sessionMetricsQuery());
+  println("");
+
+  println("=== Demo Complete ===")
+}
+
+-- ============================================
+-- QUERY EXECUTION HELPER
+-- ============================================
+
+func runQuery(projectId: string, token: string, sql: string) -> () ! {IO, Net} {
+  match query(projectId, sql, token) {
+    Ok(result) => printQueryResult(result),
+    Err(e) => println("  Error: " ++ e)
+  }
+}
+
+func printQueryResult(result: QueryResult) -> () ! {IO} {
+  println("  Total rows: " ++ show(result.totalRows));
+  println("  Job complete: " ++ show(result.jobComplete));
+  printRows(result.rows, 0)
+}
+
+func printRows(rows: [[string]], idx: int) -> () ! {IO} =
+  match rows {
+    [] => (),
+    row :: rest => {
+      println("  [" ++ show(idx) ++ "] " ++ joinRow(row));
+      printRows(rest, idx + 1)
+    }
+  }
+
+func joinRow(values: [string]) -> string =
+  match values {
+    [] => "",
+    v :: [] => v,
+    v :: rest => v ++ " | " ++ joinRow(rest)
+  }

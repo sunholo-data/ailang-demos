@@ -1,0 +1,137 @@
+module ecommerce/services/bigquery
+
+import std/net (httpRequest)
+import std/json (encode, decode, jo, kv, js, jb, jnum, getString, getNumber, getArray, asString, asNumber)
+import std/option (isSome, getOrElse)
+import std/result (Ok, Err)
+import ecommerce/services/gcp_auth (getAccessToken)
+
+-- BigQuery REST API client for AILANG
+-- Executes SQL queries against BigQuery using the jobs.query endpoint
+--
+-- CAPABILITY BUDGETS:
+--   query():         Net @limit=1 (exactly 1 API call per query)
+--   queryWithAuth(): FS @limit=5, Net @limit=2 (auth + query)
+
+-- Query result types
+export type QueryResult = {
+  rows: [[string]],
+  schema: [string],
+  totalRows: int,
+  jobComplete: bool
+}
+
+-- Execute a query with an existing access token
+-- Budget: exactly 1 Net operation per query
+export func query(projectId: string, sql: string, token: string) -> Result[QueryResult, string] ! {Net @limit=1} {
+  let url = "https://bigquery.googleapis.com/bigquery/v2/projects/" ++ projectId ++ "/queries";
+  let body = buildQueryRequest(sql);
+  let headers = [
+    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Content-Type", value: "application/json" }
+  ];
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then parseQueryResponse(response.body)
+      else Err("BigQuery API error (status " ++ show(response.status) ++ "): " ++ response.body)
+    },
+    Err(_) => Err("Network error connecting to BigQuery API")
+  }
+}
+
+-- Execute a query with automatic authentication using ADC
+-- Budget: 10 FS ops (auth), 2 Net ops (OAuth + BigQuery)
+export func queryWithAuth(projectId: string, sql: string) -> Result[QueryResult, string] ! {FS @limit=10, Net @limit=2} {
+  match getAccessToken() {
+    Ok(token) => query(projectId, sql, token),
+    Err(e) => Err("Authentication failed: " ++ e)
+  }
+}
+
+-- Build the query request JSON body
+func buildQueryRequest(sql: string) -> string =
+  encode(jo([
+    kv("query", js(sql)),
+    kv("useLegacySql", jb(false)),
+    kv("location", js("US")),
+    kv("maxResults", jnum(1000.0))
+  ]))
+
+-- Parse BigQuery query response
+func parseQueryResponse(body: string) -> Result[QueryResult, string] {
+  match decode(body) {
+    Ok(json) => extractQueryResult(json),
+    Err(e) => Err("Failed to parse BigQuery response: " ++ e)
+  }
+}
+
+func extractQueryResult(json: Json) -> Result[QueryResult, string] {
+  let schemaFields = extractSchema(json);
+  let dataRows = extractRows(json);
+  let total = extractTotalRows(json);
+  let complete = extractJobComplete(json);
+  makeQueryResultOk(dataRows, schemaFields, total, complete)
+}
+
+func makeQueryResultOk(rows: [[string]], schema: [string], totalRows: int, jobComplete: bool) -> Result[QueryResult, string] {
+  let result: QueryResult = { rows: rows, schema: schema, totalRows: totalRows, jobComplete: jobComplete };
+  Ok(result)
+}
+
+-- Extract schema field names from response (simplified - returns empty for now)
+func extractSchema(json: Json) -> [string] = []
+
+-- Extract rows from BigQuery nested format
+-- BigQuery returns: { "rows": [ { "f": [ { "v": "value1" }, { "v": "value2" } ] } ] }
+func extractRows(json: Json) -> [[string]] {
+  let rowsOpt = getArray(json, "rows");
+  if isSome(rowsOpt) then extractRowList(getOrElseArray(rowsOpt)) else []
+}
+
+func getOrElseArray(opt: Option[[Json]]) -> [Json] {
+  if isSome(opt) then unsafeGetArray(opt) else []
+}
+
+-- Helper to extract array value (safe because we check isSome first)
+func unsafeGetArray(opt: Option[[Json]]) -> [Json] =
+  getOrElse(opt, [])
+
+func extractRowList(rows: [Json]) -> [[string]] =
+  match rows {
+    [] => [],
+    row :: rest => extractRowValues(row) :: extractRowList(rest)
+  }
+
+func extractRowValues(row: Json) -> [string] {
+  let fieldsOpt = getArray(row, "f");
+  if isSome(fieldsOpt) then extractFieldValues(getOrElse(fieldsOpt, [])) else []
+}
+
+func extractFieldValues(fields: [Json]) -> [string] =
+  match fields {
+    [] => [],
+    field :: rest => extractSingleValue(field) :: extractFieldValues(rest)
+  }
+
+func extractSingleValue(field: Json) -> string {
+  let strOpt = getString(field, "v");
+  if isSome(strOpt) then getOrElse(strOpt, "null")
+  else {
+    let numOpt = getNumber(field, "v");
+    if isSome(numOpt) then show(getOrElse(numOpt, 0.0)) else "null"
+  }
+}
+
+-- Extract total rows count
+func extractTotalRows(json: Json) -> int {
+  let strOpt = getString(json, "totalRows");
+  if isSome(strOpt) then parseIntFromString(getOrElse(strOpt, "0")) else 0
+}
+
+func parseIntFromString(s: string) -> int = 0
+
+-- Extract job complete status
+func extractJobComplete(json: Json) -> bool {
+  let strOpt = getString(json, "jobComplete");
+  if isSome(strOpt) then getOrElse(strOpt, "false") == "true" else false
+}

@@ -1,0 +1,157 @@
+module ecommerce/pipeline_runner
+
+import std/fs (readFile, writeFile, fileExists)
+import std/json (encode, decode, jo, kv, js, jnum, ja, getArray, getNumber, getString)
+import std/option (Some, None)
+import std/result (Ok, Err)
+
+-- Standalone pipeline runner demonstrating data processing in AILANG
+-- Run with: ailang run --entry main --caps IO,FS ecommerce/pipeline_runner.ail
+
+export func main() -> () ! {IO, FS} {
+  println("=== AILANG Data Pipeline Demo ===");
+  println("");
+  runPipeline("ecommerce/data/sample_sales.json", "ecommerce/data/aggregated_output.json")
+}
+
+func runPipeline(inputFile: string, outputFile: string) -> () ! {IO, FS} {
+  println("Loading sales data from: " ++ inputFile);
+  let fileFound = fileExists(inputFile);
+  if fileFound then processFile(inputFile, outputFile) else println("Error: Input file not found!")
+}
+
+func processFile(inputFile: string, outputFile: string) -> () ! {IO, FS} {
+  let content = readFile(inputFile);
+  println("Raw data loaded successfully");
+  println("");
+
+  let records = parseSalesData(content);
+  println("Parsed " ++ show(countRecords(records)) ++ " sales records");
+
+  let aggregated = aggregateByProduct(records);
+  println("Aggregated into " ++ show(countAggregated(aggregated)) ++ " product summaries");
+  println("");
+
+  println("=== Aggregated Results ===");
+  printAggregated(aggregated);
+  println("");
+
+  let outputJson = buildOutputJson(aggregated);
+  writeFile(outputFile, outputJson);
+  println("Results written to: " ++ outputFile)
+}
+
+-- Data types
+type SalesRecord = {
+  productId: string,
+  quantity: int,
+  revenue: float
+}
+
+type AggregatedSales = {
+  productId: string,
+  totalQuantity: int,
+  totalRevenue: float
+}
+
+-- Parsing functions
+func parseSalesData(jsonStr: string) -> [SalesRecord] =
+  match decode(jsonStr) {
+    Ok(json) => {
+      match getArray(json, "sales") {
+        Some(arr) => parseRecordList(arr),
+        None => []
+      }
+    },
+    Err(_) => []
+  }
+
+func parseRecordList(jsonList: [Json]) -> [SalesRecord] =
+  match jsonList {
+    [] => [],
+    j :: rest => {
+      let rec = parseSingleRecord(j);
+      rec :: parseRecordList(rest)
+    }
+  }
+
+func parseSingleRecord(j: Json) -> SalesRecord = {
+  let pid = match getString(j, "productId") { Some(s) => s, None => "?" };
+  let qty = match getNumber(j, "quantity") { Some(n) => floatToInt(n), None => 0 };
+  let rev = match getNumber(j, "revenue") { Some(n) => n, None => 0.0 };
+  { productId: pid, quantity: qty, revenue: rev }
+}
+
+-- Aggregation
+func aggregateByProduct(records: [SalesRecord]) -> [AggregatedSales] {
+  let pids = uniqueIds(records);
+  aggregateAll(pids, records)
+}
+
+pure func uniqueIds(records: [SalesRecord]) -> [string] =
+  match records {
+    [] => [],
+    r :: rest => {
+      let others = uniqueIds(rest);
+      if inList(r.productId, others) then others else r.productId :: others
+    }
+  }
+
+pure func inList(s: string, xs: [string]) -> bool =
+  match xs {
+    [] => false,
+    x :: rest => if x == s then true else inList(s, rest)
+  }
+
+pure func aggregateAll(pids: [string], records: [SalesRecord]) -> [AggregatedSales] =
+  match pids {
+    [] => [],
+    pid :: rest => sumProduct(pid, records) :: aggregateAll(rest, records)
+  }
+
+pure func sumProduct(pid: string, records: [SalesRecord]) -> AggregatedSales =
+  match records {
+    [] => { productId: pid, totalQuantity: 0, totalRevenue: 0.0 },
+    r :: rest => {
+      let acc = sumProduct(pid, rest);
+      if r.productId == pid
+      then { productId: pid, totalQuantity: acc.totalQuantity + r.quantity, totalRevenue: acc.totalRevenue + r.revenue }
+      else acc
+    }
+  }
+
+-- Output functions
+func printAggregated(data: [AggregatedSales]) -> () ! {IO} =
+  match data {
+    [] => (),
+    d :: rest => {
+      println("  " ++ d.productId ++ ": qty=" ++ show(d.totalQuantity) ++ ", revenue=$" ++ show(d.totalRevenue));
+      printAggregated(rest)
+    }
+  }
+
+func buildOutputJson(data: [AggregatedSales]) -> string =
+  encode(jo([kv("aggregated_sales", ja(aggregatedListToJson(data)))]))
+
+pure func aggregatedListToJson(data: [AggregatedSales]) -> [Json] =
+  match data {
+    [] => [],
+    d :: rest => jo([
+      kv("productId", js(d.productId)),
+      kv("totalQuantity", jnum(intToFloat(d.totalQuantity))),
+      kv("totalRevenue", jnum(d.totalRevenue))
+    ]) :: aggregatedListToJson(rest)
+  }
+
+-- Utility functions
+pure func floatToInt(f: float) -> int =
+  if f < 1.0 then 0 else 1 + floatToInt(f - 1.0)
+
+pure func intToFloat(n: int) -> float =
+  match n { 0 => 0.0, _ => 1.0 + intToFloat(n - 1) }
+
+pure func countRecords(xs: [SalesRecord]) -> int =
+  match xs { [] => 0, _ :: rest => 1 + countRecords(rest) }
+
+pure func countAggregated(xs: [AggregatedSales]) -> int =
+  match xs { [] => 0, _ :: rest => 1 + countAggregated(rest) }

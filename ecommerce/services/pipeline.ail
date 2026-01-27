@@ -1,0 +1,139 @@
+module ecommerce/services/pipeline
+
+import std/fs (readFile, writeFile, fileExists)
+import std/json (encode, decode, jo, kv, js, jnum, ja, getArray, getString, getNumber, asString, asNumber)
+import std/option (Some, None)
+import std/result (Ok, Err)
+import std/list (map, filter, foldl)
+
+-- Data pipeline for processing ecommerce data
+-- Demonstrates: file I/O, JSON parsing, data transformation
+
+export type SalesRecord = {
+  productId: string,
+  quantity: int,
+  revenue: float,
+  date: string
+}
+
+-- Load sales data from a JSON file
+export func loadSalesData(filepath: string) -> [SalesRecord] ! {FS, IO} {
+  let exists = fileExists(filepath);
+  if exists then {
+    let content = readFile(filepath);
+    parseSalesRecords(content)
+  } else {
+    println("File not found: " ++ filepath);
+    []
+  }
+}
+
+-- Parse JSON array into sales records
+func parseSalesRecords(jsonStr: string) -> [SalesRecord] {
+  match decode(jsonStr) {
+    Ok(json) => {
+      match getArray(json, "sales") {
+        Some(records) => extractRecords(records),
+        None => []
+      }
+    },
+    Err(_) => []
+  }
+}
+
+func extractRecords(jsonList: [Json]) -> [SalesRecord] =
+  match jsonList {
+    [] => [],
+    j :: rest => {
+      let record = extractSingleRecord(j);
+      record :: extractRecords(rest)
+    }
+  }
+
+func extractSingleRecord(j: Json) -> SalesRecord = {
+  let pid = match getString(j, "productId") {
+    Some(s) => s,
+    None => "unknown"
+  };
+  let qty = match getNumber(j, "quantity") {
+    Some(n) => truncate(n),
+    None => 0
+  };
+  let rev = match getNumber(j, "revenue") {
+    Some(n) => n,
+    None => 0.0
+  };
+  let dt = match getString(j, "date") {
+    Some(s) => s,
+    None => "unknown"
+  };
+  { productId: pid, quantity: qty, revenue: rev, date: dt }
+}
+
+pure func truncate(f: float) -> int =
+  if f < 1.0 then 0
+  else 1 + truncate(f - 1.0)
+
+-- Aggregate sales by product
+export pure func aggregateByProduct(records: [SalesRecord]) -> [{productId: string, totalRevenue: float, totalQuantity: int}] {
+  let productIds = uniqueProductIds(records);
+  aggregateForProducts(productIds, records)
+}
+
+pure func uniqueProductIds(records: [SalesRecord]) -> [string] =
+  match records {
+    [] => [],
+    r :: rest => {
+      let restIds = uniqueProductIds(rest);
+      if contains(r.productId, restIds) then restIds
+      else r.productId :: restIds
+    }
+  }
+
+pure func contains(s: string, xs: [string]) -> bool =
+  match xs {
+    [] => false,
+    x :: rest => if x == s then true else contains(s, rest)
+  }
+
+pure func aggregateForProducts(productIds: [string], records: [SalesRecord]) -> [{productId: string, totalRevenue: float, totalQuantity: int}] =
+  match productIds {
+    [] => [],
+    pid :: rest => {
+      let stats = sumForProduct(pid, records);
+      stats :: aggregateForProducts(rest, records)
+    }
+  }
+
+pure func sumForProduct(pid: string, records: [SalesRecord]) -> {productId: string, totalRevenue: float, totalQuantity: int} =
+  match records {
+    [] => { productId: pid, totalRevenue: 0.0, totalQuantity: 0 },
+    r :: rest => {
+      let restSum = sumForProduct(pid, rest);
+      if r.productId == pid
+      then { productId: pid, totalRevenue: restSum.totalRevenue + r.revenue, totalQuantity: restSum.totalQuantity + r.quantity }
+      else restSum
+    }
+  }
+
+-- Write aggregated results to file
+export func writeAggregatedData(filepath: string, data: [{productId: string, totalRevenue: float, totalQuantity: int}]) -> () ! {FS} {
+  let json = encode(jo([kv("aggregated", ja(aggregatedToJson(data)))]));
+  writeFile(filepath, json)
+}
+
+pure func aggregatedToJson(data: [{productId: string, totalRevenue: float, totalQuantity: int}]) -> [Json] =
+  match data {
+    [] => [],
+    d :: rest => jo([
+      kv("productId", js(d.productId)),
+      kv("totalRevenue", jnum(d.totalRevenue)),
+      kv("totalQuantity", jnum(toFloat(d.totalQuantity)))
+    ]) :: aggregatedToJson(rest)
+  }
+
+pure func toFloat(n: int) -> float =
+  match n {
+    0 => 0.0,
+    _ => 1.0 + toFloat(n - 1)
+  }

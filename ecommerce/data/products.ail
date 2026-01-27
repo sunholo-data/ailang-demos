@@ -1,0 +1,60 @@
+module ecommerce/data/products
+
+-- Product data types for the ecommerce demo
+
+export type Product = {
+  id: string,
+  name: string,
+  description: string,
+  price: float,
+  category: string,
+  stock: int
+}
+
+export type CartItem = {
+  product: Product,
+  quantity: int
+}
+
+export type Order = {
+  id: string,
+  items: [CartItem],
+  total: float,
+  status: string
+}
+
+-- Pure helper functions for product operations
+
+export pure func calculateSubtotal(item: CartItem) -> float {
+  item.product.price * toFloat(item.quantity)
+}
+
+export pure func toFloat(n: int) -> float =
+  match n {
+    0 => 0.0,
+    _ => 1.0 * toFloat(n - 1) + 1.0
+  }
+
+export pure func calculateCartTotal(items: [CartItem]) -> float =
+  match items {
+    [] => 0.0,
+    item :: rest => calculateSubtotal(item) + calculateCartTotal(rest)
+  }
+
+export pure func filterByCategory(products: [Product], category: string) -> [Product] =
+  match products {
+    [] => [],
+    p :: rest =>
+      if p.category == category
+      then p :: filterByCategory(rest, category)
+      else filterByCategory(rest, category)
+  }
+
+export pure func filterInStock(products: [Product]) -> [Product] =
+  match products {
+    [] => [],
+    p :: rest =>
+      if p.stock > 0
+      then p :: filterInStock(rest)
+      else filterInStock(rest)
+  }

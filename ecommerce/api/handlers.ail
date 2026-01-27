@@ -1,0 +1,71 @@
+module ecommerce/api/handlers
+
+import std/json (encode, decode, jo, kv, js, jnum, ja, getString, getNumber, getArray, asString)
+import std/option (Some, None)
+import std/result (Ok, Err)
+import std/net (httpPost)
+
+-- API handlers for ecommerce backend
+-- These demonstrate how AILANG can power a React frontend backend
+
+export type ApiResponse = {
+  status: int,
+  body: string
+}
+
+export pure func successResponse(data: string) -> ApiResponse = {
+  status: 200,
+  body: encode(jo([
+    kv("success", js("true")),
+    kv("data", js(data))
+  ]))
+}
+
+export pure func errorResponse(message: string) -> ApiResponse = {
+  status: 400,
+  body: encode(jo([
+    kv("success", js("false")),
+    kv("error", js(message))
+  ]))
+}
+
+-- Parse a product from JSON request body
+export func parseProductRequest(jsonBody: string) -> string {
+  match decode(jsonBody) {
+    Ok(obj) => {
+      match getString(obj, "name") {
+        Some(name) => name,
+        None => "unknown"
+      }
+    },
+    Err(_) => "parse_error"
+  }
+}
+
+-- Build a product listing response
+export pure func buildProductListResponse(products: [{name: string, price: float}]) -> string =
+  encode(jo([
+    kv("products", ja(buildProductJsonList(products))),
+    kv("count", jnum(toFloat(length(products))))
+  ]))
+
+pure func buildProductJsonList(products: [{name: string, price: float}]) -> [Json] =
+  match products {
+    [] => [],
+    p :: rest => jo([
+      kv("name", js(p.name)),
+      kv("price", jnum(p.price))
+    ]) :: buildProductJsonList(rest)
+  }
+
+pure func length(xs: [{name: string, price: float}]) -> int =
+  match xs {
+    [] => 0,
+    _ :: rest => 1 + length(rest)
+  }
+
+pure func toFloat(n: int) -> float =
+  match n {
+    0 => 0.0,
+    _ => 1.0 + toFloat(n - 1)
+  }

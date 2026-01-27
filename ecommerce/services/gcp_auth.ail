@@ -1,0 +1,190 @@
+module ecommerce/services/gcp_auth
+
+import std/fs (readFile, fileExists)
+import std/net (httpRequest)
+import std/json (decode, encode, getString, jo, kv, js)
+import std/option (getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length, substring, trim, split, find, contains)
+
+-- GCP Application Default Credentials authentication module
+-- Reads ADC file and exchanges refresh token for access token
+--
+-- CAPABILITY BUDGETS:
+--   getAccessToken:    FS @limit=5 (ADC file + getHomeDir), Net @limit=1 (OAuth)
+--   getDefaultProject: FS @limit=8 (getHomeDir + active_config + config file + buffer)
+--   readCredentials:   FS @limit=4 (getCredentialsPath + check + read)
+
+-- Type for parsed credentials
+type ADCCredentials = {
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string
+}
+
+-- Get the path to ADC credentials file
+export func getCredentialsPath() -> string ! {FS @limit=2} {
+  let home = getHomeDir();
+  home ++ "/.config/gcloud/application_default_credentials.json"
+}
+
+-- Get home directory (hardcoded fallback for now due to Option issue)
+func getHomeDir() -> string ! {FS} {
+  let homePath = "/Users/mark";
+  let testFile = homePath ++ "/.config/gcloud";
+  let homeFound = fileExists(testFile);
+  if homeFound then homePath else "/tmp"
+}
+
+-- Read and parse ADC credentials file
+export func readCredentials() -> Result[ADCCredentials, string] ! {FS @limit=8} {
+  let path = getCredentialsPath();
+  let found = fileExists(path);
+  if found then parseCredentialsFile(path) else Err("ADC file not found at: " ++ path)
+}
+
+func parseCredentialsFile(path: string) -> Result[ADCCredentials, string] ! {FS} {
+  let content = readFile(path);
+  match decode(content) {
+    Ok(json) => extractCredentials(json),
+    Err(e) => Err("Failed to parse ADC file: " ++ e)
+  }
+}
+
+func extractCredentials(json: Json) -> Result[ADCCredentials, string] {
+  let clientId = getOrElse(getString(json, "client_id"), "");
+  let clientSecret = getOrElse(getString(json, "client_secret"), "");
+  let refreshToken = getOrElse(getString(json, "refresh_token"), "");
+  validateCredentials(clientId, clientSecret, refreshToken)
+}
+
+func validateCredentials(clientId: string, clientSecret: string, refreshToken: string) -> Result[ADCCredentials, string] =
+  if clientId == "" then Err("Missing client_id in ADC file")
+  else if clientSecret == "" then Err("Missing client_secret in ADC file")
+  else if refreshToken == "" then Err("Missing refresh_token in ADC file")
+  else makeCredsOk(clientId, clientSecret, refreshToken)
+
+func makeCredsOk(clientId: string, clientSecret: string, refreshToken: string) -> Result[ADCCredentials, string] {
+  let creds: ADCCredentials = { clientId: clientId, clientSecret: clientSecret, refreshToken: refreshToken };
+  Ok(creds)
+}
+
+-- Exchange refresh token for access token via OAuth2
+-- Budget: 3 FS ops (check + read ADC), 1 Net op (OAuth exchange)
+export func getAccessToken() -> Result[string, string] ! {FS @limit=10, Net @limit=1} {
+  match readCredentials() {
+    Ok(creds) => exchangeRefreshToken(creds),
+    Err(e) => Err(e)
+  }
+}
+
+func exchangeRefreshToken(creds: ADCCredentials) -> Result[string, string] ! {Net} {
+  let url = "https://oauth2.googleapis.com/token";
+  let body = "client_id=" ++ creds.clientId ++
+             "&client_secret=" ++ creds.clientSecret ++
+             "&refresh_token=" ++ creds.refreshToken ++
+             "&grant_type=refresh_token";
+  let headers = [
+    { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+  ];
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then parseTokenResponse(response.body)
+      else Err("OAuth2 request failed with status: " ++ show(response.status))
+    },
+    Err(_) => Err("Network error during OAuth2 token exchange")
+  }
+}
+
+func parseTokenResponse(body: string) -> Result[string, string] {
+  match decode(body) {
+    Ok(json) => {
+      let tokenOpt = getString(json, "access_token");
+      if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
+      else Err("No access_token in OAuth2 response")
+    },
+    Err(e) => Err("Failed to parse OAuth2 response: " ++ e)
+  }
+}
+
+-- Get the default GCP project from gcloud config
+-- Reads active config name, then loads that config file
+-- Budget: 15 FS ops (getHomeDir + config file ops + generous buffer for internal FS calls)
+export func getDefaultProject() -> Result[string, string] ! {FS @limit=15} {
+  let home = getHomeDir();
+  let activeConfigPath = home ++ "/.config/gcloud/active_config";
+  let activeFound = fileExists(activeConfigPath);
+  if activeFound then readActiveConfigAndProject(home, activeConfigPath) else tryQuotaProject()
+}
+
+func readActiveConfigAndProject(home: string, activeConfigPath: string) -> Result[string, string] ! {FS} {
+  let activeConfigName = trim(readFile(activeConfigPath));
+  let configPath = home ++ "/.config/gcloud/configurations/config_" ++ activeConfigName;
+  let configFound = fileExists(configPath);
+  if configFound then parseGcloudConfig(configPath) else Err("Config file not found: " ++ configPath)
+}
+
+func parseGcloudConfig(path: string) -> Result[string, string] ! {FS} {
+  let content = readFile(path);
+  extractProjectFromConfig(content)
+}
+
+-- Parse INI-like gcloud config to find project
+func extractProjectFromConfig(content: string) -> Result[string, string] =
+  findProjectLine(splitLines(content))
+
+func findProjectLine(lines: [string]) -> Result[string, string] =
+  match lines {
+    [] => Err("No project found in gcloud config"),
+    line :: rest => {
+      let trimmed = trimString(line);
+      if isProjectLine(trimmed) then extractProjectValue(trimmed)
+      else findProjectLine(rest)
+    }
+  }
+
+-- Use contains() + find() to check for "project" at start of line
+-- Avoids startsWith which triggers int comparison bug (gt_String)
+pure func isProjectLine(s: string) -> bool {
+  let idx = find(s, "project");
+  idx == 0
+}
+
+func extractProjectValue(line: string) -> Result[string, string] {
+  let parts = splitOnEquals(line);
+  match parts {
+    [] => Err("Invalid project line format"),
+    _ :: [] => Err("Invalid project line format"),
+    _ :: value :: _ => Ok(trimString(value))
+  }
+}
+
+-- Try to get quota_project_id from ADC file as fallback
+func tryQuotaProject() -> Result[string, string] ! {FS} {
+  let path = getCredentialsPath();
+  let found = fileExists(path);
+  if found then extractQuotaProject(path) else Err("No gcloud config or ADC file found")
+}
+
+func extractQuotaProject(path: string) -> Result[string, string] ! {FS} {
+  let content = readFile(path);
+  match decode(content) {
+    Ok(json) => {
+      let projectOpt = getString(json, "quota_project_id");
+      if isSome(projectOpt) then Ok(getOrElse(projectOpt, ""))
+      else Err("No quota_project_id in ADC file. Please set with: gcloud auth application-default set-quota-project PROJECT_ID")
+    },
+    Err(e) => Err("Failed to parse ADC file: " ++ e)
+  }
+}
+
+-- String utilities for parsing config (using std/string functions)
+pure func splitLines(s: string) -> [string] = split(s, "\n")
+
+pure func splitOnEquals(s: string) -> [string] = split(s, "=")
+
+pure func startsWith(s: string, prefix: string) -> bool =
+  if length(prefix) > length(s) then false
+  else substring(s, 0, length(prefix)) == prefix
+
+pure func trimString(s: string) -> string = trim(s)

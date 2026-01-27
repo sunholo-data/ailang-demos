@@ -1,0 +1,12 @@
+{
+  "sales": [
+    {"productId": "LAPTOP-001", "quantity": 5, "revenue": 6499.95, "date": "2025-01-15"},
+    {"productId": "MOUSE-001", "quantity": 20, "revenue": 999.80, "date": "2025-01-15"},
+    {"productId": "HUB-001", "quantity": 10, "revenue": 799.90, "date": "2025-01-15"},
+    {"productId": "LAPTOP-001", "quantity": 3, "revenue": 3899.97, "date": "2025-01-16"},
+    {"productId": "MOUSE-001", "quantity": 15, "revenue": 749.85, "date": "2025-01-16"},
+    {"productId": "HEADPHONES-001", "quantity": 8, "revenue": 1599.92, "date": "2025-01-16"},
+    {"productId": "LAPTOP-001", "quantity": 2, "revenue": 2599.98, "date": "2025-01-17"},
+    {"productId": "HUB-001", "quantity": 5, "revenue": 399.95, "date": "2025-01-17"}
+  ]
+}

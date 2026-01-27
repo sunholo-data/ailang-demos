@@ -1,0 +1,16 @@
+# AILANG build artifacts
+*.ail.out
+
+# Generated output files
+ecommerce/data/aggregated_output.json
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db

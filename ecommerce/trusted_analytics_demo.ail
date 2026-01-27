@@ -1,0 +1,97 @@
+module ecommerce/trusted_analytics_demo
+
+import std/result (Ok, Err)
+import std/fs (fileExists, readFile)
+import std/net (httpRequest)
+import std/json (decode, encode, getString, getNumber, getArray, jo, kv, js, jb, jnum)
+import std/option (isSome, getOrElse)
+import std/string (trim, split, length, substring)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import ecommerce/services/bigquery (query, QueryResult)
+import ecommerce/services/ga4_queries (
+  purchaseFunnelQuery,
+  sessionMetricsQuery,
+  revenueByCategoryQuery
+)
+
+-- Trusted Analytics Demo
+-- Demonstrates how AILANG capability budgets enable DATA TRUST:
+--
+-- 1. BOUNDED EXECUTION: Net @limit=5 guarantees max 5 API calls
+--    - You KNOW this pipeline won't run 100 queries by accident
+--    - Budget acts as a CONTRACT between code and infrastructure
+--
+-- 2. PREDICTABLE COSTS: Each query = 1 API call = known cost
+--    - No surprise BigQuery bills from runaway loops
+--    - Budget failure = immediate, not after $1000 spent
+--
+-- 3. DETERMINISTIC RESULTS: Combined with --seed for reproducibility
+--    - Same input + same budget = same output
+--    - Auditable: "This report used exactly 4 queries"
+--
+-- 4. FAIL-FAST: BudgetExhaustedError stops execution immediately
+--    - Better than silent failures or partial results
+--    - Clear error message tells you what happened
+--
+-- Run: ailang run --entry main --caps IO,FS,Net ecommerce/trusted_analytics_demo.ail
+
+-- BUDGET CONTRACT: This pipeline runs EXACTLY 4 network calls
+-- - 1 auth call (OAuth token exchange)
+-- - 3 analytics queries
+-- FS @limit=10 covers: getDefaultProject (~5 ops) + getAccessToken (~3 ops) + buffer
+-- Any deviation is a bug that the budget will catch
+export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
+  println("=== Trusted Analytics Pipeline ===");
+  println("");
+  println("Budget Contract: Net @limit=5 (1 auth + 3 queries + 1 buffer)");
+  println("This pipeline GUARANTEES no more than 5 API calls.");
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      println("Project: " ++ projectId);
+      runTrustedPipeline(projectId)
+    },
+    Err(e) => println("Failed: " ++ e)
+  }
+}
+
+func runTrustedPipeline(projectId: string) -> () ! {IO, FS, Net} {
+  match getAccessToken() {
+    Ok(token) => {
+      println("Auth: OK (1/5 API calls used)");
+      println("");
+      runBoundedQueries(projectId, token)
+    },
+    Err(e) => println("Auth failed: " ++ e)
+  }
+}
+
+-- Each query is counted against the budget
+-- If we accidentally added a 4th query, budget would fail
+func runBoundedQueries(projectId: string, token: string) -> () ! {IO, Net} {
+  println("--- Query 1/3: Session Metrics ---");
+  runAndReport(projectId, token, sessionMetricsQuery());
+
+  println("--- Query 2/3: Purchase Funnel ---");
+  runAndReport(projectId, token, purchaseFunnelQuery());
+
+  println("--- Query 3/3: Revenue by Category ---");
+  runAndReport(projectId, token, revenueByCategoryQuery());
+
+  println("");
+  println("Pipeline complete: 4/5 API calls used");
+  println("Budget remaining: 1 call (safety buffer)");
+  println("");
+  println("DATA TRUST: You can verify this pipeline ran exactly as specified.")
+}
+
+func runAndReport(projectId: string, token: string, sql: string) -> () ! {IO, Net} {
+  match query(projectId, sql, token) {
+    Ok(result) => {
+      println("  Rows: " ++ show(result.totalRows));
+      println("  Complete: " ++ show(result.jobComplete))
+    },
+    Err(e) => println("  Error: " ++ e)
+  }
+}

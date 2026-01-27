@@ -1,0 +1,62 @@
+module ecommerce/main
+
+import std/ai (call)
+import std/json (encode, decode, jo, kv, js, jnum, ja, getString)
+import std/option (Some, None)
+import std/result (Ok, Err)
+import ecommerce/services/recommendations (getProductRecommendations, generateProductDescription)
+
+-- Main entry point for the ecommerce AILANG demo
+-- Demonstrates: AI API calls, JSON handling, modular design
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=50  - Max 50 print operations (plenty for demo output)
+--   AI @limit=10  - Max 10 AI calls (demo uses 2, headroom for expansion + streaming)
+
+export func main() -> () ! {IO @limit=50, AI @limit=10} {
+  println("=== AILANG Ecommerce Demo ===");
+  println("");
+
+  -- Demo 1: AI-powered product recommendations
+  println("1. Getting AI product recommendations...");
+  let recommendations = getProductRecommendations(
+    "Wireless Bluetooth Headphones",
+    "Electronics",
+    "user likes premium audio, noise cancellation"
+  );
+  println("Recommendations: " ++ recommendations);
+  println("");
+
+  -- Demo 2: AI-generated product description
+  println("2. Generating product description...");
+  let description = generateProductDescription(
+    "Ultra-Comfort Running Shoes",
+    "breathable mesh, gel cushioning, arch support, lightweight"
+  );
+  println("Description: " ++ description);
+  println("");
+
+  -- Demo 3: Show some sample product data processing
+  println("3. Sample product data:");
+  let products = [
+    { name: "Laptop Pro", price: 1299.99 },
+    { name: "Wireless Mouse", price: 49.99 },
+    { name: "USB-C Hub", price: 79.99 }
+  ];
+  printProducts(products);
+
+  println("");
+  println("=== Demo Complete ===")
+}
+
+func printProducts(products: [{name: string, price: float}]) -> () ! {IO} =
+  match products {
+    [] => (),
+    p :: rest => {
+      println("  - " ++ p.name ++ ": $" ++ showPrice(p.price));
+      printProducts(rest)
+    }
+  }
+
+-- Simple price formatting (AILANG doesn't have float to string with decimals built-in)
+func showPrice(price: float) -> string = show(price)
