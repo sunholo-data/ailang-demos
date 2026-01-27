@@ -129,24 +129,26 @@ ailang run --entry main --caps IO,FS,Net ecommerce/trusted_analytics_demo.ail
 Budget Contract: Net @limit=5 (1 auth + 3 queries + 1 buffer)
 This pipeline GUARANTEES no more than 5 API calls.
 
-Project: ailang-dev
+Project: <your-gcp-project>
 Auth: OK (1/5 API calls used)
 
 --- Query 1/3: Session Metrics ---
-  Rows: 0
-  Complete: false
+  Rows: 1
+  Complete: true
 --- Query 2/3: Purchase Funnel ---
-  Rows: 0
-  Complete: false
+  Rows: 1
+  Complete: true
 --- Query 3/3: Revenue by Category ---
-  Rows: 0
-  Complete: false
+  Rows: 21
+  Complete: true
 
 Pipeline complete: 4/5 API calls used
 Budget remaining: 1 call (safety buffer)
 
 DATA TRUST: You can verify this pipeline ran exactly as specified.
 ```
+
+The key output is the **budget accounting** — exactly 4/5 API calls used (1 auth + 3 queries), with 1 remaining as safety buffer. The budget contract catches any deviation immediately via `BudgetExhaustedError`.
 
 **AILANG features shown:** Capability budgets (`@limit=N`), `Net` effect, OAuth2 ADC auth, `Result` error handling, budget-as-contract pattern
 
