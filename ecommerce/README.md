@@ -135,12 +135,18 @@ Auth: OK (1/5 API calls used)
 --- Query 1/3: Session Metrics ---
   Rows: 1
   Complete: true
+  [0] 270154 | 4295584 | 354970 | 5692
 --- Query 2/3: Purchase Funnel ---
   Rows: 1
   Complete: true
+  [0] 386068 | 58543 | 38757 | 5692
 --- Query 3/3: Revenue by Category ---
-  Rows: 21
+  Rows: 22
   Complete: true
+  [0] Apparel | 171727.0 | 372
+  [1] New | 25813.0 | 44
+  [2] Bags | 23860.0 | 23
+  ...
 
 Pipeline complete: 4/5 API calls used
 Budget remaining: 1 call (safety buffer)

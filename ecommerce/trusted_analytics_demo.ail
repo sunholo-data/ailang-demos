@@ -89,9 +89,32 @@ func runBoundedQueries(projectId: string, token: string) -> () ! {IO, Net} {
 func runAndReport(projectId: string, token: string, sql: string) -> () ! {IO, Net} {
   match query(projectId, sql, token) {
     Ok(result) => {
-      println("  Rows: " ++ show(result.totalRows));
-      println("  Complete: " ++ show(result.jobComplete))
+      println("  Rows: " ++ show(countRows(result.rows)));
+      println("  Complete: " ++ show(result.jobComplete));
+      printRows(result.rows, 0)
     },
     Err(e) => println("  Error: " ++ e)
   }
 }
+
+func countRows(rows: [[string]]) -> int =
+  match rows {
+    [] => 0,
+    _ :: rest => 1 + countRows(rest)
+  }
+
+func printRows(rows: [[string]], idx: int) -> () ! {IO} =
+  match rows {
+    [] => (),
+    row :: rest => {
+      println("  [" ++ show(idx) ++ "] " ++ joinRow(row));
+      printRows(rest, idx + 1)
+    }
+  }
+
+func joinRow(values: [string]) -> string =
+  match values {
+    [] => "",
+    v :: [] => v,
+    v :: rest => v ++ " | " ++ joinRow(rest)
+  }

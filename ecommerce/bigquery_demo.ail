@@ -128,8 +128,6 @@ func runQuery(projectId: string, token: string, sql: string) -> () ! {IO, Net} {
 }
 
 func printQueryResult(result: QueryResult) -> () ! {IO} {
-  println("  Total rows: " ++ show(result.totalRows));
-  println("  Job complete: " ++ show(result.jobComplete));
   printRows(result.rows, 0)
 }
 

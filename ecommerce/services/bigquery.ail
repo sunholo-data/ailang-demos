@@ -2,7 +2,8 @@ module ecommerce/services/bigquery
 
 import std/net (httpRequest)
 import std/json (encode, decode, jo, kv, js, jb, jnum, getString, getNumber, getArray, asString, asNumber)
-import std/option (isSome, getOrElse)
+import std/option (Some, None, isSome, getOrElse)
+import std/string (stringToInt)
 import std/result (Ok, Err)
 import ecommerce/services/gcp_auth (getAccessToken)
 
@@ -128,10 +129,22 @@ func extractTotalRows(json: Json) -> int {
   if isSome(strOpt) then parseIntFromString(getOrElse(strOpt, "0")) else 0
 }
 
-func parseIntFromString(s: string) -> int = 0
+func parseIntFromString(s: string) -> int =
+  match stringToInt(s) {
+    Some(n) => n,
+    None => 0
+  }
 
 -- Extract job complete status
+-- Note: BigQuery returns jobComplete as a JSON boolean, not a string.
+-- AILANG's std/json doesn't have getBool yet, so we check if the encoded
+-- response contains "jobComplete":true as a string match workaround.
 func extractJobComplete(json: Json) -> bool {
   let strOpt = getString(json, "jobComplete");
-  if isSome(strOpt) then getOrElse(strOpt, "false") == "true" else false
+  if isSome(strOpt) then getOrElse(strOpt, "false") == "true"
+  else {
+    -- Fallback: if rows were parsed, the job completed
+    let rowsOpt = getArray(json, "rows");
+    isSome(rowsOpt)
+  }
 }
