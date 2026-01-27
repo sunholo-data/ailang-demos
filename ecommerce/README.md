@@ -50,19 +50,18 @@ ailang run --entry main --caps IO,AI --ai-stub ecommerce/main.ail
 ```
 
 **Expected output** (with `--ai claude-haiku-4-5`; AI responses vary per run):
-```
+
+~~~
 === AILANG Ecommerce Demo ===
 
 1. Getting AI product recommendations...
-Recommendations: ```json
-{
+Recommendations: {
   "recommendations": [
     "Active Noise Cancelling Over-Ear Headphones with Premium Sound",
     "Wireless Earbuds with Advanced Noise Cancellation and Hi-Fi Audio",
     "Studio Monitor Bluetooth Headphones with Hybrid Noise Cancelling"
   ]
 }
-```
 
 2. Generating product description...
 Description: Experience the perfect blend of performance and comfort.
@@ -77,7 +76,9 @@ reduce fatigue, while contoured arch support promotes proper alignment.
   - USB-C Hub: $79.99
 
 === Demo Complete ===
-```
+~~~
+
+> **Note:** AI models may wrap JSON in markdown code fences — this is cosmetic and doesn't affect functionality.
 
 **AILANG features shown:** `std/ai` effect, `AI` capability, pattern matching, records, modular imports
 
