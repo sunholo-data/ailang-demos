@@ -1,229 +1,311 @@
 # AILANG Ecommerce Demo
 
-A vertical demo showcasing AILANG's capabilities for ecommerce applications, including AI-powered features, data pipelines, and BigQuery integration.
+A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce applications. Four working demos cover AI integration, data pipelines, capability budgets, and BigQuery analytics.
 
-## What is AILANG?
-
-AILANG is a pure functional programming language with:
-- Hindley-Milner type inference
-- Algebraic effects for controlled side effects
-- Pattern matching on algebraic data types
-- First-class AI capabilities
-- **Capability budgets** for resource control and cost management
-
-## Running the Demos
-
-### Prerequisites
-
-1. Install AILANG: `go install github.com/sunholo-data/ailang@latest`
-2. For AI demo: Set one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GOOGLE_API_KEY`
-3. For BigQuery demo: Run `gcloud auth application-default login`
-
-### AI Provider Authentication
-
-| Provider | Flag | Auth Method |
-|----------|------|-------------|
-| Anthropic | `--ai claude-haiku-4-5` | `ANTHROPIC_API_KEY` env var |
-| OpenAI | `--ai gpt5-mini` | `OPENAI_API_KEY` env var |
-| Google (AI Studio) | `--ai gemini-2-5-flash` | `GOOGLE_API_KEY` env var |
-| Google (Vertex AI) | `--ai gemini-2-5-flash` | ADC fallback when `GOOGLE_API_KEY` is unset (⚠️ see note) |
-| Stub (testing) | `--ai-stub` | No key needed |
-
-> **⚠️ Vertex AI Note:** ADC fallback currently uses `locations/global` which doesn't host Gemini models. Use `GOOGLE_API_KEY` (AI Studio) until a `--vertex-location` flag is added. Bug reported to AILANG core.
-
-### Demo 1: AI Product Recommendations (Working)
+## Quick Start
 
 ```bash
-# Google Gemini via AI Studio (requires GOOGLE_API_KEY)
+# Install AILANG
+go install github.com/sunholo-data/ailang@latest
+
+# Run the simplest demo (no API keys needed)
+ailang run --entry main --caps IO,FS ecommerce/pipeline_runner.ail
+
+# Run AI demo with stub (no API keys needed)
+ailang run --entry main --caps IO,AI --ai-stub ecommerce/main.ail
+
+# Run inline tests
+ailang test ecommerce/services/ga4_queries.ail
+```
+
+## Demos
+
+### 1. AI Product Recommendations
+
+Uses AILANG's `std/ai` effect to call AI models for product recommendations and descriptions. Demonstrates the AI effect system, JSON handling, and modular service design.
+
+**Run:**
+```bash
+# With any AI provider:
+ailang run --entry main --caps IO,AI --ai claude-haiku-4-5 ecommerce/main.ail
+ailang run --entry main --caps IO,AI --ai gpt5-mini ecommerce/main.ail
 ailang run --entry main --caps IO,AI --ai gemini-2-5-flash ecommerce/main.ail
 
-# Google Gemini via Vertex AI ADC (requires gcloud auth - ⚠️ see Vertex AI note above)
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,AI --ai gemini-2-5-flash ecommerce/main.ail
-
-# Anthropic Claude Haiku (requires ANTHROPIC_API_KEY)
-ailang run --entry main --caps IO,AI --ai claude-haiku-4-5 ecommerce/main.ail
-
-# OpenAI GPT-5 Mini (requires OPENAI_API_KEY)
-ailang run --entry main --caps IO,AI --ai gpt5-mini ecommerce/main.ail
-
-# Stub - no API key needed, for testing
+# With stub (no API key needed):
 ailang run --entry main --caps IO,AI --ai-stub ecommerce/main.ail
 ```
 
-This demo shows:
-- AI-powered product recommendations using `std/ai`
-- AI-generated product descriptions
-- Basic data processing with records and lists
+**Expected output** (with real AI provider):
+```
+=== AILANG Ecommerce Demo ===
 
-### Demo 2: Data Pipeline (Working)
+1. Getting AI product recommendations...
+Recommendations: {
+  "recommendations": [
+    "Active Noise Cancelling Over-Ear Headphones with Premium Sound",
+    "Wireless Earbuds with Advanced Noise Isolation and Hi-Fi Audio",
+    "Professional Studio Headphones with Bluetooth and Noise Cancellation"
+  ]
+}
 
+2. Generating product description...
+Description: Experience effortless miles in our Ultra-Comfort Running Shoes.
+Engineered with premium breathable mesh, advanced gel cushioning, and
+specially designed arch support. Lightweight construction means less
+effort, more endurance.
+
+3. Sample product data:
+  - Laptop Pro: $1299.99
+  - Wireless Mouse: $49.99
+  - USB-C Hub: $79.99
+
+=== Demo Complete ===
+```
+
+**AILANG features shown:** `std/ai` effect, `AI` capability, pattern matching, records, modular imports
+
+---
+
+### 2. Data Pipeline
+
+Pure functional data pipeline that reads JSON sales data, aggregates by product, and writes results. No external APIs needed.
+
+**Run:**
 ```bash
 ailang run --entry main --caps IO,FS ecommerce/pipeline_runner.ail
 ```
 
-This demo shows:
-- Local data transformations
-- Record processing
-- Pattern matching on lists
-- Pure functional data pipelines
+**Expected output:**
+```
+=== AILANG Data Pipeline Demo ===
 
-### Demo 3: Trusted Analytics Pipeline (Working)
+Loading sales data from: ecommerce/data/sample_sales.json
+Raw data loaded successfully
 
+Parsed 8 sales records
+Aggregated into 4 product summaries
+
+=== Aggregated Results ===
+  MOUSE-001: qty=35, revenue=$1749.65
+  HEADPHONES-001: qty=8, revenue=$1599.92
+  LAPTOP-001: qty=10, revenue=$12999.9
+  HUB-001: qty=15, revenue=$1199.85
+
+Results written to: ecommerce/data/aggregated_output.json
+```
+
+**AILANG features shown:** `FS` effect, JSON decode/encode, recursive list processing, pattern matching on `[]`/`x :: rest`, record types
+
+---
+
+### 3. Trusted Analytics Pipeline
+
+Demonstrates **capability budgets as contracts for data trust**. The budget guarantees exactly how many API calls the pipeline will make -- any deviation is a bug that the budget catches immediately.
+
+**Run:**
 ```bash
+# Requires: gcloud auth application-default login
 ailang run --entry main --caps IO,FS,Net ecommerce/trusted_analytics_demo.ail
 ```
 
-This demo shows **budgets as contracts for data trust**:
-- **Bounded execution**: `Net @limit=5` guarantees max 5 API calls
-- **Predictable costs**: Each query = 1 API call = known cost
-- **Fail-fast**: Budget violations stop immediately, not after overspending
-- **Auditable**: "This report used exactly 4 queries"
+**Expected output:**
+```
+=== Trusted Analytics Pipeline ===
 
-The budget acts as a **contract** between the code and infrastructure, ensuring the analytics pipeline behaves exactly as specified.
+Budget Contract: Net @limit=5 (1 auth + 3 queries + 1 buffer)
+This pipeline GUARANTEES no more than 5 API calls.
 
-### Demo 4: BigQuery GA4 Analytics
+Project: ailang-dev
+Auth: OK (1/5 API calls used)
 
+--- Query 1/3: Session Metrics ---
+  Rows: 0
+  Complete: false
+--- Query 2/3: Purchase Funnel ---
+  Rows: 0
+  Complete: false
+--- Query 3/3: Revenue by Category ---
+  Rows: 0
+  Complete: false
+
+Pipeline complete: 4/5 API calls used
+Budget remaining: 1 call (safety buffer)
+
+DATA TRUST: You can verify this pipeline ran exactly as specified.
+```
+
+**AILANG features shown:** Capability budgets (`@limit=N`), `Net` effect, OAuth2 ADC auth, `Result` error handling, budget-as-contract pattern
+
+---
+
+### 4. BigQuery GA4 Analytics
+
+Full BigQuery integration querying the public GA4 ecommerce dataset. Authenticates via Application Default Credentials, executes 7 analytics queries, and displays results.
+
+**Run:**
 ```bash
+# Requires: gcloud auth application-default login
 ailang run --entry main --caps IO,FS,Net ecommerce/bigquery_demo.ail
 ```
 
-This demo shows:
-- OAuth2 authentication using Application Default Credentials
-- BigQuery REST API integration
-- GA4 ecommerce analytics queries
-- Pure AILANG HTTP client implementation
-
-## Project Structure
-
+**Expected output** (truncated):
 ```
-ecommerce/
-├── CLAUDE.md                    # AI assistant context file
-├── README.md                    # This file
-├── main.ail                     # AI demo entry point
-├── pipeline_runner.ail          # Data pipeline demo
-├── trusted_analytics_demo.ail   # Budget-as-contract for data trust
-├── bigquery_demo.ail            # BigQuery GA4 demo
-└── services/
-    ├── recommendations.ail      # AI product recommendations
-    ├── gcp_auth.ail            # GCP OAuth2 ADC authentication
-    ├── bigquery.ail            # BigQuery REST API client
-    └── ga4_queries.ail         # Pre-built GA4 SQL queries
-```
+=== AILANG BigQuery GA4 Ecommerce Demo ===
 
-## Key Learnings
+Detecting GCP project from gcloud config...
+Using project: ailang-dev
 
-### What Works Well
+Authenticating with Google Cloud ADC...
+Authentication successful!
 
-1. **AI Integration** - The `std/ai` module provides clean AI API access
-2. **Pattern Matching** - List, Option (`Some`/`None`), and Result (`Ok`/`Err`) all work correctly
-3. **HTTP Requests** - `std/net` httpRequest works for REST API calls
-4. **JSON Handling** - Building JSON with `jo`, `kv`, `js` works well
-5. **Effect System** - Declaring capabilities (IO, FS, Net, AI) provides good guardrails
-6. **Capability Budgets** - `@limit=N` gives hard guarantees on resource usage
-7. **Inline Tests** - `tests [...]` clause in function signatures for zero-cost verification
-8. **If-Then-Else Blocks** - Multi-statement blocks work in branches
-9. **Records in ADT Constructors** - `Ok({ field: value })` works directly (ANF normalization)
+=== EVENT ANALYTICS ===
 
-### Design Choices to Know
+1. Top 10 Events by Count:
+  [0] page_view | 1350428
+  [1] user_engagement | 1058721
+  [2] scroll | 493072
+  [3] view_item | 386068
+  [4] session_start | 354970
+  ...
 
-1. **Reserved Words** - `exists`, `forall`, etc. are reserved; parser gives helpful suggestions
-2. **Non-Transitive Imports** - Each module must import its own dependencies explicitly
-3. **Inline Tests Limitation** - Tests may fail on modules with complex imports (test harness bug)
+=== PRODUCT ANALYTICS ===
 
-### Developer Experience Observations
+2. Top 10 Products by Revenue:
+  [0] Google Zip Hoodie F/C | 13788.0 | 273
+  [1] Google Crewneck Sweatshirt Navy | 10714.0 | 236
+  [2] Google Men's Tech Fleece Grey | 9965.0 | 134
+  ...
 
-**Positive:**
-- Clean syntax similar to ML/Haskell
-- Good error messages during type checking (including reserved keyword detection)
-- Effect system catches capability mismatches at compile time
-- Standard library is well-organized
-- Stdlib version warning shows once, suppressible with `AILANG_NO_VERSION_WARNINGS=1`
+3. Revenue by Category:
+  [0] Apparel | 171727.0 | 372
+  [1] New | 25813.0 | 44
+  [2] Bags | 23860.0 | 23
+  ...
 
+4. Purchase Funnel:
+  [0] 386068 | 58543 | 38757 | 5692
+       views    carts   checkouts purchases
 
-## Capability Budgets
+=== USER ANALYTICS ===
 
-This demo uses AILANG's capability budget system to control resource usage.
+5. Device Breakdown:
+  [0] desktop | 158917 | 2498330
+  [1] mobile | 109195 | 1704069
+  [2] tablet | 6250 | 93185
 
-### What Are Capability Budgets?
+6. Top 10 Countries by Users:
+  [0] United States | 118493
+  [1] India | 25367
+  [2] Canada | 20268
+  ...
 
-Capability budgets use `@limit=N` to restrict how many times a function can perform a particular effect:
+7. Session Metrics Summary:
+  [0] 270154 | 4295584 | 354970 | 5692
+       users    events    sessions  purchases
 
-```ailang
--- Limit IO to 50 operations, AI to 5 calls
-export func main() -> () ! {IO @limit=50, AI @limit=5} { ... }
+=== Demo Complete ===
 ```
 
-**Key semantics:**
-- **Per-invocation**: Each function call gets a fresh budget
-- **Fail-fast**: Throws `BudgetExhaustedError` when exceeded
-- **Opt-in**: No limits by default
+**AILANG features shown:** HTTP REST API (`std/net`), OAuth2 token exchange, JSON parsing, `Result`/`Option` pattern matching, pure functional BigQuery client
 
-### Budgets in This Demo
+---
 
-**Entry Points:**
-| File | Budget | Purpose |
-|------|--------|---------|
-| `main.ail` | `IO @limit=50, AI @limit=10` | Limit AI API costs |
-| `bigquery_demo.ail` | `IO @limit=100, FS @limit=30, Net @limit=20` | Control BigQuery API calls |
-| `trusted_analytics_demo.ail` | `IO @limit=30, FS @limit=30, Net @limit=5` | Data trust contract |
-
-**Services (per-call guarantees):**
-| Function | Budget | What It Guarantees |
-|----------|--------|-------------------|
-| `getAccessToken()` | `FS @limit=10, Net @limit=1` | Read ADC + OAuth call |
-| `getDefaultProject()` | `FS @limit=15` | Read config files |
-| `query()` | `Net @limit=1` | Exactly 1 BigQuery API call |
-| `queryWithAuth()` | `FS @limit=10, Net @limit=2` | Auth + 1 query |
-
-**Note:** FS budgets need to be generous because stdlib FS operations (e.g., `fileExists`, `readFile`) may consume multiple FS effect units per call internally.
-
-### Benefits for Ecommerce
-
-1. **Cost Control**: Prevent runaway AI/API costs with hard limits
-2. **Predictability**: Know exactly how many operations a function will perform
-3. **Testing**: Verify functions don't exceed expected resource usage
-4. **Safety**: Bounded failures instead of unbounded resource consumption
-
-### Running Without Budgets (Debugging)
-
-```bash
-# Bypass budget enforcement for debugging
-ailang run --entry main --caps IO,AI --no-budgets ecommerce/main.ail
-```
-
-**Warning**: Only use `--no-budgets` for debugging. Always enforce budgets in production.
-
-## Inline Tests
-
-AILANG supports inline tests directly in function signatures using the `tests` clause.
-
-### Syntax
-
-```ailang
-pure func myFunc(arg: Type) -> ReturnType
-  tests [
-    (input1, expected1),
-    (input2, expected2)
-  ]
-{
-  -- function body
-}
-```
-
-**Key rules:**
-- Only works with `pure func` declarations
-- Must use block-style `{ }`, not expression-style `= expr`
-- Nullary functions use `()` as input: `((), expected)`
-- Multi-arg functions use tuples: `((arg1, arg2), expected)`
-- Works best with simple modules (few imports)
-
-### Running Tests
+### Inline Tests
 
 ```bash
 ailang test ecommerce/services/ga4_queries.ail
 ```
 
-### Example
+**Expected output:**
+```
+Test Results
+
+  ✓ ga4Table_test_1
+  ✓ topEventsQuery_test_1
+  ✓ topEventsQuery_test_2
+  ✓ eventCountsByDateQuery_test_1
+  ✓ eventTrendQuery_test_1
+  ✓ topProductsByRevenueQuery_test_1
+  ✓ revenueByCategoryQuery_test_1
+  ✓ purchaseFunnelQuery_test_1
+  ✓ topCategoriesByViewsQuery_test_1
+  ✓ deviceBreakdownQuery_test_1
+  ✓ geoDistributionQuery_test_1
+  ✓ browserBreakdownQuery_test_1
+  ✓ sessionMetricsQuery_test_1
+  ✓ dailySummaryQuery_test_1
+
+✓ All tests passed!
+14 tests: 14 passed, 0 failed, 0 skipped
+```
+
+---
+
+## AI Provider Authentication
+
+| Provider | Flag | Auth |
+|----------|------|------|
+| Google (AI Studio) | `--ai gemini-2-5-flash` | `GOOGLE_API_KEY` env var |
+| Google (Vertex AI) | `--ai gemini-2-5-flash` | ADC fallback when key unset |
+| Anthropic | `--ai claude-haiku-4-5` | `ANTHROPIC_API_KEY` env var |
+| OpenAI | `--ai gpt5-mini` | `OPENAI_API_KEY` env var |
+| Stub (testing) | `--ai-stub` | No key needed |
+
+> **Note:** Vertex AI ADC fallback currently defaults to `locations/global` which may not host all Gemini models. Use `GOOGLE_API_KEY` for AI Studio, or ensure your project has Vertex AI enabled in `us-central1`.
+
+## Project Structure
+
+```
+ecommerce/
+├── main.ail                     # Demo 1: AI recommendations
+├── pipeline_runner.ail          # Demo 2: Data pipeline
+├── trusted_analytics_demo.ail   # Demo 3: Budget-as-contract
+├── bigquery_demo.ail            # Demo 4: BigQuery GA4
+├── data/
+│   ├── products.ail             # Product type definitions
+│   └── sample_sales.json        # Sample sales data
+├── api/
+│   └── handlers.ail             # API handler patterns
+└── services/
+    ├── recommendations.ail      # AI product recommendations
+    ├── gcp_auth.ail             # GCP OAuth2 ADC authentication
+    ├── bigquery.ail             # BigQuery REST API client
+    ├── pipeline.ail             # Data pipeline transforms
+    └── ga4_queries.ail          # Pre-built GA4 SQL queries (14 inline tests)
+```
+
+## Capability Budgets
+
+All entry points and services use AILANG's capability budget system (`@limit=N`) to enforce hard limits on side effects:
+
+```ailang
+-- This function can perform at most 50 IO ops and 10 AI calls
+export func main() -> () ! {IO @limit=50, AI @limit=10} { ... }
+```
+
+**Entry Points:**
+
+| File | Budget | Purpose |
+|------|--------|---------|
+| `main.ail` | `IO @limit=50, AI @limit=10` | Cap AI API costs |
+| `pipeline_runner.ail` | `IO @limit=50, FS @limit=20` | Limit file operations |
+| `trusted_analytics_demo.ail` | `IO @limit=30, FS @limit=30, Net @limit=5` | Data trust contract |
+| `bigquery_demo.ail` | `IO @limit=100, FS @limit=30, Net @limit=20` | Control BigQuery calls |
+
+**Services (per-call guarantees):**
+
+| Function | Budget | Guarantee |
+|----------|--------|-----------|
+| `getAccessToken()` | `FS @limit=10, Net @limit=1` | Read ADC + 1 OAuth call |
+| `getDefaultProject()` | `FS @limit=15` | Read gcloud config files |
+| `query()` | `Net @limit=1` | Exactly 1 BigQuery API call |
+| `queryWithAuth()` | `FS @limit=10, Net @limit=2` | Auth + 1 query |
+
+> **Note:** FS budgets are set generously because stdlib FS operations may consume multiple effect units internally per call.
+
+## Inline Tests
+
+AILANG supports inline tests in function signatures:
 
 ```ailang
 export pure func topEventsQuery(limit: int) -> string
@@ -238,69 +320,30 @@ export pure func topEventsQuery(limit: int) -> string
 }
 ```
 
-### Test Coverage in This Demo
+**Rules:** `pure func` only, block-style `{ }`, `((), expected)` for nullary functions.
 
-| File | Tests | Status |
-|------|-------|--------|
-| `ga4_queries.ail` | 14 inline tests | All passing |
+**Coverage:** `ga4_queries.ail` has 14 inline tests (all passing).
 
-**Note:** Inline tests may fail on modules with complex imports due to a test harness limitation.
+## BigQuery Implementation
 
-## BigQuery Implementation Details
+The BigQuery connector is implemented in pure AILANG with no Go dependencies:
 
-The BigQuery connector uses pure AILANG with no Go dependencies:
+1. Read ADC file (`~/.config/gcloud/application_default_credentials.json`)
+2. Exchange refresh token for access token via OAuth2
+3. Query BigQuery REST API with Bearer token
+4. Parse nested `rows[].f[].v` response format
 
-### Authentication Flow
+**GA4 queries included:** Top events, product revenue, category revenue, purchase funnel, device breakdown, geo distribution, session metrics.
 
-1. Read ADC file: `~/.config/gcloud/application_default_credentials.json`
-2. Extract `client_id`, `client_secret`, `refresh_token`
-3. POST to `https://oauth2.googleapis.com/token` to exchange refresh token
-4. Use resulting access token for BigQuery API calls
-
-### BigQuery API
-
-- Endpoint: `POST https://bigquery.googleapis.com/bigquery/v2/projects/{projectId}/queries`
-- Response format: Nested `rows[].f[].v` structure requiring extraction
-
-### GA4 Queries Included
-
-| Query | Description |
-|-------|-------------|
-| `topEventsQuery(n)` | Top N events by count |
-| `topProductsByRevenueQuery(n)` | Top N products by revenue |
-| `revenueByCategoryQuery()` | Revenue breakdown by category |
-| `purchaseFunnelQuery()` | View -> Cart -> Purchase funnel |
-| `deviceBreakdownQuery()` | Users by device type |
-| `geoDistributionQuery(n)` | Top N countries by users |
-| `sessionMetricsQuery()` | Session/user/engagement metrics |
-
-## Resolved Issues (M-DX24 Audit, 2026-01-27)
-
-| Issue | Status | Resolution |
-|-------|--------|------------|
-| Option Pattern Matching | **Fixed (v0.7.0)** | M-BUILTIN-SAFETY: safe type checks in builtins |
-| Stdlib Version Warning | **Fixed (v0.6.1)** | M-DX21: show-once + `AILANG_NO_VERSION_WARNINGS=1` |
-| If-Then-Else Blocks | **Always worked** | `parseBlockOrExpression()` handles blocks in branches |
-| Record in Result Types | **Always worked** | ANF `normalizeToAtomic()` handles automatically |
-| Reserved Keywords | **Mostly resolved** | Parser detects + suggests alternatives; docs exist |
-| Import Transitivity | **Documented** | `docs/guides/module-imports.md` explains design choice |
-
-## Bug Reports
-
-Bugs are reported to AILANG core via:
+## Debugging
 
 ```bash
-ailang messages send user "Bug description" --title "Bug: Title" --from "demos-ecommerce"
+# Run without budget enforcement
+ailang run --entry main --caps IO,AI --no-budgets ecommerce/main.ail
+
+# Run with debug output
+ailang run --entry main --caps IO,AI --debug ecommerce/main.ail
 ```
-
-## Contributing
-
-When working on this demo:
-
-1. Test all changes with `ailang run`
-2. Run inline tests with `ailang test ecommerce/services/ga4_queries.ail`
-3. Use `Some`/`None` pattern matching directly (fixed in v0.7.0)
-4. Report new bugs via `ailang messages send`
 
 ## References
 
