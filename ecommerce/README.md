@@ -175,7 +175,7 @@ ailang run --entry main --caps IO,FS,Net ecommerce/bigquery_demo.ail
 === AILANG BigQuery GA4 Ecommerce Demo ===
 
 Detecting GCP project from gcloud config...
-Using project: ailang-dev
+Using project: <your-gcp-project>
 
 Authenticating with Google Cloud ADC...
 Authentication successful!
@@ -216,9 +216,9 @@ Authentication successful!
   [2] tablet | 6250 | 93185
 
 6. Top 10 Countries by Users:
-  [0] United States | 118493
-  [1] India | 25367
-  [2] Canada | 20268
+  [0] United States | 118493 | 1910483
+  [1] India | 25367 | 391859
+  [2] Canada | 20268 | 324261
   ...
 
 7. Session Metrics Summary:
