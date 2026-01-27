@@ -38,6 +38,19 @@ ailang test ecommerce/services/ga4_queries.ail
 
 Uses AILANG's `std/ai` effect to call AI models for product recommendations and descriptions. Demonstrates the AI effect system, JSON handling, and modular service design.
 
+**Key code** (`services/recommendations.ail`):
+```ailang
+export func getProductRecommendations(
+  productName: string, category: string, userPreferences: string
+) -> string ! {AI} {
+  let prompt = "You are an ecommerce recommendation engine. " ++
+    "Given the product '" ++ productName ++ "' in category '" ++ category ++ "', " ++
+    "and user preferences: " ++ userPreferences ++ ". " ++
+    "Return a JSON array of 3 recommended product names.";
+  call(prompt)
+}
+```
+
 **Run:**
 ```bash
 # With any AI provider:
@@ -88,6 +101,24 @@ reduce fatigue, while contoured arch support promotes proper alignment.
 
 Pure functional data pipeline that reads JSON sales data, aggregates by product, and writes results. No external APIs needed.
 
+**Key code** (`services/pipeline.ail`):
+```ailang
+export pure func aggregateByProduct(records: [SalesRecord]) -> [...] {
+  let productIds = uniqueProductIds(records);
+  aggregateForProducts(productIds, records)
+}
+
+pure func uniqueProductIds(records: [SalesRecord]) -> [string] =
+  match records {
+    [] => [],
+    r :: rest => {
+      let restIds = uniqueProductIds(rest);
+      if contains(r.productId, restIds) then restIds
+      else r.productId :: restIds
+    }
+  }
+```
+
 **Run:**
 ```bash
 ailang run --entry main --caps IO,FS ecommerce/pipeline_runner.ail
@@ -119,6 +150,17 @@ Results written to: ecommerce/data/aggregated_output.json
 ### 3. Trusted Analytics Pipeline
 
 Demonstrates **capability budgets as contracts for data trust**. The budget guarantees exactly how many API calls the pipeline will make -- any deviation is a bug that the budget catches immediately.
+
+**Key code** (`trusted_analytics_demo.ail`):
+```ailang
+-- BUDGET CONTRACT: This pipeline runs EXACTLY 4 network calls
+-- Any deviation is a bug that the budget will catch
+export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
+  println("Budget Contract: Net @limit=5 (1 auth + 3 queries + 1 buffer)");
+  println("This pipeline GUARANTEES no more than 5 API calls.");
+  ...
+}
+```
 
 **Run:**
 ```bash
@@ -167,6 +209,23 @@ The key output is the **budget accounting** — exactly 4/5 API calls used (1 au
 ### 4. BigQuery GA4 Analytics
 
 Full BigQuery integration querying the public GA4 ecommerce dataset. Authenticates via Application Default Credentials, executes 7 analytics queries, and displays results.
+
+**Key code** (`services/bigquery.ail`):
+```ailang
+export func query(projectId: string, sql: string, token: string)
+    -> Result[QueryResult, string] ! {Net @limit=1} {
+  let url = "https://bigquery.googleapis.com/.../queries";
+  let headers = [
+    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Content-Type", value: "application/json" }
+  ];
+  match httpRequest("POST", url, headers, buildQueryRequest(sql)) {
+    Ok(response) => if response.ok then parseQueryResponse(response.body)
+                     else Err("BigQuery API error: " ++ response.body),
+    Err(_) => Err("Network error connecting to BigQuery API")
+  }
+}
+```
 
 **Run:**
 ```bash
@@ -237,6 +296,21 @@ Authentication successful!
 ---
 
 ### Inline Tests
+
+**Key code** (`services/ga4_queries.ail`):
+```ailang
+export pure func topEventsQuery(limit: int) -> string
+  tests [
+    (5, "SELECT event_name... LIMIT 5"),
+    (10, "SELECT event_name... LIMIT 10")
+  ]
+{
+  "SELECT event_name, COUNT(*) as event_count " ++
+  "FROM " ++ ga4Table() ++ " " ++
+  "ORDER BY event_count DESC " ++
+  "LIMIT " ++ show(limit)
+}
+```
 
 ```bash
 ailang test ecommerce/services/ga4_queries.ail
