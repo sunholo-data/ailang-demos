@@ -4,10 +4,24 @@ A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce a
 
 ## Quick Start
 
-```bash
-# Install AILANG
-go install github.com/sunholo-data/ailang@latest
+### Install AILANG
 
+**Claude Code:**
+```
+/plugin marketplace add sunholo-data/ailang_bootstrap
+/plugin install ailang
+```
+
+**Gemini CLI:**
+```
+gemini extensions install https://github.com/sunholo-data/ailang_bootstrap.git
+```
+
+See [ailang.sunholo.com](https://ailang.sunholo.com/) for full installation docs.
+
+### Run the Demos
+
+```bash
 # Run the simplest demo (no API keys needed)
 ailang run --entry main --caps IO,FS ecommerce/pipeline_runner.ail
 
