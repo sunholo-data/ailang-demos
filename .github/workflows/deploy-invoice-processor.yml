@@ -33,11 +33,12 @@ jobs:
           echo "Downloading AILANG WASM tarball..."
           wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang-wasm.tar.gz \
             -O ailang-wasm.tar.gz
-          echo "Extracting WASM files..."
+          echo "Extracting WASM binary..."
           tar -xzf ailang-wasm.tar.gz
-          echo "Moving files to invoice_processor_wasm/wasm/..."
           mv ailang.wasm invoice_processor_wasm/wasm/
-          mv wasm_exec.js invoice_processor_wasm/wasm/
+          echo "Downloading Go WASM runtime..."
+          curl -sL -o invoice_processor_wasm/wasm/wasm_exec.js \
+            https://raw.githubusercontent.com/golang/go/go1.22.0/misc/wasm/wasm_exec.js
           echo "WASM files installed successfully!"
           ls -lh invoice_processor_wasm/wasm/
 

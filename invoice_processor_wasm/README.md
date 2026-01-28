@@ -57,12 +57,15 @@ All processing happens entirely in the browser via WebAssembly - no server requi
 
    **Option A: Download from releases** (Recommended):
    ```bash
-   # Download and extract latest AILANG WASM release
+   # Download and extract AILANG WASM binary
    wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang-wasm.tar.gz
    tar -xzf ailang-wasm.tar.gz
    mv ailang.wasm wasm/
-   mv wasm_exec.js wasm/
    rm ailang-wasm.tar.gz
+
+   # Download Go WASM runtime
+   curl -sL -o wasm/wasm_exec.js \
+     https://raw.githubusercontent.com/golang/go/go1.22.0/misc/wasm/wasm_exec.js
    ```
 
    **Option B: Build from source**:
