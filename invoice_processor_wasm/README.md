@@ -57,9 +57,12 @@ All processing happens entirely in the browser via WebAssembly - no server requi
 
    **Option A: Download from releases** (Recommended):
    ```bash
-   # Download latest AILANG WASM release
-   wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang.wasm -O wasm/ailang.wasm
-   wget https://github.com/sunholo-data/ailang/releases/latest/download/wasm_exec.js -O wasm/wasm_exec.js
+   # Download and extract latest AILANG WASM release
+   wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang-wasm.tar.gz
+   tar -xzf ailang-wasm.tar.gz
+   mv ailang.wasm wasm/
+   mv wasm_exec.js wasm/
+   rm ailang-wasm.tar.gz
    ```
 
    **Option B: Build from source**:

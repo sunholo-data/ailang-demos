@@ -30,13 +30,15 @@ jobs:
 
       - name: Download AILANG WASM files
         run: |
-          echo "Downloading AILANG WASM binary..."
-          wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang.wasm \
-            -O invoice_processor_wasm/wasm/ailang.wasm
-          echo "Downloading Go WASM runtime..."
-          wget https://github.com/sunholo-data/ailang/releases/latest/download/wasm_exec.js \
-            -O invoice_processor_wasm/wasm/wasm_exec.js
-          echo "WASM files downloaded successfully!"
+          echo "Downloading AILANG WASM tarball..."
+          wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang-wasm.tar.gz \
+            -O ailang-wasm.tar.gz
+          echo "Extracting WASM files..."
+          tar -xzf ailang-wasm.tar.gz
+          echo "Moving files to invoice_processor_wasm/wasm/..."
+          mv ailang.wasm invoice_processor_wasm/wasm/
+          mv wasm_exec.js invoice_processor_wasm/wasm/
+          echo "WASM files installed successfully!"
           ls -lh invoice_processor_wasm/wasm/
 
       - name: Setup Pages
