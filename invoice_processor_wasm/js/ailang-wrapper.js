@@ -122,14 +122,42 @@ class InvoiceProcessor {
       const ailangCall = `wasm/invoice_processor.processInvoice("${escapedJson}")`;
       const resultString = window.ailangEval(ailangCall);
 
+      // Debug: log what AILANG returned
+      console.log('AILANG response:', resultString);
+
+      // Check if AILANG returned an error
+      if (!resultString || resultString.trim() === '') {
+        return {
+          valid: false,
+          error: 'AILANG returned empty response',
+          errorType: 'wrapper'
+        };
+      }
+
       // Parse the result
-      const result = JSON.parse(resultString);
+      let result;
+      try {
+        result = JSON.parse(resultString);
+      } catch (parseErr) {
+        return {
+          valid: false,
+          error: `Failed to parse AILANG response: ${parseErr.message}`,
+          errorType: 'wrapper',
+          rawResponse: resultString.substring(0, 200) // First 200 chars for debugging
+        };
+      }
+
+      // Add errorType to distinguish AILANG validation errors
+      if (result && !result.valid) {
+        result.errorType = 'ailang';
+      }
 
       return result;
     } catch (err) {
       return {
         valid: false,
-        error: `Processing error: ${err.message}`
+        error: `WASM execution error: ${err.message}`,
+        errorType: 'wrapper'
       };
     }
   }

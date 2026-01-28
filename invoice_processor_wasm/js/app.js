@@ -122,7 +122,7 @@ async function processInvoice() {
     if (result.valid) {
       displaySuccessResult(result);
     } else {
-      displayErrorResult(result.error);
+      displayErrorResult(result);
     }
   } catch (err) {
     hideLoading();
@@ -195,16 +195,26 @@ function displaySuccessResult(result) {
 
 /**
  * Display error result
- * @param {string} errorMessage - The error message
+ * @param {Object|string} result - The error result object or error message string
  */
-function displayErrorResult(errorMessage) {
+function displayErrorResult(result) {
   const resultsDiv = document.getElementById('results');
   if (!resultsDiv) return;
 
-  resultsDiv.innerHTML = `
+  // Handle legacy string parameter
+  const errorMessage = typeof result === 'string' ? result : result.error;
+  const errorType = typeof result === 'object' ? result.errorType : 'unknown';
+  const rawResponse = typeof result === 'object' ? result.rawResponse : null;
+
+  let html = `
     <div class="result-error">
-      <h3>✗ Validation Failed</h3>
+      <h3>✗ ${errorType === 'ailang' ? 'Validation Failed' : 'Processing Error'}</h3>
       <p class="error-message">${escapeHtml(errorMessage)}</p>
+  `;
+
+  // Only show the "Why AILANG Caught This Error" for actual AILANG validation errors
+  if (errorType === 'ailang') {
+    html += `
       <div class="error-explanation">
         <h4>Why AILANG Caught This Error</h4>
         <p>
@@ -221,8 +231,27 @@ function displayErrorResult(errorMessage) {
           more reliable and easier to debug.
         </p>
       </div>
-    </div>
-  `;
+    `;
+  } else if (errorType === 'wrapper') {
+    html += `
+      <div class="error-explanation error-wrapper">
+        <h4>Integration Error</h4>
+        <p>
+          This error occurred in the JavaScript/WebAssembly integration layer, not in AILANG itself.
+          This could be due to:
+        </p>
+        <ul>
+          <li>WASM module not fully initialized</li>
+          <li>Communication error between JavaScript and AILANG</li>
+          <li>Invalid response format from AILANG</li>
+        </ul>
+        ${rawResponse ? `<details><summary>Debug Info</summary><pre>${escapeHtml(rawResponse)}</pre></details>` : ''}
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  resultsDiv.innerHTML = html;
 }
 
 /**

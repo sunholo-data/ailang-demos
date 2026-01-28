@@ -431,6 +431,31 @@ textarea:focus {
   color: var(--text-secondary);
 }
 
+.error-wrapper {
+  background: #fef3c7;
+  border: 1px solid var(--warning-color);
+}
+
+.error-wrapper details {
+  margin-top: 10px;
+}
+
+.error-wrapper summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--warning-color);
+}
+
+.error-wrapper pre {
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  margin-top: 5px;
+}
+
 /* Comparison */
 .comparison {
   text-align: center;
