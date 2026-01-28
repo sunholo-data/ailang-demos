@@ -6,7 +6,7 @@ Vertical demos showcasing [AILANG](https://ailang.sunholo.com/) — a pure funct
 
 | Demo | Description | Features |
 |------|-------------|----------|
-| [Ecommerce](ecommerce/) | AI recommendations, data pipelines, BigQuery analytics, contracts | AI effect, capability budgets, OAuth2, REST API, inline tests, requires/ensures |
+| [Ecommerce](ecommerce/) | AI recommendations, data pipelines, BigQuery analytics, contracts, REST API + React UI | AI effect, capability budgets, OAuth2, REST API, serve-api, inline tests, requires/ensures |
 
 ## Install AILANG
 
@@ -34,6 +34,14 @@ AILANG is a pure functional language designed for AI-native applications:
 - **First-class AI** — `std/ai` effect for calling any AI provider
 - **Inline tests** — `tests [...]` clause in function signatures
 
+## Demo Showcase
+
+The ecommerce demo includes a full-stack React dashboard powered by `ailang serve-api`:
+
+![Ecommerce Dashboard](ecommerce/img/ecommerce-dashboard-ui.png)
+
+**Features:** Contract verification forms, live BigQuery analytics with charts, AI-powered product recommendations, server status monitoring, and zero-code API generation from AILANG modules.
+
 ## Repository Structure
 
 ```
@@ -43,6 +51,8 @@ demos/
 │   ├── pipeline_runner.ail  # Data pipeline
 │   ├── trusted_analytics_demo.ail  # Budget-as-contract
 │   ├── bigquery_demo.ail   # BigQuery GA4 analytics
+│   ├── contracts_demo.ail  # Design-by-contract verification
+│   ├── ui/                 # React dashboard (serve-api frontend)
 │   └── services/       # Shared services (auth, BigQuery, AI)
 └── models.yml          # AI model configuration
 ```

@@ -1,6 +1,7 @@
 module ecommerce/services/bigquery
 
 import std/net (httpRequest)
+import std/fs (readFile, fileExists)
 import std/json (encode, decode, jo, kv, js, jb, jnum, getString, getNumber, getArray, asString, asNumber)
 import std/option (Some, None, isSome, getOrElse)
 import std/string (stringToInt)
@@ -79,7 +80,11 @@ func makeQueryResultOk(rows: [[string]], schema: [string], totalRows: int, jobCo
   Ok(result)
 }
 
--- Extract schema field names from response (simplified - returns empty for now)
+-- Extract schema field names from response
+-- BigQuery returns: { "schema": { "fields": [ { "name": "column_name", ... }, ... ] } }
+-- NOTE: Currently returns empty because std/json doesn't have getObject() yet.
+-- The React UI falls back to generating col_0, col_1, etc. when schema is empty.
+-- TODO: Implement once AILANG adds support for accessing nested JSON objects
 func extractSchema(json: Json) -> [string] = []
 
 -- Extract rows from BigQuery nested format

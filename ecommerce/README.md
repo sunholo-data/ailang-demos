@@ -1,6 +1,6 @@
 # AILANG Ecommerce Demo
 
-A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce applications. Five working demos cover AI integration, data pipelines, capability budgets, BigQuery analytics, and design-by-contract verification.
+A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce applications. Six working demos cover AI integration, data pipelines, capability budgets, BigQuery analytics, design-by-contract verification, and a REST API with React UI.
 
 ## Quick Start
 
@@ -407,6 +407,76 @@ Contracts are also used in the service layer — `pipeline.ail` uses `requires`/
 
 ---
 
+### 6. REST API & React UI
+
+Serves existing AILANG modules as a REST API using `ailang serve-api`, with a React dashboard for interactive endpoint testing. **Zero AILANG code changes** — `serve-api` automatically exposes all exported functions.
+
+**Key concept:** Every `export func` becomes a POST endpoint at `/api/{module}/{function}`.
+
+**Run:**
+```bash
+# Start API server with React UI (dev mode):
+cd ecommerce/ui && npm install && npm run dev &
+
+# With AI stub (no API keys needed):
+ailang serve-api --port 8092 --caps IO,AI,FS,Net --ai-stub \
+  ecommerce/contracts_demo.ail \
+  ecommerce/services/ga4_queries.ail \
+  ecommerce/services/bigquery.ail \
+  ecommerce/services/gcp_auth.ail \
+  ecommerce/api/handlers.ail \
+  ecommerce/data/products.ail \
+  ecommerce/services/recommendations.ail
+
+# With real AI provider:
+ANTHROPIC_API_KEY=sk-... ailang serve-api --port 8092 \
+  --caps IO,AI,FS,Net --ai claude-haiku-4-5 \
+  ecommerce/contracts_demo.ail \
+  ecommerce/services/ga4_queries.ail \
+  ecommerce/services/bigquery.ail \
+  ecommerce/services/gcp_auth.ail \
+  ecommerce/api/handlers.ail \
+  ecommerce/data/products.ail \
+  ecommerce/services/recommendations.ail
+
+# Open http://localhost:5173 — API proxied via Vite
+```
+
+**curl examples:**
+```bash
+# Health check
+curl http://localhost:8092/api/_health
+# → {"status":"ok","modules_count":5,"exports_count":31}
+
+# Call a contracted function
+curl -X POST http://localhost:8092/api/ecommerce/contracts_demo/calculateTotal \
+  -H 'Content-Type: application/json' \
+  -d '{"args":[29.99, 3]}'
+# → {"result":89.97,"module":"ecommerce/contracts_demo","func":"calculateTotal","elapsed_ms":0}
+
+# Generate a BigQuery SQL query
+curl -X POST http://localhost:8092/api/ecommerce/services/ga4_queries/topEventsQuery \
+  -H 'Content-Type: application/json' \
+  -d '{"args":[5]}'
+# → {"result":"SELECT event_name, COUNT(*)...LIMIT 5","elapsed_ms":3}
+
+# Introspect all endpoints
+curl http://localhost:8092/api/_meta/modules
+```
+
+The React UI provides:
+- **Contracts tab** — interactive forms for applyDiscount, calculateTotal, clampQuantity, validateQuantity
+- **Analytics tab** — generate BigQuery SQL, run queries live against BigQuery (with data tables + bar charts), or copy SQL to BigQuery Console
+- **AI tab** — product recommendations, descriptions, review analysis (graceful fallback when no API key)
+
+![Ecommerce Dashboard UI](img/ecommerce-dashboard-ui.png)
+
+> **Note:** BigQuery execution and AI calls require `--caps IO,AI,FS,Net` and an AI provider flag (`--ai` or `--ai-stub`). Without these flags, effect-dependent endpoints will return errors. The UI provides graceful fallbacks with explanations.
+
+**AILANG features shown:** `serve-api` auto-endpoint generation, module introspection, capability-aware serving, React frontend integration
+
+---
+
 ## AI Provider Authentication
 
 | Provider | Flag | Auth |
@@ -433,6 +503,9 @@ ecommerce/
 │   └── sample_sales.json        # Sample sales data
 ├── api/
 │   └── handlers.ail             # API handler patterns
+├── ui/                          # Demo 6: React dashboard (Vite + TypeScript)
+│   ├── src/App.tsx              # API Explorer UI
+│   └── package.json
 └── services/
     ├── recommendations.ail      # AI product recommendations
     ├── gcp_auth.ail             # GCP OAuth2 ADC authentication
