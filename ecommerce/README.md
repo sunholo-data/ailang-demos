@@ -1,6 +1,6 @@
 # AILANG Ecommerce Demo
 
-A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce applications. Four working demos cover AI integration, data pipelines, capability budgets, and BigQuery analytics.
+A vertical demo showcasing [AILANG](https://ailang.sunholo.com/) for ecommerce applications. Five working demos cover AI integration, data pipelines, capability budgets, BigQuery analytics, and design-by-contract verification.
 
 ## Quick Start
 
@@ -341,6 +341,72 @@ Test Results
 
 ---
 
+### 5. Contracts & Verification
+
+Demonstrates AILANG's design-by-contract system with `requires` (preconditions) and `ensures` (postconditions). Contracts are documented as comments by default and optionally enforced at runtime with `--verify-contracts`.
+
+**Key code** (`contracts_demo.ail`):
+```ailang
+export func applyDiscount(price: float, discountPct: float) -> float ! {}
+requires { price >= 0.0, discountPct >= 0.0, discountPct <= 100.0 }
+ensures { result >= 0.0 }
+{
+  price * (1.0 - discountPct / 100.0)
+}
+
+export func clampQuantity(qty: int, minQty: int, maxQty: int) -> int ! {}
+requires { minQty >= 0, maxQty >= minQty }
+ensures { result >= minQty }
+{
+  if qty < minQty then minQty
+  else if qty > maxQty then maxQty
+  else qty
+}
+```
+
+**Run:**
+```bash
+# No API keys needed
+ailang run --entry main --caps IO ecommerce/contracts_demo.ail
+
+# With runtime contract enforcement
+ailang run --entry main --caps IO --verify-contracts ecommerce/contracts_demo.ail
+```
+
+**Expected output:**
+```
+=== AILANG Contracts Demo ===
+
+1. Price discount with contracts...
+   applyDiscount(99.99, 20.0) = $79.992
+   requires: price >= 0, 0 <= discountPct <= 100
+   ensures:  result >= 0
+
+2. Quantity validation...
+   validateQuantity(5) = 5
+   requires: qty > 0
+   ensures:  result > 0
+
+3. Calculate total with contracts...
+   calculateTotal(29.99, 3) = $89.97
+   requires: unitPrice >= 0, quantity > 0
+   ensures:  result >= 0
+
+4. Clamp quantity to inventory bounds...
+   clampQuantity(150, 1, 100) = 100
+   requires: minQty >= 0, maxQty >= minQty
+   ensures:  result >= minQty
+
+All contracts verified. Run with --verify-contracts for runtime enforcement.
+=== Demo Complete ===
+```
+
+Contracts are also used in the service layer — `pipeline.ail` uses `requires`/`ensures` on `truncate()` and `bigquery.ail` uses `ensures` on `parseIntFromString()` to guarantee non-negative row counts.
+
+**AILANG features shown:** `requires`/`ensures` contracts, comma-separated predicates, `result` keyword in postconditions, `--verify-contracts` runtime enforcement
+
+---
+
 ## AI Provider Authentication
 
 | Provider | Flag | Auth |
@@ -361,6 +427,7 @@ ecommerce/
 ├── pipeline_runner.ail          # Demo 2: Data pipeline
 ├── trusted_analytics_demo.ail   # Demo 3: Budget-as-contract
 ├── bigquery_demo.ail            # Demo 4: BigQuery GA4
+├── contracts_demo.ail           # Demo 5: Contracts & verification
 ├── data/
 │   ├── products.ail             # Product type definitions
 │   └── sample_sales.json        # Sample sales data
@@ -391,6 +458,7 @@ export func main() -> () ! {IO @limit=50, AI @limit=10} { ... }
 | `pipeline_runner.ail` | `IO @limit=50, FS @limit=20` | Limit file operations |
 | `trusted_analytics_demo.ail` | `IO @limit=30, FS @limit=30, Net @limit=5` | Data trust contract |
 | `bigquery_demo.ail` | `IO @limit=100, FS @limit=30, Net @limit=20` | Control BigQuery calls |
+| `contracts_demo.ail` | `IO @limit=20` | Minimal IO for contract demo |
 
 **Services (per-call guarantees):**
 

@@ -129,11 +129,14 @@ func extractTotalRows(json: Json) -> int {
   if isSome(strOpt) then parseIntFromString(getOrElse(strOpt, "0")) else 0
 }
 
-func parseIntFromString(s: string) -> int =
+func parseIntFromString(s: string) -> int ! {}
+ensures { result >= 0 }
+{
   match stringToInt(s) {
     Some(n) => n,
     None => 0
   }
+}
 
 -- Extract job complete status
 -- Note: BigQuery returns jobComplete as a JSON boolean, not a string.

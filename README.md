@@ -6,7 +6,7 @@ Vertical demos showcasing [AILANG](https://ailang.sunholo.com/) — a pure funct
 
 | Demo | Description | Features |
 |------|-------------|----------|
-| [Ecommerce](ecommerce/) | AI recommendations, data pipelines, BigQuery analytics | AI effect, capability budgets, OAuth2, REST API, inline tests |
+| [Ecommerce](ecommerce/) | AI recommendations, data pipelines, BigQuery analytics, contracts | AI effect, capability budgets, OAuth2, REST API, inline tests, requires/ensures |
 
 ## Install AILANG
 

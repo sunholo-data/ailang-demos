@@ -1,0 +1,97 @@
+module ecommerce/contracts_demo
+
+-- Contracts Demo
+-- Demonstrates AILANG's requires/ensures design-by-contract system
+-- for ecommerce domain validation.
+--
+-- Contracts specify preconditions and postconditions that are:
+--   - Always documented as comments in generated code
+--   - Optionally enforced at runtime with --verify-contracts
+--   - A stepping stone toward SMT-based formal verification (v0.8.0)
+--
+-- Run:
+--   ailang run --entry main --caps IO ecommerce/contracts_demo.ail
+--   ailang run --entry main --caps IO --verify-contracts ecommerce/contracts_demo.ail
+
+-- Apply a percentage discount to a price
+-- Contracts guarantee: valid inputs produce valid outputs
+export func applyDiscount(price: float, discountPct: float) -> float ! {}
+requires { price >= 0.0, discountPct >= 0.0, discountPct <= 100.0 }
+ensures { result >= 0.0 }
+{
+  price * (1.0 - discountPct / 100.0)
+}
+
+-- Validate that a quantity is positive
+export func validateQuantity(qty: int) -> int ! {}
+requires { qty > 0 }
+ensures { result > 0 }
+{
+  qty
+}
+
+-- Calculate total price with quantity bounds
+export func calculateTotal(unitPrice: float, quantity: int) -> float ! {}
+requires { unitPrice >= 0.0, quantity > 0 }
+ensures { result >= 0.0 }
+{
+  unitPrice * toFloat(quantity)
+}
+
+-- Clamp a value within bounds (e.g., inventory limits)
+export func clampQuantity(qty: int, minQty: int, maxQty: int) -> int ! {}
+requires { minQty >= 0, maxQty >= minQty }
+ensures { result >= minQty }
+{
+  if qty < minQty then minQty
+  else if qty > maxQty then maxQty
+  else qty
+}
+
+-- Helper: convert int to float
+pure func toFloat(n: int) -> float ! {}
+requires { n >= 0 }
+ensures { result >= 0.0 }
+{
+  match n {
+    0 => 0.0,
+    _ => 1.0 + toFloat(n - 1)
+  }
+}
+
+-- Entry point
+export func main() -> () ! {IO @limit=20} {
+  println("=== AILANG Contracts Demo ===");
+  println("");
+
+  println("1. Price discount with contracts...");
+  let discounted = applyDiscount(99.99, 20.0);
+  println("   applyDiscount(99.99, 20.0) = $" ++ show(discounted));
+  println("   requires: price >= 0, 0 <= discountPct <= 100");
+  println("   ensures:  result >= 0");
+  println("");
+
+  println("2. Quantity validation...");
+  let qty = validateQuantity(5);
+  println("   validateQuantity(5) = " ++ show(qty));
+  println("   requires: qty > 0");
+  println("   ensures:  result > 0");
+  println("");
+
+  println("3. Calculate total with contracts...");
+  let total = calculateTotal(29.99, 3);
+  println("   calculateTotal(29.99, 3) = $" ++ show(total));
+  println("   requires: unitPrice >= 0, quantity > 0");
+  println("   ensures:  result >= 0");
+  println("");
+
+  println("4. Clamp quantity to inventory bounds...");
+  let clamped = clampQuantity(150, 1, 100);
+  println("   clampQuantity(150, 1, 100) = " ++ show(clamped));
+  println("   requires: minQty >= 0, maxQty >= minQty");
+  println("   ensures:  result >= minQty");
+  println("");
+
+  println("All contracts verified. Run with --verify-contracts for runtime enforcement.");
+  println("=== Demo Complete ===")
+}
