@@ -1,0 +1,241 @@
+module wasm/invoice_processor
+
+import std/json (decode, encode, jo, ja, kv, js, jnum, jb, getString, getNumber, getInt, getArray)
+import std/list (foldl, map)
+import std/string (floatToStr, intToStr)
+import std/option (Option, Some, None)
+import std/math (intToFloat)
+
+-- Result type for operations that can fail
+type Result[a] = Ok(a) | Err(string)
+
+-- Invoice line item type
+type LineItem = {
+  description: string,
+  quantity: int,
+  unit_price: float,
+  tax_rate: float
+}
+
+-- Invoice type
+type Invoice = {
+  invoice_number: string,
+  customer_name: string,
+  date: string,
+  line_items: [LineItem],
+  discount_percent: float
+}
+
+-- Result type for validation
+type ValidationResult =
+  | Valid(Invoice)
+  | Invalid(string)
+
+-- Calculate line item total (quantity * price + tax)
+pure func lineItemTotal(item: LineItem) -> float {
+  let subtotal = intToFloat(item.quantity) * item.unit_price;
+  let tax = subtotal * item.tax_rate;
+  subtotal + tax
+}
+
+-- Calculate invoice subtotal (before discount)
+pure func calculateSubtotal(items: [LineItem]) -> float =
+  match items {
+    [] => 0.0,
+    item :: rest => lineItemTotal(item) + calculateSubtotal(rest)
+  }
+
+-- Calculate final total with discount
+pure func calculateTotal(invoice: Invoice) -> float {
+  let subtotal = calculateSubtotal(invoice.line_items);
+  let discount = subtotal * (invoice.discount_percent / 100.0);
+  subtotal - discount
+}
+
+-- Validate a single line item
+pure func validateLineItem(item: LineItem, lineNum: int) -> Option[string] =
+  if item.quantity <= 0 then
+    Some("Line " ++ intToStr(lineNum) ++ ": quantity must be positive")
+  else if item.unit_price < 0.0 then
+    Some("Line " ++ intToStr(lineNum) ++ ": price cannot be negative")
+  else if item.tax_rate < 0.0 || item.tax_rate > 1.0 then
+    Some("Line " ++ intToStr(lineNum) ++ ": tax rate must be between 0 and 1")
+  else if item.description == "" then
+    Some("Line " ++ intToStr(lineNum) ++ ": description cannot be empty")
+  else
+    None
+
+-- Validate all line items recursively
+pure func validateLineItems(items: [LineItem], lineNum: int) -> Option[string] =
+  match items {
+    [] => None,
+    item :: rest => match validateLineItem(item, lineNum) {
+      Some(err) => Some(err),
+      None => validateLineItems(rest, lineNum + 1)
+    }
+  }
+
+-- Validate invoice structure and data
+pure func validateInvoice(invoice: Invoice) -> ValidationResult =
+  if invoice.invoice_number == "" then
+    Invalid("Missing invoice_number")
+  else if invoice.customer_name == "" then
+    Invalid("Missing customer_name")
+  else if invoice.discount_percent < 0.0 || invoice.discount_percent > 100.0 then
+    Invalid("Discount must be between 0 and 100")
+  else match invoice.line_items {
+    [] => Invalid("Invoice must have at least one line item"),
+    _ => match validateLineItems(invoice.line_items, 1) {
+      Some(err) => Invalid(err),
+      None => Valid(invoice)
+    }
+  }
+
+-- Parse a line item from JSON
+pure func parseLineItem(json: Json) -> Option[LineItem] =
+  match getString(json, "description") {
+    None => None,
+    Some(desc) => match getInt(json, "quantity") {
+      None => None,
+      Some(qty) => match getNumber(json, "unit_price") {
+        None => None,
+        Some(price) => match getNumber(json, "tax_rate") {
+          None => None,
+          Some(tax) => Some({
+            description: desc,
+            quantity: qty,
+            unit_price: price,
+            tax_rate: tax
+          })
+        }
+      }
+    }
+  }
+
+-- Parse list of line items from JSON array
+pure func parseLineItems(jsonArray: [Json]) -> Option[[LineItem]] =
+  parseLineItemsHelper(jsonArray, [])
+
+pure func parseLineItemsHelper(jsonArray: [Json], acc: [LineItem]) -> Option[[LineItem]] =
+  match jsonArray {
+    [] => Some(reverseList(acc)),
+    json :: rest => match parseLineItem(json) {
+      None => None,
+      Some(item) => parseLineItemsHelper(rest, item :: acc)
+    }
+  }
+
+-- Reverse a list (helper for accumulator pattern)
+pure func reverseList(xs: [LineItem]) -> [LineItem] =
+  reverseHelper(xs, [])
+
+pure func reverseHelper(xs: [LineItem], acc: [LineItem]) -> [LineItem] =
+  match xs {
+    [] => acc,
+    x :: rest => reverseHelper(rest, x :: acc)
+  }
+
+-- Parse invoice from JSON
+pure func parseInvoice(json: Json) -> Result[Invoice] =
+  match getString(json, "invoice_number") {
+    None => Err("Missing or invalid invoice_number field"),
+    Some(invNum) => match getString(json, "customer_name") {
+      None => Err("Missing or invalid customer_name field"),
+      Some(custName) => match getString(json, "date") {
+        None => Err("Missing or invalid date field"),
+        Some(dateStr) => match getNumber(json, "discount_percent") {
+          None => Err("Missing or invalid discount_percent field"),
+          Some(discount) => match getArray(json, "line_items") {
+            None => Err("Missing or invalid line_items field"),
+            Some(itemsArray) => match parseLineItems(itemsArray) {
+              None => Err("Failed to parse line_items"),
+              Some(items) => Ok({
+                invoice_number: invNum,
+                customer_name: custName,
+                date: dateStr,
+                line_items: items,
+                discount_percent: discount
+              })
+            }
+          }
+        }
+      }
+    }
+  }
+
+-- Format line item for JSON response
+pure func lineItemToJson(item: LineItem) -> Json {
+  let subtotal = intToFloat(item.quantity) * item.unit_price;
+  let tax = subtotal * item.tax_rate;
+  let total = subtotal + tax;
+  jo([
+    kv("description", js(item.description)),
+    kv("quantity", jnum(intToFloat(item.quantity))),
+    kv("unit_price", jnum(item.unit_price)),
+    kv("tax_rate", jnum(item.tax_rate)),
+    kv("subtotal", jnum(subtotal)),
+    kv("tax", jnum(tax)),
+    kv("total", jnum(total))
+  ])
+}
+
+-- Convert line items to JSON array
+pure func lineItemsToJsonArray(items: [LineItem]) -> [Json] =
+  match items {
+    [] => [],
+    item :: rest => lineItemToJson(item) :: lineItemsToJsonArray(rest)
+  }
+
+-- Main processing function (exposed to JavaScript)
+export func processInvoice(jsonString: string) -> string {
+  -- Parse JSON string
+  let parseResult = decode(jsonString);
+
+  match parseResult {
+    Err(parseErr) => encode(jo([
+      kv("valid", jb(false)),
+      kv("error", js("Invalid JSON: " ++ parseErr))
+    ])),
+    Ok(jsonObj) => {
+      -- Parse invoice structure
+      let invoiceResult = parseInvoice(jsonObj);
+
+      match invoiceResult {
+        Err(err) => encode(jo([
+          kv("valid", jb(false)),
+          kv("error", js(err))
+        ])),
+        Ok(invoice) => {
+          -- Validate invoice
+          let validationResult = validateInvoice(invoice);
+
+          match validationResult {
+            Invalid(err) => encode(jo([
+              kv("valid", jb(false)),
+              kv("error", js(err))
+            ])),
+            Valid(validInvoice) => {
+              -- Calculate totals
+              let subtotal = calculateSubtotal(validInvoice.line_items);
+              let discount = subtotal * (validInvoice.discount_percent / 100.0);
+              let total = subtotal - discount;
+
+              -- Build success response
+              encode(jo([
+                kv("valid", jb(true)),
+                kv("invoice_number", js(validInvoice.invoice_number)),
+                kv("customer_name", js(validInvoice.customer_name)),
+                kv("date", js(validInvoice.date)),
+                kv("line_items", ja(lineItemsToJsonArray(validInvoice.line_items))),
+                kv("subtotal", jnum(subtotal)),
+                kv("discount_percent", jnum(validInvoice.discount_percent)),
+                kv("discount_amount", jnum(discount)),
+                kv("total", jnum(total))
+              ]))
+            }
+          }
+        }
+      }
+    }
+  }
+}

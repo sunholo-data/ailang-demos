@@ -551,7 +551,6 @@ const GA4_QUERIES: QueryDef[] = [
   { name: 'Event Counts by Date', func: 'eventCountsByDateQuery', chart: 'bar', args: [{ name: 'startDate', type: 'string', default: '20210101' }, { name: 'endDate', type: 'string', default: '20211231' }] },
   { name: 'Daily Summary', func: 'dailySummaryQuery', chart: 'bar', args: [{ name: 'startDate', type: 'string', default: '20210101' }, { name: 'endDate', type: 'string', default: '20211231' }] },
   { name: 'Top Categories by Views', func: 'topCategoriesByViewsQuery', chart: 'bar', args: [{ name: 'limit', type: 'int', default: '10' }] },
-  { name: 'GA4 Table Reference', func: 'ga4Table', chart: 'none', args: [] },
 ]
 
 // ─── AI Function Config ─────────────────────────────────────────────────────
@@ -777,22 +776,30 @@ function SmartChart({ data, chartType }: { data: ParsedData; chartType: ChartTyp
   if (chartType === 'kpi') return <KPICards data={data} />
 
   // Find label (string) and value (numeric) columns
-  const firstNumCol = data.rows[0]?.findIndex((_v, i) =>
-    data.rows.every(r => !isNaN(parseFloat(r[i])) && r[i] !== '')
-  ) ?? -1
-  const labelCol = firstNumCol > 0 ? 0 : -1
+  // Date-like values (20210115) should be treated as labels, not numbers
+  const isDateLike = (v: string) => /^20\d{6}$/.test(v)
+  const isTrulyNumeric = (col: number) =>
+    data.rows.every(r => !isNaN(parseFloat(r[col])) && r[col] !== '' && !isDateLike(r[col]))
 
-  if (labelCol < 0 || firstNumCol < 0) return null
+  // Find first truly numeric column, preferring cols > 0
+  let valueCol = data.rows[0]?.findIndex((_v, i) => i > 0 && isTrulyNumeric(i)) ?? -1
+  if (valueCol < 0 && data.rows[0] && isTrulyNumeric(0)) valueCol = 0
+
+  // Label column: use col 0 if valueCol > 0, otherwise col 1
+  let labelCol = valueCol > 0 ? 0 : (data.rows[0]?.length > 1 ? 1 : -1)
+  if (valueCol === 0 && data.rows[0]?.length > 1) labelCol = 1
+
+  if (labelCol < 0 || valueCol < 0 || labelCol === valueCol) return null
 
   if (chartType === 'pie') {
-    return <PieChart data={data} labelCol={labelCol} valueCol={firstNumCol} />
+    return <PieChart data={data} labelCol={labelCol} valueCol={valueCol} />
   }
 
   // Default: bar chart
-  const title = data.headers.length > 0
-    ? `${data.headers[labelCol]} vs ${data.headers[firstNumCol]}`
+  const title = data.headers.length > 0 && data.headers[labelCol] && data.headers[valueCol]
+    ? `${data.headers[labelCol]} vs ${data.headers[valueCol]}`
     : undefined
-  return <HBarChart data={data} labelCol={labelCol} valueCol={firstNumCol} title={title} />
+  return <HBarChart data={data} labelCol={labelCol} valueCol={valueCol} title={title} />
 }
 
 // ─── Components ─────────────────────────────────────────────────────────────

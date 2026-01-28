@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AILANG Invoice Processor Demo</title>
+  <meta name="description" content="Type-safe invoice validation and processing powered by AILANG WebAssembly">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="wasm/wasm_exec.js"></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>AILANG Invoice Processor</h1>
+      <p class="tagline">Type-safe business logic with WebAssembly</p>
+      <div class="header-links">
+        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG on GitHub</a>
+        <a href="https://ailang-docs.com" target="_blank" rel="noopener">Documentation</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Introduction -->
+    <section class="intro">
+      <h2>Business logic that catches errors <strong>before</strong> they reach production</h2>
+      <p>
+        See how AILANG's type system validates invoice data with zero runtime overhead.
+        Type safety, pattern matching, and pure functional programming combine to create
+        bulletproof business logic.
+      </p>
+    </section>
+
+    <!-- Demo Panel -->
+    <section class="demo-panel">
+      <div class="panel-container">
+        <!-- Left Panel: Input -->
+        <div class="input-panel">
+          <h2>Invoice Data (JSON)</h2>
+
+          <div class="examples">
+            <h3>Try an Example:</h3>
+            <div class="example-buttons">
+              <button class="example-btn success" data-example="valid">✓ Valid Invoice</button>
+              <button class="example-btn error" data-example="missing-field">✗ Missing Field</button>
+              <button class="example-btn error" data-example="missing-items">✗ No Items</button>
+              <button class="example-btn error" data-example="negative-price">✗ Negative Price</button>
+              <button class="example-btn error" data-example="invalid-quantity">✗ Zero Quantity</button>
+              <button class="example-btn error" data-example="invalid-discount">✗ Invalid Discount</button>
+              <button class="example-btn error" data-example="invalid-tax-rate">✗ Invalid Tax Rate</button>
+            </div>
+          </div>
+
+          <textarea id="invoiceInput" rows="25" placeholder='Paste your invoice JSON here...'></textarea>
+
+          <div class="button-group">
+            <button id="processBtn" class="btn btn-primary">Process Invoice</button>
+            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+          </div>
+        </div>
+
+        <!-- Right Panel: Output -->
+        <div class="output-panel">
+          <h2>Results</h2>
+          <div id="results">
+            <p class="placeholder">Paste invoice data and click "Process Invoice"</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comparison -->
+    <section class="comparison">
+      <h2>Why AILANG for Business Logic?</h2>
+      <div class="comparison-grid">
+        <div class="comparison-col bad">
+          <h3>✗ JavaScript / Python</h3>
+          <ul>
+            <li>Missing fields crash at runtime</li>
+            <li>Type errors discovered by users</li>
+            <li>No guarantees about data structure</li>
+            <li>Silent calculation errors (NaN, undefined)</li>
+            <li>Difficult to maintain as code grows</li>
+          </ul>
+        </div>
+        <div class="comparison-col good">
+          <h3>✓ AILANG</h3>
+          <ul>
+            <li>Type system ensures all fields present</li>
+            <li>Errors caught at parse time</li>
+            <li>Guaranteed data structure correctness</li>
+            <li>Impossible to produce invalid results</li>
+            <li>Clear, declarative, maintainable code</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <h2>Key Features</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="feature-icon">🛡️</div>
+          <h3>Type Safety</h3>
+          <p>Catch errors at parse time, not in production. AILANG's Hindley-Milner type system ensures correctness.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">⚡</div>
+          <h3>Fast</h3>
+          <p>Runs entirely in browser via WebAssembly. No server required, instant feedback.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔧</div>
+          <h3>Maintainable</h3>
+          <p>Clear, declarative code with pattern matching. Easy to understand and modify.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📦</div>
+          <h3>Portable</h3>
+          <p>Same code runs client-side or server-side. Write once, run anywhere.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🎯</div>
+          <h3>Pure Functions</h3>
+          <p>No side effects, fully testable logic. Guaranteed predictable behavior.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔍</div>
+          <h3>Pattern Matching</h3>
+          <p>Exhaustive case analysis ensures all scenarios are handled correctly.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code Example -->
+    <section class="code-example">
+      <h2>The AILANG Code</h2>
+      <p>
+        The entire business logic is written in ~200 lines of AILANG code.
+        View the source: <a href="wasm/invoice_processor.ail" target="_blank">invoice_processor.ail</a>
+      </p>
+      <pre><code>-- Calculate line item total (quantity * price + tax)
+pure func lineItemTotal(item: LineItem) -> float {
+  let subtotal = intToFloat(item.quantity) * item.unit_price;
+  let tax = subtotal * item.tax_rate;
+  subtotal + tax
+}
+
+-- Validate invoice structure and data
+pure func validateInvoice(invoice: Invoice) -> ValidationResult =
+  if invoice.invoice_number == "" then
+    Invalid("Missing invoice_number")
+  else if invoice.customer_name == "" then
+    Invalid("Missing customer_name")
+  else if invoice.discount_percent < 0.0 || invoice.discount_percent > 100.0 then
+    Invalid("Discount must be between 0 and 100")
+  else match invoice.line_items {
+    [] => Invalid("Invoice must have at least one line item"),
+    _ => match validateLineItems(invoice.line_items, 1) {
+      Some(err) => Invalid(err),
+      None => Valid(invoice)
+    }
+  }</code></pre>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <h2>How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>User pastes JSON</h3>
+          <p>Invoice data is entered as JSON in the browser</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>AILANG validates</h3>
+          <p>Type system checks structure, validates data</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Calculates totals</h3>
+          <p>Type-safe arithmetic with pure functions</p>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>Returns results</h3>
+          <p>Detailed error messages or calculated totals</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section class="cta">
+      <h2>Try AILANG in Your Project</h2>
+      <p>
+        AILANG is open source and ready for production use. Build reliable,
+        type-safe applications with the power of functional programming.
+      </p>
+      <div class="cta-buttons">
+        <a href="https://github.com/sunholo-data/ailang" class="btn btn-primary" target="_blank" rel="noopener">
+          View on GitHub
+        </a>
+        <a href="https://ailang-docs.com/docs/guides/wasm-integration" class="btn btn-secondary" target="_blank" rel="noopener">
+          WASM Integration Guide
+        </a>
+        <a href="https://github.com/sunholo-data/ailang/releases" class="btn btn-secondary" target="_blank" rel="noopener">
+          Download AILANG
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>
+        Built with <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a> -
+        The AI-First Programming Language
+      </p>
+      <p>
+        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">GitHub</a> |
+        <a href="https://ailang-docs.com" target="_blank" rel="noopener">Documentation</a> |
+        <a href="https://github.com/sunholo-data/ailang/issues" target="_blank" rel="noopener">Report Issues</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

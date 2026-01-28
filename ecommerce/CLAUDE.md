@@ -188,14 +188,39 @@ See `docs/guides/module-imports.md` for full explanation.
 -- module A must ALSO import std/fs
 ```
 
+## Discovering AILANG Features
+
+**IMPORTANT:** Before reporting missing features or bugs, use `ailang docs` to check the documentation:
+
+```bash
+# Search for a specific topic
+ailang docs search "startsWith"
+ailang docs search "json"
+ailang docs search "contracts"
+
+# View module documentation
+ailang docs std/string
+ailang docs std/json
+ailang docs std/result
+
+# List all available stdlib modules
+ailang docs list
+
+# View a specific function
+ailang docs std/string.substring
+```
+
+Many "missing" features are actually available - `ailang docs` helps discover them before filing bug reports.
+
 ## When Editing This Code
 
-1. **Always test with `ailang run`** after changes
-2. **Use `Some`/`None` pattern matching** directly (fixed in v0.7.0)
-3. **Check for reserved words** if you get parse errors on identifiers
-4. **Declare all effects** in function signatures
-5. **Add all needed imports** per module (non-transitive)
-6. **Respect budget limits** or adjust @limit values if needed
+1. **Use `ailang docs` first** to check available functions before assuming something is missing
+2. **Always test with `ailang run`** after changes
+3. **Use `Some`/`None` pattern matching** directly (fixed in v0.7.0)
+4. **Check for reserved words** if you get parse errors on identifiers
+5. **Declare all effects** in function signatures
+6. **Add all needed imports** per module (non-transitive)
+7. **Respect budget limits** or adjust @limit values if needed
 
 ## Debugging Budget Issues
 

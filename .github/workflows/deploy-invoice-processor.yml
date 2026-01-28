@@ -1,0 +1,52 @@
+name: Deploy Invoice Processor to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'invoice_processor_wasm/**'
+      - '.github/workflows/deploy-invoice-processor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download AILANG WASM files
+        run: |
+          echo "Downloading AILANG WASM binary..."
+          wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang.wasm \
+            -O invoice_processor_wasm/wasm/ailang.wasm
+          echo "Downloading Go WASM runtime..."
+          wget https://github.com/sunholo-data/ailang/releases/latest/download/wasm_exec.js \
+            -O invoice_processor_wasm/wasm/wasm_exec.js
+          echo "WASM files downloaded successfully!"
+          ls -lh invoice_processor_wasm/wasm/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'invoice_processor_wasm'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

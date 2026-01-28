@@ -1,12 +1,20 @@
 module ecommerce/services/ga4_queries
 
+import std/string (startsWith, length)
+
 -- GA4 BigQuery Query Helpers
 -- Pre-built SQL queries for the GA4 demo ecommerce dataset
 -- Dataset: bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*
 --
 -- Run tests: ailang test ecommerce/services/ga4_queries.ail
+-- Run with contracts: ailang run --verify-contracts ...
+--
+-- CONTRACTS: All query functions use ensures to guarantee:
+--   1. Result starts with "SELECT" (valid SQL)
+--   2. Result length > 50 (non-trivial query)
+-- This distinguishes queries from utility functions like ga4Table()
 
--- The GA4 demo dataset table path
+-- The GA4 demo dataset table path (NOT a query - no SELECT contract)
 export pure func ga4Table() -> string
   tests [
     ((), "`bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`")
@@ -21,6 +29,8 @@ export pure func ga4Table() -> string
 
 -- Get top events by count
 export pure func topEventsQuery(limit: int) -> string
+  requires { limit > 0 }
+  ensures { startsWith(result, "SELECT"), length(result) > 50 }
   tests [
     (5, "SELECT event_name, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` GROUP BY event_name ORDER BY event_count DESC LIMIT 5"),
     (10, "SELECT event_name, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` GROUP BY event_name ORDER BY event_count DESC LIMIT 10")
@@ -35,6 +45,8 @@ export pure func topEventsQuery(limit: int) -> string
 
 -- Get event counts for a specific date range
 export pure func eventCountsByDateQuery(startDate: string, endDate: string) -> string
+  requires { length(startDate) == 8, length(endDate) == 8 }
+  ensures { startsWith(result, "SELECT"), length(result) > 50 }
   tests [
     (("20201101", "20210131"), "SELECT event_date, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE _TABLE_SUFFIX BETWEEN '20201101' AND '20210131' GROUP BY event_date ORDER BY event_date")
   ]
@@ -48,6 +60,8 @@ export pure func eventCountsByDateQuery(startDate: string, endDate: string) -> s
 
 -- Get specific event trend over time
 export pure func eventTrendQuery(eventName: string) -> string
+  requires { length(eventName) > 0 }
+  ensures { startsWith(result, "SELECT"), length(result) > 50 }
   tests [
     ("purchase", "SELECT event_date, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE event_name = 'purchase' GROUP BY event_date ORDER BY event_date")
   ]
@@ -65,6 +79,8 @@ export pure func eventTrendQuery(eventName: string) -> string
 
 -- Get top products by revenue
 export pure func topProductsByRevenueQuery(limit: int) -> string
+  requires { limit > 0 }
+  ensures { startsWith(result, "SELECT"), length(result) > 50 }
   tests [
     (10, "SELECT items.item_name, SUM(items.item_revenue) as total_revenue, SUM(items.quantity) as total_quantity FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`, UNNEST(items) as items WHERE event_name = 'purchase' AND items.item_revenue IS NOT NULL GROUP BY items.item_name ORDER BY total_revenue DESC LIMIT 10")
   ]
