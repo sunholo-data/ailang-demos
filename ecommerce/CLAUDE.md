@@ -57,13 +57,13 @@ ecommerce/
 ## AILANG Syntax Essentials
 
 ### Effects (Capabilities)
-```ailang
+```haskell
 func foo() -> string ! {IO, Net, FS} { ... }  -- Declares required effects
 pure func bar() -> int = 42                    -- No effects allowed
 ```
 
 ### Capability Budgets
-```ailang
+```haskell
 -- Limit effect operations with @limit=N
 func limited() -> () ! {IO @limit=10, Net @limit=5} { ... }
 
@@ -91,7 +91,7 @@ func limited() -> () ! {IO @limit=10, Net @limit=5} { ... }
 **Note:** FS budgets are higher than expected because internal stdlib operations (e.g., `fileExists`, `readFile`) may consume multiple FS effect units per call.
 
 ### Pattern Matching
-```ailang
+```haskell
 match list {
   [] => "empty",
   x :: rest => "has items"
@@ -104,14 +104,14 @@ match result {
 ```
 
 ### Records
-```ailang
+```haskell
 type Product = { name: string, price: float }
 let p: Product = { name: "Widget", price: 9.99 };
 println(p.name)
 ```
 
 ### Inline Tests
-```ailang
+```haskell
 -- Tests are part of the function signature
 pure func add(x: int, y: int) -> int
   tests [
@@ -144,7 +144,7 @@ pure func getTable() -> string
 ### Fixed in v0.7.0
 
 **Option Pattern Matching** - FIXED (M-BUILTIN-SAFETY)
-```ailang
+```haskell
 -- This now works correctly:
 match getString(json, "key") {
   Some(s) => s,
@@ -153,13 +153,13 @@ match getString(json, "key") {
 ```
 
 **Record in Result Construction** - ALWAYS WORKED (ANF normalization)
-```ailang
+```haskell
 -- This works - no helper function needed:
 Ok({ status: 200, body: "ok" })
 ```
 
 **If-Then-Else Blocks** - ALWAYS WORKED (`parseBlockOrExpression()`)
-```ailang
+```haskell
 -- Multi-statement blocks in if branches work:
 if condition then {
   let x = compute();
@@ -176,14 +176,14 @@ if condition then {
 ### Still Relevant
 
 **Reserved Words:** `exists`, `forall`, etc. are reserved. Parser gives helpful error with suggestions.
-```ailang
+```haskell
 -- Use alternative names:
 let found = fileExists(path)   -- not "exists"
 ```
 
 **Non-Transitive Imports:** Each module must import its own dependencies.
 See `docs/guides/module-imports.md` for full explanation.
-```ailang
+```haskell
 -- If module A imports module B, and B uses std/fs,
 -- module A must ALSO import std/fs
 ```

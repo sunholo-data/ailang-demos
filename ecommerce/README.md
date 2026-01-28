@@ -39,7 +39,7 @@ ailang test ecommerce/services/ga4_queries.ail
 Uses AILANG's `std/ai` effect to call AI models for product recommendations and descriptions. Demonstrates the AI effect system, JSON handling, and modular service design.
 
 **Key code** (`services/recommendations.ail`):
-```ailang
+```haskell
 export func getProductRecommendations(
   productName: string, category: string, userPreferences: string
 ) -> string ! {AI} {
@@ -102,7 +102,7 @@ reduce fatigue, while contoured arch support promotes proper alignment.
 Pure functional data pipeline that reads JSON sales data, aggregates by product, and writes results. No external APIs needed.
 
 **Key code** (`services/pipeline.ail`):
-```ailang
+```haskell
 export pure func aggregateByProduct(records: [SalesRecord]) -> [...] {
   let productIds = uniqueProductIds(records);
   aggregateForProducts(productIds, records)
@@ -152,7 +152,7 @@ Results written to: ecommerce/data/aggregated_output.json
 Demonstrates **capability budgets as contracts for data trust**. The budget guarantees exactly how many API calls the pipeline will make -- any deviation is a bug that the budget catches immediately.
 
 **Key code** (`trusted_analytics_demo.ail`):
-```ailang
+```haskell
 -- BUDGET CONTRACT: This pipeline runs EXACTLY 4 network calls
 -- Any deviation is a bug that the budget will catch
 export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
@@ -211,7 +211,7 @@ The key output is the **budget accounting** — exactly 4/5 API calls used (1 au
 Full BigQuery integration querying the public GA4 ecommerce dataset. Authenticates via Application Default Credentials, executes 7 analytics queries, and displays results.
 
 **Key code** (`services/bigquery.ail`):
-```ailang
+```haskell
 export func query(projectId: string, sql: string, token: string)
     -> Result[QueryResult, string] ! {Net @limit=1} {
   let url = "https://bigquery.googleapis.com/.../queries";
@@ -298,7 +298,7 @@ Authentication successful!
 ### Inline Tests
 
 **Key code** (`services/ga4_queries.ail`):
-```ailang
+```haskell
 export pure func topEventsQuery(limit: int) -> string
   tests [
     (5, "SELECT event_name... LIMIT 5"),
@@ -346,7 +346,7 @@ Test Results
 Demonstrates AILANG's design-by-contract system with `requires` (preconditions) and `ensures` (postconditions). Contracts are documented as comments by default and optionally enforced at runtime with `--verify-contracts`.
 
 **Key code** (`contracts_demo.ail`):
-```ailang
+```haskell
 export func applyDiscount(price: float, discountPct: float) -> float ! {}
 requires { price >= 0.0, discountPct >= 0.0, discountPct <= 100.0 }
 ensures { result >= 0.0 }
@@ -445,7 +445,7 @@ ecommerce/
 
 All entry points and services use AILANG's capability budget system (`@limit=N`) to enforce hard limits on side effects:
 
-```ailang
+```haskell
 -- This function can perform at most 50 IO ops and 10 AI calls
 export func main() -> () ! {IO @limit=50, AI @limit=10} { ... }
 ```
@@ -475,7 +475,7 @@ export func main() -> () ! {IO @limit=50, AI @limit=10} { ... }
 
 AILANG supports inline tests in function signatures:
 
-```ailang
+```haskell
 export pure func topEventsQuery(limit: int) -> string
   tests [
     (5, "SELECT event_name... LIMIT 5"),
