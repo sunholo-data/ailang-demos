@@ -75,9 +75,16 @@ jobs:
               "https://raw.githubusercontent.com/sunholo-data/ailang/${RELEASE_TAG}/docs/static/wasm/wasm_exec.js"
           fi
 
-          # ailang-repl.js is committed to this repo (has loadModule/call/importModule API)
-          # Do NOT overwrite it — the AILANG repo's version may lack these methods
-          echo "Using ailang-repl.js from repo checkout"
+          # Use ailang-repl.js from tarball if present, otherwise download from AILANG repo
+          if [ -f ailang-repl.js ]; then
+            echo "Using ailang-repl.js from release tarball"
+            mv ailang-repl.js "$WASM_DIR/"
+          else
+            echo "ailang-repl.js not in tarball, downloading from AILANG repo..."
+            curl -sfL --retry 3 --retry-delay 5 \
+              -o "$WASM_DIR/ailang-repl.js" \
+              "https://raw.githubusercontent.com/sunholo-data/ailang/${RELEASE_TAG}/web/ailang-repl.js"
+          fi
 
       - name: Verify WASM files
         run: |

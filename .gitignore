@@ -16,3 +16,4 @@ ecommerce/data/aggregated_output.json
 Thumbs.db
 /invoice_processor_wasm/wasm/ailang.wasm
 /invoice_processor_wasm/wasm/wasm_exec.js
+/invoice_processor_wasm/wasm/ailang-repl.js
