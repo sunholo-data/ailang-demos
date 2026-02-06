@@ -68,6 +68,7 @@ body {
   background-size: 48px 48px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 /* ── Animations ────────────────────────────────────────────── */
@@ -402,6 +403,8 @@ section p {
   padding: 24px;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
+  min-width: 0;          /* prevent content from expanding grid columns */
+  overflow: hidden;
 }
 
 .pipeline-col h2 {
@@ -1195,6 +1198,11 @@ textarea:focus {
   background: var(--bg);
   border-radius: 8px;
   border: 1.5px solid var(--border);
+  overflow-x: auto;
+}
+
+#results table {
+  font-size: 0.75rem;
 }
 
 #results .placeholder {
@@ -1302,7 +1310,7 @@ textarea:focus {
   border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
 }
 
 .line-items-table th {
@@ -1844,13 +1852,18 @@ footer a:hover {
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .pipeline-grid {
     grid-template-columns: 1fr 1fr;
   }
 
   .pipeline-middle {
     grid-column: 1 / -1;
+    order: -1;       /* code panel goes to top row */
+  }
+
+  .pipeline-middle pre {
+    max-height: 260px;
   }
 
   .pipeline-steps {
