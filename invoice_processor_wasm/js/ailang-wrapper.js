@@ -43,9 +43,12 @@ class AilangEngine {
         console.log(`Import ${lib}:`, result);
       }
 
-      // Check if native AI handler support exists
-      this._hasNativeAI = typeof window.ailangSetAIHandler === 'function';
+      // Check if native AI handler support exists (REPL method or global function)
+      this._hasNativeAI = typeof this.repl.setAIHandler === 'function'
+        || typeof window.ailangSetAIHandler === 'function';
+      this._hasAsyncCall = typeof this.repl.callAsync === 'function';
       console.log('Native AI handler support:', this._hasNativeAI);
+      console.log('Async call support:', this._hasAsyncCall);
 
       this.ready = true;
     } catch (err) {
@@ -65,7 +68,12 @@ class AilangEngine {
   setAIHandler(handler) {
     this._aiHandler = handler;
     if (this._hasNativeAI) {
-      window.ailangSetAIHandler(handler);
+      // Prefer REPL method, fall back to global function
+      if (typeof this.repl.setAIHandler === 'function') {
+        this.repl.setAIHandler(handler);
+      } else {
+        window.ailangSetAIHandler(handler);
+      }
       console.log('Registered native AI handler');
     } else {
       console.log('Stored AI handler for JS-side fallback (no native WASM AI support)');
@@ -145,6 +153,48 @@ class AilangEngine {
   }
 
   /**
+   * Call a function that may trigger async effect handlers (e.g. AI calls).
+   * Uses the REPL's callAsync when available, falls back to synchronous call.
+   * @param {string} moduleName - Module name
+   * @param {string} funcName - Function name
+   * @param {...string} args - String arguments
+   * @returns {Promise<{ success: boolean, result?: any, error?: string, errorType?: string }>}
+   */
+  async callFunctionAsync(moduleName, funcName, ...args) {
+    if (!this.ready) throw new Error('Engine not initialized');
+
+    try {
+      let callResult;
+      if (this._hasAsyncCall) {
+        callResult = await this.repl.callAsync(moduleName, funcName, ...args);
+      } else {
+        callResult = this.repl.call(moduleName, funcName, ...args);
+      }
+
+      if (!callResult.success) {
+        return {
+          success: false,
+          error: callResult.error,
+          errorType: 'ailang'
+        };
+      }
+
+      const parsed = this._parseResult(callResult.result);
+      return {
+        success: true,
+        result: parsed,
+        raw: callResult.result
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `WASM execution error: ${err.message}`,
+        errorType: 'wrapper'
+      };
+    }
+  }
+
+  /**
    * Reset the REPL and reimport stdlibs.
    * Clears all loaded modules.
    */
@@ -162,7 +212,11 @@ class AilangEngine {
 
     // Re-register AI handler if we have native support
     if (this._hasNativeAI && this._aiHandler) {
-      window.ailangSetAIHandler(this._aiHandler);
+      if (typeof this.repl.setAIHandler === 'function') {
+        this.repl.setAIHandler(this._aiHandler);
+      } else {
+        window.ailangSetAIHandler(this._aiHandler);
+      }
     }
   }
 

@@ -9,7 +9,7 @@
  *   - AI extraction function (! {AI} effect)
  *   - JSON parse function using std/json
  *   - Validation function with requires/ensures contracts
- *   - Export functions: processDocument (effectful) and validateOnly (pure)
+ *   - Export functions: processDocument, processFile (effectful) and validateOnly (pure)
  */
 
 export class SchemaCompiler {
@@ -24,6 +24,7 @@ export class SchemaCompiler {
       this._typeDefinition(schema),
       this._jintHelper(),
       this._aiExtractionFunction(schema),
+      this._fileExtractionFunction(schema),
       this._parseFunction(schema),
       this._validateFunction(schema),
       this._resultEncoder(schema),
@@ -80,6 +81,32 @@ pure func jint(n: int) -> Json = jnum(intToFloat(n))
 func extractFields(document: string) -> string ! {AI} {
   let prompt = "Extract these fields as JSON from the document below.\\nFields:\\n${fieldList}\\nFor int fields, return integer values (e.g. monetary amounts in cents).\\nReturn ONLY a JSON object with these exact field names.\\n\\nDocument:\\n" ++ document in
   call(prompt)
+}
+
+`;
+  }
+
+  /**
+   * Generate the multimodal file extraction function.
+   * Builds a structured JSON request with base64 data using std/json,
+   * then sends it through std/ai.call(). The JS handler interprets the
+   * JSON to construct a Gemini inlineData request.
+   */
+  _fileExtractionFunction(schema) {
+    const fieldList = schema.fields
+      .map(f => `--   ${f.name} (${f.type}${f.required ? ', required' : ''})`)
+      .join('\\n');
+
+    return `-- Multimodal extraction: sends base64 file data to AI via structured JSON request
+-- Uses std/json to build the request, std/ai.call() to invoke the host AI handler
+func extractFromFile(base64Data: string, mimeType: string) -> string ! {AI} {
+  let request = encode(jo([
+    kv("mode", js("multimodal")),
+    kv("mimeType", js(mimeType)),
+    kv("data", js(base64Data)),
+    kv("prompt", js("Extract these fields as JSON from the attached document.\\nFields:\\n${fieldList}\\nFor int fields, return integer values (e.g. monetary amounts in cents).\\nReturn ONLY a JSON object with these exact field names."))
+  ])) in
+  call(request)
 }
 
 `;
@@ -198,17 +225,25 @@ pure func encodeError(msg: string) -> string =
   }
 
   /**
-   * Generate the two export functions:
-   * - processDocument: effectful (AI extraction + validation)
+   * Generate the export functions:
+   * - processDocument: effectful (text AI extraction + validation)
+   * - processFile: effectful (multimodal file extraction + validation)
    * - validateOnly: pure (validate pre-extracted JSON)
    */
   _exportFunctions(schema) {
     const typeName = schema.name;
     const parseFn = `parse${typeName}`;
 
-    return `-- Main pipeline: AI extraction + AILANG validation (requires AI capability)
+    return `-- Text pipeline: AI extraction + AILANG validation (requires AI capability)
 export func processDocument(document: string) -> string ! {AI} {
   let raw = extractFields(document) in
+  validateOnly(raw)
+}
+
+-- File pipeline: multimodal AI extraction + AILANG validation
+-- base64Data is the file content encoded as base64, mimeType is e.g. "application/pdf"
+export func processFile(base64Data: string, mimeType: string) -> string ! {AI} {
+  let raw = extractFromFile(base64Data, mimeType) in
   validateOnly(raw)
 }
 

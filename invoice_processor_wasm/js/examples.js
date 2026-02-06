@@ -102,6 +102,27 @@ Thank you for visiting Coffee House!`,
     }
   },
 
+  pdfInvoice: {
+    label: 'PDF Invoice',
+    description: 'Extract fields from a real PDF car hire invoice using multimodal AI',
+    document: '',
+    pdfUrl: 'assets/bristol-car-hire-demo.pdf',
+    schema: {
+      name: 'CarHireInvoice',
+      fields: [
+        { name: 'company_name', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'invoice_number', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'customer_name', type: 'string', required: true, constraints: [] },
+        { name: 'hire_date', type: 'string', required: true, constraints: [] },
+        { name: 'return_date', type: 'string', required: true, constraints: [] },
+        { name: 'vehicle_type', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'total_cents', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'tax_cents', type: 'int', required: false, constraints: ['>= 0'] }
+      ]
+    },
+    preExtracted: null // Requires API key — no pre-extracted data for PDF demos
+  },
+
   contract: {
     label: 'Contract',
     description: 'Extract parties, dates, and key terms from a service agreement',

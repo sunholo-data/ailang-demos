@@ -24,6 +24,14 @@ let schemaEditor = null;
 let formatter = null;
 let currentDemo = null;   // key into demoExamples, or null for custom
 let running = false;
+let uploadedBinary = null; // { base64: string, mimeType: string, fileName: string, fileSize: number }
+
+// ── File Size Limits ────────────────────────────────────────
+const FILE_SIZE_LIMITS = {
+  image: 10 * 1024 * 1024,   // 10 MB for images
+  pdf: 20 * 1024 * 1024,     // 20 MB for PDFs
+  text: 5 * 1024 * 1024,     // 5 MB for text files
+};
 
 // ── DOM References ───────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
@@ -56,13 +64,7 @@ async function init() {
     // Register Gemini as AI handler
     const apiKey = loadApiKey();
     if (apiKey) {
-      const gemini = new GeminiClient(apiKey);
-      engine.setAIHandler(async (input) => {
-        // The AILANG std/ai.call(prompt) sends the prompt here
-        // We extract fields using the prompt directly
-        // The input is the full prompt string from AILANG
-        return JSON.stringify(await gemini.extractFields(input, schemaEditor.getSchema()));
-      });
+      registerAIHandler(apiKey);
     }
 
     hideLoading();
@@ -99,10 +101,7 @@ function setupApiKeyPanel() {
         updateApiKeyBadge();
         // Re-register AI handler with new key
         if (engine) {
-          const gemini = new GeminiClient(key);
-          engine.setAIHandler(async (prompt) => {
-            return JSON.stringify(await gemini.extractFields(prompt, schemaEditor.getSchema()));
-          });
+          registerAIHandler(key);
         }
       }
     });
@@ -129,6 +128,26 @@ function updateApiKeyBadge() {
   badge.className = hasKey ? 'demo-badge live' : 'demo-badge';
 }
 
+// ── AI Handler ──────────────────────────────────────────────
+function registerAIHandler(apiKey) {
+  const gemini = new GeminiClient(apiKey);
+  engine.setAIHandler(async (input) => {
+    // AILANG sends either a plain text prompt or a JSON-structured multimodal request
+    try {
+      const req = JSON.parse(input);
+      if (req.mode === 'multimodal' && req.data) {
+        // Multimodal: AILANG built a JSON request with base64 file data
+        return JSON.stringify(await gemini.extractFields(
+          req.prompt || '', schemaEditor.getSchema(),
+          { base64: req.data, mimeType: req.mimeType }
+        ));
+      }
+    } catch { /* not JSON — fall through to text mode */ }
+    // Text mode: input is the full prompt string from AILANG
+    return JSON.stringify(await gemini.extractFields(input, schemaEditor.getSchema()));
+  });
+}
+
 // ── Demo Buttons ─────────────────────────────────────────────
 function setupDemoButtons() {
   // Support both demo-chip (toolbar) and demo-btn (legacy) selectors
@@ -144,40 +163,77 @@ function loadDemo(name) {
   if (!demo) return;
 
   currentDemo = name;
+  uploadedBinary = null;
+  hideFilePreview();
+  $('#uploadChip')?.classList.remove('has-file');
 
   // Update active states on all demo selectors
   $$('[data-demo]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.demo === name);
   });
 
-  // Load document
-  const docInput = $('#documentInput');
-  if (docInput) docInput.value = demo.document;
-
   // Load schema
   if (schemaEditor) {
     schemaEditor.loadSchema(demo.schema);
+  }
+
+  // If demo has a PDF URL, fetch it as binary
+  if (demo.pdfUrl) {
+    const docInput = $('#documentInput');
+    if (docInput) docInput.style.display = 'none';
+    loadPdfDemo(demo);
+    return;
+  }
+
+  // Restore textarea and load document
+  const docInput = $('#documentInput');
+  if (docInput) {
+    docInput.style.display = '';
+    docInput.value = demo.document;
+    docInput.placeholder = 'Paste document text here...';
   }
 
   // Auto-run extraction
   runPipeline();
 }
 
+async function loadPdfDemo(demo) {
+  showLoading('Loading PDF demo...');
+  try {
+    const response = await fetch(demo.pdfUrl);
+    if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+
+    uploadedBinary = {
+      base64: btoa(binary),
+      mimeType: 'application/pdf',
+      fileName: demo.pdfUrl.split('/').pop(),
+      fileSize: arrayBuffer.byteLength
+    };
+
+    showFilePreview(uploadedBinary);
+    runPipeline();
+  } catch (err) {
+    showError(`Failed to load PDF demo: ${err.message}`);
+  }
+}
+
 // ── Input Methods ────────────────────────────────────────────
 function setupInputMethods() {
-  $$('.method-btn[data-method]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const method = btn.dataset.method;
-      $$('.method-btn').forEach(b => b.classList.toggle('active', b.dataset.method === method));
-
-      const textarea = $('#documentInput');
+  // Upload chip in toolbar triggers file picker
+  const uploadChip = $('#uploadChip');
+  if (uploadChip) {
+    uploadChip.addEventListener('click', () => {
       const fileInput = $('#fileUpload');
-
-      if (method === 'upload' && fileInput) {
-        fileInput.click();
-      }
+      if (fileInput) fileInput.click();
     });
-  });
+  }
 
   const fileInput = $('#fileUpload');
   if (fileInput) {
@@ -185,16 +241,65 @@ function setupInputMethods() {
       const file = e.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const textarea = $('#documentInput');
-        if (textarea) textarea.value = reader.result;
-        currentDemo = null;
-        $$('[data-demo]').forEach(b => b.classList.remove('active'));
-        // Reset method toggle back to paste
-        $$('.method-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'paste'));
-      };
-      reader.readAsText(file);
+      const textarea = $('#documentInput');
+      const textExts = ['.txt', '.json', '.csv'];
+      const isText = textExts.some(ext => file.name.toLowerCase().endsWith(ext));
+
+      // Check file size limits
+      const sizeLimit = isText ? FILE_SIZE_LIMITS.text
+        : file.type === 'application/pdf' ? FILE_SIZE_LIMITS.pdf
+        : FILE_SIZE_LIMITS.image;
+      if (file.size > sizeLimit) {
+        showError(`File too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(sizeLimit)}.`);
+        fileInput.value = '';
+        return;
+      }
+
+      if (isText) {
+        // Text file: read as text, put in textarea
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (textarea) {
+            textarea.value = reader.result;
+            textarea.style.display = '';
+          }
+          uploadedBinary = null;
+          hideFilePreview();
+          currentDemo = null;
+          $$('[data-demo]').forEach(b => b.classList.remove('active'));
+          $('#uploadChip')?.classList.remove('has-file');
+        };
+        reader.readAsText(file);
+      } else {
+        // Binary file (PDF, image): read as ArrayBuffer, convert to base64
+        const reader = new FileReader();
+        reader.onload = () => {
+          const bytes = new Uint8Array(reader.result);
+          let binary = '';
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+          }
+
+          const mimeType = file.type || guessMimeType(file.name);
+          uploadedBinary = {
+            base64: btoa(binary),
+            mimeType,
+            fileName: file.name,
+            fileSize: file.size
+          };
+
+          // Hide textarea, show file preview
+          if (textarea) textarea.style.display = 'none';
+          showFilePreview(uploadedBinary);
+
+          currentDemo = null;
+          $$('[data-demo]').forEach(b => b.classList.remove('active'));
+          $('#uploadChip')?.classList.add('has-file');
+        };
+        reader.readAsArrayBuffer(file);
+      }
+      fileInput.value = '';
     });
   }
 }
@@ -210,7 +315,14 @@ function setupActionButtons() {
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       const docInput = $('#documentInput');
-      if (docInput) docInput.value = '';
+      if (docInput) {
+        docInput.style.display = '';
+        docInput.value = '';
+        docInput.placeholder = 'Paste document text here...';
+      }
+      uploadedBinary = null;
+      hideFilePreview();
+      $('#uploadChip')?.classList.remove('has-file');
       currentDemo = null;
       $$('[data-demo]').forEach(b => b.classList.remove('active'));
       resetPipelineSteps();
@@ -234,10 +346,19 @@ function onSchemaChange(schema) {
 function resetPipelineSteps() {
   $$('.pipe-step').forEach(step => {
     step.classList.remove('active', 'complete', 'error');
+    const log = step.querySelector('.pipe-log');
+    if (log) log.textContent = '';
   });
   $$('.pipe-connector').forEach(conn => {
     conn.classList.remove('complete');
   });
+}
+
+function setStepLog(stepNum, message) {
+  const step = $(`.pipe-step[data-step="${stepNum}"]`);
+  if (!step) return;
+  const log = step.querySelector('.pipe-log');
+  if (log) log.textContent = message;
 }
 
 function setStepActive(stepNum) {
@@ -321,7 +442,7 @@ async function runPipeline() {
   }
 
   const documentText = $('#documentInput')?.value?.trim();
-  if (!documentText) {
+  if (!documentText && !uploadedBinary) {
     showError('Please provide a document to extract from');
     return;
   }
@@ -336,18 +457,24 @@ async function runPipeline() {
   try {
     // Step 1: Compile schema → AILANG module
     setStepActive(1);
+    setStepLog(1, `Generating ${schema.name} module...`);
     const ailangSource = compiler.compile(schema);
     updateGeneratedCode(ailangSource);
-    await sleep(150); // Brief visual pause
+    await sleep(150);
+    setStepLog(1, `${schema.fields.length} fields, ${ailangSource.split('\n').length} lines`);
     setStepComplete(1);
 
     // Step 2: Load module into WASM
     setStepActive(2);
+    setStepLog(2, 'Resetting WASM runtime...');
     await engine.reset();
+    setStepLog(2, 'Loading extractor module...');
     const loadResult = engine.loadDynamicModule('extractor', ailangSource);
     if (!loadResult.success) {
       throw new Error(`AILANG compile error: ${loadResult.error}`);
     }
+    const exportCount = loadResult.exports?.length || 0;
+    setStepLog(2, `Module loaded, ${exportCount} exports`);
     await sleep(150);
     setStepComplete(2);
 
@@ -358,49 +485,77 @@ async function runPipeline() {
 
     if (engine.hasNativeAI() && apiKey) {
       // Tier 1: Full AILANG pipeline — AI effect handled by WASM runtime
-      const result = engine.callFunction('extractor', 'processDocument', documentText);
+      let result;
+      if (uploadedBinary) {
+        setStepLog(3, `Sending ${formatFileSize(uploadedBinary.fileSize)} ${uploadedBinary.mimeType} to Gemini...`);
+        result = await engine.callFunctionAsync('extractor', 'processFile',
+          uploadedBinary.base64, uploadedBinary.mimeType);
+      } else {
+        setStepLog(3, 'Calling Gemini via AILANG ! {AI} effect...');
+        result = await engine.callFunctionAsync('extractor', 'processDocument', documentText);
+      }
       if (!result.success) {
         throw new Error(result.error);
       }
+      setStepLog(3, 'AI extraction complete');
       setStepComplete(3);
 
       // Step 4: Validation happened inside AILANG
       setStepActive(4);
+      setStepLog(4, 'Validated inside AILANG pipeline');
       await sleep(100);
       setStepComplete(4);
 
       // Step 5: Done
+      setStepLog(5, 'Tier 1: full AILANG pipeline');
       setStepComplete(5);
       displayResult(result.result, schema);
 
     } else if (apiKey) {
       // Tier 2: JS extraction + AILANG validation
       const gemini = new GeminiClient(apiKey);
-      extractedJson = await gemini.extractFields(documentText, schema);
+      if (uploadedBinary) {
+        setStepLog(3, `Sending ${formatFileSize(uploadedBinary.fileSize)} to Gemini (JS)...`);
+      } else {
+        setStepLog(3, 'Calling Gemini API (JS fallback)...');
+      }
+      extractedJson = await gemini.extractFields(
+        documentText || '', schema, uploadedBinary || null);
+      setStepLog(3, `Extracted ${Object.keys(extractedJson).length} fields`);
       setStepComplete(3);
 
       // Step 4: Validate in AILANG
       setStepActive(4);
+      setStepLog(4, 'Running AILANG contracts...');
       const jsonString = JSON.stringify(extractedJson);
       const result = engine.callFunction('extractor', 'validateOnly', jsonString);
       if (!result.success) {
         throw new Error(result.error);
       }
+      setStepLog(4, 'All constraints passed');
       await sleep(100);
       setStepComplete(4);
 
       // Step 5: Done
+      setStepLog(5, 'Tier 2: JS extract + AILANG validate');
       setStepComplete(5);
       displayResult(result.result, schema);
 
     } else {
       // Tier 3: Demo data + AILANG validation
+      if (uploadedBinary) {
+        setStepError(3);
+        setStepLog(3, 'API key required for files');
+        showError('File extraction requires a Gemini API key. Add one above to extract from uploaded files.');
+        return;
+      }
       const demo = currentDemo ? demoExamples[currentDemo] : null;
       if (demo?.preExtracted) {
+        setStepLog(3, 'Using pre-extracted demo data');
         extractedJson = demo.preExtracted;
       } else {
-        // No API key, no demo — show message
         setStepError(3);
+        setStepLog(3, 'No API key or demo data');
         showError('No API key configured. Add a Gemini API key for live extraction, or select a demo example.');
         return;
       }
@@ -408,25 +563,30 @@ async function runPipeline() {
 
       // Step 4: Validate in AILANG
       setStepActive(4);
+      setStepLog(4, 'Running AILANG contracts...');
       const jsonString = JSON.stringify(extractedJson);
       const result = engine.callFunction('extractor', 'validateOnly', jsonString);
       if (!result.success) {
         throw new Error(result.error);
       }
+      setStepLog(4, 'All constraints passed');
       await sleep(100);
       setStepComplete(4);
 
       // Step 5: Done
+      setStepLog(5, 'Tier 3: demo data + AILANG validate');
       setStepComplete(5);
       displayResult(result.result, schema);
     }
 
   } catch (err) {
     console.error('Pipeline error:', err);
-    // Mark current active step as error
+    // Mark current active step as error and log the message
     $$('.pipe-step.active').forEach(s => {
+      const stepNum = s.dataset.step;
       s.classList.remove('active');
       s.classList.add('error');
+      setStepLog(stepNum, err.message.substring(0, 80));
     });
     showError(err.message);
   } finally {
@@ -488,6 +648,98 @@ function escapeHtml(text) {
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+// ── File Upload Helpers ──────────────────────────────────────
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function guessMimeType(fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+  const map = {
+    pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg',
+    jpeg: 'image/jpeg', webp: 'image/webp', bmp: 'image/bmp'
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+function showFilePreview(binaryInfo) {
+  const previewEl = $('#filePreview');
+  if (!previewEl) return;
+
+  // Clean up previous blob URL
+  if (previewEl._blobUrl) {
+    URL.revokeObjectURL(previewEl._blobUrl);
+    previewEl._blobUrl = null;
+  }
+
+  const isImage = binaryInfo.mimeType.startsWith('image/');
+  const isPdf = binaryInfo.mimeType === 'application/pdf';
+  const icon = isImage ? '\u{1F5BC}' : '\u{1F4C4}';
+
+  let bodyHtml;
+  if (isImage) {
+    bodyHtml = `<img src="data:${binaryInfo.mimeType};base64,${binaryInfo.base64}" alt="${escapeHtml(binaryInfo.fileName)}">`;
+  } else if (isPdf) {
+    // Use blob URL — data URIs are blocked in some browsers for object/iframe
+    const byteChars = atob(binaryInfo.base64);
+    const byteArr = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([byteArr], { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+    previewEl._blobUrl = blobUrl;
+    bodyHtml = `<object data="${blobUrl}" type="application/pdf" width="100%" height="360">` +
+      `<div class="file-preview-fallback">` +
+        `<svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+          `<rect x="8" y="4" width="32" height="40" rx="3"/>` +
+          `<path d="M16 4v10h10"/><path d="M26 4L38 16"/>` +
+          `<path d="M16 24h16M16 30h16M16 36h10"/>` +
+        `</svg>` +
+        `<span>PDF preview not available in this browser — file ready for extraction</span>` +
+      `</div>` +
+    `</object>`;
+  } else {
+    bodyHtml = `<div class="file-preview-fallback">` +
+      `<span>${icon} File ready for extraction</span>` +
+    `</div>`;
+  }
+
+  previewEl.innerHTML =
+    `<div class="file-preview-header">` +
+      `<span class="file-preview-icon">${icon}</span>` +
+      `<span class="file-preview-name">${escapeHtml(binaryInfo.fileName)}</span>` +
+      `<span class="file-preview-size">${formatFileSize(binaryInfo.fileSize)}</span>` +
+      `<button class="file-preview-remove" title="Remove file">&times;</button>` +
+    `</div>` +
+    `<div class="file-preview-body">${bodyHtml}</div>`;
+
+  previewEl.querySelector('.file-preview-remove').addEventListener('click', () => {
+    uploadedBinary = null;
+    hideFilePreview();
+    const textarea = $('#documentInput');
+    if (textarea) {
+      textarea.style.display = '';
+      textarea.placeholder = 'Paste document text here...';
+    }
+    $('#uploadChip')?.classList.remove('has-file');
+  });
+
+  previewEl.style.display = '';
+}
+
+function hideFilePreview() {
+  const previewEl = $('#filePreview');
+  if (!previewEl) return;
+  // Revoke blob URL before clearing
+  if (previewEl._blobUrl) {
+    URL.revokeObjectURL(previewEl._blobUrl);
+    previewEl._blobUrl = null;
+  }
+  previewEl.style.display = 'none';
+  previewEl.innerHTML = '';
 }
 
 // ── Bootstrap ────────────────────────────────────────────────

@@ -31,10 +31,19 @@
   <div class="toolbar">
     <div class="container toolbar-row">
       <div class="toolbar-demos">
-        <span class="toolbar-label">Demo:</span>
+        <span class="toolbar-label">Try:</span>
         <button class="demo-chip" data-demo="invoice">Invoice</button>
         <button class="demo-chip" data-demo="receipt">Receipt</button>
         <button class="demo-chip" data-demo="contract">Contract</button>
+        <button class="demo-chip" data-demo="pdfInvoice">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+          PDF Invoice
+        </button>
+        <span class="toolbar-divider"></span>
+        <button class="demo-chip upload-chip" id="uploadChip">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V3m0 0L5 6m3-3l3 3"/><path d="M2 10v2.5A1.5 1.5 0 003.5 14h9a1.5 1.5 0 001.5-1.5V10"/></svg>
+          Upload File
+        </button>
       </div>
       <div class="toolbar-key">
         <div class="api-key-panel">
@@ -69,13 +78,10 @@
         <div class="pipeline-col pipeline-input">
           <div class="col-header">
             <h2>Document</h2>
-            <div class="input-method-toggle">
-              <button class="method-btn active" data-method="paste">Paste</button>
-              <button class="method-btn" data-method="upload">Upload</button>
-            </div>
           </div>
+          <div id="filePreview" class="file-preview" style="display:none"></div>
           <textarea id="documentInput" rows="10" placeholder="Paste document text here..." spellcheck="false"></textarea>
-          <input type="file" id="fileUpload" accept=".txt,.json,.csv" class="file-input-hidden">
+          <input type="file" id="fileUpload" accept=".txt,.json,.csv,.pdf,.png,.jpg,.jpeg,.webp,.bmp,application/pdf,image/*" class="file-input-hidden">
 
           <div class="col-header" style="margin-top:20px">
             <h2>Extraction Schema</h2>
@@ -109,6 +115,7 @@
                 <span class="pipe-name">Compile Schema</span>
                 <span class="effect-badge pure">pure</span>
               </div>
+              <div class="pipe-log"></div>
             </div>
             <div class="pipe-connector"></div>
             <div class="pipe-step" data-step="2">
@@ -117,6 +124,7 @@
                 <span class="pipe-name">Load Module</span>
                 <span class="effect-badge pure">WASM</span>
               </div>
+              <div class="pipe-log"></div>
             </div>
             <div class="pipe-connector"></div>
             <div class="pipe-step" data-step="3">
@@ -125,6 +133,7 @@
                 <span class="pipe-name">Extract Fields</span>
                 <span class="effect-badge ai">! {AI}</span>
               </div>
+              <div class="pipe-log"></div>
             </div>
             <div class="pipe-connector"></div>
             <div class="pipe-step" data-step="4">
@@ -133,6 +142,7 @@
                 <span class="pipe-name">Validate</span>
                 <span class="effect-badge contract">contracts</span>
               </div>
+              <div class="pipe-log"></div>
             </div>
             <div class="pipe-connector"></div>
             <div class="pipe-step" data-step="5">
@@ -140,6 +150,7 @@
               <div class="pipe-label">
                 <span class="pipe-name">Done</span>
               </div>
+              <div class="pipe-log"></div>
             </div>
           </div>
 
@@ -395,6 +406,6 @@
     </div>
   </footer>
 
-  <script type="module" src="js/app.js?v=20"></script>
+  <script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>
