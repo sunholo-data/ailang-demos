@@ -1,29 +1,36 @@
-module wasm/invoice_processor
+-- Invoice Processor Module for AILANG WASM
+-- Full type-safe validation and calculation using Module Loading API
+-- All monetary values use integer cents/basis points (no float arithmetic)
+-- Uses requires/ensures contracts for invariant enforcement
 
-import std/json (decode, encode, jo, ja, kv, js, jnum, jb, getString, getNumber, getInt, getArray)
-import std/list (foldl, map)
-import std/string (floatToStr, intToStr)
+module invoice
+
+import std/json (Json, decode, encode, jo, ja, kv, js, jnum, jb, getString, getInt, getArray)
 import std/option (Option, Some, None)
+import std/result (Result, Ok, Err)
+import std/string (intToStr)
 import std/math (intToFloat)
 
--- Result type for operations that can fail
-type Result[a] = Ok(a) | Err(string)
+-- Local Result type for parsing (single type parameter)
+type ParseResult[a] = ParseOk(a) | ParseErr(string)
 
--- Invoice line item type
+-- Invoice line item type (all monetary values as integers)
+-- unit_price_cents: price in cents (2500 = $25.00)
+-- tax_rate_bps: tax rate in basis points (800 = 8.00%)
 type LineItem = {
   description: string,
   quantity: int,
-  unit_price: float,
-  tax_rate: float
+  unit_price_cents: int,
+  tax_rate_bps: int
 }
 
--- Invoice type
+-- Invoice type (discount_percent is an integer 0-100)
 type Invoice = {
   invoice_number: string,
   customer_name: string,
   date: string,
   line_items: [LineItem],
-  discount_percent: float
+  discount_percent: int
 }
 
 -- Result type for validation
@@ -31,35 +38,54 @@ type ValidationResult =
   | Valid(Invoice)
   | Invalid(string)
 
--- Calculate line item total (quantity * price + tax)
-pure func lineItemTotal(item: LineItem) -> float {
-  let subtotal = intToFloat(item.quantity) * item.unit_price;
-  let tax = subtotal * item.tax_rate;
-  subtotal + tax
+-- Helper: output int as JSON number
+pure func jint(n: int) -> Json = jnum(intToFloat(n))
+
+-- Calculate line item subtotal in cents (quantity * unit_price_cents)
+-- CONTRACT: price non-negative, quantity positive => result non-negative
+pure func lineItemSubtotal(item: LineItem) -> int
+  requires { item.unit_price_cents >= 0, item.quantity > 0 }
+  ensures { result >= 0 }
+{
+  item.quantity * item.unit_price_cents
 }
 
--- Calculate invoice subtotal (before discount)
-pure func calculateSubtotal(items: [LineItem]) -> float =
+-- Calculate line item tax in cents
+-- CONTRACT: tax rate in valid basis-point range => result non-negative
+pure func lineItemTax(item: LineItem) -> int
+  requires { item.tax_rate_bps >= 0, item.tax_rate_bps <= 10000 }
+  ensures { result >= 0 }
+{
+  lineItemSubtotal(item) * item.tax_rate_bps / 10000
+}
+
+-- Calculate line item total in cents (subtotal + tax)
+-- CONTRACT: result is always non-negative
+pure func lineItemTotal(item: LineItem) -> int
+  ensures { result >= 0 }
+{
+  lineItemSubtotal(item) + lineItemTax(item)
+}
+
+-- Calculate invoice subtotal in cents (before discount)
+-- CONTRACT: result is always non-negative
+pure func calculateSubtotal(items: [LineItem]) -> int
+  ensures { result >= 0 }
+{
   match items {
-    [] => 0.0,
+    [] => 0,
     item :: rest => lineItemTotal(item) + calculateSubtotal(rest)
   }
-
--- Calculate final total with discount
-pure func calculateTotal(invoice: Invoice) -> float {
-  let subtotal = calculateSubtotal(invoice.line_items);
-  let discount = subtotal * (invoice.discount_percent / 100.0);
-  subtotal - discount
 }
 
 -- Validate a single line item
 pure func validateLineItem(item: LineItem, lineNum: int) -> Option[string] =
   if item.quantity <= 0 then
     Some("Line " ++ intToStr(lineNum) ++ ": quantity must be positive")
-  else if item.unit_price < 0.0 then
+  else if item.unit_price_cents < 0 then
     Some("Line " ++ intToStr(lineNum) ++ ": price cannot be negative")
-  else if item.tax_rate < 0.0 || item.tax_rate > 1.0 then
-    Some("Line " ++ intToStr(lineNum) ++ ": tax rate must be between 0 and 1")
+  else if item.tax_rate_bps < 0 || item.tax_rate_bps > 10000 then
+    Some("Line " ++ intToStr(lineNum) ++ ": tax rate must be between 0 and 10000 bps")
   else if item.description == "" then
     Some("Line " ++ intToStr(lineNum) ++ ": description cannot be empty")
   else
@@ -69,10 +95,11 @@ pure func validateLineItem(item: LineItem, lineNum: int) -> Option[string] =
 pure func validateLineItems(items: [LineItem], lineNum: int) -> Option[string] =
   match items {
     [] => None,
-    item :: rest => match validateLineItem(item, lineNum) {
-      Some(err) => Some(err),
-      None => validateLineItems(rest, lineNum + 1)
-    }
+    item :: rest =>
+      match validateLineItem(item, lineNum) {
+        Some(err) => Some(err),
+        None => validateLineItems(rest, lineNum + 1)
+      }
   }
 
 -- Validate invoice structure and data
@@ -81,103 +108,112 @@ pure func validateInvoice(invoice: Invoice) -> ValidationResult =
     Invalid("Missing invoice_number")
   else if invoice.customer_name == "" then
     Invalid("Missing customer_name")
-  else if invoice.discount_percent < 0.0 || invoice.discount_percent > 100.0 then
+  else if invoice.discount_percent < 0 || invoice.discount_percent > 100 then
     Invalid("Discount must be between 0 and 100")
-  else match invoice.line_items {
-    [] => Invalid("Invoice must have at least one line item"),
-    _ => match validateLineItems(invoice.line_items, 1) {
-      Some(err) => Invalid(err),
-      None => Valid(invoice)
+  else
+    match invoice.line_items {
+      [] => Invalid("Invoice must have at least one line item"),
+      _ =>
+        match validateLineItems(invoice.line_items, 1) {
+          Some(err) => Invalid(err),
+          None => Valid(invoice)
+        }
     }
-  }
 
 -- Parse a line item from JSON
-pure func parseLineItem(json: Json) -> Option[LineItem] =
-  match getString(json, "description") {
+pure func parseLineItem(j: Json) -> Option[LineItem] =
+  match getString(j, "description") {
     None => None,
-    Some(desc) => match getInt(json, "quantity") {
-      None => None,
-      Some(qty) => match getNumber(json, "unit_price") {
+    Some(desc) =>
+      match getInt(j, "quantity") {
         None => None,
-        Some(price) => match getNumber(json, "tax_rate") {
-          None => None,
-          Some(tax) => Some({
-            description: desc,
-            quantity: qty,
-            unit_price: price,
-            tax_rate: tax
-          })
-        }
+        Some(qty) =>
+          match getInt(j, "unit_price_cents") {
+            None => None,
+            Some(price) =>
+              match getInt(j, "tax_rate_bps") {
+                None => None,
+                Some(tax) => Some({
+                  description: desc,
+                  quantity: qty,
+                  unit_price_cents: price,
+                  tax_rate_bps: tax
+                })
+              }
+          }
       }
-    }
   }
 
--- Parse list of line items from JSON array
-pure func parseLineItems(jsonArray: [Json]) -> Option[[LineItem]] =
-  parseLineItemsHelper(jsonArray, [])
-
-pure func parseLineItemsHelper(jsonArray: [Json], acc: [LineItem]) -> Option[[LineItem]] =
-  match jsonArray {
-    [] => Some(reverseList(acc)),
-    json :: rest => match parseLineItem(json) {
-      None => None,
-      Some(item) => parseLineItemsHelper(rest, item :: acc)
-    }
-  }
-
--- Reverse a list (helper for accumulator pattern)
-pure func reverseList(xs: [LineItem]) -> [LineItem] =
-  reverseHelper(xs, [])
-
-pure func reverseHelper(xs: [LineItem], acc: [LineItem]) -> [LineItem] =
+-- Reverse a list helper
+pure func reverseHelper(xs: [a], acc: [a]) -> [a] =
   match xs {
     [] => acc,
     x :: rest => reverseHelper(rest, x :: acc)
   }
 
--- Parse invoice from JSON
-pure func parseInvoice(json: Json) -> Result[Invoice] =
-  match getString(json, "invoice_number") {
-    None => Err("Missing or invalid invoice_number field"),
-    Some(invNum) => match getString(json, "customer_name") {
-      None => Err("Missing or invalid customer_name field"),
-      Some(custName) => match getString(json, "date") {
-        None => Err("Missing or invalid date field"),
-        Some(dateStr) => match getNumber(json, "discount_percent") {
-          None => Err("Missing or invalid discount_percent field"),
-          Some(discount) => match getArray(json, "line_items") {
-            None => Err("Missing or invalid line_items field"),
-            Some(itemsArray) => match parseLineItems(itemsArray) {
-              None => Err("Failed to parse line_items"),
-              Some(items) => Ok({
-                invoice_number: invNum,
-                customer_name: custName,
-                date: dateStr,
-                line_items: items,
-                discount_percent: discount
-              })
-            }
-          }
-        }
+pure func reverse(xs: [a]) -> [a] = reverseHelper(xs, [])
+
+-- Parse list of line items from JSON array
+pure func parseLineItemsHelper(jsonArray: [Json], acc: [LineItem]) -> Option[[LineItem]] =
+  match jsonArray {
+    [] => Some(reverse(acc)),
+    jitem :: rest =>
+      match parseLineItem(jitem) {
+        None => None,
+        Some(item) => parseLineItemsHelper(rest, item :: acc)
       }
-    }
+  }
+
+pure func parseLineItems(jsonArray: [Json]) -> Option[[LineItem]] =
+  parseLineItemsHelper(jsonArray, [])
+
+-- Parse invoice from JSON
+pure func parseInvoice(j: Json) -> ParseResult[Invoice] =
+  match getString(j, "invoice_number") {
+    None => ParseErr("Missing or invalid invoice_number field"),
+    Some(invNum) =>
+      match getString(j, "customer_name") {
+        None => ParseErr("Missing or invalid customer_name field"),
+        Some(custName) =>
+          match getString(j, "date") {
+            None => ParseErr("Missing or invalid date field"),
+            Some(dateStr) =>
+              match getInt(j, "discount_percent") {
+                None => ParseErr("Missing or invalid discount_percent field"),
+                Some(discount) =>
+                  match getArray(j, "line_items") {
+                    None => ParseErr("Missing or invalid line_items field"),
+                    Some(itemsArray) =>
+                      match parseLineItems(itemsArray) {
+                        None => ParseErr("Failed to parse line_items - ensure unit_price_cents and tax_rate_bps are integers"),
+                        Some(items) => ParseOk({
+                          invoice_number: invNum,
+                          customer_name: custName,
+                          date: dateStr,
+                          line_items: items,
+                          discount_percent: discount
+                        })
+                      }
+                  }
+              }
+          }
+      }
   }
 
 -- Format line item for JSON response
-pure func lineItemToJson(item: LineItem) -> Json {
-  let subtotal = intToFloat(item.quantity) * item.unit_price;
-  let tax = subtotal * item.tax_rate;
-  let total = subtotal + tax;
+pure func lineItemToJson(item: LineItem) -> Json =
+  let sub = lineItemSubtotal(item) in
+  let tax = lineItemTax(item) in
+  let total = sub + tax in
   jo([
     kv("description", js(item.description)),
-    kv("quantity", jnum(intToFloat(item.quantity))),
-    kv("unit_price", jnum(item.unit_price)),
-    kv("tax_rate", jnum(item.tax_rate)),
-    kv("subtotal", jnum(subtotal)),
-    kv("tax", jnum(tax)),
-    kv("total", jnum(total))
+    kv("quantity", jint(item.quantity)),
+    kv("unit_price_cents", jint(item.unit_price_cents)),
+    kv("tax_rate_bps", jint(item.tax_rate_bps)),
+    kv("subtotal_cents", jint(sub)),
+    kv("tax_cents", jint(tax)),
+    kv("total_cents", jint(total))
   ])
-}
 
 -- Convert line items to JSON array
 pure func lineItemsToJsonArray(items: [LineItem]) -> [Json] =
@@ -187,55 +223,40 @@ pure func lineItemsToJsonArray(items: [LineItem]) -> [Json] =
   }
 
 -- Main processing function (exposed to JavaScript)
-export func processInvoice(jsonString: string) -> string {
-  -- Parse JSON string
-  let parseResult = decode(jsonString);
-
-  match parseResult {
+-- All values are integer cents/basis points - JavaScript converts for display
+export pure func processInvoice(jsonString: string) -> string =
+  match decode(jsonString) {
     Err(parseErr) => encode(jo([
       kv("valid", jb(false)),
       kv("error", js("Invalid JSON: " ++ parseErr))
     ])),
-    Ok(jsonObj) => {
-      -- Parse invoice structure
-      let invoiceResult = parseInvoice(jsonObj);
-
-      match invoiceResult {
-        Err(err) => encode(jo([
+    Ok(jsonObj) =>
+      match parseInvoice(jsonObj) {
+        ParseErr(err) => encode(jo([
           kv("valid", jb(false)),
           kv("error", js(err))
         ])),
-        Ok(invoice) => {
-          -- Validate invoice
-          let validationResult = validateInvoice(invoice);
-
-          match validationResult {
+        ParseOk(invoice) =>
+          match validateInvoice(invoice) {
             Invalid(err) => encode(jo([
               kv("valid", jb(false)),
               kv("error", js(err))
             ])),
-            Valid(validInvoice) => {
-              -- Calculate totals
-              let subtotal = calculateSubtotal(validInvoice.line_items);
-              let discount = subtotal * (validInvoice.discount_percent / 100.0);
-              let total = subtotal - discount;
-
-              -- Build success response
+            Valid(validInvoice) =>
+              let subtotal = calculateSubtotal(validInvoice.line_items) in
+              let discountAmount = subtotal * validInvoice.discount_percent / 100 in
+              let total = subtotal - discountAmount in
               encode(jo([
                 kv("valid", jb(true)),
                 kv("invoice_number", js(validInvoice.invoice_number)),
                 kv("customer_name", js(validInvoice.customer_name)),
                 kv("date", js(validInvoice.date)),
                 kv("line_items", ja(lineItemsToJsonArray(validInvoice.line_items))),
-                kv("subtotal", jnum(subtotal)),
-                kv("discount_percent", jnum(validInvoice.discount_percent)),
-                kv("discount_amount", jnum(discount)),
-                kv("total", jnum(total))
+                kv("subtotal_cents", jint(subtotal)),
+                kv("discount_percent", jint(validInvoice.discount_percent)),
+                kv("discount_amount_cents", jint(discountAmount)),
+                kv("total_cents", jint(total))
               ]))
-            }
           }
-        }
       }
-    }
   }
-}

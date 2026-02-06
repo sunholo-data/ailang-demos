@@ -3,165 +3,329 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AILANG Invoice Processor Demo</title>
-  <meta name="description" content="Type-safe invoice validation and processing powered by AILANG WebAssembly">
+  <title>AILANG Document Extractor</title>
+  <meta name="description" content="AI-powered document extraction validated by AILANG contracts, effects, and type system via WebAssembly">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script src="wasm/wasm_exec.js"></script>
+  <script src="wasm/ailang-repl.js"></script>
 </head>
 <body>
   <header>
-    <div class="container">
-      <h1>AILANG Invoice Processor</h1>
-      <p class="tagline">Type-safe business logic with WebAssembly</p>
-      <div class="header-links">
-        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG on GitHub</a>
-        <a href="https://ailang-docs.com" target="_blank" rel="noopener">Documentation</a>
+    <div class="container header-row">
+      <div class="header-left">
+        <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
+        <h1>AILANG Document Extractor</h1>
+        <span class="tagline">AI extraction validated by contracts &amp; effects</span>
+      </div>
+      <div class="header-right">
+        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Docs</a>
       </div>
     </div>
   </header>
 
+  <!-- Toolbar: API key + demo selector — compact single row -->
+  <div class="toolbar">
+    <div class="container toolbar-row">
+      <div class="toolbar-demos">
+        <span class="toolbar-label">Demo:</span>
+        <button class="demo-chip" data-demo="invoice">Invoice</button>
+        <button class="demo-chip" data-demo="receipt">Receipt</button>
+        <button class="demo-chip" data-demo="contract">Contract</button>
+      </div>
+      <div class="toolbar-key">
+        <div class="api-key-panel">
+          <div class="api-key-header" id="apiKeyToggle">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span class="demo-badge" id="demoBadge">Demo Mode</span>
+            <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="api-key-body" id="apiKeyBody">
+            <div class="api-key-input-row">
+              <input type="password" id="apiKeyInput" placeholder="Gemini API key" autocomplete="off">
+              <button id="saveKeyBtn" class="btn btn-primary btn-sm">Save</button>
+              <button id="clearKeyBtn" class="btn btn-secondary btn-sm">Clear</button>
+            </div>
+            <p class="api-key-note">
+              Stored in browser only.
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <main class="container">
-    <!-- Introduction -->
-    <section class="intro">
-      <h2>Business logic that catches errors <strong>before</strong> they reach production</h2>
-      <p>
-        See how AILANG's type system validates invoice data with zero runtime overhead.
-        Type safety, pattern matching, and pure functional programming combine to create
-        bulletproof business logic.
-      </p>
-    </section>
 
-    <!-- Demo Panel -->
-    <section class="demo-panel">
-      <div class="panel-container">
-        <!-- Left Panel: Input -->
-        <div class="input-panel">
-          <h2>Invoice Data (JSON)</h2>
+    <!-- Pipeline Panel (Main Section) -->
+    <section class="pipeline-section">
+      <div class="pipeline-grid">
 
-          <div class="examples">
-            <h3>Try an Example:</h3>
-            <div class="example-buttons">
-              <button class="example-btn success" data-example="valid">✓ Valid Invoice</button>
-              <button class="example-btn error" data-example="missing-field">✗ Missing Field</button>
-              <button class="example-btn error" data-example="missing-items">✗ No Items</button>
-              <button class="example-btn error" data-example="negative-price">✗ Negative Price</button>
-              <button class="example-btn error" data-example="invalid-quantity">✗ Zero Quantity</button>
-              <button class="example-btn error" data-example="invalid-discount">✗ Invalid Discount</button>
-              <button class="example-btn error" data-example="invalid-tax-rate">✗ Invalid Tax Rate</button>
+        <!-- Column 1: Input -->
+        <div class="pipeline-col pipeline-input">
+          <div class="col-header">
+            <h2>Document</h2>
+            <div class="input-method-toggle">
+              <button class="method-btn active" data-method="paste">Paste</button>
+              <button class="method-btn" data-method="upload">Upload</button>
+            </div>
+          </div>
+          <textarea id="documentInput" rows="10" placeholder="Paste document text here..." spellcheck="false"></textarea>
+          <input type="file" id="fileUpload" accept=".txt,.json,.csv" class="file-input-hidden">
+
+          <div class="col-header" style="margin-top:20px">
+            <h2>Extraction Schema</h2>
+          </div>
+          <div id="schema-editor">
+            <!-- Populated by schema-editor.js -->
+          </div>
+
+          <div class="button-group" style="margin-top:16px">
+            <button id="extractBtn" class="btn btn-primary">
+              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Extract &amp; Validate
+            </button>
+            <button id="clearBtn" class="btn btn-secondary">Clear All</button>
+          </div>
+        </div>
+
+        <!-- Column 2: Generated Code -->
+        <div class="pipeline-col pipeline-middle">
+          <h2>Generated AILANG</h2>
+          <pre id="generatedCode"><code class="generated-code">-- Define a schema to see generated AILANG code</code></pre>
+        </div>
+
+        <!-- Column 3: Pipeline + Results -->
+        <div class="pipeline-col pipeline-output">
+          <h2>Pipeline</h2>
+          <div id="pipeline-steps" class="pipeline-steps">
+            <div class="pipe-step" data-step="1">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">Compile Schema</span>
+                <span class="effect-badge pure">pure</span>
+              </div>
+            </div>
+            <div class="pipe-connector"></div>
+            <div class="pipe-step" data-step="2">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">Load Module</span>
+                <span class="effect-badge pure">WASM</span>
+              </div>
+            </div>
+            <div class="pipe-connector"></div>
+            <div class="pipe-step" data-step="3">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">Extract Fields</span>
+                <span class="effect-badge ai">! {AI}</span>
+              </div>
+            </div>
+            <div class="pipe-connector"></div>
+            <div class="pipe-step" data-step="4">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">Validate</span>
+                <span class="effect-badge contract">contracts</span>
+              </div>
+            </div>
+            <div class="pipe-connector"></div>
+            <div class="pipe-step" data-step="5">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">Done</span>
+              </div>
             </div>
           </div>
 
-          <textarea id="invoiceInput" rows="25" placeholder='Paste your invoice JSON here...'></textarea>
-
-          <div class="button-group">
-            <button id="processBtn" class="btn btn-primary">Process Invoice</button>
-            <button id="clearBtn" class="btn btn-secondary">Clear</button>
-          </div>
-        </div>
-
-        <!-- Right Panel: Output -->
-        <div class="output-panel">
-          <h2>Results</h2>
+          <h2 style="margin-top: 20px;">Results</h2>
           <div id="results">
-            <p class="placeholder">Paste invoice data and click "Process Invoice"</p>
+            <p class="placeholder">Select a demo or provide your own document and schema</p>
           </div>
         </div>
+
       </div>
     </section>
 
-    <!-- Comparison -->
-    <section class="comparison">
-      <h2>Why AILANG for Business Logic?</h2>
-      <div class="comparison-grid">
-        <div class="comparison-col bad">
-          <h3>✗ JavaScript / Python</h3>
-          <ul>
-            <li>Missing fields crash at runtime</li>
-            <li>Type errors discovered by users</li>
-            <li>No guarantees about data structure</li>
-            <li>Silent calculation errors (NaN, undefined)</li>
-            <li>Difficult to maintain as code grows</li>
-          </ul>
-        </div>
-        <div class="comparison-col good">
-          <h3>✓ AILANG</h3>
-          <ul>
-            <li>Type system ensures all fields present</li>
-            <li>Errors caught at parse time</li>
-            <li>Guaranteed data structure correctness</li>
-            <li>Impossible to produce invalid results</li>
-            <li>Clear, declarative, maintainable code</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- Features -->
-    <section class="features">
-      <h2>Key Features</h2>
-      <div class="feature-grid">
-        <div class="feature">
-          <div class="feature-icon">🛡️</div>
-          <h3>Type Safety</h3>
-          <p>Catch errors at parse time, not in production. AILANG's Hindley-Milner type system ensures correctness.</p>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">⚡</div>
-          <h3>Fast</h3>
-          <p>Runs entirely in browser via WebAssembly. No server required, instant feedback.</p>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">🔧</div>
-          <h3>Maintainable</h3>
-          <p>Clear, declarative code with pattern matching. Easy to understand and modify.</p>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">📦</div>
-          <h3>Portable</h3>
-          <p>Same code runs client-side or server-side. Write once, run anywhere.</p>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">🎯</div>
-          <h3>Pure Functions</h3>
-          <p>No side effects, fully testable logic. Guaranteed predictable behavior.</p>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">🔍</div>
-          <h3>Pattern Matching</h3>
-          <p>Exhaustive case analysis ensures all scenarios are handled correctly.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Code Example -->
-    <section class="code-example">
-      <h2>The AILANG Code</h2>
+    <!-- Effects + Stdlib Showcase -->
+    <section class="code-showcase effects-showcase">
+      <h2>AILANG Effects &amp; Stdlib in Action</h2>
       <p>
-        The entire business logic is written in ~200 lines of AILANG code.
-        View the source: <a href="wasm/invoice_processor.ail" target="_blank">invoice_processor.ail</a>
+        See how AILANG's effect system, contracts, and stdlib modules work together
+        to create a trustworthy AI extraction pipeline. Every line below runs in this demo via WebAssembly.
       </p>
-      <pre><code>-- Calculate line item total (quantity * price + tax)
-pure func lineItemTotal(item: LineItem) -> float {
-  let subtotal = intToFloat(item.quantity) * item.unit_price;
-  let tax = subtotal * item.tax_rate;
-  subtotal + tax
+
+      <div class="showcase-tabs">
+        <input type="radio" name="fx-tab" id="fx-ai" checked>
+        <label for="fx-ai"><span class="effect-badge ai inline">! {AI}</span> AI Effect</label>
+
+        <input type="radio" name="fx-tab" id="fx-contracts">
+        <label for="fx-contracts"><span class="effect-badge contract inline">req/ens</span> Contracts</label>
+
+        <input type="radio" name="fx-tab" id="fx-json">
+        <label for="fx-json">std/json</label>
+
+        <input type="radio" name="fx-tab" id="fx-option">
+        <label for="fx-option">std/option</label>
+
+        <input type="radio" name="fx-tab" id="fx-security">
+        <label for="fx-security">Capability Security</label>
+
+        <!-- Panel: AI Effect -->
+        <div class="tab-panel" id="panel-fx-ai">
+          <div class="tab-explanation">
+            <h3>The AI Effect: <code>! {AI}</code></h3>
+            <p>
+              AILANG tracks side effects in the type system. The <code>AI</code> effect marks functions
+              that call an external AI oracle. The host grants this capability &mdash; in the browser,
+              a JavaScript callback calls Gemini Flash. In production, <code>ailang run --ai gemini-2-5-flash --caps AI</code>
+              handles it natively.
+            </p>
+          </div>
+          <pre><code><span class="kw">import</span> std/ai (<span class="fn">call</span>)
+
+<span class="cm">-- Effectful: calls AI oracle for field extraction</span>
+<span class="cm">-- The ! {AI} annotation declares this function has the AI effect</span>
+<span class="kw">func</span> <span class="fn">extractFields</span>(document: <span class="ty">string</span>) -> <span class="ty">string</span> <span class="ct">! {AI}</span> {
+  <span class="kw">let</span> prompt = <span class="st">"Extract these fields as JSON..."</span> ++ document
+  <span class="fn">call</span>(prompt)   <span class="cm">-- std/ai.call invokes host AI handler</span>
 }
 
--- Validate invoice structure and data
-pure func validateInvoice(invoice: Invoice) -> ValidationResult =
-  if invoice.invoice_number == "" then
-    Invalid("Missing invoice_number")
-  else if invoice.customer_name == "" then
-    Invalid("Missing customer_name")
-  else if invoice.discount_percent < 0.0 || invoice.discount_percent > 100.0 then
-    Invalid("Discount must be between 0 and 100")
-  else match invoice.line_items {
-    [] => Invalid("Invoice must have at least one line item"),
-    _ => match validateLineItems(invoice.line_items, 1) {
-      Some(err) => Invalid(err),
-      None => Valid(invoice)
-    }
-  }</code></pre>
+<span class="cm">-- Main pipeline: effectful extraction + pure validation</span>
+<span class="kw">export func</span> <span class="fn">processDocument</span>(doc: <span class="ty">string</span>) -> <span class="ty">string</span> <span class="ct">! {AI}</span> {
+  <span class="kw">let</span> raw = extractFields(doc)
+  validateOnly(raw)   <span class="cm">-- pure validation, no effects</span>
+}
+
+<span class="cm">-- Pure fallback: validate pre-extracted data</span>
+<span class="kw">export pure func</span> <span class="fn">validateOnly</span>(json: <span class="ty">string</span>) -> <span class="ty">string</span> = ...</code></pre>
+        </div>
+
+        <!-- Panel: Contracts -->
+        <div class="tab-panel" id="panel-fx-contracts">
+          <div class="tab-explanation">
+            <h3>Contracts: <code>requires</code> / <code>ensures</code></h3>
+            <p>
+              Preconditions and postconditions are declared in the function signature.
+              AILANG checks them at call time &mdash; invalid inputs are caught before
+              any computation happens. No defensive checks scattered through code.
+            </p>
+          </div>
+          <pre><code><span class="cm">-- Contract: non-empty input, non-empty output</span>
+<span class="kw">pure func</span> <span class="fn">validateExtraction</span>(jsonString: <span class="ty">string</span>) -> <span class="ty">string</span>
+  <span class="ct">requires</span> { length(trim(jsonString)) > 0 }
+  <span class="ct">ensures</span>  { result != <span class="st">""</span> }
+{
+  <span class="kw">match</span> decode(jsonString) {
+    <span class="ct">Err</span>(e) => encodeError(<span class="st">"Invalid JSON: "</span> ++ e),
+    <span class="ct">Ok</span>(obj) =>
+      <span class="kw">match</span> parseRecord(obj) {
+        <span class="ct">None</span> => encodeError(<span class="st">"Missing fields"</span>),
+        <span class="ct">Some</span>(r) =>
+          <span class="kw">match</span> validateFields(r) {
+            <span class="ct">Some</span>(err) => encodeError(err),
+            <span class="ct">None</span> => encodeResult(r)
+          }
+      }
+  }
+}</code></pre>
+        </div>
+
+        <!-- Panel: std/json -->
+        <div class="tab-panel" id="panel-fx-json">
+          <div class="tab-explanation">
+            <h3>std/json: Type-Safe JSON</h3>
+            <p>
+              AILANG's JSON library returns <code>Option</code> types for every access,
+              forcing you to handle missing fields. No <code>undefined</code>,
+              no <code>null</code> surprises.
+            </p>
+          </div>
+          <pre><code><span class="kw">import</span> std/json (<span class="ty">Json</span>, <span class="fn">decode</span>, <span class="fn">encode</span>, <span class="fn">getString</span>, <span class="fn">getInt</span>, <span class="fn">jo</span>, <span class="fn">kv</span>, <span class="fn">js</span>, <span class="fn">jb</span>)
+
+<span class="cm">-- Parse a record from JSON: every field access returns Option</span>
+<span class="kw">pure func</span> <span class="fn">parseRecord</span>(j: <span class="ty">Json</span>) -> <span class="ty">Option</span>[<span class="ty">MyRecord</span>] =
+  <span class="kw">match</span> getString(j, <span class="st">"vendor"</span>) {
+    <span class="ct">None</span> => <span class="ct">None</span>,              <span class="cm">-- field missing? return None</span>
+    <span class="ct">Some</span>(vendor) =>
+      <span class="kw">match</span> getInt(j, <span class="st">"total_cents"</span>) {
+        <span class="ct">None</span> => <span class="ct">None</span>,
+        <span class="ct">Some</span>(total) =>
+          <span class="ct">Some</span>({ vendor: vendor, total_cents: total })
+      }
+  }
+
+<span class="cm">-- Encode result as JSON</span>
+<span class="kw">pure func</span> <span class="fn">encodeResult</span>(r: <span class="ty">MyRecord</span>) -> <span class="ty">string</span> =
+  encode(jo([kv(<span class="st">"valid"</span>, jb(<span class="ct">true</span>)), kv(<span class="st">"vendor"</span>, js(r.vendor))]))</code></pre>
+        </div>
+
+        <!-- Panel: std/option -->
+        <div class="tab-panel" id="panel-fx-option">
+          <div class="tab-explanation">
+            <h3>std/option &amp; std/result: No Null, No Exceptions</h3>
+            <p>
+              <code>Option[a]</code> is <code>Some(value)</code> or <code>None</code>.
+              <code>Result[a, e]</code> is <code>Ok(value)</code> or <code>Err(error)</code>.
+              Pattern matching forces you to handle both cases. No forgotten null checks.
+            </p>
+          </div>
+          <pre><code><span class="kw">import</span> std/option (<span class="ty">Option</span>, <span class="ct">Some</span>, <span class="ct">None</span>, <span class="fn">getOrElse</span>)
+<span class="kw">import</span> std/result (<span class="ty">Result</span>, <span class="ct">Ok</span>, <span class="ct">Err</span>)
+
+<span class="cm">-- Every JSON decode returns Result: you MUST handle both</span>
+<span class="kw">match</span> decode(jsonString) {
+  <span class="ct">Err</span>(e) => <span class="cm">-- parse failed, e is the error message</span>
+    encodeError(<span class="st">"Invalid JSON: "</span> ++ e),
+  <span class="ct">Ok</span>(obj) => <span class="cm">-- parse succeeded, obj is the JSON value</span>
+    processObj(obj)
+}
+
+<span class="cm">-- Optional fields with defaults</span>
+<span class="kw">let</span> discount = getOrElse(getInt(j, <span class="st">"discount"</span>), 0)
+<span class="cm">-- ^ If "discount" is missing, defaults to 0. No NaN. No undefined.</span></code></pre>
+        </div>
+
+        <!-- Panel: Capability Security -->
+        <div class="tab-panel" id="panel-fx-security">
+          <div class="tab-explanation">
+            <h3>Capability-Based Security</h3>
+            <p>
+              AILANG uses deny-by-default capabilities. Code can only perform effects
+              that are explicitly granted by the host. The WASM sandbox has no network
+              or filesystem access &mdash; the AI handler is injected by JavaScript.
+            </p>
+          </div>
+          <pre><code><span class="cm">-- CLI: explicitly grant capabilities</span>
+<span class="cm">-- $ ailang run --ai gemini-2-5-flash --caps AI,IO module.ail</span>
+
+<span class="cm">-- Effect budgets: limit operations for cost control</span>
+<span class="kw">func</span> <span class="fn">pipeline</span>() -> <span class="ty">string</span> <span class="ct">! {AI @limit=10, IO @limit=50}</span> {
+  <span class="cm">-- At most 10 AI calls, 50 IO operations</span>
+  <span class="cm">-- Budget exceeded? Runtime error with clear message</span>
+  ...
+}
+
+<span class="cm">-- In the browser (WASM):</span>
+<span class="cm">-- No FS, no Net, no IO by default</span>
+<span class="cm">-- AI effect only works if host registers a handler:</span>
+<span class="cm">--   ailangSetAIHandler(jsCallback)</span>
+<span class="cm">-- This is the capability model in action:</span>
+<span class="cm">--   the language controls the pipeline,</span>
+<span class="cm">--   the host provides capabilities</span></code></pre>
+        </div>
+      </div>
+
+      <p class="showcase-source">
+        <a href="https://ailang.sunholo.com/docs/reference/language-syntax" target="_blank" rel="noopener">Language Reference</a>
+        &mdash; <a href="https://ailang.sunholo.com/docs/why-ailang" target="_blank" rel="noopener">Why AILANG</a>
+        &mdash; <code>ailang docs std/ai</code>
+      </p>
     </section>
 
     <!-- How It Works -->
@@ -170,23 +334,28 @@ pure func validateInvoice(invoice: Invoice) -> ValidationResult =
       <div class="steps">
         <div class="step">
           <div class="step-number">1</div>
-          <h3>User pastes JSON</h3>
-          <p>Invoice data is entered as JSON in the browser</p>
+          <h3>Upload document</h3>
+          <p>Paste text or upload a file in any format</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
-          <h3>AILANG validates</h3>
-          <p>Type system checks structure, validates data</p>
+          <h3>Define schema</h3>
+          <p>Specify fields to extract with types and constraints</p>
         </div>
         <div class="step">
           <div class="step-number">3</div>
-          <h3>Calculates totals</h3>
-          <p>Type-safe arithmetic with pure functions</p>
+          <h3>AI extracts <span class="effect-badge ai inline-sm">! {AI}</span></h3>
+          <p>Gemini Flash extracts structured data from your document</p>
         </div>
         <div class="step">
           <div class="step-number">4</div>
-          <h3>Returns results</h3>
-          <p>Detailed error messages or calculated totals</p>
+          <h3>AILANG validates</h3>
+          <p>Contracts and type system guarantee correctness</p>
+        </div>
+        <div class="step">
+          <div class="step-number">5</div>
+          <h3>Trusted output</h3>
+          <p>Deterministic validation of stochastic AI output</p>
         </div>
       </div>
     </section>
@@ -195,18 +364,18 @@ pure func validateInvoice(invoice: Invoice) -> ValidationResult =
     <section class="cta">
       <h2>Try AILANG in Your Project</h2>
       <p>
-        AILANG is open source and ready for production use. Build reliable,
-        type-safe applications with the power of functional programming.
+        AILANG is open source and AI-native. Build reliable applications
+        where AI handles implementation and AILANG guarantees correctness.
       </p>
       <div class="cta-buttons">
         <a href="https://github.com/sunholo-data/ailang" class="btn btn-primary" target="_blank" rel="noopener">
           View on GitHub
         </a>
-        <a href="https://ailang-docs.com/docs/guides/wasm-integration" class="btn btn-secondary" target="_blank" rel="noopener">
+        <a href="https://ailang.sunholo.com/docs/guides/wasm-integration" class="btn btn-secondary" target="_blank" rel="noopener">
           WASM Integration Guide
         </a>
-        <a href="https://github.com/sunholo-data/ailang/releases" class="btn btn-secondary" target="_blank" rel="noopener">
-          Download AILANG
+        <a href="https://ailang.sunholo.com/docs/playground" class="btn btn-secondary" target="_blank" rel="noopener">
+          Try the Playground
         </a>
       </div>
     </section>
@@ -215,17 +384,17 @@ pure func validateInvoice(invoice: Invoice) -> ValidationResult =
   <footer>
     <div class="container">
       <p>
-        Built with <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a> -
+        Built with <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a> &mdash;
         The AI-First Programming Language
       </p>
       <p>
         <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">GitHub</a> |
-        <a href="https://ailang-docs.com" target="_blank" rel="noopener">Documentation</a> |
+        <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Documentation</a> |
         <a href="https://github.com/sunholo-data/ailang/issues" target="_blank" rel="noopener">Report Issues</a>
       </p>
     </div>
   </footer>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=20"></script>
 </body>
 </html>

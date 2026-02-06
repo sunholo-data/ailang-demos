@@ -1,268 +1,463 @@
 /**
- * Main application logic for the AILANG Invoice Processor Demo
+ * AILANG Document Extractor — Pipeline Orchestrator
+ *
+ * Wires together: WASM engine, schema editor, schema compiler,
+ * Gemini client, output formatter, and demo examples.
+ *
+ * 3-tier execution:
+ *   1. WASM AI handler + API key → full AILANG pipeline (processDocument)
+ *   2. No WASM AI handler + API key → JS extraction + AILANG validation (validateOnly)
+ *   3. No API key → pre-extracted demo data + AILANG validation (validateOnly)
  */
 
-import InvoiceProcessor from './ailang-wrapper.js';
-import { examples } from './examples.js';
+import AilangEngine from './ailang-wrapper.js';
+import { SchemaCompiler } from './schema-compiler.js';
+import { SchemaEditor } from './schema-editor.js';
+import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
+import { OutputFormatter } from './output-formatter.js';
+import { demoExamples } from './examples.js';
 
-// Global processor instance
-let processor = null;
+// ── Globals ──────────────────────────────────────────────────
+let engine = null;
+const compiler = new SchemaCompiler();
+let schemaEditor = null;
+let formatter = null;
+let currentDemo = null;   // key into demoExamples, or null for custom
+let running = false;
 
-/**
- * Initialize the application
- */
-async function initializeApp() {
-  showLoading('Initializing AILANG WASM...');
+// ── DOM References ───────────────────────────────────────────
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
 
+// ── Initialization ───────────────────────────────────────────
+async function init() {
+  // Set up UI components first (before async WASM load)
+  setupApiKeyPanel();
+  setupDemoButtons();
+  setupInputMethods();
+  setupActionButtons();
+
+  // Schema editor
+  const editorEl = $('#schema-editor');
+  if (editorEl) {
+    schemaEditor = new SchemaEditor(editorEl);
+    schemaEditor.onChange = onSchemaChange;
+  }
+
+  // Output formatter
+  formatter = new OutputFormatter();
+
+  // Initialize WASM engine
+  showLoading('Initializing AILANG WASM runtime...');
   try {
-    processor = new InvoiceProcessor();
-    await processor.init();
+    engine = new AilangEngine();
+    await engine.init();
+
+    // Register Gemini as AI handler
+    const apiKey = loadApiKey();
+    if (apiKey) {
+      const gemini = new GeminiClient(apiKey);
+      engine.setAIHandler(async (input) => {
+        // The AILANG std/ai.call(prompt) sends the prompt here
+        // We extract fields using the prompt directly
+        // The input is the full prompt string from AILANG
+        return JSON.stringify(await gemini.extractFields(input, schemaEditor.getSchema()));
+      });
+    }
 
     hideLoading();
-    showSuccess('AILANG initialized successfully! Ready to process invoices.');
+    updateApiKeyBadge();
 
-    // Set up event listeners
-    setupEventListeners();
-
-    // Load the first example by default
-    loadExample('valid');
+    // Load default demo
+    loadDemo('invoice');
   } catch (err) {
     hideLoading();
-    showError(`Failed to initialize: ${err.message}`);
+    showError(`Failed to initialize AILANG: ${err.message}`);
+    console.error('Init error:', err);
   }
 }
 
-/**
- * Set up event listeners for UI interactions
- */
-function setupEventListeners() {
-  // Process button
-  const processBtn = document.getElementById('processBtn');
-  if (processBtn) {
-    processBtn.addEventListener('click', processInvoice);
+// ── API Key Panel ────────────────────────────────────────────
+function setupApiKeyPanel() {
+  const toggle = $('#apiKeyToggle');
+  const panel = toggle?.closest('.api-key-panel');
+  if (toggle && panel) {
+    toggle.addEventListener('click', () => panel.classList.toggle('open'));
   }
 
-  // Example buttons
-  const exampleButtons = document.querySelectorAll('[data-example]');
-  exampleButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      const exampleName = e.currentTarget.getAttribute('data-example');
-      loadExample(exampleName);
+  const saveBtn = $('#saveKeyBtn');
+  const clearBtn = $('#clearKeyBtn');
+  const input = $('#apiKeyInput');
+
+  if (saveBtn && input) {
+    saveBtn.addEventListener('click', () => {
+      const key = input.value.trim();
+      if (key) {
+        saveApiKey(key);
+        input.value = '';
+        panel?.classList.remove('open');
+        updateApiKeyBadge();
+        // Re-register AI handler with new key
+        if (engine) {
+          const gemini = new GeminiClient(key);
+          engine.setAIHandler(async (prompt) => {
+            return JSON.stringify(await gemini.extractFields(prompt, schemaEditor.getSchema()));
+          });
+        }
+      }
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      clearApiKey();
+      updateApiKeyBadge();
+    });
+  }
+
+  // Load existing key into input hint
+  if (input && loadApiKey()) {
+    input.placeholder = 'Key saved (click Clear to remove)';
+  }
+}
+
+function updateApiKeyBadge() {
+  const badge = $('#demoBadge');
+  if (!badge) return;
+  const hasKey = !!loadApiKey();
+  badge.textContent = hasKey ? 'Live Mode' : 'Demo Mode';
+  badge.className = hasKey ? 'demo-badge live' : 'demo-badge';
+}
+
+// ── Demo Buttons ─────────────────────────────────────────────
+function setupDemoButtons() {
+  // Support both demo-chip (toolbar) and demo-btn (legacy) selectors
+  $$('[data-demo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      loadDemo(btn.dataset.demo);
+    });
+  });
+}
+
+function loadDemo(name) {
+  const demo = demoExamples[name];
+  if (!demo) return;
+
+  currentDemo = name;
+
+  // Update active states on all demo selectors
+  $$('[data-demo]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.demo === name);
+  });
+
+  // Load document
+  const docInput = $('#documentInput');
+  if (docInput) docInput.value = demo.document;
+
+  // Load schema
+  if (schemaEditor) {
+    schemaEditor.loadSchema(demo.schema);
+  }
+
+  // Auto-run extraction
+  runPipeline();
+}
+
+// ── Input Methods ────────────────────────────────────────────
+function setupInputMethods() {
+  $$('.method-btn[data-method]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const method = btn.dataset.method;
+      $$('.method-btn').forEach(b => b.classList.toggle('active', b.dataset.method === method));
+
+      const textarea = $('#documentInput');
+      const fileInput = $('#fileUpload');
+
+      if (method === 'upload' && fileInput) {
+        fileInput.click();
+      }
     });
   });
 
-  // Clear button
-  const clearBtn = document.getElementById('clearBtn');
+  const fileInput = $('#fileUpload');
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const textarea = $('#documentInput');
+        if (textarea) textarea.value = reader.result;
+        currentDemo = null;
+        $$('[data-demo]').forEach(b => b.classList.remove('active'));
+        // Reset method toggle back to paste
+        $$('.method-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'paste'));
+      };
+      reader.readAsText(file);
+    });
+  }
+}
+
+// ── Action Buttons ───────────────────────────────────────────
+function setupActionButtons() {
+  const extractBtn = $('#extractBtn');
+  if (extractBtn) {
+    extractBtn.addEventListener('click', () => runPipeline());
+  }
+
+  const clearBtn = $('#clearBtn');
   if (clearBtn) {
-    clearBtn.addEventListener('click', clearInput);
+    clearBtn.addEventListener('click', () => {
+      const docInput = $('#documentInput');
+      if (docInput) docInput.value = '';
+      currentDemo = null;
+      $$('[data-demo]').forEach(b => b.classList.remove('active'));
+      resetPipelineSteps();
+      updateGeneratedCode('-- Define a schema to see generated AILANG code');
+      const results = $('#results');
+      if (results) results.innerHTML = '<p class="placeholder">Select a demo or provide your own document and schema</p>';
+    });
   }
 }
 
-/**
- * Load an example invoice into the input textarea
- * @param {string} exampleName - Name of the example to load
- */
-function loadExample(exampleName) {
-  const textarea = document.getElementById('invoiceInput');
-  if (!textarea) return;
+// ── Schema Change Handler ────────────────────────────────────
+function onSchemaChange(schema) {
+  // Regenerate AILANG code preview
+  if (schema && schema.fields.length > 0) {
+    const ailangSource = compiler.compile(schema);
+    updateGeneratedCode(ailangSource);
+  }
+}
 
-  const example = examples[exampleName];
-  if (!example) {
-    console.error(`Example '${exampleName}' not found`);
+// ── Pipeline Steps UI ────────────────────────────────────────
+function resetPipelineSteps() {
+  $$('.pipe-step').forEach(step => {
+    step.classList.remove('active', 'complete', 'error');
+  });
+  $$('.pipe-connector').forEach(conn => {
+    conn.classList.remove('complete');
+  });
+}
+
+function setStepActive(stepNum) {
+  const step = $(`.pipe-step[data-step="${stepNum}"]`);
+  if (step) {
+    step.classList.remove('error');
+    step.classList.add('active');
+  }
+}
+
+function setStepComplete(stepNum) {
+  const step = $(`.pipe-step[data-step="${stepNum}"]`);
+  if (step) {
+    step.classList.remove('active', 'error');
+    step.classList.add('complete');
+  }
+  // Mark connector after this step as complete
+  const connectors = document.querySelectorAll('.pipe-connector');
+  if (connectors[stepNum - 1]) {
+    connectors[stepNum - 1].classList.add('complete');
+  }
+}
+
+function setStepError(stepNum) {
+  const step = $(`.pipe-step[data-step="${stepNum}"]`);
+  if (step) {
+    step.classList.remove('active', 'complete');
+    step.classList.add('error');
+  }
+}
+
+// ── Generated Code Display ───────────────────────────────────
+function updateGeneratedCode(source) {
+  const codeEl = $('#generatedCode code');
+  if (!codeEl) return;
+  codeEl.textContent = source;
+  // Apply syntax highlighting
+  codeEl.innerHTML = highlightAilang(codeEl.textContent);
+}
+
+function highlightAilang(code) {
+  const escaped = escapeHtml(code);
+  return escaped.split('\n').map(line => {
+    // Comment lines: highlight entire line, no further processing
+    const stripped = line.trimStart();
+    if (stripped.startsWith('--')) {
+      return '<span class=cm>' + line + '</span>';
+    }
+    // For non-comment lines: strings first, then keywords/types/constructors
+    // Use single-quote HTML attributes to avoid conflicts with AILANG strings
+    return line
+      // Strings (must be first — before we add any HTML tags)
+      .replace(/"([^"\\]|\\.)*"/g, '<span class=st>$&</span>')
+      // Keywords
+      .replace(/\b(module|import|export|type|func|pure|let|match|if|then|else|requires|ensures)\b/g, '<span class=kw>$1</span>')
+      // Types
+      .replace(/\b(string|int|float|bool|Json|Option|Result)\b/g, '<span class=ty>$1</span>')
+      // Constructors
+      .replace(/\b(Some|None|Ok|Err|true|false)\b/g, '<span class=ct>$1</span>')
+      // Effect annotations
+      .replace(/(!\s*\{[^}]+\})/g, '<span class=ct>$1</span>')
+      // Function names after func keyword
+      .replace(/(func\s+)(<span class=\w+>)?(\w+)/g, '$1$2<span class=fn>$3</span>')
+      // Inline comments (after code on same line)
+      .replace(/(--[^<]*)$/g, '<span class=cm>$1</span>');
+  }).join('\n');
+}
+
+// ── Main Pipeline ────────────────────────────────────────────
+async function runPipeline() {
+  if (running) return;
+  if (!engine || !engine.ready) {
+    showError('AILANG engine not initialized');
     return;
   }
 
-  textarea.value = JSON.stringify(example, null, 2);
-
-  // Clear previous results
-  clearResults();
-}
-
-/**
- * Clear the input textarea
- */
-function clearInput() {
-  const textarea = document.getElementById('invoiceInput');
-  if (textarea) {
-    textarea.value = '';
-  }
-  clearResults();
-}
-
-/**
- * Process the invoice from the input textarea
- */
-async function processInvoice() {
-  const textarea = document.getElementById('invoiceInput');
-  if (!textarea) return;
-
-  const input = textarea.value.trim();
-  if (!input) {
-    showError('Please enter invoice data');
+  const schema = schemaEditor?.getSchema();
+  if (!schema || schema.fields.length === 0) {
+    showError('Please define at least one field in the schema');
     return;
   }
 
-  showLoading('Processing invoice...');
+  const documentText = $('#documentInput')?.value?.trim();
+  if (!documentText) {
+    showError('Please provide a document to extract from');
+    return;
+  }
+
+  running = true;
+  const extractBtn = $('#extractBtn');
+  if (extractBtn) extractBtn.disabled = true;
+
+  resetPipelineSteps();
+  showLoading('Running extraction pipeline...');
 
   try {
-    // Parse the input JSON
-    let invoiceData;
-    try {
-      invoiceData = JSON.parse(input);
-    } catch (parseErr) {
-      throw new Error(`Invalid JSON: ${parseErr.message}`);
+    // Step 1: Compile schema → AILANG module
+    setStepActive(1);
+    const ailangSource = compiler.compile(schema);
+    updateGeneratedCode(ailangSource);
+    await sleep(150); // Brief visual pause
+    setStepComplete(1);
+
+    // Step 2: Load module into WASM
+    setStepActive(2);
+    await engine.reset();
+    const loadResult = engine.loadDynamicModule('extractor', ailangSource);
+    if (!loadResult.success) {
+      throw new Error(`AILANG compile error: ${loadResult.error}`);
     }
+    await sleep(150);
+    setStepComplete(2);
 
-    // Process with AILANG
-    const result = await processor.processInvoice(invoiceData);
+    // Step 3: Extract fields (AI or demo data)
+    setStepActive(3);
+    let extractedJson;
+    const apiKey = loadApiKey();
 
-    hideLoading();
+    if (engine.hasNativeAI() && apiKey) {
+      // Tier 1: Full AILANG pipeline — AI effect handled by WASM runtime
+      const result = engine.callFunction('extractor', 'processDocument', documentText);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      setStepComplete(3);
 
-    // Display results
-    if (result.valid) {
-      displaySuccessResult(result);
+      // Step 4: Validation happened inside AILANG
+      setStepActive(4);
+      await sleep(100);
+      setStepComplete(4);
+
+      // Step 5: Done
+      setStepComplete(5);
+      displayResult(result.result, schema);
+
+    } else if (apiKey) {
+      // Tier 2: JS extraction + AILANG validation
+      const gemini = new GeminiClient(apiKey);
+      extractedJson = await gemini.extractFields(documentText, schema);
+      setStepComplete(3);
+
+      // Step 4: Validate in AILANG
+      setStepActive(4);
+      const jsonString = JSON.stringify(extractedJson);
+      const result = engine.callFunction('extractor', 'validateOnly', jsonString);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      await sleep(100);
+      setStepComplete(4);
+
+      // Step 5: Done
+      setStepComplete(5);
+      displayResult(result.result, schema);
+
     } else {
-      displayErrorResult(result);
+      // Tier 3: Demo data + AILANG validation
+      const demo = currentDemo ? demoExamples[currentDemo] : null;
+      if (demo?.preExtracted) {
+        extractedJson = demo.preExtracted;
+      } else {
+        // No API key, no demo — show message
+        setStepError(3);
+        showError('No API key configured. Add a Gemini API key for live extraction, or select a demo example.');
+        return;
+      }
+      setStepComplete(3);
+
+      // Step 4: Validate in AILANG
+      setStepActive(4);
+      const jsonString = JSON.stringify(extractedJson);
+      const result = engine.callFunction('extractor', 'validateOnly', jsonString);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      await sleep(100);
+      setStepComplete(4);
+
+      // Step 5: Done
+      setStepComplete(5);
+      displayResult(result.result, schema);
     }
+
   } catch (err) {
-    hideLoading();
+    console.error('Pipeline error:', err);
+    // Mark current active step as error
+    $$('.pipe-step.active').forEach(s => {
+      s.classList.remove('active');
+      s.classList.add('error');
+    });
     showError(err.message);
+  } finally {
+    running = false;
+    if (extractBtn) extractBtn.disabled = false;
   }
 }
 
-/**
- * Display successful processing result
- * @param {Object} result - The processing result
- */
-function displaySuccessResult(result) {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
+// ── Result Display ───────────────────────────────────────────
+function displayResult(rawResult, schema) {
+  const resultsEl = $('#results');
+  if (!resultsEl) return;
 
-  let html = `
-    <div class="result-success">
-      <h3>✓ Valid Invoice</h3>
-
-      <div class="invoice-info">
-        <p><strong>Invoice #:</strong> ${escapeHtml(result.invoice_number)}</p>
-        <p><strong>Customer:</strong> ${escapeHtml(result.customer_name)}</p>
-        <p><strong>Date:</strong> ${escapeHtml(result.date)}</p>
-      </div>
-
-      <h4>Line Items</h4>
-      <table class="line-items-table">
-        <thead>
-          <tr>
-            <th>Description</th>
-            <th>Qty</th>
-            <th>Unit Price</th>
-            <th>Tax Rate</th>
-            <th>Subtotal</th>
-            <th>Tax</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
-
-  result.line_items.forEach(item => {
-    html += `
-      <tr>
-        <td>${escapeHtml(item.description)}</td>
-        <td>${item.quantity}</td>
-        <td>$${item.unit_price.toFixed(2)}</td>
-        <td>${(item.tax_rate * 100).toFixed(1)}%</td>
-        <td>$${item.subtotal.toFixed(2)}</td>
-        <td>$${item.tax.toFixed(2)}</td>
-        <td>$${item.total.toFixed(2)}</td>
-      </tr>
-    `;
-  });
-
-  html += `
-        </tbody>
-      </table>
-
-      <div class="totals">
-        <p><strong>Subtotal:</strong> $${result.subtotal.toFixed(2)}</p>
-        <p><strong>Discount (${result.discount_percent}%):</strong> -$${result.discount_amount.toFixed(2)}</p>
-        <p class="final-total"><strong>Total:</strong> $${result.total.toFixed(2)}</p>
-      </div>
-    </div>
-  `;
-
-  resultsDiv.innerHTML = html;
-}
-
-/**
- * Display error result
- * @param {Object|string} result - The error result object or error message string
- */
-function displayErrorResult(result) {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
-
-  // Handle legacy string parameter
-  const errorMessage = typeof result === 'string' ? result : result.error;
-  const errorType = typeof result === 'object' ? result.errorType : 'unknown';
-  const rawResponse = typeof result === 'object' ? result.rawResponse : null;
-
-  let html = `
-    <div class="result-error">
-      <h3>✗ ${errorType === 'ailang' ? 'Validation Failed' : 'Processing Error'}</h3>
-      <p class="error-message">${escapeHtml(errorMessage)}</p>
-  `;
-
-  // Only show the "Why AILANG Caught This Error" for actual AILANG validation errors
-  if (errorType === 'ailang') {
-    html += `
-      <div class="error-explanation">
-        <h4>Why AILANG Caught This Error</h4>
-        <p>
-          AILANG's type system and validation logic detected this issue <strong>before</strong>
-          any calculations were performed. In JavaScript or Python, this error might have caused:
-        </p>
-        <ul>
-          <li>Runtime crashes (NaN, undefined, null pointer exceptions)</li>
-          <li>Silent calculation errors producing incorrect totals</li>
-          <li>Data corruption in your database</li>
-        </ul>
-        <p>
-          With AILANG, errors are caught early and reported clearly, making your applications
-          more reliable and easier to debug.
-        </p>
-      </div>
-    `;
-  } else if (errorType === 'wrapper') {
-    html += `
-      <div class="error-explanation error-wrapper">
-        <h4>Integration Error</h4>
-        <p>
-          This error occurred in the JavaScript/WebAssembly integration layer, not in AILANG itself.
-          This could be due to:
-        </p>
-        <ul>
-          <li>WASM module not fully initialized</li>
-          <li>Communication error between JavaScript and AILANG</li>
-          <li>Invalid response format from AILANG</li>
-        </ul>
-        ${rawResponse ? `<details><summary>Debug Info</summary><pre>${escapeHtml(rawResponse)}</pre></details>` : ''}
-      </div>
-    `;
+  // Parse the JSON result from AILANG
+  let parsed;
+  try {
+    parsed = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
+  } catch (e) {
+    showError(`Failed to parse AILANG output: ${e.message}`);
+    return;
   }
 
-  html += `</div>`;
-  resultsDiv.innerHTML = html;
+  // Use the output formatter
+  formatter.render(parsed, schema, resultsEl);
 }
 
-/**
- * Show loading indicator
- * @param {string} message - Loading message
- */
+// ── UI Helpers ───────────────────────────────────────────────
 function showLoading(message) {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
-
-  resultsDiv.innerHTML = `
+  const resultsEl = $('#results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
       <p>${escapeHtml(message)}</p>
@@ -270,69 +465,34 @@ function showLoading(message) {
   `;
 }
 
-/**
- * Hide loading indicator
- */
 function hideLoading() {
-  // Loading will be replaced by results
+  // Replaced by actual results
 }
 
-/**
- * Show success message
- * @param {string} message - Success message
- */
-function showSuccess(message) {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
-
-  resultsDiv.innerHTML = `
-    <div class="status-success">
-      <p>✓ ${escapeHtml(message)}</p>
-    </div>
-  `;
-}
-
-/**
- * Show error message
- * @param {string} message - Error message
- */
 function showError(message) {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
-
-  resultsDiv.innerHTML = `
-    <div class="status-error">
-      <p>✗ ${escapeHtml(message)}</p>
+  const resultsEl = $('#results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = `
+    <div class="result-error">
+      <h3><span class="icon-fail"></span> Error</h3>
+      <p class="error-message">${escapeHtml(message)}</p>
     </div>
   `;
 }
 
-/**
- * Clear results display
- */
-function clearResults() {
-  const resultsDiv = document.getElementById('results');
-  if (!resultsDiv) return;
-
-  resultsDiv.innerHTML = `
-    <p class="placeholder">Paste invoice data and click "Process Invoice"</p>
-  `;
-}
-
-/**
- * Escape HTML to prevent XSS
- * @param {string} text - Text to escape
- * @returns {string} - Escaped text
- */
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = String(text ?? '');
   return div.innerHTML;
 }
 
-// Initialize when DOM is ready
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Bootstrap ────────────────────────────────────────────────
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeApp);
+  document.addEventListener('DOMContentLoaded', init);
 } else {
-  initializeApp();
+  init();
 }

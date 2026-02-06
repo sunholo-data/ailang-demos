@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AILANG REPL Test</title>
+  <script src="wasm/wasm_exec.js"></script>
+</head>
+<body>
+  <h1>AILANG REPL Test</h1>
+  <button onclick="test1()">Test 1: Load Module</button>
+  <button onclick="test2()">Test 2: Import and Call</button>
+  <button onclick="test3()">Test 3: Direct Eval</button>
+  <pre id="output"></pre>
+
+  <script>
+    let log = (msg) => {
+      document.getElementById('output').textContent += msg + '\n';
+      console.log(msg);
+    };
+
+    async function initAilang() {
+      log('Initializing AILANG...');
+      const go = new Go();
+      const result = await WebAssembly.instantiateStreaming(
+        fetch('wasm/ailang.wasm'),
+        go.importObject
+      );
+      go.run(result.instance);
+
+      // Wait for ailangEval to be available
+      while (typeof window.ailangEval === 'undefined') {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      log('AILANG ready!');
+    }
+
+    async function test1() {
+      document.getElementById('output').textContent = '';
+      await initAilang();
+
+      log('\n=== Test 1: Load Module ===');
+      const moduleResp = await fetch('wasm/invoice_processor.ail');
+      const moduleCode = await moduleResp.text();
+      log('Module code loaded, length: ' + moduleCode.length);
+
+      try {
+        const result = window.ailangEval(moduleCode);
+        log('Eval result: ' + (result || '(empty)'));
+      } catch (e) {
+        log('Error: ' + e.message);
+      }
+    }
+
+    async function test2() {
+      document.getElementById('output').textContent = '';
+      await initAilang();
+      await test1();
+
+      log('\n=== Test 2: Import and Call ===');
+      const testProgram = `
+import wasm/invoice_processor (processInvoice)
+processInvoice("{\\\"invoice_number\\\":\\\"TEST\\\"}")
+`;
+      log('Running: ' + testProgram);
+      try {
+        const result = window.ailangEval(testProgram);
+        log('Result: ' + result);
+      } catch (e) {
+        log('Error: ' + e.message);
+      }
+    }
+
+    async function test3() {
+      document.getElementById('output').textContent = '';
+      await initAilang();
+
+      log('\n=== Test 3: Direct Call ===');
+      const testProgram = `
+wasm/invoice_processor.processInvoice("{\\\"invoice_number\\\":\\\"TEST\\\"}")
+`;
+      log('Running: ' + testProgram);
+      try {
+        const result = window.ailangEval(testProgram);
+        log('Result: ' + result);
+      } catch (e) {
+        log('Error: ' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>

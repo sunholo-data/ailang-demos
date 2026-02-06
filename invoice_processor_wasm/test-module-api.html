@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AILANG Module Loading API Test</title>
+  <script src="wasm/wasm_exec.js"></script>
+  <script src="wasm/ailang-repl.js"></script>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+    .pass { color: #4ade80; }
+    .fail { color: #f87171; }
+    .info { color: #60a5fa; }
+    pre { background: #16213e; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    h2 { border-bottom: 1px solid #444; padding-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>AILANG Module Loading API Diagnostic</h1>
+  <div id="output"></div>
+
+  <script>
+    const out = document.getElementById('output');
+
+    function log(msg, cls = '') {
+      const div = document.createElement('div');
+      div.className = cls;
+      div.innerHTML = msg;
+      out.appendChild(div);
+    }
+
+    function pre(content) {
+      const p = document.createElement('pre');
+      p.textContent = typeof content === 'object' ? JSON.stringify(content, null, 2) : content;
+      out.appendChild(p);
+    }
+
+    async function runTests() {
+      log('<h2>1. Initialize WASM</h2>');
+
+      const repl = new AilangREPL();
+      await repl.init('wasm/ailang.wasm');
+
+      const version = repl.getVersion();
+      log(`Version: <strong>${version}</strong>`, 'info');
+
+      // Test simple module first
+      log('<h2>2. Test Simple Module (no imports)</h2>');
+
+      const simpleCode = `
+module simple
+
+pure func add(a: int, b: int) -> int = a + b
+
+export pure func double(x: int) -> int = x * 2
+`;
+
+      log('Loading simple module...');
+      const simpleResult = window.ailangLoadModule('simple', simpleCode);
+      pre(simpleResult);
+
+      if (simpleResult.success) {
+        log('✓ Module loaded', 'pass');
+        log(`Exports: ${JSON.stringify(simpleResult.exports)}`);
+
+        log('<br>Testing ailangCall("simple", "double", 5)...');
+        try {
+          const callResult = window.ailangCall('simple', 'double', 5);
+          pre(callResult);
+          if (callResult.success) {
+            log(`✓ Call succeeded: ${callResult.result}`, 'pass');
+          } else {
+            log(`✗ Call failed: ${callResult.error}`, 'fail');
+          }
+        } catch (e) {
+          log(`✗ Call threw: ${e.message}`, 'fail');
+        }
+      } else {
+        log(`✗ Module load failed: ${simpleResult.error}`, 'fail');
+      }
+
+      // Test if stdlib is available without imports
+      log('<h2>3. Test Stdlib Availability</h2>');
+
+      log('Testing if std/string.intToStr is available...');
+      const strTest = repl.eval('std/string.intToStr(42)');
+      log(`std/string.intToStr(42): ${strTest}`, strTest.includes('Error') ? 'fail' : 'pass');
+
+      log('<br>Testing if intToStr is available (unqualified)...');
+      const strTest2 = repl.eval('intToStr(42)');
+      log(`intToStr(42): ${strTest2}`, strTest2.includes('Error') ? 'fail' : 'pass');
+
+      log('<br>Testing :import std/string...');
+      const importRes = repl.eval(':import std/string');
+      log(`:import std/string: ${importRes}`);
+
+      log('<br>After import, testing intToStr...');
+      const strTest3 = repl.eval('intToStr(42)');
+      log(`intToStr(42): ${strTest3}`, strTest3.includes('Error') ? 'fail' : 'pass');
+
+      // Test module with stdlib imports
+      log('<h2>4. Test Module WITH Stdlib Imports</h2>');
+
+      const stdlibCode = `
+module withstdlib
+
+import std/json (encode, jo, kv, js)
+
+export pure func makeJson(name: string) -> string =
+  encode(jo([kv("name", js(name))]))
+`;
+
+      log('Loading module with stdlib imports...');
+      const stdlibResult = window.ailangLoadModule('withstdlib', stdlibCode);
+      pre(stdlibResult);
+
+      if (stdlibResult.success) {
+        log('✓ Module loaded', 'pass');
+        log(`Exports: ${JSON.stringify(stdlibResult.exports)}`);
+
+        log('<br>Testing ailangCall("withstdlib", "makeJson", "test")...');
+        try {
+          const callResult = window.ailangCall('withstdlib', 'makeJson', 'test');
+          pre(callResult);
+          if (callResult.success) {
+            log(`✓ Call succeeded: ${callResult.result}`, 'pass');
+          } else {
+            log(`✗ Call failed: ${callResult.error}`, 'fail');
+          }
+        } catch (e) {
+          log(`✗ Call threw: ${e.message}`, 'fail');
+        }
+      } else {
+        log(`✗ Module load failed: ${stdlibResult.error}`, 'fail');
+      }
+
+      // Test the actual invoice module
+      log('<h2>5. Test Invoice Module</h2>');
+
+      const response = await fetch('wasm/invoice_processor.ail?v=' + Date.now());
+      const invoiceCode = await response.text();
+      log(`Code length: ${invoiceCode.length} bytes`);
+
+      log('Loading invoice module...');
+      const invoiceResult = window.ailangLoadModule('invoice', invoiceCode);
+      pre(invoiceResult);
+
+      if (invoiceResult.success) {
+        log('✓ Module loaded', 'pass');
+        log(`Exports: ${JSON.stringify(invoiceResult.exports)}`);
+
+        log('<br>Testing ailangCall("invoice", "processInvoice", "{}")...');
+        try {
+          const callResult = window.ailangCall('invoice', 'processInvoice', '{}');
+          pre(callResult);
+          if (callResult.success) {
+            log(`✓ Call succeeded`, 'pass');
+          } else {
+            log(`✗ Call failed: ${callResult.error}`, 'fail');
+          }
+        } catch (e) {
+          log(`✗ Call threw: ${e.message}`, 'fail');
+        }
+
+        // Test with a full valid invoice (integer cents format)
+        log('<br>Testing with full valid invoice JSON (integer cents)...');
+        const validInvoice = JSON.stringify({
+          invoice_number: "INV-2024-001",
+          customer_name: "Acme Corp",
+          date: "2024-01-15",
+          line_items: [
+            { description: "Widget A", quantity: 10, unit_price_cents: 2500, tax_rate_bps: 800 }
+          ],
+          discount_percent: 10
+        });
+        log(`Input length: ${validInvoice.length} chars`);
+        try {
+          const fullResult = window.ailangCall('invoice', 'processInvoice', validInvoice);
+          pre(fullResult);
+          if (fullResult.success) {
+            log(`✓ Full invoice call succeeded`, 'pass');
+            // Verify calculations
+            try {
+              const parsed = JSON.parse(fullResult.result);
+              if (parsed.valid) {
+                const expected_subtotal = 27000; // 10 * 2500 + 10 * 2500 * 800/10000 = 25000 + 2000 = 27000
+                const expected_discount = 2700;  // 27000 * 10 / 100
+                const expected_total = 24300;    // 27000 - 2700
+                log(`  subtotal_cents: ${parsed.subtotal_cents} (expected ${expected_subtotal})`, parsed.subtotal_cents === expected_subtotal ? 'pass' : 'fail');
+                log(`  discount_amount_cents: ${parsed.discount_amount_cents} (expected ${expected_discount})`, parsed.discount_amount_cents === expected_discount ? 'pass' : 'fail');
+                log(`  total_cents: ${parsed.total_cents} (expected ${expected_total})`, parsed.total_cents === expected_total ? 'pass' : 'fail');
+              }
+            } catch (e) { /* result may not be directly parseable */ }
+          } else {
+            log(`✗ Full invoice call failed: ${fullResult.error}`, 'fail');
+          }
+        } catch (e) {
+          log(`✗ Full invoice call threw: ${e.message}`, 'fail');
+        }
+      } else {
+        log(`✗ Module load failed: ${invoiceResult.error}`, 'fail');
+      }
+
+      // Check REPL state
+      log('<h2>6. REPL State Check</h2>');
+
+      log('ailangListModules():');
+      pre(window.ailangListModules());
+
+      log('<br>:modules command:');
+      pre(repl.eval(':modules'));
+
+      log('<br>:env command (first 500 chars):');
+      pre(repl.eval(':env').substring(0, 500));
+
+      log('<h2>Summary</h2>');
+      log(`
+AILANG WASM Module Loading API v${version} diagnostic complete.
+<ul>
+  <li>All monetary values use <strong>integer cents</strong> (no float arithmetic)</li>
+  <li>Tax rates use <strong>basis points</strong> (800 bps = 8.00%)</li>
+  <li>JavaScript converts cents to dollars for display</li>
+</ul>
+`, 'info');
+    }
+
+    runTests().catch(e => log(`Error: ${e.message}`, 'fail'));
+  </script>
+</body>
+</html>

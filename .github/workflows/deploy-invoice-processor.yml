@@ -39,6 +39,9 @@ jobs:
           echo "Downloading Go WASM runtime..."
           curl -sL -o invoice_processor_wasm/wasm/wasm_exec.js \
             https://raw.githubusercontent.com/golang/go/go1.22.0/misc/wasm/wasm_exec.js
+          echo "Downloading AILANG REPL JavaScript..."
+          curl -sL -o invoice_processor_wasm/wasm/ailang-repl.js \
+            https://raw.githubusercontent.com/sunholo-data/ailang/main/web/ailang-repl.js
           echo "WASM files installed successfully!"
           ls -lh invoice_processor_wasm/wasm/
 

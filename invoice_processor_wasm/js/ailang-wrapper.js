@@ -1,161 +1,143 @@
 /**
- * AILANG WASM Wrapper
- * Handles loading and interaction with the AILANG WebAssembly module
+ * AILANG WASM Engine
+ * Wraps the AILANG WASM REPL with support for dynamic module loading,
+ * AI handler registration, and generic function calls.
  */
 
-class InvoiceProcessor {
+class AilangEngine {
   constructor() {
     this.ready = false;
     this.loading = false;
     this.error = null;
+    this.repl = null;
+    this.loadedModules = new Map(); // name -> { exports }
+    this._aiHandler = null;
+    this._hasNativeAI = false;
   }
 
   /**
-   * Initialize the WASM module and load the invoice processor
-   * @returns {Promise<void>}
+   * Initialize the WASM module and import stdlib
    */
   async init() {
-    if (this.ready) {
-      return;
-    }
-
+    if (this.ready) return;
     if (this.loading) {
-      // Wait for existing initialization
-      while (this.loading) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      while (this.loading) await new Promise(r => setTimeout(r, 100));
       return;
     }
 
     this.loading = true;
-
     try {
-      // Load WASM module using the Go WASM runtime
-      const go = new Go();
+      if (typeof AilangREPL === 'undefined') {
+        throw new Error('AilangREPL class not found. Make sure ailang-repl.js is loaded.');
+      }
 
-      // Fetch and instantiate the WASM module
-      const result = await WebAssembly.instantiateStreaming(
-        fetch('wasm/ailang.wasm'),
-        go.importObject
-      );
+      this.repl = new AilangREPL();
+      await this.repl.init('wasm/ailang.wasm');
 
-      // Run the Go instance (starts the AILANG REPL)
-      go.run(result.instance);
+      console.log('AILANG REPL initialized, version:', this.repl.getVersion());
 
-      // Wait for AILANG to be ready
-      await this.waitForAilang();
+      // Import core stdlib modules
+      const stdlibs = ['std/json', 'std/option', 'std/result', 'std/string', 'std/math', 'std/ai'];
+      for (const lib of stdlibs) {
+        const result = this.repl.importModule(lib);
+        console.log(`Import ${lib}:`, result);
+      }
 
-      // Load the invoice processor module
-      await this.loadModule('wasm/invoice_processor.ail');
+      // Check if native AI handler support exists
+      this._hasNativeAI = typeof window.ailangSetAIHandler === 'function';
+      console.log('Native AI handler support:', this._hasNativeAI);
 
       this.ready = true;
-      this.loading = false;
     } catch (err) {
       this.error = err.message;
-      this.loading = false;
       throw new Error(`Failed to initialize AILANG: ${err.message}`);
+    } finally {
+      this.loading = false;
     }
   }
 
   /**
-   * Wait for the AILANG global to be available
-   * @returns {Promise<void>}
+   * Register an AI handler callback.
+   * If native WASM AI handler support exists, registers it with the runtime.
+   * Otherwise stores for JS-side fallback.
+   * @param {Function} handler - async (input: string) => string
    */
-  async waitForAilang() {
-    let attempts = 0;
-    const maxAttempts = 50;
-
-    while (typeof window.ailangEval === 'undefined' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-
-    if (typeof window.ailangEval === 'undefined') {
-      throw new Error('AILANG WASM failed to initialize');
+  setAIHandler(handler) {
+    this._aiHandler = handler;
+    if (this._hasNativeAI) {
+      window.ailangSetAIHandler(handler);
+      console.log('Registered native AI handler');
+    } else {
+      console.log('Stored AI handler for JS-side fallback (no native WASM AI support)');
     }
   }
 
   /**
-   * Load an AILANG module from a file
-   * @param {string} path - Path to the .ail file
-   * @returns {Promise<void>}
+   * Whether WASM-native AI handler interop is available
    */
-  async loadModule(path) {
+  hasNativeAI() {
+    return this._hasNativeAI;
+  }
+
+  /**
+   * Get the stored AI handler for JS-side fallback
+   */
+  getAIHandler() {
+    return this._aiHandler;
+  }
+
+  /**
+   * Load an AILANG module from source code at runtime
+   * @param {string} name - Module name
+   * @param {string} ailangSource - AILANG source code
+   * @returns {{ success: boolean, exports?: string[], error?: string }}
+   */
+  loadDynamicModule(name, ailangSource) {
+    if (!this.ready) throw new Error('Engine not initialized');
+
+    const result = this.repl.loadModule(name, ailangSource);
+
+    if (result.success) {
+      this.loadedModules.set(name, { exports: result.exports || [] });
+      console.log(`Module '${name}' loaded. Exports:`, result.exports);
+    } else {
+      console.error(`Failed to load module '${name}':`, result.error);
+    }
+
+    return result;
+  }
+
+  /**
+   * Call a function on a loaded module
+   * @param {string} moduleName - Module name
+   * @param {string} funcName - Function name
+   * @param {...string} args - String arguments
+   * @returns {{ success: boolean, result?: any, error?: string, errorType?: string }}
+   */
+  callFunction(moduleName, funcName, ...args) {
+    if (!this.ready) throw new Error('Engine not initialized');
+
     try {
-      const response = await fetch(path);
-      if (!response.ok) {
-        throw new Error(`Failed to load module: ${response.statusText}`);
-      }
+      const callResult = this.repl.call(moduleName, funcName, ...args);
 
-      const code = await response.text();
-
-      // Load the module into AILANG
-      const result = window.ailangEval(code);
-
-      // Check if there was an error
-      if (result && result.includes('Error')) {
-        throw new Error(result);
-      }
-    } catch (err) {
-      throw new Error(`Failed to load AILANG module: ${err.message}`);
-    }
-  }
-
-  /**
-   * Process an invoice using the AILANG function
-   * @param {Object} invoiceData - The invoice data to process
-   * @returns {Promise<Object>} - The processing result
-   */
-  async processInvoice(invoiceData) {
-    if (!this.ready) {
-      throw new Error('Invoice processor not initialized. Call init() first.');
-    }
-
-    try {
-      // Convert invoice data to JSON string
-      const jsonInput = JSON.stringify(invoiceData);
-
-      // Escape the JSON string for AILANG
-      const escapedJson = this.escapeForAilang(jsonInput);
-
-      // Call the AILANG function
-      const ailangCall = `wasm/invoice_processor.processInvoice("${escapedJson}")`;
-      const resultString = window.ailangEval(ailangCall);
-
-      // Debug: log what AILANG returned
-      console.log('AILANG response:', resultString);
-
-      // Check if AILANG returned an error
-      if (!resultString || resultString.trim() === '') {
+      if (!callResult.success) {
         return {
-          valid: false,
-          error: 'AILANG returned empty response',
-          errorType: 'wrapper'
+          success: false,
+          error: callResult.error,
+          errorType: 'ailang'
         };
       }
 
       // Parse the result
-      let result;
-      try {
-        result = JSON.parse(resultString);
-      } catch (parseErr) {
-        return {
-          valid: false,
-          error: `Failed to parse AILANG response: ${parseErr.message}`,
-          errorType: 'wrapper',
-          rawResponse: resultString.substring(0, 200) // First 200 chars for debugging
-        };
-      }
-
-      // Add errorType to distinguish AILANG validation errors
-      if (result && !result.valid) {
-        result.errorType = 'ailang';
-      }
-
-      return result;
+      const parsed = this._parseResult(callResult.result);
+      return {
+        success: true,
+        result: parsed,
+        raw: callResult.result
+      };
     } catch (err) {
       return {
-        valid: false,
+        success: false,
         error: `WASM execution error: ${err.message}`,
         errorType: 'wrapper'
       };
@@ -163,31 +145,106 @@ class InvoiceProcessor {
   }
 
   /**
-   * Escape a JSON string for use in AILANG code
-   * @param {string} jsonStr - JSON string to escape
-   * @returns {string} - Escaped string
+   * Reset the REPL and reimport stdlibs.
+   * Clears all loaded modules.
    */
-  escapeForAilang(jsonStr) {
-    return jsonStr
-      .replace(/\\/g, '\\\\')  // Escape backslashes
-      .replace(/"/g, '\\"')    // Escape double quotes
-      .replace(/\n/g, '\\n')   // Escape newlines
-      .replace(/\r/g, '\\r')   // Escape carriage returns
-      .replace(/\t/g, '\\t');  // Escape tabs
+  async reset() {
+    if (!this.ready) return;
+
+    this.repl.reset();
+    this.loadedModules.clear();
+
+    // Reimport stdlibs
+    const stdlibs = ['std/json', 'std/option', 'std/result', 'std/string', 'std/math', 'std/ai'];
+    for (const lib of stdlibs) {
+      this.repl.importModule(lib);
+    }
+
+    // Re-register AI handler if we have native support
+    if (this._hasNativeAI && this._aiHandler) {
+      window.ailangSetAIHandler(this._aiHandler);
+    }
   }
 
   /**
-   * Get the status of the processor
-   * @returns {Object} - Status information
+   * Load the original invoice processor module (backward compat)
    */
+  async loadInvoiceModule() {
+    const response = await fetch('wasm/invoice_processor.ail?v=' + Date.now());
+    if (!response.ok) throw new Error(`Failed to fetch module: ${response.statusText}`);
+    const code = await response.text();
+    return this.loadDynamicModule('invoice', code);
+  }
+
+  /**
+   * Process an invoice using the legacy invoice module
+   * @param {Object} invoiceData
+   * @returns {Object} result
+   */
+  async processInvoice(invoiceData) {
+    if (!this.loadedModules.has('invoice')) {
+      await this.loadInvoiceModule();
+    }
+
+    const jsonInput = JSON.stringify(invoiceData);
+    const result = this.callFunction('invoice', 'processInvoice', jsonInput);
+
+    if (!result.success) {
+      return { valid: false, error: result.error, errorType: result.errorType };
+    }
+
+    // Parse the JSON string result
+    try {
+      const parsed = typeof result.result === 'string' ? JSON.parse(result.result) : result.result;
+      if (parsed && !parsed.valid) parsed.errorType = 'ailang';
+      return parsed;
+    } catch (e) {
+      return { valid: false, error: `Failed to parse response: ${e.message}`, errorType: 'wrapper', rawResponse: result.raw };
+    }
+  }
+
+  /**
+   * Parse an AILANG result string.
+   * Strips type annotations, unescapes quoted strings.
+   * @param {string} resultString
+   * @returns {string} Cleaned result
+   */
+  _parseResult(resultString) {
+    if (!resultString) return resultString;
+
+    let cleaned = resultString;
+
+    // Strip type annotation " :: Type"
+    const typeMatch = cleaned.match(/^(.+) :: \w+$/s);
+    if (typeMatch) {
+      cleaned = typeMatch[1];
+    }
+
+    // Unwrap quoted strings
+    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+      try {
+        cleaned = JSON.parse(cleaned);
+      } catch {
+        cleaned = cleaned.slice(1, -1)
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\')
+          .replace(/\\n/g, '\n');
+      }
+    }
+
+    return cleaned;
+  }
+
   getStatus() {
     return {
       ready: this.ready,
       loading: this.loading,
-      error: this.error
+      error: this.error,
+      modules: Array.from(this.loadedModules.keys()),
+      hasNativeAI: this._hasNativeAI,
+      hasAIHandler: !!this._aiHandler
     };
   }
 }
 
-// Export for use in other modules
-export default InvoiceProcessor;
+export default AilangEngine;
