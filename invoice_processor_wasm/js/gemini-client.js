@@ -113,6 +113,100 @@ export class GeminiClient {
     const map = { string: 'STRING', int: 'INTEGER', float: 'NUMBER', bool: 'BOOLEAN' };
     return map[ailangType] || 'STRING';
   }
+
+  /**
+   * Auto-detect a schema from a document — asks Gemini to suggest fields
+   * @param {string} documentText - The document text (can be empty for binary)
+   * @param {Object|null} binaryData - { base64: string, mimeType: string } for file uploads
+   * @returns {Promise<{ name: string, fields: Array<{ name: string, type: string, required: boolean, constraints: string[] }> }>}
+   */
+  async detectSchema(documentText, binaryData = null) {
+    const prompt = `Analyze this document and suggest a structured extraction schema.
+
+For each field you identify:
+- Use snake_case names (e.g., "invoice_number", "total_cents")
+- Use type "string" for text fields, "int" for numeric fields
+- For monetary amounts, use cents (e.g., $25.00 → field name ending in _cents, integer 2500)
+- Mark fields as required if they are clearly present and important
+- Add constraints where appropriate: ">= 0" for amounts, '!= ""' for required strings
+
+Return a JSON object with:
+- "name": a PascalCase name for this schema (e.g., "InvoiceExtraction")
+- "fields": array of { "name": string, "type": "string"|"int", "required": boolean, "constraints": string[] }
+
+Suggest 5-10 fields that best represent the key data in this document.` +
+      (documentText ? `\n\nDocument:\n---\n${documentText}\n---` : '\n\nAnalyze the attached document.');
+
+    const parts = [{ text: prompt }];
+    if (binaryData) {
+      parts.push({
+        inlineData: {
+          mimeType: binaryData.mimeType,
+          data: binaryData.base64
+        }
+      });
+    }
+
+    const responseSchema = {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING' },
+        fields: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              name: { type: 'STRING' },
+              type: { type: 'STRING' },
+              required: { type: 'BOOLEAN' },
+              constraints: { type: 'ARRAY', items: { type: 'STRING' } }
+            },
+            required: ['name', 'type', 'required', 'constraints']
+          }
+        }
+      },
+      required: ['name', 'fields']
+    };
+
+    const response = await fetch(
+      `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema,
+            temperature: 0.2
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Gemini API error (${response.status}): ${body.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No content in Gemini response');
+
+    const result = JSON.parse(text);
+
+    // Normalize field types to only string/int
+    for (const f of result.fields) {
+      if (f.type !== 'string' && f.type !== 'int') {
+        f.type = 'string';
+      }
+      if (!Array.isArray(f.constraints)) {
+        f.constraints = [];
+      }
+    }
+
+    return result;
+  }
 }
 
 // API key management helpers

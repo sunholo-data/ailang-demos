@@ -35,6 +35,9 @@
         <button class="demo-chip" data-demo="invoice">Invoice</button>
         <button class="demo-chip" data-demo="receipt">Receipt</button>
         <button class="demo-chip" data-demo="contract">Contract</button>
+        <button class="demo-chip" data-demo="bankStatement">Bank Statement</button>
+        <button class="demo-chip" data-demo="shippingLabel">Shipping</button>
+        <button class="demo-chip" data-demo="resume">Resume</button>
         <button class="demo-chip" data-demo="pdfInvoice">
           <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
           PDF Invoice
@@ -85,6 +88,10 @@
 
           <div class="col-header" style="margin-top:20px">
             <h2>Extraction Schema</h2>
+            <button id="detectSchemaBtn" class="btn-detect" title="Use AI to auto-detect fields from the document">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 3.5L13 6l-3.5 1.5L8 11l-1.5-3.5L3 6l3.5-1.5z"/><path d="M12 10l.75 1.75L14.5 12.5l-1.75.75L12 15l-.75-1.75-1.75-.75 1.75-.75z"/></svg>
+              Detect Schema
+            </button>
           </div>
           <div id="schema-editor">
             <!-- Populated by schema-editor.js -->
@@ -406,6 +413,6 @@
     </div>
   </footer>
 
-  <script type="module" src="js/app.js?v=21"></script>
+  <script type="module" src="js/app.js?v=22"></script>
 </body>
 </html>

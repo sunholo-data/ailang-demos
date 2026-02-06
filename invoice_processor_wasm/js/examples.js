@@ -183,5 +183,183 @@ Signed on behalf of the parties on the date first written above.`,
       notice_period_days: 60,
       uptime_guarantee: '99.9%'
     }
+  },
+
+  bankStatement: {
+    label: 'Bank Statement',
+    description: 'Extract account details, balance, and transaction summary',
+    document: `NATIONAL BANK OF AUSTRALIA
+Monthly Statement — Personal Cheque Account
+
+Account Holder: Sarah J. Mitchell
+Account Number: 0621-4478-9903
+BSB: 082-140
+Statement Period: 1 March 2024 – 31 March 2024
+
+Opening Balance:                    $4,231.50
+
+TRANSACTIONS
+Date        Description                     Debit       Credit
+03 Mar      Direct Debit — Netflix           $22.99
+05 Mar      Salary — Sunholo Pty Ltd                    $6,450.00
+07 Mar      EFTPOS — Woolworths             $187.30
+12 Mar      Transfer to Savings             $500.00
+15 Mar      ATM Withdrawal                  $200.00
+18 Mar      BPAY — AGL Energy              $142.80
+22 Mar      EFTPOS — Bunnings               $89.50
+25 Mar      Direct Debit — Health Ins       $175.00
+28 Mar      Interest Earned                              $3.12
+
+Total Debits:    $1,317.59
+Total Credits:   $6,453.12
+
+Closing Balance:                    $9,367.03`,
+
+    schema: {
+      name: 'BankStatementExtraction',
+      fields: [
+        { name: 'account_holder', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'account_number', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'statement_period', type: 'string', required: true, constraints: [] },
+        { name: 'opening_balance_cents', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'closing_balance_cents', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'total_debits_cents', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'total_credits_cents', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'transaction_count', type: 'int', required: false, constraints: ['>= 0'] }
+      ]
+    },
+
+    preExtracted: {
+      account_holder: 'Sarah J. Mitchell',
+      account_number: '0621-4478-9903',
+      statement_period: '2024-03-01 to 2024-03-31',
+      opening_balance_cents: 423150,
+      closing_balance_cents: 936703,
+      total_debits_cents: 131759,
+      total_credits_cents: 645312,
+      transaction_count: 9
+    }
+  },
+
+  shippingLabel: {
+    label: 'Shipping',
+    description: 'Extract sender, recipient, and tracking info from a shipping label',
+    document: `═══════════════════════════════════════
+        AUSTRALIA POST — EXPRESS POST
+═══════════════════════════════════════
+
+FROM:
+  Sunholo Pty Ltd
+  Level 10, 100 Collins Street
+  Melbourne VIC 3000
+  AU
+
+TO:
+  James Chen
+  42 Harbour View Drive
+  Pyrmont NSW 2009
+  AU
+
+Tracking: EP349201847AU
+Service:  Express Post — Next Business Day
+Weight:   1.2 kg
+Declared Value: $85.00
+
+Parcel ID: PKG-2024-00417
+Date Shipped: 2024-03-15
+Signature Required: Yes
+
+═══════════════════════════════════════`,
+
+    schema: {
+      name: 'ShippingExtraction',
+      fields: [
+        { name: 'sender_name', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'recipient_name', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'recipient_city', type: 'string', required: true, constraints: [] },
+        { name: 'tracking_number', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'service_type', type: 'string', required: true, constraints: [] },
+        { name: 'weight_grams', type: 'int', required: false, constraints: ['>= 0'] },
+        { name: 'declared_value_cents', type: 'int', required: false, constraints: ['>= 0'] },
+        { name: 'signature_required', type: 'string', required: false, constraints: [] }
+      ]
+    },
+
+    preExtracted: {
+      sender_name: 'Sunholo Pty Ltd',
+      recipient_name: 'James Chen',
+      recipient_city: 'Pyrmont',
+      tracking_number: 'EP349201847AU',
+      service_type: 'Express Post — Next Business Day',
+      weight_grams: 1200,
+      declared_value_cents: 8500,
+      signature_required: 'Yes'
+    }
+  },
+
+  resume: {
+    label: 'Resume',
+    description: 'Extract candidate details, experience, and skills from a CV',
+    document: `EMILY WATSON
+Senior Software Engineer
+
+Email: emily.watson@email.com
+Phone: +61 412 345 678
+Location: Melbourne, VIC, Australia
+LinkedIn: linkedin.com/in/emilywatson
+
+SUMMARY
+Experienced software engineer with 8 years of expertise in cloud-native
+applications, distributed systems, and machine learning infrastructure.
+Passionate about building reliable, scalable systems.
+
+EXPERIENCE
+Senior Software Engineer — Sunholo Pty Ltd (2022 – Present)
+  - Lead engineer on AI infrastructure platform
+  - Designed event-driven microservices handling 50k req/sec
+  - Mentored team of 4 junior engineers
+
+Software Engineer — Atlassian (2018 – 2022)
+  - Built CI/CD pipelines for Bitbucket Pipelines
+  - Reduced deployment times by 40%
+  - Contributed to open-source Kubernetes tooling
+
+Junior Developer — Canva (2016 – 2018)
+  - Full-stack development with React and Go
+  - Implemented image processing pipeline
+
+EDUCATION
+B.Sc. Computer Science — University of Melbourne (2016)
+  First Class Honours
+
+SKILLS
+Languages: Python, Go, TypeScript, Rust
+Cloud: GCP, AWS, Kubernetes, Terraform
+ML: PyTorch, TensorFlow, MLflow`,
+
+    schema: {
+      name: 'ResumeExtraction',
+      fields: [
+        { name: 'candidate_name', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'current_title', type: 'string', required: true, constraints: [] },
+        { name: 'email', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'location', type: 'string', required: false, constraints: [] },
+        { name: 'years_experience', type: 'int', required: true, constraints: ['>= 0'] },
+        { name: 'current_employer', type: 'string', required: true, constraints: [] },
+        { name: 'education', type: 'string', required: false, constraints: [] },
+        { name: 'num_roles', type: 'int', required: false, constraints: ['>= 0'] }
+      ]
+    },
+
+    preExtracted: {
+      candidate_name: 'Emily Watson',
+      current_title: 'Senior Software Engineer',
+      email: 'emily.watson@email.com',
+      location: 'Melbourne, VIC, Australia',
+      years_experience: 8,
+      current_employer: 'Sunholo Pty Ltd',
+      education: 'B.Sc. Computer Science, University of Melbourne',
+      num_roles: 3
+    }
   }
 };

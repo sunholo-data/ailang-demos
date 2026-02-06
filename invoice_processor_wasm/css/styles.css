@@ -191,6 +191,7 @@ header .tagline {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .toolbar-label {
@@ -898,6 +899,42 @@ section p {
 .field-remove:hover {
   background: var(--error-bg);
   color: var(--error);
+}
+
+/* Detect Schema button */
+.btn-detect {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1.5px solid var(--ai-orange);
+  border-radius: 20px;
+  background: var(--ai-orange-bg);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ai-orange);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-detect:hover {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #d97706;
+}
+
+.btn-detect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-detect.detecting {
+  animation: pulse 1.2s ease infinite;
+}
+
+.btn-detect svg {
+  flex-shrink: 0;
 }
 
 /* Add field button */

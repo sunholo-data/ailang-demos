@@ -311,6 +311,11 @@ function setupActionButtons() {
     extractBtn.addEventListener('click', () => runPipeline());
   }
 
+  const detectBtn = $('#detectSchemaBtn');
+  if (detectBtn) {
+    detectBtn.addEventListener('click', () => detectSchema());
+  }
+
   const clearBtn = $('#clearBtn');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
@@ -330,6 +335,50 @@ function setupActionButtons() {
       const results = $('#results');
       if (results) results.innerHTML = '<p class="placeholder">Select a demo or provide your own document and schema</p>';
     });
+  }
+}
+
+// ── Auto-Detect Schema ──────────────────────────────────────
+async function detectSchema() {
+  const apiKey = loadApiKey();
+  if (!apiKey) {
+    showError('Schema detection requires a Gemini API key. Add one above.');
+    return;
+  }
+
+  const documentText = $('#documentInput')?.value?.trim();
+  if (!documentText && !uploadedBinary) {
+    showError('Please provide a document first — paste text or upload a file.');
+    return;
+  }
+
+  const btn = $('#detectSchemaBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('detecting');
+    btn.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 3.5L13 6l-3.5 1.5L8 11l-1.5-3.5L3 6l3.5-1.5z"/><path d="M12 10l.75 1.75L14.5 12.5l-1.75.75L12 15l-.75-1.75-1.75-.75 1.75-.75z"/></svg> Detecting...`;
+  }
+
+  try {
+    const gemini = new GeminiClient(apiKey);
+    const schema = await gemini.detectSchema(
+      documentText || '',
+      uploadedBinary || null
+    );
+
+    if (schema && schema.fields?.length > 0 && schemaEditor) {
+      schemaEditor.loadSchema(schema);
+    } else {
+      showError('AI could not detect a schema from this document. Try adding more text.');
+    }
+  } catch (err) {
+    showError(`Schema detection failed: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('detecting');
+      btn.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l1.5 3.5L13 6l-3.5 1.5L8 11l-1.5-3.5L3 6l3.5-1.5z"/><path d="M12 10l.75 1.75L14.5 12.5l-1.75.75L12 15l-.75-1.75-1.75-.75 1.75-.75z"/></svg> Detect Schema`;
+    }
   }
 }
 
