@@ -500,9 +500,15 @@ async function runPipeline() {
       setStepLog(3, 'AI extraction complete');
       setStepComplete(3);
 
-      // Step 4: Validation happened inside AILANG
+      // Step 4: Validation happened inside AILANG — inspect the result
       setStepActive(4);
-      setStepLog(4, 'Validated inside AILANG pipeline');
+      const tier1Parsed = safeParse(result.result);
+      if (tier1Parsed?.valid) {
+        const fieldCount = Object.keys(tier1Parsed).filter(k => k !== 'valid').length;
+        setStepLog(4, `${fieldCount} fields validated`);
+      } else {
+        setStepLog(4, tier1Parsed?.error || 'Validation failed');
+      }
       await sleep(100);
       setStepComplete(4);
 
@@ -532,7 +538,13 @@ async function runPipeline() {
       if (!result.success) {
         throw new Error(result.error);
       }
-      setStepLog(4, 'All constraints passed');
+      const tier2Parsed = safeParse(result.result);
+      if (tier2Parsed?.valid) {
+        const fieldCount = Object.keys(tier2Parsed).filter(k => k !== 'valid').length;
+        setStepLog(4, `${fieldCount} fields validated`);
+      } else {
+        setStepLog(4, tier2Parsed?.error || 'Validation returned errors');
+      }
       await sleep(100);
       setStepComplete(4);
 
@@ -569,7 +581,13 @@ async function runPipeline() {
       if (!result.success) {
         throw new Error(result.error);
       }
-      setStepLog(4, 'All constraints passed');
+      const tier3Parsed = safeParse(result.result);
+      if (tier3Parsed?.valid) {
+        const fieldCount = Object.keys(tier3Parsed).filter(k => k !== 'valid').length;
+        setStepLog(4, `${fieldCount} fields validated`);
+      } else {
+        setStepLog(4, tier3Parsed?.error || 'Validation returned errors');
+      }
       await sleep(100);
       setStepComplete(4);
 
@@ -593,6 +611,11 @@ async function runPipeline() {
     running = false;
     if (extractBtn) extractBtn.disabled = false;
   }
+}
+
+function safeParse(val) {
+  try { return typeof val === 'string' ? JSON.parse(val) : val; }
+  catch { return null; }
 }
 
 // ── Result Display ───────────────────────────────────────────
