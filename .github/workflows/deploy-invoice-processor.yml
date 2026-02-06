@@ -28,22 +28,100 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download AILANG WASM files
+      - name: Download AILANG WASM tarball
         run: |
-          echo "Downloading AILANG WASM tarball..."
-          wget https://github.com/sunholo-data/ailang/releases/latest/download/ailang-wasm.tar.gz \
-            -O ailang-wasm.tar.gz
-          echo "Extracting WASM binary..."
+          set -euo pipefail
+          WASM_DIR="invoice_processor_wasm/wasm"
+          mkdir -p "$WASM_DIR"
+
+          echo "::group::Fetching latest AILANG release info"
+          RELEASE_JSON=$(curl -sfL \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/sunholo-data/ailang/releases/latest)
+          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          echo "Latest release: $RELEASE_TAG"
+          echo "::endgroup::"
+
+          echo "::group::Downloading ailang-wasm.tar.gz"
+          curl -sfL --retry 3 --retry-delay 5 \
+            -o ailang-wasm.tar.gz \
+            "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/ailang-wasm.tar.gz"
+          echo "Tarball size: $(stat --printf='%s' ailang-wasm.tar.gz) bytes"
+          echo "::endgroup::"
+
+          echo "::group::Extracting tarball"
+          tar -tzf ailang-wasm.tar.gz || { echo "::error::Tarball is corrupt"; exit 1; }
           tar -xzf ailang-wasm.tar.gz
-          mv ailang.wasm invoice_processor_wasm/wasm/
-          echo "Downloading Go WASM runtime..."
-          curl -sL -o invoice_processor_wasm/wasm/wasm_exec.js \
-            https://raw.githubusercontent.com/golang/go/go1.22.0/misc/wasm/wasm_exec.js
-          echo "Downloading AILANG REPL JavaScript..."
-          curl -sL -o invoice_processor_wasm/wasm/ailang-repl.js \
-            https://raw.githubusercontent.com/sunholo-data/ailang/main/web/ailang-repl.js
-          echo "WASM files installed successfully!"
-          ls -lh invoice_processor_wasm/wasm/
+          echo "Tarball contents:"
+          tar -tzf ailang-wasm.tar.gz
+          echo "::endgroup::"
+
+          # Move ailang.wasm (required)
+          if [ -f ailang.wasm ]; then
+            mv ailang.wasm "$WASM_DIR/"
+          else
+            echo "::error::ailang.wasm not found in tarball"
+            exit 1
+          fi
+
+          # Use wasm_exec.js from tarball if present, otherwise download from AILANG repo
+          if [ -f wasm_exec.js ]; then
+            echo "Using wasm_exec.js from release tarball"
+            mv wasm_exec.js "$WASM_DIR/"
+          else
+            echo "wasm_exec.js not in tarball, downloading from AILANG repo..."
+            curl -sfL --retry 3 --retry-delay 5 \
+              -o "$WASM_DIR/wasm_exec.js" \
+              "https://raw.githubusercontent.com/sunholo-data/ailang/${RELEASE_TAG}/docs/static/wasm/wasm_exec.js"
+          fi
+
+          # ailang-repl.js is committed to this repo (has loadModule/call/importModule API)
+          # Do NOT overwrite it — the AILANG repo's version may lack these methods
+          echo "Using ailang-repl.js from repo checkout"
+
+      - name: Verify WASM files
+        run: |
+          set -euo pipefail
+          WASM_DIR="invoice_processor_wasm/wasm"
+          echo "::group::File listing"
+          ls -lh "$WASM_DIR/"
+          echo "::endgroup::"
+
+          FAIL=0
+
+          # ailang.wasm — should be >1MB (currently ~34MB)
+          WASM_SIZE=$(stat --printf='%s' "$WASM_DIR/ailang.wasm")
+          if [ "$WASM_SIZE" -lt 1000000 ]; then
+            echo "::error::ailang.wasm is only ${WASM_SIZE} bytes (expected >1MB)"
+            FAIL=1
+          else
+            echo "ailang.wasm: ${WASM_SIZE} bytes — OK"
+          fi
+
+          # wasm_exec.js — should be >10KB
+          EXEC_SIZE=$(stat --printf='%s' "$WASM_DIR/wasm_exec.js")
+          if [ "$EXEC_SIZE" -lt 10000 ]; then
+            echo "::error::wasm_exec.js is only ${EXEC_SIZE} bytes (expected >10KB)"
+            FAIL=1
+          else
+            echo "wasm_exec.js: ${EXEC_SIZE} bytes — OK"
+          fi
+
+          # ailang-repl.js — should be >3KB
+          REPL_SIZE=$(stat --printf='%s' "$WASM_DIR/ailang-repl.js")
+          if [ "$REPL_SIZE" -lt 3000 ]; then
+            echo "::error::ailang-repl.js is only ${REPL_SIZE} bytes (expected >3KB)"
+            FAIL=1
+          else
+            echo "ailang-repl.js: ${REPL_SIZE} bytes — OK"
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::WASM file verification failed"
+            exit 1
+          fi
+
+          echo "All WASM files verified successfully"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
