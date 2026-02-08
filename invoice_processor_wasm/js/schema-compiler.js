@@ -97,13 +97,14 @@ func extractFields(document: string) -> string ! {AI} {
       .map(f => `--   ${f.name} (${f.type}${f.required ? ', required' : ''})`)
       .join('\\n');
 
-    return `-- Multimodal extraction: sends base64 file data to AI via structured JSON request
+    return `-- Multimodal extraction: sends base64 file data + metadata to AI via structured JSON request
 -- Uses std/json to build the request, std/ai.call() to invoke the host AI handler
-func extractFromFile(base64Data: string, mimeType: string) -> string ! {AI} {
+func extractFromFile(base64Data: string, mimeType: string, fileName: string) -> string ! {AI} {
   let request = encode(jo([
     kv("mode", js("multimodal")),
     kv("mimeType", js(mimeType)),
     kv("data", js(base64Data)),
+    kv("fileName", js(fileName)),
     kv("prompt", js("Extract these fields as JSON from the attached document.\\nFields:\\n${fieldList}\\nFor int fields, return integer values (e.g. monetary amounts in cents).\\nReturn ONLY a JSON object with these exact field names."))
   ])) in
   call(request)
@@ -242,8 +243,9 @@ export func processDocument(document: string) -> string ! {AI} {
 
 -- File pipeline: multimodal AI extraction + AILANG validation
 -- base64Data is the file content encoded as base64, mimeType is e.g. "application/pdf"
-export func processFile(base64Data: string, mimeType: string) -> string ! {AI} {
-  let raw = extractFromFile(base64Data, mimeType) in
+-- fileName is the original file name (e.g. "invoice.pdf") passed through for AI context
+export func processFile(base64Data: string, mimeType: string, fileName: string) -> string ! {AI} {
+  let raw = extractFromFile(base64Data, mimeType, fileName) in
   validateOnly(raw)
 }
 

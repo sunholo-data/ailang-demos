@@ -1003,14 +1003,70 @@ section p {
   box-shadow: 0 0 0 3px var(--primary-faded);
 }
 
-/* ── Output Format Tabs (from output-formatter.js) ─────────── */
+/* ── Output Toolbar (tabs + copy button) ──────────────────── */
+.output-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+
 .output-format-tabs {
   display: flex;
   gap: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  margin: 12px 0;
+  flex: 1;
+}
+
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-copy:hover {
+  border-color: var(--charcoal);
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.btn-copy.copied {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.btn-copy svg {
+  flex-shrink: 0;
+}
+
+/* Table metadata rows */
+.meta-separator .meta-label {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.meta-row td {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .output-tab {
@@ -1442,6 +1498,17 @@ textarea:focus {
   margin-bottom: 16px;
   display: flex;
   align-items: center;
+}
+
+.result-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--ai-orange);
 }
 
 .invoice-info {

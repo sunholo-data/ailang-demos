@@ -20,7 +20,7 @@ export class GeminiClient {
    * @returns {Promise<Object>} Extracted fields as a JSON object
    */
   async extractFields(documentText, schema, binaryData = null) {
-    const prompt = this._buildPrompt(documentText, schema, !!binaryData);
+    const prompt = this._buildPrompt(documentText, schema, binaryData);
     const responseSchema = this._buildResponseSchema(schema);
 
     const parts = [{ text: prompt }];
@@ -61,7 +61,7 @@ export class GeminiClient {
     return JSON.parse(text);
   }
 
-  _buildPrompt(documentText, schema, hasBinaryData = false) {
+  _buildPrompt(documentText, schema, binaryData = null) {
     const fieldDescriptions = schema.fields
       .map(f => {
         let desc = `- "${f.name}" (${f.type}`;
@@ -79,9 +79,18 @@ export class GeminiClient {
       `- If a required field cannot be found, make your best guess from context\n` +
       `- If an optional field cannot be found, use a sensible default (0 for int, "" for string)`;
 
-    if (hasBinaryData) {
+    // Build file metadata context line if available
+    let metaLine = '';
+    if (binaryData?.fileName) {
+      const sizePart = binaryData.fileSize
+        ? `, ${this._formatSize(binaryData.fileSize)}`
+        : '';
+      metaLine = `Source file: ${binaryData.fileName} (${binaryData.mimeType || 'unknown'}${sizePart})\n\n`;
+    }
+
+    if (binaryData) {
       return (
-        `Extract the following fields from the attached document.\n\n` +
+        `${metaLine}Extract the following fields from the attached document.\n\n` +
         `Fields to extract:\n${fieldDescriptions}\n\n` +
         `${rules}\n\n` +
         `Return a JSON object with exactly these field names.`
@@ -95,6 +104,12 @@ export class GeminiClient {
       `Document:\n---\n${documentText}\n---\n\n` +
       `Return a JSON object with exactly these field names.`
     );
+  }
+
+  _formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
   }
 
   _buildResponseSchema(schema) {
@@ -135,6 +150,7 @@ Return a JSON object with:
 - "fields": array of { "name": string, "type": "string"|"int", "required": boolean, "constraints": string[] }
 
 Suggest 5-10 fields that best represent the key data in this document.` +
+      (binaryData?.fileName ? `\n\nSource file: ${binaryData.fileName} (${binaryData.mimeType || 'unknown'})` : '') +
       (documentText ? `\n\nDocument:\n---\n${documentText}\n---` : '\n\nAnalyze the attached document.');
 
     const parts = [{ text: prompt }];

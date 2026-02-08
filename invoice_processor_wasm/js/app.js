@@ -24,7 +24,7 @@ let schemaEditor = null;
 let formatter = null;
 let currentDemo = null;   // key into demoExamples, or null for custom
 let running = false;
-let uploadedBinary = null; // { base64: string, mimeType: string, fileName: string, fileSize: number }
+let uploadedBinary = null; // { base64, mimeType, fileName, fileSize, lastModified, uploadedAt }
 
 // ── File Size Limits ────────────────────────────────────────
 const FILE_SIZE_LIMITS = {
@@ -136,10 +136,10 @@ function registerAIHandler(apiKey) {
     try {
       const req = JSON.parse(input);
       if (req.mode === 'multimodal' && req.data) {
-        // Multimodal: AILANG built a JSON request with base64 file data
+        // Multimodal: AILANG built a JSON request with base64 file data + metadata
         return JSON.stringify(await gemini.extractFields(
           req.prompt || '', schemaEditor.getSchema(),
-          { base64: req.data, mimeType: req.mimeType }
+          { base64: req.data, mimeType: req.mimeType, fileName: req.fileName || '', fileSize: uploadedBinary?.fileSize || 0 }
         ));
       }
     } catch { /* not JSON — fall through to text mode */ }
@@ -214,7 +214,9 @@ async function loadPdfDemo(demo) {
       base64: btoa(binary),
       mimeType: 'application/pdf',
       fileName: demo.pdfUrl.split('/').pop(),
-      fileSize: arrayBuffer.byteLength
+      fileSize: arrayBuffer.byteLength,
+      lastModified: null,
+      uploadedAt: Date.now()
     };
 
     showFilePreview(uploadedBinary);
@@ -286,7 +288,9 @@ function setupInputMethods() {
             base64: btoa(binary),
             mimeType,
             fileName: file.name,
-            fileSize: file.size
+            fileSize: file.size,
+            lastModified: file.lastModified,
+            uploadedAt: Date.now()
           };
 
           // Hide textarea, show file preview
@@ -538,7 +542,7 @@ async function runPipeline() {
       if (uploadedBinary) {
         setStepLog(3, `Sending ${formatFileSize(uploadedBinary.fileSize)} ${uploadedBinary.mimeType} to Gemini...`);
         result = await engine.callFunctionAsync('extractor', 'processFile',
-          uploadedBinary.base64, uploadedBinary.mimeType);
+          uploadedBinary.base64, uploadedBinary.mimeType, uploadedBinary.fileName);
       } else {
         setStepLog(3, 'Calling Gemini via AILANG ! {AI} effect...');
         result = await engine.callFunctionAsync('extractor', 'processDocument', documentText);
@@ -667,18 +671,40 @@ function safeParse(val) {
   catch { return null; }
 }
 
+// ── File Metadata Merging ────────────────────────────────────
+function mergeMetadata(rawResult) {
+  const parsed = safeParse(rawResult);
+  if (parsed && uploadedBinary) {
+    parsed._file_name = uploadedBinary.fileName;
+    parsed._file_type = uploadedBinary.mimeType;
+    parsed._file_size = uploadedBinary.fileSize;
+    if (uploadedBinary.lastModified) parsed._file_modified = uploadedBinary.lastModified;
+    if (uploadedBinary.uploadedAt) parsed._file_uploaded = uploadedBinary.uploadedAt;
+  }
+  return parsed;
+}
+
 // ── Result Display ───────────────────────────────────────────
 function displayResult(rawResult, schema) {
   const resultsEl = $('#results');
   if (!resultsEl) return;
 
-  // Parse the JSON result from AILANG
+  // Parse the JSON result from AILANG and merge file metadata if available
   let parsed;
   try {
     parsed = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
   } catch (e) {
     showError(`Failed to parse AILANG output: ${e.message}`);
     return;
+  }
+
+  // Merge file metadata into the result for display
+  if (parsed && uploadedBinary) {
+    parsed._file_name = uploadedBinary.fileName;
+    parsed._file_type = uploadedBinary.mimeType;
+    parsed._file_size = uploadedBinary.fileSize;
+    if (uploadedBinary.lastModified) parsed._file_modified = uploadedBinary.lastModified;
+    if (uploadedBinary.uploadedAt) parsed._file_uploaded = uploadedBinary.uploadedAt;
   }
 
   // Use the output formatter
