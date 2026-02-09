@@ -1,0 +1,314 @@
+module docparse/services/pptx_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/option (Some, None, flatMap as optFlatMap, map as optMap, getOrElse)
+import std/result (Ok, Err)
+import std/string (contains, length, trim, stringToInt, join)
+import std/list (map, flatMap, any, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, DocMetadata, emptyMetadata)
+import docparse/services/zip_extract (readCoreProperties, findSlideEntries, readZipEntry, findMediaEntries, readImageEntry, mediaMimeType)
+
+-- PPTX Parser
+-- Parses PowerPoint slides into content Blocks.
+--
+-- PPTX XML structure (ppt/slides/slideN.xml):
+--   <p:sld>
+--     <p:cSld>
+--       <p:spTree>             -- shape tree (all slide content)
+--         <p:sp>               -- shape (text box, title, body)
+--           <p:nvSpPr>         -- non-visual properties
+--             <p:nvPr>
+--               <p:ph type="title"/>  -- placeholder type
+--             </p:nvPr>
+--           </p:nvSpPr>
+--           <p:txBody>         -- text body
+--             <a:p>            -- paragraph
+--               <a:r>          -- run
+--                 <a:t>text</a:t>
+--               </a:r>
+--             </a:p>
+--           </p:txBody>
+--         </p:sp>
+--         <p:graphicFrame>     -- table or chart
+--           <a:graphic>
+--             <a:graphicData>
+--               <a:tbl>        -- table
+--                 <a:tr><a:tc>...</a:tc></a:tr>
+--               </a:tbl>
+--             </a:graphicData>
+--           </a:graphic>
+--         </p:graphicFrame>
+--         <p:pic>              -- image
+--           <p:blipFill><a:blip r:embed="rId2"/></p:blipFill>
+--         </p:pic>
+--       </p:spTree>
+--     </p:cSld>
+--   </p:sld>
+
+-- Parse all slides from a PPTX file
+export func parsePptx(filepath: string) -> [Block] ! {FS} {
+  let slideEntries = findSlideEntries(filepath);
+  parseSlides(filepath, slideEntries)
+}
+
+-- Parse metadata from PPTX (same core.xml format as DOCX)
+export func parsePptxMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let coreXml = readCoreProperties(filepath);
+  match parse(coreXml) {
+    Ok(root) => extractMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Parse images from PPTX
+export func parsePptxImages(filepath: string) -> [Block] ! {FS} {
+  let entries = findMediaEntries(filepath);
+  extractPptxImages(filepath, entries)
+}
+
+-- Parse each slide entry into a SectionBlock
+func parseSlides(filepath: string, entries: [string]) -> [Block] ! {FS} =
+  match entries {
+    [] => [],
+    entry :: rest => {
+      let xml = readZipEntry(filepath, entry);
+      let blocks = parseSlideXml(xml);
+      let moreBlocks = parseSlides(filepath, rest);
+      if hasContent(blocks)
+      then {
+        let section = SectionBlock({kind: "slide", blocks: blocks});
+        section :: moreBlocks
+      }
+      else moreBlocks
+    }
+  }
+
+-- Parse a single slide's XML into blocks
+pure func parseSlideXml(xml: string) -> [Block] {
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => extractSlideBlocks(root),
+    Err(_) => []
+  }
+}
+
+-- Extract blocks from a slide root element
+pure func extractSlideBlocks(root: XmlNode) -> [Block] =
+  getOrElse(
+    optFlatMap(\csld.
+      optMap(\spTree. processShapeTree(getChildren(spTree)),
+        findFirst(csld, "p:spTree")),
+      findFirst(root, "p:cSld")),
+    [])
+
+-- Process all children of the shape tree
+pure func processShapeTree(nodes: [XmlNode]) -> [Block] =
+  flatMap(processShapeNode, nodes)
+
+-- Process a single shape tree node
+pure func processShapeNode(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+  if tag == "p:sp" then parseShape(node)
+  else if tag == "p:graphicFrame" then parseGraphicFrame(node)
+  else if tag == "p:pic" then parsePicture(node)
+  else if tag == "p:grpSp" then parseGroupShape(node)
+  else []
+}
+
+-- Parse a shape (p:sp) into blocks
+-- Checks placeholder type to determine heading level
+pure func parseShape(sp: XmlNode) -> [Block] {
+  let phType = getPlaceholderType(sp);
+  match findFirst(sp, "p:txBody") {
+    Some(txBody) => {
+      let children = getChildren(txBody);
+      extractShapeParagraphs(children, phType)
+    },
+    None => []
+  }
+}
+
+-- Get placeholder type from p:nvSpPr/p:nvPr/p:ph@type
+pure func getPlaceholderType(sp: XmlNode) -> string {
+  match optFlatMap(\nvSpPr.
+    optFlatMap(\nvPr.
+      findFirst(nvPr, "p:ph"),
+      findFirst(nvSpPr, "p:nvPr")),
+    findFirst(sp, "p:nvSpPr"))
+  {
+    Some(ph) => getOrElse(getAttr(ph, "type"), "body"),
+    None => "none"
+  }
+}
+
+-- Extract paragraphs from a text body
+pure func extractShapeParagraphs(nodes: [XmlNode], phType: string) -> [Block] =
+  flatMap(\node.
+    if getTag(node) == "a:p" then
+      let text = extractDrawingMLText(node) in
+      if length(trim(text)) > 0 then
+        [if phType == "title" || phType == "ctrTitle"
+          then HeadingBlock({text: text, level: 1})
+          else if phType == "subTitle"
+          then HeadingBlock({text: text, level: 2})
+          else TextBlock({text: text, style: phType, level: 0})]
+      else []
+    else [],
+    nodes)
+
+-- Extract text from a DrawingML paragraph (a:p -> a:r -> a:t)
+pure func extractDrawingMLText(p: XmlNode) -> string {
+  let children = getChildren(p);
+  extractDrawingMLRuns(children)
+}
+
+pure func extractDrawingMLRuns(nodes: [XmlNode]) -> string =
+  join("", map(drawingMLNodeText, nodes))
+
+-- Extract text contribution from a single DrawingML node
+pure func drawingMLNodeText(node: XmlNode) -> string {
+  let tag = getTag(node);
+  if tag == "a:r" then extractDrawingMLRunText(node)
+  else if tag == "a:br" then "\n"
+  else ""
+}
+
+-- Extract text from a single a:r run
+pure func extractDrawingMLRunText(run: XmlNode) -> string =
+  getOrElse(optMap(getText, findFirst(run, "a:t")), "")
+
+-- Parse a graphic frame (contains tables or charts)
+pure func parseGraphicFrame(gf: XmlNode) -> [Block] {
+  match findFirst(gf, "a:tbl") {
+    Some(tbl) => [parsePptxTable(tbl)],
+    None => []
+  }
+}
+
+-- Parse a PPTX table (a:tbl -> a:tr -> a:tc)
+pure func parsePptxTable(tbl: XmlNode) -> Block {
+  let rows = findAll(tbl, "a:tr");
+  let parsedRows = parsePptxRows(rows);
+  match parsedRows {
+    [] => TableBlock({rows: [], headers: []}),
+    firstRow :: dataRows =>
+      TableBlock({rows: dataRows, headers: firstRow})
+  }
+}
+
+pure func parsePptxRows(rows: [XmlNode]) -> [[TableCell]]
+  ensures { listLength(result) == listLength(rows) }
+{
+  map(parsePptxRow, rows)
+}
+
+pure func parsePptxRow(tr: XmlNode) -> [TableCell] {
+  let cells = findAll(tr, "a:tc");
+  parsePptxCells(cells)
+}
+
+pure func parsePptxCells(cells: [XmlNode]) -> [TableCell]
+  ensures { listLength(result) == listLength(cells) }
+{
+  map(parsePptxCell, cells)
+}
+
+-- Parse a single PPTX table cell with merge info
+-- gridSpan, hMerge, vMerge are attributes on a:tc
+pure func parsePptxCell(tc: XmlNode) -> TableCell {
+  let text = extractPptxCellText(tc);
+  let cs = getPptxGridSpan(tc);
+  let hm = getPptxHMerge(tc);
+  let vm = getPptxVMerge(tc);
+  if hm || vm
+  then { text: "", colSpan: cs, rowSpan: 1, merged: true }
+  else { text: text, colSpan: cs, rowSpan: 1, merged: false }
+}
+
+pure func extractPptxCellText(tc: XmlNode) -> string {
+  match findFirst(tc, "a:txBody") {
+    Some(txBody) => {
+      let paragraphs = findAll(txBody, "a:p");
+      joinParagraphTexts(paragraphs)
+    },
+    None => ""
+  }
+}
+
+pure func joinParagraphTexts(ps: [XmlNode]) -> string =
+  join("\n", map(extractDrawingMLText, ps))
+
+pure func getPptxGridSpan(tc: XmlNode) -> int
+  ensures { result >= 1 }
+{
+  getOrElse(optMap(\val. parseIntOrDefault(val, 1), getAttr(tc, "gridSpan")), 1)
+}
+
+pure func getPptxHMerge(tc: XmlNode) -> bool =
+  getOrElse(optMap(\val. val == "1" || val == "true", getAttr(tc, "hMerge")), false)
+
+pure func getPptxVMerge(tc: XmlNode) -> bool =
+  getOrElse(optMap(\val. val == "1" || val == "true", getAttr(tc, "vMerge")), false)
+
+-- Parse a picture element
+pure func parsePicture(pic: XmlNode) -> [Block] {
+  let descr = getPictureDescription(pic);
+  [ImageBlock({data: "", description: descr, mime: "image/unknown"})]
+}
+
+pure func getPictureDescription(pic: XmlNode) -> string =
+  getOrElse(
+    optFlatMap(\nvPicPr.
+      optFlatMap(\cNvPr.
+        getAttr(cNvPr, "descr"),
+        findFirst(nvPicPr, "p:cNvPr")),
+      findFirst(pic, "p:nvPicPr")),
+    "")
+
+-- Parse a group shape (recursively process children)
+pure func parseGroupShape(grpSp: XmlNode) -> [Block] {
+  let children = getChildren(grpSp);
+  processShapeTree(children)
+}
+
+-- Extract metadata from core.xml (shared format across Office)
+pure func extractMetadata(root: XmlNode) -> DocMetadata {
+  let title = getMetaField(root, "dc:title");
+  let author = getMetaField(root, "dc:creator");
+  let created = getMetaField(root, "dcterms:created");
+  let modified = getMetaField(root, "dcterms:modified");
+  { title: title, author: author, created: created, modified: modified, pageCount: 0 }
+}
+
+pure func getMetaField(root: XmlNode, tagName: string) -> string =
+  getOrElse(optMap(getText, findFirst(root, tagName)), "")
+
+-- Extract images from media entries
+func extractPptxImages(filepath: string, entries: [string]) -> [Block] ! {FS} =
+  match entries {
+    [] => [],
+    entry :: rest => {
+      let imageData = readImageEntry(filepath, entry);
+      let mime = mediaMimeType(entry);
+      let block = ImageBlock({data: imageData, description: "", mime: mime});
+      let moreBlocks = extractPptxImages(filepath, rest);
+      block :: moreBlocks
+    }
+  }
+
+-- Check if a block list has content
+pure func hasContent(blocks: [Block]) -> bool =
+  any(blockHasContent, blocks)
+
+pure func blockHasContent(b: Block) -> bool =
+  match b {
+    TextBlock(t) => length(trim(t.text)) > 0,
+    HeadingBlock(h) => length(trim(h.text)) > 0,
+    TableBlock(_) => true,
+    ListBlock(_) => true,
+    ImageBlock(_) => true,
+    SectionBlock(s) => hasContent(s.blocks)
+  }
+
+pure func parseIntOrDefault(s: string, default: int) -> int =
+  getOrElse(stringToInt(s), default)

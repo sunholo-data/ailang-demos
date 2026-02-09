@@ -1,0 +1,201 @@
+module docparse/services/xlsx_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/option (Some, None, flatMap as optFlatMap, map as optMap, getOrElse)
+import std/result (Ok, Err)
+import std/string (contains, length, trim, stringToInt, join)
+import std/list (map, flatMap, nth, length as listLength, concat)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, DocMetadata, emptyMetadata, simpleCell)
+import docparse/services/zip_extract (readCoreProperties, findSheetEntries, readZipEntry)
+
+-- XLSX Parser
+-- Parses Excel worksheets into content Blocks.
+--
+-- XLSX structure:
+--   xl/workbook.xml           - sheet list
+--   xl/sharedStrings.xml      - string table (cells reference by index)
+--   xl/worksheets/sheetN.xml  - cell data
+--
+-- Cell types (t= attribute on <c>):
+--   t="s"          - shared string (value is index into sharedStrings)
+--   t="inlineStr"  - inline string (text in <is><t>)
+--   t="b"          - boolean (1/0)
+--   t="e"          - error (#REF!, etc.)
+--   t="n" or none  - number
+--
+-- Each worksheet becomes a TableBlock with the first row as headers.
+
+-- Parse all worksheets from an XLSX file
+export func parseXlsx(filepath: string) -> [Block] ! {FS} {
+  -- Load shared strings table
+  let sharedStrings = loadSharedStrings(filepath);
+  -- Find and parse each sheet
+  let sheetEntries = findSheetEntries(filepath);
+  parseSheets(filepath, sheetEntries, sharedStrings)
+}
+
+-- Parse metadata from XLSX (same core.xml format)
+export func parseXlsxMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let coreXml = readCoreProperties(filepath);
+  match parse(coreXml) {
+    Ok(root) => extractMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Load the shared strings table from xl/sharedStrings.xml
+func loadSharedStrings(filepath: string) -> [string] ! {FS} {
+  let xml = readZipEntry(filepath, "xl/sharedStrings.xml");
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let items = findAll(root, "si");
+      extractSharedStrings(items)
+    },
+    Err(_) => []
+  }
+}
+
+-- Extract text from each <si> element
+-- Handles both <si><t>text</t></si> and <si><r><t>text</t></r></si> (rich text)
+pure func extractSharedStrings(items: [XmlNode]) -> [string]
+  ensures { listLength(result) == listLength(items) }
+{
+  map(extractSiText, items)
+}
+
+-- Get text from a single <si> element
+pure func extractSiText(si: XmlNode) -> string {
+  -- Try simple form: <si><t>text</t></si>
+  match findFirst(si, "t") {
+    Some(t) => getText(t),
+    None => {
+      -- Rich text form: <si><r><t>text</t></r><r><t>more</t></r></si>
+      let runs = findAll(si, "r");
+      extractRichText(runs)
+    }
+  }
+}
+
+-- Concatenate text from rich text runs
+pure func extractRichText(runs: [XmlNode]) -> string =
+  join("", map(\r. getOrElse(optMap(getText, findFirst(r, "t")), ""), runs))
+
+-- Parse each sheet entry into blocks
+func parseSheets(filepath: string, entries: [string], sharedStrings: [string]) -> [Block] ! {FS} =
+  match entries {
+    [] => [],
+    entry :: rest => {
+      let xml = readZipEntry(filepath, entry);
+      let blocks = parseSheetXml(xml, sharedStrings, entry);
+      let moreBlocks = parseSheets(filepath, rest, sharedStrings);
+      concat(blocks, moreBlocks)
+    }
+  }
+
+-- Parse a single worksheet's XML into blocks
+pure func parseSheetXml(xml: string, sharedStrings: [string], sheetName: string) -> [Block] {
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let parsedRows = extractSheetRows(root, sharedStrings);
+      match parsedRows {
+        [] => [],
+        firstRow :: dataRows => {
+          let tableBlock = TableBlock({rows: dataRows, headers: firstRow});
+          let section = SectionBlock({kind: "sheet", blocks: [tableBlock]});
+          [section]
+        }
+      }
+    },
+    Err(_) => []
+  }
+}
+
+-- Extract all rows from sheetData
+pure func extractSheetRows(root: XmlNode, sharedStrings: [string]) -> [[TableCell]] =
+  getOrElse(
+    optMap(\sheetData.
+      parseXlsxRows(findAll(sheetData, "row"), sharedStrings),
+      findFirst(root, "sheetData")),
+    [])
+
+-- Parse all rows
+pure func parseXlsxRows(rows: [XmlNode], sharedStrings: [string]) -> [[TableCell]] =
+  flatMap(\row.
+    let cells = parseXlsxRow(row, sharedStrings) in
+    if listLength(cells) > 0 then [cells] else [],
+    rows)
+
+-- Parse a single row
+pure func parseXlsxRow(row: XmlNode, sharedStrings: [string]) -> [TableCell] {
+  let cells = findAll(row, "c");
+  parseXlsxCells(cells, sharedStrings)
+}
+
+-- Parse all cells in a row
+pure func parseXlsxCells(cells: [XmlNode], sharedStrings: [string]) -> [TableCell]
+  ensures { listLength(result) == listLength(cells) }
+{
+  map(\cell. parseXlsxCell(cell, sharedStrings), cells)
+}
+
+-- Parse a single cell
+-- Reads t= attribute for type, resolves shared strings
+pure func parseXlsxCell(c: XmlNode, sharedStrings: [string]) -> TableCell {
+  let cellType = getCellType(c);
+  let text = if cellType == "s" then resolveSharedString(c, sharedStrings)
+    else if cellType == "inlineStr" then getInlineString(c)
+    else if cellType == "b" then getBooleanValue(c)
+    else if cellType == "e" then getErrorValue(c)
+    else getNumericValue(c);
+  simpleCell(text)
+}
+
+-- Get cell type from t= attribute (default "n" for number)
+pure func getCellType(c: XmlNode) -> string =
+  getOrElse(getAttr(c, "t"), "n")
+
+-- Resolve a shared string reference: <v>INDEX</v> -> sharedStrings[INDEX]
+pure func resolveSharedString(c: XmlNode, sharedStrings: [string]) -> string {
+  match optMap(getText, findFirst(c, "v")) {
+    Some(indexStr) =>
+      match stringToInt(indexStr) {
+        Some(idx) => getOrElse(nth(sharedStrings, idx), ""),
+        None => indexStr
+      },
+    None => ""
+  }
+}
+
+-- Get inline string: <is><t>text</t></is>
+pure func getInlineString(c: XmlNode) -> string =
+  getOrElse(
+    optFlatMap(\is_.
+      optMap(getText, findFirst(is_, "t")),
+      findFirst(c, "is")),
+    "")
+
+-- Get boolean value
+pure func getBooleanValue(c: XmlNode) -> string =
+  getOrElse(optMap(\v. if getText(v) == "1" then "TRUE" else "FALSE", findFirst(c, "v")), "")
+
+-- Get error value (e.g., #REF!)
+pure func getErrorValue(c: XmlNode) -> string =
+  getOrElse(optMap(getText, findFirst(c, "v")), "")
+
+-- Get numeric value
+pure func getNumericValue(c: XmlNode) -> string =
+  getOrElse(optMap(getText, findFirst(c, "v")), "")
+
+-- Extract metadata from core.xml
+pure func extractMetadata(root: XmlNode) -> DocMetadata {
+  let title = getMetaField(root, "dc:title");
+  let author = getMetaField(root, "dc:creator");
+  let created = getMetaField(root, "dcterms:created");
+  let modified = getMetaField(root, "dcterms:modified");
+  { title: title, author: author, created: created, modified: modified, pageCount: 0 }
+}
+
+pure func getMetaField(root: XmlNode, tagName: string) -> string =
+  getOrElse(optMap(getText, findFirst(root, tagName)), "")

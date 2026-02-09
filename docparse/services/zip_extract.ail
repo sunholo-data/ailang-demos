@@ -1,0 +1,229 @@
+module docparse/services/zip_extract
+
+import std/zip (listEntries, readEntry, readEntryBytes)
+import std/string (contains, length, endsWith, startsWith)
+import std/result (Ok, Err)
+
+-- ZIP extraction layer for Office documents
+-- DOCX, PPTX, XLSX are all ZIP archives containing XML parts.
+--
+-- DOCX structure:
+--   word/document.xml    - main content (paragraphs, runs, tables)
+--   word/styles.xml      - style definitions
+--   word/media/          - embedded images
+--   docProps/core.xml    - metadata (title, author, dates)
+--   docProps/app.xml     - app metadata (pages, words count)
+--   [Content_Types].xml  - MIME type registry
+--   word/_rels/document.xml.rels - relationships (image refs)
+
+-- List all entries in an Office ZIP file
+export func listOfficeEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => entries,
+    Err(_) => []
+  }
+}
+
+-- Read the main document XML from a DOCX
+export func readDocxContent(path: string) -> string ! {FS} {
+  match readEntry(path, "word/document.xml") {
+    Ok(content) => content,
+    Err(e) => ""
+  }
+}
+
+-- Read the styles XML from a DOCX
+export func readDocxStyles(path: string) -> string ! {FS} {
+  match readEntry(path, "word/styles.xml") {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
+-- Read the core properties (metadata) from an Office file
+export func readCoreProperties(path: string) -> string ! {FS} {
+  match readEntry(path, "docProps/core.xml") {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
+-- Read the app properties (page count, etc.)
+export func readAppProperties(path: string) -> string ! {FS} {
+  match readEntry(path, "docProps/app.xml") {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
+-- Read the relationships file (maps rId -> target for images etc.)
+export func readDocxRelationships(path: string) -> string ! {FS} {
+  match readEntry(path, "word/_rels/document.xml.rels") {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
+-- Read an embedded image as base64
+export func readEmbeddedImage(path: string, imageName: string) -> string ! {FS} {
+  match readEntryBytes(path, "word/media/" ++ imageName) {
+    Ok(data) => data,
+    Err(_) => ""
+  }
+}
+
+-- Read a ZIP entry by name, returning empty string on failure
+export func readZipEntry(path: string, entryName: string) -> string ! {FS} {
+  match readEntry(path, entryName) {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
+-- Find all header XML entries in the ZIP
+export func findHeaderEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterByPrefix(entries, "word/header"),
+    Err(_) => []
+  }
+}
+
+-- Find all footer XML entries in the ZIP
+export func findFooterEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterByPrefix(entries, "word/footer"),
+    Err(_) => []
+  }
+}
+
+-- Find footnotes.xml if present
+export func findFootnoteEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterByPrefix(entries, "word/footnotes"),
+    Err(_) => []
+  }
+}
+
+-- Find endnotes.xml if present
+export func findEndnoteEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterByPrefix(entries, "word/endnotes"),
+    Err(_) => []
+  }
+}
+
+-- Filter entries that start with a given prefix
+pure func filterByPrefix(entries: [string], prefix: string) -> [string] =
+  match entries {
+    [] => [],
+    e :: rest =>
+      if startsWith(e, prefix)
+      then e :: filterByPrefix(rest, prefix)
+      else filterByPrefix(rest, prefix)
+  }
+
+-- Find all slide entries in a PPTX ZIP (ppt/slides/slide*.xml)
+export func findSlideEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterSlides(entries),
+    Err(_) => []
+  }
+}
+
+-- Filter entries to find slide XMLs (exclude _rels)
+pure func filterSlides(entries: [string]) -> [string] =
+  match entries {
+    [] => [],
+    e :: rest =>
+      if isSlideEntry(e)
+      then e :: filterSlides(rest)
+      else filterSlides(rest)
+  }
+
+-- Check if an entry is a slide XML
+pure func isSlideEntry(entry: string) -> bool {
+  startsWith(entry, "ppt/slides/slide") &&
+  endsWith(entry, ".xml")
+}
+
+-- Find all worksheet entries in an XLSX ZIP (xl/worksheets/sheet*.xml)
+export func findSheetEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterSheets(entries),
+    Err(_) => []
+  }
+}
+
+-- Filter entries to find worksheet XMLs
+pure func filterSheets(entries: [string]) -> [string] =
+  match entries {
+    [] => [],
+    e :: rest =>
+      if isSheetEntry(e)
+      then e :: filterSheets(rest)
+      else filterSheets(rest)
+  }
+
+-- Check if an entry is a worksheet XML
+pure func isSheetEntry(entry: string) -> bool {
+  startsWith(entry, "xl/worksheets/sheet") &&
+  endsWith(entry, ".xml")
+}
+
+-- Read a binary ZIP entry by full path (format-agnostic image reading)
+export func readImageEntry(path: string, entryPath: string) -> string ! {FS} {
+  match readEntryBytes(path, entryPath) {
+    Ok(data) => data,
+    Err(_) => ""
+  }
+}
+
+-- Find all media entries in the ZIP
+export func findMediaEntries(path: string) -> [string] ! {FS} {
+  match listEntries(path) {
+    Ok(entries) => filterMedia(entries),
+    Err(_) => []
+  }
+}
+
+-- Filter entries to only media files
+pure func filterMedia(entries: [string]) -> [string] =
+  match entries {
+    [] => [],
+    e :: rest =>
+      if isMediaEntry(e)
+      then e :: filterMedia(rest)
+      else filterMedia(rest)
+  }
+
+-- Check if a ZIP entry is a media file
+pure func isMediaEntry(entry: string) -> bool {
+  contains(entry, "word/media/") ||
+  contains(entry, "ppt/media/") ||
+  contains(entry, "xl/media/")
+}
+
+-- Determine the MIME type from a media filename
+export pure func mediaMimeType(filename: string) -> string
+  tests [
+    ("image1.png", "image/png"),
+    ("image2.jpg", "image/jpeg"),
+    ("image3.jpeg", "image/jpeg"),
+    ("image4.gif", "image/gif"),
+    ("image5.bmp", "image/bmp"),
+    ("image6.tiff", "image/tiff"),
+    ("image7.emf", "image/emf"),
+    ("image8.wmf", "image/wmf"),
+    ("unknown.xyz", "application/octet-stream")
+  ]
+{
+  if endsWith(filename, ".png") then "image/png"
+  else if endsWith(filename, ".jpg") then "image/jpeg"
+  else if endsWith(filename, ".jpeg") then "image/jpeg"
+  else if endsWith(filename, ".gif") then "image/gif"
+  else if endsWith(filename, ".bmp") then "image/bmp"
+  else if endsWith(filename, ".tiff") then "image/tiff"
+  else if endsWith(filename, ".emf") then "image/emf"
+  else if endsWith(filename, ".wmf") then "image/wmf"
+  else "application/octet-stream"
+}

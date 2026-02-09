@@ -1,0 +1,331 @@
+module docparse/services/output_formatter
+
+import std/io (println)
+import std/json (encode, jo, kv, js, jnum, ja, jb, jn)
+import std/string (length)
+import std/math (intToFloat)
+import std/list (map, foldl, filter, length as listLength, forEachE)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, TableCell, ParsedDocument, ExtractionResult, DocMetadata, countBlocks, filterHeadings, filterTables, filterImages, filterSections, cellText)
+
+-- Output Formatter
+-- Converts ParsedDocument to structured JSON output with validation.
+-- Uses contracts to guarantee output quality.
+--
+-- Run:
+--   ailang run --entry main --caps IO,FS docparse/main.ail
+--   ailang run --entry main --caps IO,FS --verify-contracts docparse/main.ail
+
+-- Format a full extraction result as JSON
+export func formatResult(result: ExtractionResult) -> string ! {}
+  ensures { length(result) > 100 }
+{
+  encode(resultToJson(result))
+}
+
+-- Convert ExtractionResult to JSON value
+pure func resultToJson(result: ExtractionResult) -> Json {
+  jo([
+    kv("document", documentToJson(result.document)),
+    kv("warnings", ja(stringsToJson(result.warnings))),
+    kv("aiCallsUsed", jnum(intToFloat(result.aiCallsUsed)))
+  ])
+}
+
+-- Convert ParsedDocument to JSON value
+pure func documentToJson(doc: ParsedDocument) -> Json {
+  jo([
+    kv("format", js(doc.format)),
+    kv("filename", js(doc.filename)),
+    kv("metadata", metadataToJson(doc.metadata)),
+    kv("blocks", ja(blocksToJson(doc.blocks))),
+    kv("summary", summaryToJson(doc.blocks))
+  ])
+}
+
+-- Convert DocMetadata to JSON
+pure func metadataToJson(meta: DocMetadata) -> Json {
+  jo([
+    kv("title", js(meta.title)),
+    kv("author", js(meta.author)),
+    kv("created", js(meta.created)),
+    kv("modified", js(meta.modified)),
+    kv("pageCount", jnum(intToFloat(meta.pageCount)))
+  ])
+}
+
+-- Generate a summary section
+pure func summaryToJson(blocks: [Block]) -> Json {
+  let total = countBlocks(blocks);
+  let headings = countBlocks(filterHeadings(blocks));
+  let tables = countBlocks(filterTables(blocks));
+  let images = countBlocks(filterImages(blocks));
+  jo([
+    kv("totalBlocks", jnum(intToFloat(total))),
+    kv("headings", jnum(intToFloat(headings))),
+    kv("tables", jnum(intToFloat(tables))),
+    kv("images", jnum(intToFloat(images)))
+  ])
+}
+
+-- Convert a list of blocks to JSON
+pure func blocksToJson(blocks: [Block]) -> [Json]
+  ensures { listLength(result) == listLength(blocks) }
+{
+  map(blockToJson, blocks)
+}
+
+-- Convert a single Block to JSON
+pure func blockToJson(block: Block) -> Json =
+  match block {
+    TextBlock(b) => jo([
+      kv("type", js("text")),
+      kv("text", js(b.text)),
+      kv("style", js(b.style)),
+      kv("level", jnum(intToFloat(b.level)))
+    ]),
+    HeadingBlock(b) => jo([
+      kv("type", js("heading")),
+      kv("text", js(b.text)),
+      kv("level", jnum(intToFloat(b.level)))
+    ]),
+    TableBlock(b) => jo([
+      kv("type", js("table")),
+      kv("headers", ja(cellsToJson(b.headers))),
+      kv("rows", ja(cellRowsToJson(b.rows)))
+    ]),
+    ListBlock(b) => jo([
+      kv("type", js("list")),
+      kv("items", ja(stringsToJson(b.items))),
+      kv("ordered", jb(b.ordered))
+    ]),
+    ImageBlock(b) => jo([
+      kv("type", js("image")),
+      kv("description", js(b.description)),
+      kv("mime", js(b.mime)),
+      kv("dataLength", jnum(intToFloat(length(b.data))))
+    ]),
+    AudioBlock(b) => jo([
+      kv("type", js("audio")),
+      kv("transcription", js(b.transcription)),
+      kv("mime", js(b.mime)),
+      kv("dataLength", jnum(intToFloat(length(b.data))))
+    ]),
+    VideoBlock(b) => jo([
+      kv("type", js("video")),
+      kv("description", js(b.description)),
+      kv("mime", js(b.mime)),
+      kv("dataLength", jnum(intToFloat(length(b.data))))
+    ]),
+    SectionBlock(b) => jo([
+      kv("type", js("section")),
+      kv("kind", js(b.kind)),
+      kv("blocks", ja(blocksToJson(b.blocks)))
+    ])
+  }
+
+-- Convert rows of TableCells to JSON
+pure func cellRowsToJson(rows: [[TableCell]]) -> [Json]
+  ensures { listLength(result) == listLength(rows) }
+{
+  map(\row. ja(cellsToJson(row)), rows)
+}
+
+-- Convert a list of TableCells to JSON values
+-- Cells with colSpan > 1 or merged=true include span metadata
+pure func cellsToJson(cells: [TableCell]) -> [Json]
+  ensures { listLength(result) == listLength(cells) }
+{
+  map(cellToJson, cells)
+}
+
+-- Convert a single TableCell to JSON
+-- Simple cells (no merges) output as just the text string for compact JSON
+-- Merged/spanned cells include full metadata
+pure func cellToJson(cell: TableCell) -> Json {
+  if cell.colSpan == 1 && not cell.merged
+  then js(cell.text)
+  else jo([
+    kv("text", js(cell.text)),
+    kv("colSpan", jnum(intToFloat(cell.colSpan))),
+    kv("merged", jb(cell.merged))
+  ])
+}
+
+-- Convert a list of strings to JSON values
+pure func stringsToJson(strs: [string]) -> [Json]
+  ensures { listLength(result) == listLength(strs) }
+{
+  map(js, strs)
+}
+
+-- Pretty print a document summary to console
+export func printSummary(doc: ParsedDocument) -> () ! {IO} {
+  println("=== Document Summary ===");
+  println("Format:   " ++ doc.format);
+  println("Filename: " ++ doc.filename);
+  println("Title:    " ++ doc.metadata.title);
+  println("Author:   " ++ doc.metadata.author);
+  println("Blocks:   " ++ show(countBlocks(doc.blocks)));
+  println("Headings: " ++ show(countBlocks(filterHeadings(doc.blocks))));
+  println("Tables:   " ++ show(countBlocks(filterTables(doc.blocks))));
+  println("Images:   " ++ show(countBlocks(filterImages(doc.blocks))));
+  println("Sections: " ++ show(countBlocks(filterSections(doc.blocks))));
+  println("========================")
+}
+
+-- Print each block with its type
+export func printBlocks(blocks: [Block]) -> () ! {IO} =
+  forEachE(printBlock, blocks)
+
+func printBlock(block: Block) -> () ! {IO} =
+  match block {
+    TextBlock(b) =>
+      println("[text:" ++ b.style ++ "] " ++ b.text),
+    HeadingBlock(b) =>
+      println("[h" ++ show(b.level) ++ "] " ++ b.text),
+    TableBlock(b) =>
+      println("[table] " ++ show(countCellRows(b.rows)) ++ " rows, " ++ show(countCells(b.headers)) ++ " cols" ++ mergeInfo(b.headers, b.rows)),
+    ListBlock(b) =>
+      println("[list] " ++ show(countItems(b.items)) ++ " items"),
+    ImageBlock(b) =>
+      println("[image:" ++ b.mime ++ "] " ++ b.description),
+    AudioBlock(b) =>
+      println("[audio:" ++ b.mime ++ "] " ++ b.transcription),
+    VideoBlock(b) =>
+      println("[video:" ++ b.mime ++ "] " ++ b.description),
+    SectionBlock(b) => {
+      println("[" ++ b.kind ++ "]");
+      printBlocks(b.blocks)
+    }
+  }
+
+pure func countCellRows(rows: [[TableCell]]) -> int = listLength(rows)
+
+pure func countCells(cells: [TableCell]) -> int = listLength(cells)
+
+pure func countItems(items: [string]) -> int = listLength(items)
+
+-- Check if any cells have merge info and return a summary string
+pure func mergeInfo(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let mergedCount = countMergedCells(headers) + countMergedInRows(rows);
+  let spanCount = countSpannedCells(headers) + countSpannedInRows(rows);
+  if mergedCount > 0 || spanCount > 0
+  then " (merged:" ++ show(mergedCount) ++ " spanned:" ++ show(spanCount) ++ ")"
+  else ""
+}
+
+pure func countMergedCells(cells: [TableCell]) -> int =
+  foldl(\acc c. if c.merged then acc + 1 else acc, 0, cells)
+
+pure func countSpannedCells(cells: [TableCell]) -> int =
+  foldl(\acc c. if c.colSpan > 1 then acc + 1 else acc, 0, cells)
+
+pure func countMergedInRows(rows: [[TableCell]]) -> int =
+  foldl(\acc row. acc + countMergedCells(row), 0, rows)
+
+pure func countSpannedInRows(rows: [[TableCell]]) -> int =
+  foldl(\acc row. acc + countSpannedCells(row), 0, rows)
+
+-- Render blocks to markdown text suitable for LLM consumption
+-- Strips binary image data, keeps descriptions, renders tables as markdown tables
+export pure func renderMarkdown(doc: ParsedDocument) -> string {
+  let header = renderMetadataHeader(doc.metadata, doc.format, doc.filename);
+  let body = renderBlocksMd(doc.blocks);
+  header ++ "\n" ++ body
+}
+
+pure func renderMetadataHeader(meta: DocMetadata, format: string, filename: string) -> string {
+  let titleLine = if length(meta.title) > 0
+    then "# " ++ meta.title ++ "\n\n"
+    else "";
+  let metaLines = if length(meta.author) > 0
+    then "**Author:** " ++ meta.author ++ "\n"
+    else "";
+  titleLine ++ metaLines
+}
+
+pure func renderBlocksMd(blocks: [Block]) -> string =
+  foldl(\acc b. acc ++ renderBlockMd(b), "", blocks)
+
+pure func renderBlockMd(block: Block) -> string =
+  match block {
+    HeadingBlock(h) =>
+      headingPrefix(h.level) ++ h.text ++ "\n\n",
+    TextBlock(t) =>
+      if length(t.text) > 0 then t.text ++ "\n\n"
+      else "",
+    TableBlock(t) =>
+      renderTableMd(t.headers, t.rows) ++ "\n",
+    ListBlock(l) =>
+      renderListMd(l.items, l.ordered, 1) ++ "\n",
+    ImageBlock(i) =>
+      if length(i.description) > 0
+      then "[Image: " ++ i.description ++ "]\n\n"
+      else "[Image]\n\n",
+    AudioBlock(a) =>
+      if length(a.transcription) > 0
+      then "[Audio transcription: " ++ a.transcription ++ "]\n\n"
+      else "[Audio]\n\n",
+    VideoBlock(v) =>
+      if length(v.description) > 0
+      then "[Video: " ++ v.description ++ "]\n\n"
+      else "[Video]\n\n",
+    SectionBlock(s) =>
+      renderSectionMd(s.kind, s.blocks)
+  }
+
+pure func headingPrefix(level: int) -> string =
+  if level == 1 then "# "
+  else if level == 2 then "## "
+  else if level == 3 then "### "
+  else if level == 4 then "#### "
+  else if level == 5 then "##### "
+  else if level == 6 then "###### "
+  else "## "
+
+pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
+  let label = if kind == "slide" then "---\n\n"
+    else if kind == "sheet" then "---\n\n### Sheet\n\n"
+    else if kind == "header" then "*Header:*\n"
+    else if kind == "footer" then "*Footer:*\n"
+    else if kind == "footnote" then "*Footnote:*\n"
+    else if kind == "endnote" then "*Endnote:*\n"
+    else if kind == "textbox" then "> "
+    else "";
+  label ++ renderBlocksMd(blocks)
+}
+
+-- Render a table as markdown
+pure func renderTableMd(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerLine = "| " ++ renderCellsMd(headers) ++ "\n";
+  let sepLine = "| " ++ renderSepMd(headers) ++ "\n";
+  let rowLines = renderRowsMd(rows);
+  headerLine ++ sepLine ++ rowLines
+}
+
+pure func renderCellsMd(cells: [TableCell]) -> string =
+  match cells {
+    [] => "",
+    c :: [] => cellText(c) ++ " |",
+    c :: rest => cellText(c) ++ " | " ++ renderCellsMd(rest)
+  }
+
+pure func renderSepMd(cells: [TableCell]) -> string =
+  match cells {
+    [] => "",
+    _ :: [] => "--- |",
+    _ :: rest => "--- | " ++ renderSepMd(rest)
+  }
+
+pure func renderRowsMd(rows: [[TableCell]]) -> string =
+  foldl(\acc row. acc ++ "| " ++ renderCellsMd(row) ++ "\n", "", rows)
+
+-- Render list items
+pure func renderListMd(items: [string], ordered: bool, idx: int) -> string =
+  match items {
+    [] => "",
+    item :: rest =>
+      if ordered
+      then show(idx) ++ ". " ++ item ++ "\n" ++ renderListMd(rest, ordered, idx + 1)
+      else "- " ++ item ++ "\n" ++ renderListMd(rest, ordered, idx + 1)
+  }

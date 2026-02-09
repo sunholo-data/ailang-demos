@@ -1,0 +1,334 @@
+module docparse/services/direct_ai_parser
+
+import std/ai (call, callJson, callJsonSimple)
+import std/fs (readFileBytes)
+import std/string (length, substring, trim, find, startsWith)
+import std/json (decode, encode, jo, kv, js, jnum, ja, getString, getInt, getBool, getArray, asString, asArray)
+import std/option (Some, None, getOrElse)
+import std/list (map, flatMap)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, TableCell, DocMetadata, emptyMetadata, simpleCell)
+
+-- Direct AI Parser for PDF and Image files
+--
+-- Uses multimodal AI requests (same pattern as invoice_processor_wasm):
+-- encode a JSON request with mode:"multimodal", mimeType, data (base64), and prompt.
+-- The AILANG runtime sends file data as a proper multimodal part, not embedded in text.
+--
+-- This is the "AI-first" path - the file content IS the AI input.
+-- Budget: AI @limit=N ensures bounded cost.
+
+-- MIME type for PDF
+pure func pdfMimeType() -> string = "application/pdf"
+
+-- Parse a PDF file using AI multimodal extraction
+export func parsePdf(filepath: string) -> [Block] ! {FS, AI} {
+  match readFileBytes(filepath) {
+    Err(_) => [],
+    Ok(base64Data) =>
+      if length(base64Data) == 0 then []
+      else {
+        let request = encode(jo([
+          kv("mode", js("multimodal")),
+          kv("mimeType", js(pdfMimeType())),
+          kv("data", js(base64Data)),
+          kv("fileName", js(filepath)),
+          kv("prompt", js(
+            "Extract content from this PDF as a compact JSON array of blocks. " ++
+            "Block types: {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, " ++
+            "{\"type\":\"text\",\"text\":\"...\"}, " ++
+            "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, " ++
+            "{\"type\":\"list\",\"items\":[...],\"ordered\":bool}. " ++
+            "Merge adjacent text into single blocks. Use compact JSON (no whitespace). Return ONLY the JSON array."
+          ))
+        ]));
+        let response = callJsonSimple(request);
+        parseBlocksFromJson(response)
+      }
+  }
+}
+
+-- Parse an image file using AI vision
+export func parseImage(filepath: string, mime: string) -> [Block] ! {FS, AI} {
+  match readFileBytes(filepath) {
+    Err(_) => [],
+    Ok(base64Data) =>
+      if length(base64Data) == 0 then []
+      else {
+        let request = encode(jo([
+          kv("mode", js("multimodal")),
+          kv("mimeType", js(mime)),
+          kv("data", js(base64Data)),
+          kv("fileName", js(filepath)),
+          kv("prompt", js(
+            "Describe this image in detail. Include what it shows, any visible text or labels, " ++
+            "key data or information conveyed, and visual structure. Be concise but thorough."
+          ))
+        ]));
+        let description = call(request);
+        [ImageBlock({data: base64Data, description: description, mime: mime})]
+      }
+  }
+}
+
+-- Parse an audio file using AI (transcription + understanding)
+export func parseAudio(filepath: string, mime: string) -> [Block] ! {FS, AI} {
+  match readFileBytes(filepath) {
+    Err(_) => [],
+    Ok(base64Data) =>
+      if length(base64Data) == 0 then []
+      else {
+        let request = encode(jo([
+          kv("mode", js("multimodal")),
+          kv("mimeType", js(mime)),
+          kv("data", js(base64Data)),
+          kv("fileName", js(filepath)),
+          kv("prompt", js(
+            "Transcribe and analyze this audio file. Return a JSON object with:\n" ++
+            "- \"transcription\": full text transcription of all speech\n" ++
+            "- \"summary\": brief summary of the audio content\n" ++
+            "- \"speakers\": number of distinct speakers detected\n" ++
+            "- \"language\": detected language\n" ++
+            "Include ALL spoken content. Return ONLY the JSON."
+          ))
+        ]));
+        let audioSchema = "{\"type\":\"object\",\"properties\":{\"transcription\":{\"type\":\"string\"},\"summary\":{\"type\":\"string\"},\"speakers\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"}}}";
+        let response = callJson(request, audioSchema);
+        parseAudioResponse(response, base64Data, mime)
+      }
+  }
+}
+
+-- Parse a video file using AI (visual + audio understanding)
+export func parseVideo(filepath: string, mime: string) -> [Block] ! {FS, AI} {
+  match readFileBytes(filepath) {
+    Err(_) => [],
+    Ok(base64Data) =>
+      if length(base64Data) == 0 then []
+      else {
+        let request = encode(jo([
+          kv("mode", js("multimodal")),
+          kv("mimeType", js(mime)),
+          kv("data", js(base64Data)),
+          kv("fileName", js(filepath)),
+          kv("prompt", js(
+            "Analyze this video file. Extract ALL content from both visuals and audio. " ++
+            "Return a JSON array of blocks. Each block must be one of these types:\n" ++
+            "- {\"type\":\"heading\",\"text\":\"...\",\"level\":1} (level 1-6)\n" ++
+            "- {\"type\":\"text\",\"text\":\"...\"}\n" ++
+            "- {\"type\":\"table\",\"headers\":[\"col1\",\"col2\"],\"rows\":[[\"a\",\"b\"]]}\n" ++
+            "- {\"type\":\"list\",\"items\":[\"item1\",\"item2\"],\"ordered\":false}\n" ++
+            "- {\"type\":\"image\",\"description\":\"what is shown in this scene\"}\n" ++
+            "- {\"type\":\"transcription\",\"text\":\"spoken words\"}\n\n" ++
+            "Include scene descriptions, any on-screen text, tables or data shown, " ++
+            "and full transcription of speech. Return ONLY the JSON array."
+          ))
+        ]));
+        let videoSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"level\":{\"type\":\"integer\"},\"headers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\"},\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"ordered\":{\"type\":\"boolean\"},\"description\":{\"type\":\"string\"}}}}";
+        let response = callJson(request, videoSchema);
+        parseVideoResponse(response, base64Data, mime)
+      }
+  }
+}
+
+-- Extract metadata from a PDF using AI
+export func parsePdfMetadata(filepath: string) -> DocMetadata ! {FS, AI} {
+  match readFileBytes(filepath) {
+    Err(_) => emptyMetadata(),
+    Ok(base64Data) =>
+      if length(base64Data) == 0 then emptyMetadata()
+      else {
+        let request = encode(jo([
+          kv("mode", js("multimodal")),
+          kv("mimeType", js(pdfMimeType())),
+          kv("data", js(base64Data)),
+          kv("fileName", js(filepath)),
+          kv("prompt", js(
+            "Extract metadata from this PDF. Return JSON: " ++
+            "{\"title\":\"...\",\"author\":\"...\",\"pageCount\":N}. " ++
+            "Use empty string if unavailable. Return ONLY the JSON."
+          ))
+        ]));
+        let metadataSchema = "{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"author\":{\"type\":\"string\"},\"pageCount\":{\"type\":\"integer\"}}}";
+        let response = callJson(request, metadataSchema);
+        parseMetadataFromJson(response)
+      }
+  }
+}
+
+-- Parse AI response JSON into Block list
+-- Handles truncated responses via JSON repair (AI may hit output token limits)
+pure func parseBlocksFromJson(response: string) -> [Block] {
+  let trimmed = trim(response);
+  match decode(trimmed) {
+    Ok(json) => match asArray(json) {
+      Some(items) => parseBlockItems(items),
+      None => [TextBlock({text: trimmed, style: "ai-raw", level: 0})]
+    },
+    Err(_) =>
+      -- Try repairing truncated JSON array
+      match repairJsonArray(trimmed) {
+        Some(repaired) => match decode(repaired) {
+          Ok(json2) => match asArray(json2) {
+            Some(items) => parseBlockItems(items),
+            None => [TextBlock({text: trimmed, style: "ai-raw", level: 0})]
+          },
+          Err(_) => [TextBlock({text: trimmed, style: "ai-raw", level: 0})]
+        },
+        None => [TextBlock({text: trimmed, style: "ai-raw", level: 0})]
+      }
+  }
+}
+
+-- Repair a truncated JSON array by finding the last complete object
+-- If the response starts with [ but doesn't end with ], find the last }
+-- and close the array. This recovers partial results from truncated AI output.
+pure func repairJsonArray(s: string) -> Option[string] {
+  if startsWith(s, "[") then {
+    let lastBrace = findLastBrace(s, length(s) - 1);
+    if lastBrace > 0
+    then Some(substring(s, 0, lastBrace + 1) ++ "]")
+    else None
+  }
+  else None
+}
+
+-- Find the last '}' character by scanning backwards
+pure func findLastBrace(s: string, idx: int) -> int {
+  if idx < 0 then -1
+  else if substring(s, idx, idx + 1) == "}" then idx
+  else findLastBrace(s, idx - 1)
+}
+
+-- Parse individual block items from JSON array
+pure func parseBlockItems(items: [Json]) -> [Block] =
+  flatMap(\item. match parseOneBlock(item) {
+    Some(block) => [block],
+    None => []
+  }, items)
+
+-- Parse a single JSON object into a Block
+pure func parseOneBlock(json: Json) -> Option[Block] {
+  match getString(json, "type") {
+    Some("heading") => match getString(json, "text") {
+      Some(text) =>
+        Some(HeadingBlock({text: text, level: getOrElse(getInt(json, "level"), 1)})),
+      None => None
+    },
+    Some("text") => match getString(json, "text") {
+      Some(text) => Some(TextBlock({text: text, style: "Normal", level: 0})),
+      None => None
+    },
+    Some("table") => {
+      let headers = getOrElse(getArray(json, "headers"), []);
+      let rows = getOrElse(getArray(json, "rows"), []);
+      Some(TableBlock({headers: stringsToSimpleCells(extractStrings(headers)), rows: parseTableRows(rows)}))
+    },
+    Some("list") => {
+      let items = getOrElse(getArray(json, "items"), []);
+      let ordered = getOrElse(getBool(json, "ordered"), false);
+      Some(ListBlock({items: extractStrings(items), ordered: ordered}))
+    },
+    Some("image") => match getString(json, "description") {
+      Some(desc) => Some(ImageBlock({data: "", description: desc, mime: "image/unknown"})),
+      None => None
+    },
+    _ => None
+  }
+}
+
+-- Parse metadata from AI JSON response
+-- callJson guarantees valid JSON matching the metadata schema
+pure func parseMetadataFromJson(response: string) -> DocMetadata {
+  match decode(response) {
+    Ok(json) => {
+      title: getOrElse(getString(json, "title"), ""),
+      author: getOrElse(getString(json, "author"), ""),
+      created: "",
+      modified: "",
+      pageCount: getOrElse(getInt(json, "pageCount"), 0)
+    },
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Parse table rows from JSON array of arrays
+pure func parseTableRows(rowJsons: [Json]) -> [[TableCell]] =
+  flatMap(\rj. match asArray(rj) {
+    Some(cells) => [stringsToSimpleCells(extractStrings(cells))],
+    None => []
+  }, rowJsons)
+
+pure func stringsToSimpleCells(strs: [string]) -> [TableCell] =
+  map(simpleCell, strs)
+
+pure func extractStrings(jsons: [Json]) -> [string] =
+  flatMap(\j. match asString(j) {
+    Some(s) => [s],
+    None => []
+  }, jsons)
+
+-- Parse audio AI response into blocks
+-- callJson guarantees valid JSON with transcription, summary, speakers, language fields
+pure func parseAudioResponse(response: string, data: string, mime: string) -> [Block] {
+  match decode(response) {
+    Ok(json) => {
+      let transcription = getOrElse(getString(json, "transcription"), response);
+      let summary = getOrElse(getString(json, "summary"), "");
+      let lang = getOrElse(getString(json, "language"), "");
+      let blocks = [AudioBlock({data: data, transcription: transcription, mime: mime})];
+      let withSummary = if length(summary) > 0
+        then blocks ++ [TextBlock({text: "Summary: " ++ summary, style: "ai-summary", level: 0})]
+        else blocks;
+      if length(lang) > 0
+        then withSummary ++ [TextBlock({text: "Language: " ++ lang, style: "ai-metadata", level: 0})]
+        else withSummary
+    },
+    Err(_) => [AudioBlock({data: data, transcription: response, mime: mime})]
+  }
+}
+
+-- Parse video AI response into blocks
+-- callJson guarantees valid JSON array of blocks
+pure func parseVideoResponse(response: string, data: string, mime: string) -> [Block] {
+  match decode(response) {
+    Ok(json) => match asArray(json) {
+      Some(items) => {
+        let contentBlocks = parseVideoBlockItems(items);
+        let videoBlock = VideoBlock({data: data, description: videoSummaryFromBlocks(contentBlocks), mime: mime});
+        videoBlock :: contentBlocks
+      },
+      None => [VideoBlock({data: data, description: response, mime: mime})]
+    },
+    Err(_) => [VideoBlock({data: data, description: response, mime: mime})]
+  }
+}
+
+-- Parse video block items - extends standard blocks with transcription type
+pure func parseVideoBlockItems(items: [Json]) -> [Block] =
+  flatMap(\item. match parseVideoBlock(item) {
+    Some(block) => [block],
+    None => []
+  }, items)
+
+pure func parseVideoBlock(json: Json) -> Option[Block] {
+  match getString(json, "type") {
+    Some("transcription") => match getString(json, "text") {
+      Some(text) => Some(TextBlock({text: text, style: "transcription", level: 0})),
+      None => None
+    },
+    _ => parseOneBlock(json)
+  }
+}
+
+-- Build a summary description from extracted video content blocks
+pure func videoSummaryFromBlocks(blocks: [Block]) -> string =
+  match blocks {
+    [] => "video content",
+    b :: _ => match b {
+      TextBlock(t) => if length(t.text) > 100 then substring(t.text, 0, 100) ++ "..."
+                      else t.text,
+      HeadingBlock(h) => h.text,
+      _ => "video content"
+    }
+  }

@@ -1,0 +1,152 @@
+module docparse/types/document
+
+-- Core document content model for DocParse
+-- Represents the universal output of parsing any document format.
+-- All parsers (docx, pptx, xlsx) produce [Block] lists.
+
+import std/string (length, join)
+import std/list (filter, length as listLength)
+
+-- A table cell with merge span info
+-- colSpan: number of columns this cell spans (1 = normal)
+-- rowSpan: number of rows this cell spans (1 = normal)
+-- merged: true if this is a continuation cell (content lives in the span origin)
+export type TableCell = {
+  text: string,
+  colSpan: int,
+  rowSpan: int,
+  merged: bool
+}
+
+-- A content block extracted from a document
+export type Block = TextBlock({text: string, style: string, level: int})
+                  | TableBlock({rows: [[TableCell]], headers: [TableCell]})
+                  | ImageBlock({data: string, description: string, mime: string})
+                  | AudioBlock({data: string, transcription: string, mime: string})
+                  | VideoBlock({data: string, description: string, mime: string})
+                  | ListBlock({items: [string], ordered: bool})
+                  | HeadingBlock({text: string, level: int})
+                  | SectionBlock({kind: string, blocks: [Block]})
+
+-- Document metadata from core.xml / app.xml
+export type DocMetadata = {
+  title: string,
+  author: string,
+  created: string,
+  modified: string,
+  pageCount: int
+}
+
+-- Full parsed document
+export type ParsedDocument = {
+  format: string,
+  filename: string,
+  metadata: DocMetadata,
+  blocks: [Block]
+}
+
+-- Extraction result with quality info
+export type ExtractionResult = {
+  document: ParsedDocument,
+  warnings: [string],
+  aiCallsUsed: int
+}
+
+-- Helpers for working with blocks
+
+export pure func blockText(block: Block) -> string =
+  match block {
+    TextBlock(b) => b.text,
+    TableBlock(_) => "[table]",
+    ImageBlock(b) => "[image: " ++ b.description ++ "]",
+    AudioBlock(b) => "[audio: " ++ b.transcription ++ "]",
+    VideoBlock(b) => "[video: " ++ b.description ++ "]",
+    ListBlock(b) => join(", ", b.items),
+    HeadingBlock(b) => b.text,
+    SectionBlock(b) => "[" ++ b.kind ++ "]"
+  }
+
+export pure func isHeading(block: Block) -> bool =
+  match block {
+    HeadingBlock(_) => true,
+    _ => false
+  }
+
+export pure func isTable(block: Block) -> bool =
+  match block {
+    TableBlock(_) => true,
+    _ => false
+  }
+
+export pure func isImage(block: Block) -> bool =
+  match block {
+    ImageBlock(_) => true,
+    _ => false
+  }
+
+export pure func isSection(block: Block) -> bool =
+  match block {
+    SectionBlock(_) => true,
+    _ => false
+  }
+
+export pure func filterSections(blocks: [Block]) -> [Block]
+  ensures { listLength(result) <= listLength(blocks) }
+{
+  filter(isSection, blocks)
+}
+
+export pure func countBlocks(blocks: [Block]) -> int
+  ensures { result >= 0 }
+{
+  listLength(blocks)
+}
+
+export pure func filterHeadings(blocks: [Block]) -> [Block]
+  ensures { listLength(result) <= listLength(blocks) }
+{
+  filter(isHeading, blocks)
+}
+
+export pure func filterTables(blocks: [Block]) -> [Block]
+  ensures { listLength(result) <= listLength(blocks) }
+{
+  filter(isTable, blocks)
+}
+
+export pure func filterImages(blocks: [Block]) -> [Block]
+  ensures { listLength(result) <= listLength(blocks) }
+{
+  filter(isImage, blocks)
+}
+
+-- Create a simple (non-merged) table cell
+export pure func simpleCell(text: string) -> TableCell
+  ensures { result.colSpan == 1 && result.rowSpan == 1 && result.merged == false }
+{
+  {text: text, colSpan: 1, rowSpan: 1, merged: false}
+}
+
+-- Create a merged continuation cell (empty, spanned from another cell)
+export pure func mergedCell() -> TableCell
+  ensures { result.merged && length(result.text) == 0 }
+{
+  {text: "", colSpan: 1, rowSpan: 1, merged: true}
+}
+
+-- Create a cell with column span
+export pure func spanCell(text: string, cs: int) -> TableCell
+  ensures { result.colSpan == cs && result.merged == false }
+{
+  {text: text, colSpan: cs, rowSpan: 1, merged: false}
+}
+
+-- Get text from a table cell
+export pure func cellText(cell: TableCell) -> string = cell.text
+
+-- Create an empty metadata record
+export pure func emptyMetadata() -> DocMetadata
+  ensures { length(result.title) == 0 && result.pageCount == 0 }
+{
+  {title: "", author: "", created: "", modified: "", pageCount: 0}
+}

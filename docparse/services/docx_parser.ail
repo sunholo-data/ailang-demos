@@ -1,0 +1,397 @@
+module docparse/services/docx_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/option (Some, None, flatMap as optFlatMap, map as optMap, getOrElse)
+import std/result (Ok, Err)
+import std/string (contains, length, trim, stringToInt, join)
+import std/list (map, flatMap, any, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell)
+import docparse/services/zip_extract (readDocxContent, readCoreProperties, readAppProperties, readDocxRelationships, findMediaEntries, readEmbeddedImage, mediaMimeType, findHeaderEntries, findFooterEntries, readZipEntry, findFootnoteEntries, findEndnoteEntries)
+
+-- DOCX Parser
+-- Parses Word document XML into a list of content Blocks.
+--
+-- DOCX XML structure (word/document.xml):
+--   <w:document>
+--     <w:body>
+--       <w:p>            -- paragraph
+--         <w:pPr>        -- paragraph properties
+--           <w:pStyle w:val="Heading1"/>
+--           <w:numPr/>   -- numbering (lists)
+--         </w:pPr>
+--         <w:r>          -- run (text with formatting)
+--           <w:rPr/>     -- run properties (bold, italic, etc.)
+--           <w:t>text</w:t>
+--         </w:r>
+--       </w:p>
+--       <w:tbl>          -- table
+--         <w:tr>         -- row
+--           <w:tc>       -- cell
+--             <w:p>...</w:p>
+--           </w:tc>
+--         </w:tr>
+--       </w:tbl>
+--     </w:body>
+--   </w:document>
+--
+-- Run: ailang run --entry main --caps IO,FS docparse/main.ail
+
+-- Parse a DOCX file into content blocks
+export func parseDocx(filepath: string) -> [Block] ! {FS} {
+  let xml = readDocxContent(filepath);
+  match parse(xml) {
+    Ok(root) => extractBodyBlocks(root),
+    Err(e) => [TextBlock({text: "XML parse error: " ++ e, style: "error", level: 0})]
+  }
+}
+
+-- Extract metadata from a DOCX file
+export func parseDocxMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let coreXml = readCoreProperties(filepath);
+  match parse(coreXml) {
+    Ok(root) => extractMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Extract images from a DOCX file
+export func parseDocxImages(filepath: string) -> [Block] ! {FS} {
+  let mediaEntries = findMediaEntries(filepath);
+  extractImages(filepath, mediaEntries)
+}
+
+-- Extract headers from a DOCX file
+export func parseDocxHeaders(filepath: string) -> [Block] ! {FS} {
+  let entries = findHeaderEntries(filepath);
+  parseSectionEntries(filepath, entries, "header")
+}
+
+-- Extract footers from a DOCX file
+export func parseDocxFooters(filepath: string) -> [Block] ! {FS} {
+  let entries = findFooterEntries(filepath);
+  parseSectionEntries(filepath, entries, "footer")
+}
+
+-- Extract footnotes from a DOCX file
+export func parseDocxFootnotes(filepath: string) -> [Block] ! {FS} {
+  let entries = findFootnoteEntries(filepath);
+  parseSectionEntries(filepath, entries, "footnote")
+}
+
+-- Extract endnotes from a DOCX file
+export func parseDocxEndnotes(filepath: string) -> [Block] ! {FS} {
+  let entries = findEndnoteEntries(filepath);
+  parseSectionEntries(filepath, entries, "endnote")
+}
+
+-- Parse a list of ZIP entries as section blocks
+func parseSectionEntries(filepath: string, entries: [string], kind: string) -> [Block] ! {FS} =
+  match entries {
+    [] => [],
+    entry :: rest => {
+      let xml = readZipEntry(filepath, entry);
+      let blocks = parseSectionXml(xml);
+      let moreBlocks = parseSectionEntries(filepath, rest, kind);
+      if hasContent(blocks)
+      then {
+        let section = SectionBlock({kind: kind, blocks: blocks});
+        section :: moreBlocks
+      }
+      else moreBlocks
+    }
+  }
+
+-- Parse XML from a header/footer/footnote part into blocks
+pure func parseSectionXml(xml: string) -> [Block] {
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let children = getChildren(root);
+      processBodyChildren(children)
+    },
+    Err(_) => []
+  }
+}
+
+-- Check if a block list has any non-empty content
+pure func hasContent(blocks: [Block]) -> bool =
+  any(blockHasContent, blocks)
+
+-- Check if a single block has meaningful content
+pure func blockHasContent(b: Block) -> bool =
+  match b {
+    TextBlock(t) => length(trim(t.text)) > 0,
+    HeadingBlock(h) => length(trim(h.text)) > 0,
+    TableBlock(_) => true,
+    ListBlock(_) => true,
+    ImageBlock(_) => true,
+    SectionBlock(s) => hasContent(s.blocks)
+  }
+
+-- Navigate to w:body and extract blocks from its children
+pure func extractBodyBlocks(root: XmlNode) -> [Block] {
+  match findFirst(root, "w:body") {
+    Some(body) => {
+      let children = getChildren(body);
+      processBodyChildren(children)
+    },
+    None => []
+  }
+}
+
+-- Process children of w:body (paragraphs and tables)
+pure func processBodyChildren(nodes: [XmlNode]) -> [Block] =
+  flatMap(processBodyNode, nodes)
+
+-- Process a single body-level node
+pure func processBodyNode(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+  if tag == "w:p" then {
+    let mainBlock = parseParagraph(node);
+    let textBoxBlocks = extractTextBoxes(node);
+    mainBlock :: textBoxBlocks
+  }
+  else if tag == "w:tbl" then [parseTable(node)]
+  else []
+}
+
+-- Extract text from text boxes (wps:txbx / w:txbxContent) inside a node
+-- Text boxes appear inside drawings within paragraphs
+pure func extractTextBoxes(node: XmlNode) -> [Block] {
+  let txbxContents = findAll(node, "w:txbxContent");
+  extractTextBoxContent(txbxContents)
+}
+
+-- Parse text box content nodes into blocks wrapped in a SectionBlock
+pure func extractTextBoxContent(nodes: [XmlNode]) -> [Block] =
+  flatMap(\txbx.
+    let blocks = processBodyChildren(getChildren(txbx)) in
+    if hasContent(blocks) then [SectionBlock({kind: "textbox", blocks: blocks})]
+    else [],
+    nodes)
+
+-- Parse a w:p (paragraph) element into a Block
+pure func parseParagraph(p: XmlNode) -> Block {
+  let text = extractParagraphText(p);
+  let style = extractParagraphStyle(p);
+  let headingLevel = headingLevelFromStyle(style);
+  if headingLevel > 0
+  then HeadingBlock({text: text, level: headingLevel})
+  else if isListParagraph(p)
+  then ListBlock({items: [text], ordered: isOrderedList(p)})
+  else TextBlock({text: text, style: style, level: 0})
+}
+
+-- Extract all text from a paragraph by concatenating runs
+-- Handles track changes: includes w:ins and w:moveTo text,
+-- skips w:del and w:moveFrom (deleted/moved-away text)
+pure func extractParagraphText(p: XmlNode) -> string {
+  let children = getChildren(p);
+  extractTextFromChildren(children)
+}
+
+-- Walk paragraph children, skipping deleted/moved-away content
+pure func extractTextFromChildren(nodes: [XmlNode]) -> string =
+  join("", map(childNodeText, nodes))
+
+-- Extract text contribution from a single child node
+pure func childNodeText(node: XmlNode) -> string {
+  let tag = getTag(node);
+  if tag == "w:r" then extractRunText(node)
+  else if tag == "w:del" then ""
+  else if tag == "w:moveFrom" then ""
+  else if tag == "w:ins" then extractNestedRunText(node)
+  else if tag == "w:moveTo" then extractNestedRunText(node)
+  else if tag == "w:smartTag" then extractNestedRunText(node)
+  else if tag == "w:hyperlink" then extractNestedRunText(node)
+  else if tag == "w:sdt" then extractSdtText(node)
+  else ""
+}
+
+-- Extract text from runs nested inside ins/moveTo/smartTag/hyperlink elements
+pure func extractNestedRunText(parent: XmlNode) -> string {
+  let runs = findAll(parent, "w:r");
+  joinRunTexts(runs)
+}
+
+-- Extract text from structured document tags (w:sdt -> w:sdtContent)
+pure func extractSdtText(sdt: XmlNode) -> string {
+  match findFirst(sdt, "w:sdtContent") {
+    Some(content) => {
+      let runs = findAll(content, "w:r");
+      joinRunTexts(runs)
+    },
+    None => ""
+  }
+}
+
+-- Concatenate text from all runs
+pure func joinRunTexts(runs: [XmlNode]) -> string =
+  join("", map(extractRunText, runs))
+
+-- Extract text from a single w:r (run)
+pure func extractRunText(run: XmlNode) -> string {
+  match findFirst(run, "w:t") {
+    Some(t) => getText(t),
+    None => ""
+  }
+}
+
+-- Extract the paragraph style name from w:pPr/w:pStyle
+pure func extractParagraphStyle(p: XmlNode) -> string =
+  getOrElse(
+    optFlatMap(\ppr.
+      optFlatMap(\pstyle.
+        getAttr(pstyle, "w:val"),
+        findFirst(ppr, "w:pStyle")),
+      findFirst(p, "w:pPr")),
+    "Normal")
+
+-- Determine heading level from style name
+-- Heading1 -> 1, Heading2 -> 2, etc.
+pure func headingLevelFromStyle(style: string) -> int
+  ensures { result >= 0 && result <= 6 }
+  tests [
+    ("Heading1", 1),
+    ("Heading2", 2),
+    ("Heading3", 3),
+    ("Normal", 0),
+    ("BodyText", 0),
+    ("Title", 0)
+  ]
+{
+  if style == "Heading1" then 1
+  else if style == "Heading2" then 2
+  else if style == "Heading3" then 3
+  else if style == "Heading4" then 4
+  else if style == "Heading5" then 5
+  else if style == "Heading6" then 6
+  else 0
+}
+
+-- Check if paragraph is a list item (has w:numPr)
+pure func isListParagraph(p: XmlNode) -> bool =
+  getOrElse(
+    optMap(\_.  true,
+      optFlatMap(\ppr. findFirst(ppr, "w:numPr"), findFirst(p, "w:pPr"))),
+    false)
+
+-- Check if a list paragraph is ordered (numbered) vs unordered (bullet)
+-- Convention: numId > 0 with ilvl suggests ordered; simplified heuristic
+pure func isOrderedList(p: XmlNode) -> bool =
+  getOrElse(
+    optFlatMap(\ppr.
+      optFlatMap(\numPr.
+        optFlatMap(\numId.
+          optMap(\val. val != "1", getAttr(numId, "w:val")),
+          findFirst(numPr, "w:numId")),
+        findFirst(ppr, "w:numPr")),
+      findFirst(p, "w:pPr")),
+    false)
+
+-- Parse a w:tbl (table) element into a TableBlock
+-- Handles merged cells via gridSpan (horizontal) and vMerge (vertical)
+pure func parseTable(tbl: XmlNode) -> Block {
+  let rows = findAll(tbl, "w:tr");
+  let parsedRows = parseTableRows(rows);
+  match parsedRows {
+    [] => TableBlock({rows: [], headers: []}),
+    firstRow :: dataRows =>
+      TableBlock({rows: dataRows, headers: firstRow})
+  }
+}
+
+-- Parse all table rows
+pure func parseTableRows(rows: [XmlNode]) -> [[TableCell]]
+  ensures { listLength(result) == listLength(rows) }
+{
+  map(parseTableRow, rows)
+}
+
+-- Parse a single table row into TableCells with span info
+pure func parseTableRow(tr: XmlNode) -> [TableCell] {
+  let cells = findAll(tr, "w:tc");
+  parseCells(cells)
+}
+
+-- Extract TableCells from all cells in a row
+pure func parseCells(cells: [XmlNode]) -> [TableCell]
+  ensures { listLength(result) == listLength(cells) }
+{
+  map(parseCell, cells)
+}
+
+-- Parse a single w:tc into a TableCell with merge info
+-- Reads w:tcPr for gridSpan and vMerge attributes
+pure func parseCell(tc: XmlNode) -> TableCell {
+  let text = getCellText(tc);
+  let cs = getCellGridSpan(tc);
+  let vm = getCellVMerge(tc);
+  if vm == "continue"
+  then { text: "", colSpan: cs, rowSpan: 1, merged: true }
+  else { text: text, colSpan: cs, rowSpan: 1, merged: false }
+}
+
+-- Get gridSpan value from w:tcPr/w:gridSpan[@w:val]
+-- Returns 1 if not present (normal single-column cell)
+pure func getCellGridSpan(tc: XmlNode) -> int
+  ensures { result >= 1 }
+{
+  getOrElse(
+    optFlatMap(\tcPr.
+      optFlatMap(\gs.
+        optMap(\val. parseIntOrDefault(val, 1), getAttr(gs, "w:val")),
+        findFirst(tcPr, "w:gridSpan")),
+      findFirst(tc, "w:tcPr")),
+    1)
+}
+
+-- Get vMerge status from w:tcPr/w:vMerge
+-- Returns "restart" for merge start, "continue" for continuation, "" for no merge
+pure func getCellVMerge(tc: XmlNode) -> string {
+  match optFlatMap(\tcPr. findFirst(tcPr, "w:vMerge"), findFirst(tc, "w:tcPr")) {
+    Some(vm) => getOrElse(getAttr(vm, "w:val"), "continue"),
+    None => ""
+  }
+}
+
+-- Parse an integer string, returning default if not a valid number
+pure func parseIntOrDefault(s: string, default: int) -> int =
+  getOrElse(stringToInt(s), default)
+
+-- Get text from a table cell (concatenate all paragraph text within)
+pure func getCellText(tc: XmlNode) -> string {
+  let paragraphs = findAll(tc, "w:p");
+  joinParagraphTexts(paragraphs)
+}
+
+-- Concatenate text from multiple paragraphs
+pure func joinParagraphTexts(ps: [XmlNode]) -> string =
+  join("\n", map(extractParagraphText, ps))
+
+-- Extract metadata from core.xml
+pure func extractMetadata(root: XmlNode) -> DocMetadata {
+  let title = getMetaField(root, "dc:title");
+  let author = getMetaField(root, "dc:creator");
+  let created = getMetaField(root, "dcterms:created");
+  let modified = getMetaField(root, "dcterms:modified");
+  { title: title, author: author, created: created, modified: modified, pageCount: 0 }
+}
+
+-- Get a text field from metadata XML
+pure func getMetaField(root: XmlNode, tagName: string) -> string =
+  getOrElse(optMap(getText, findFirst(root, tagName)), "")
+
+-- Extract images from media entries
+func extractImages(filepath: string, entries: [string]) -> [Block] ! {FS} =
+  match entries {
+    [] => [],
+    entry :: rest => {
+      let imageData = readEmbeddedImage(filepath, entry);
+      let mime = mediaMimeType(entry);
+      let block = ImageBlock({data: imageData, description: "", mime: mime});
+      let moreBlocks = extractImages(filepath, rest);
+      block :: moreBlocks
+    }
+  }
+

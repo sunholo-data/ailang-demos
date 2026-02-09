@@ -1,0 +1,276 @@
+module docparse/services/layout_ai
+
+import std/ai (call, callJson, callJsonSimple)
+import std/string (length, join, substring)
+import std/json (decode, getString, getArray, getInt, asString, asArray, asNumber)
+import std/math (floatToInt)
+import std/option (Some, None, flatMap as optFlatMap, getOrElse)
+import std/result (Ok, Err)
+import std/list (map, foldl, length as listLength, flatMap, mapE, nth)
+import docparse/types/document (Block, TextBlock, TableBlock, ImageBlock, AudioBlock, VideoBlock, HeadingBlock, ListBlock, SectionBlock, TableCell, blockText, isImage, isTable, cellText, simpleCell)
+
+-- AI-powered layout understanding
+-- Uses LLM to handle complex document structure that pure XML parsing misses:
+--   - Table structure inference (merged cells, nested tables)
+--   - Reading order for multi-column layouts
+--   - Image content description
+--   - Complex list nesting
+--
+-- Budget: AI @limit=N ensures bounded cost per document.
+-- Pure parsing handles the deterministic parts; AI handles ambiguity.
+
+-- Describe all images in a document using AI vision
+export func describeImages(blocks: [Block]) -> [Block] ! {AI}
+  ensures { listLength(result) == listLength(blocks) }
+{
+  mapE(describeOneBlock, blocks)
+}
+
+func describeOneBlock(b: Block) -> Block ! {AI} =
+  match b {
+    ImageBlock(img) => {
+      let description = if length(img.data) > 0
+        then call("Describe this image concisely in one sentence. Focus on the key content and any text visible. Image data (base64): " ++ img.data)
+        else "";
+      ImageBlock({data: img.data, description: description, mime: img.mime})
+    },
+    SectionBlock(s) => {
+      let describedInner = mapE(describeOneBlock, s.blocks);
+      SectionBlock({kind: s.kind, blocks: describedInner})
+    },
+    _ => b
+  }
+
+-- Use AI to infer table structure from raw cell data
+-- Handles: merged cells, header detection, nested tables
+export func inferTableStructure(block: Block) -> Block ! {AI}
+  ensures { isTable(block) || isTable(result) == false }
+{
+  match block {
+    TableBlock(tbl) => {
+      let tableDesc = formatTableForAI(tbl.headers, tbl.rows);
+      let tableSchema = "{\"type\":\"object\",\"properties\":{\"headers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}";
+      let response = callJson(
+        "Analyze this table and return a JSON object with:" ++
+        " \"headers\": [list of header strings]," ++
+        " \"rows\": [[row1 cells], [row2 cells], ...]." ++
+        " Fix any merged cell issues, align columns, and clean up whitespace." ++
+        " Table data:\n" ++ tableDesc,
+        tableSchema
+      );
+      match parseTableResponse(response) {
+        Some(fixed) => fixed,
+        None => block
+      }
+    },
+    _ => block
+  }
+}
+
+-- Use AI to determine reading order for complex layouts
+-- Multi-column documents, text boxes, floating elements
+export func inferReadingOrder(blocks: [Block]) -> [Block] ! {AI}
+  ensures { listLength(blocks) == 0 || listLength(result) > 0 }
+{
+  let blockSummary = summarizeBlocks(blocks, 0);
+  let response = callJsonSimple(
+    "Given these document blocks in their original order, " ++
+    "return the correct reading order as a JSON array of block indices (0-based). " ++
+    "Consider: multi-column layouts should be read column by column, " ++
+    "headers before their content, captions near their images.\n" ++
+    "Blocks:\n" ++ blockSummary
+  );
+  match parseOrderResponse(response, blocks) {
+    Some(reordered) => reordered,
+    None => blocks
+  }
+}
+
+-- Use AI to clean up and structure extracted text
+-- Fixes: broken paragraphs, OCR artifacts, encoding issues
+export func cleanExtractedText(blocks: [Block]) -> [Block] ! {AI}
+  ensures { listLength(result) == 1 }
+{
+  let rawText = collectBlockTexts(blocks);
+  let response = call(
+    "Clean up this extracted document text. Fix:" ++
+    " broken paragraphs (merge lines that were split mid-sentence)," ++
+    " remove OCR artifacts," ++
+    " fix obvious encoding issues." ++
+    " Return the cleaned text with paragraph breaks as \\n\\n.\n\n" ++
+    rawText
+  );
+  [TextBlock({text: response, style: "cleaned", level: 0})]
+}
+
+-- Enhance blocks using AI when quality issues are detected
+-- This is the "self-healing" step: after deterministic parsing,
+-- AI fixes tables with empty/ambiguous cells, and reorders blocks if needed.
+-- Only calls AI when heuristics detect a problem - doesn't waste budget on good blocks.
+export func enhanceBlocks(blocks: [Block]) -> [Block] ! {AI}
+  ensures { listLength(result) == listLength(blocks) }
+{
+  mapE(enhanceOneBlock, blocks)
+}
+
+func enhanceOneBlock(b: Block) -> Block ! {AI} =
+  match b {
+    TableBlock(tbl) =>
+      if tableNeedsAI(tbl.headers, tbl.rows)
+      then inferTableStructure(b)
+      else b,
+    SectionBlock(s) => {
+      let innerEnhanced = mapE(enhanceOneBlock, s.blocks);
+      SectionBlock({kind: s.kind, blocks: innerEnhanced})
+    },
+    _ => b
+  }
+
+-- Heuristic: does this table have quality issues that AI could fix?
+-- Triggers on: all-empty cells, many merged cells, misaligned columns
+pure func tableNeedsAI(headers: [TableCell], rows: [[TableCell]]) -> bool {
+  let emptyHeaders = countEmptyCells(headers);
+  let totalHeaders = countCellsLen(headers);
+  let emptyRows = countEmptyRows(rows);
+  let totalRows = countRows(rows);
+  let mergedCount = countMergedCells(headers) + countMergedInRows(rows);
+  -- Trigger AI if: all headers empty, or >50% rows empty, or many merged cells
+  (totalHeaders > 0 && emptyHeaders == totalHeaders) ||
+  (totalRows > 0 && emptyRows * 2 > totalRows) ||
+  mergedCount > 3
+}
+
+pure func countEmptyCells(cells: [TableCell]) -> int =
+  foldl(\acc c. if length(cellText(c)) == 0 then acc + 1 else acc, 0, cells)
+
+pure func countCellsLen(cells: [TableCell]) -> int = listLength(cells)
+
+pure func countEmptyRows(rows: [[TableCell]]) -> int =
+  foldl(\acc row. if isRowEmpty(row) then acc + 1 else acc, 0, rows)
+
+pure func isRowEmpty(cells: [TableCell]) -> bool =
+  foldl(\acc c. acc && length(cellText(c)) == 0, true, cells)
+
+pure func countMergedCells(cells: [TableCell]) -> int =
+  foldl(\acc c. if c.merged then acc + 1 else acc, 0, cells)
+
+pure func countMergedInRows(rows: [[TableCell]]) -> int =
+  foldl(\acc row. acc + countMergedCells(row), 0, rows)
+
+-- Format a table for AI analysis
+pure func formatTableForAI(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerLine = "Headers: " ++ joinTableCells(headers);
+  let rowLines = formatRows(rows, 1);
+  headerLine ++ "\n" ++ rowLines
+}
+
+pure func formatRows(rows: [[TableCell]], idx: int) -> string =
+  match rows {
+    [] => "",
+    row :: rest =>
+      "Row " ++ show(idx) ++ ": " ++ joinTableCells(row) ++ "\n" ++ formatRows(rest, idx + 1)
+  }
+
+pure func joinTableCells(cells: [TableCell]) -> string =
+  join(" | ", map(cellText, cells))
+
+-- Summarize blocks for AI ordering
+pure func summarizeBlocks(blocks: [Block], idx: int) -> string =
+  match blocks {
+    [] => "",
+    b :: rest =>
+      show(idx) ++ ": " ++ blockSummary(b) ++ "\n" ++ summarizeBlocks(rest, idx + 1)
+  }
+
+pure func blockSummary(b: Block) -> string =
+  match b {
+    TextBlock(t) => "[text] " ++ truncateStr(t.text, 60),
+    HeadingBlock(h) => "[h" ++ show(h.level) ++ "] " ++ h.text,
+    TableBlock(t) => "[table] " ++ show(countRows(t.rows)) ++ " rows",
+    ListBlock(l) => "[list] " ++ show(countItems(l.items)) ++ " items",
+    ImageBlock(i) => "[image] " ++ i.mime,
+    AudioBlock(a) => "[audio] " ++ a.mime,
+    VideoBlock(v) => "[video] " ++ v.mime,
+    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(countItems2(s.blocks)) ++ " blocks"
+  }
+
+pure func countItems2(blocks: [Block]) -> int = listLength(blocks)
+
+pure func truncateStr(s: string, maxLen: int) -> string {
+  if length(s) <= maxLen then s
+  else substring(s, 0, maxLen) ++ "..."
+}
+
+pure func countRows(rows: [[TableCell]]) -> int = listLength(rows)
+
+pure func countItems(items: [string]) -> int = listLength(items)
+
+-- Collect all text from blocks
+pure func collectBlockTexts(blocks: [Block]) -> string =
+  join("\n", map(blockText, blocks))
+
+-- Parse AI response for table structure
+pure func parseTableResponse(response: string) -> Option[Block] {
+  match decode(response) {
+    Ok(json) =>
+      optFlatMap(\headerJsons.
+        let headers = stringsToSimpleCells(extractStrings(headerJsons)) in
+        optFlatMap(\rowJsons.
+          let rows = stringRowsToSimpleCells(extractStringArrays(rowJsons)) in
+          Some(TableBlock({rows: rows, headers: headers})),
+          getArray(json, "rows")),
+        getArray(json, "headers")),
+    Err(_) => None
+  }
+}
+
+-- Convert string lists to simple TableCell lists (for AI-reconstructed tables)
+pure func stringsToSimpleCells(strs: [string]) -> [TableCell] =
+  map(simpleCell, strs)
+
+pure func stringRowsToSimpleCells(rows: [[string]]) -> [[TableCell]] =
+  map(stringsToSimpleCells, rows)
+
+-- Parse AI response for reading order
+-- Expects a JSON array of integers (block indices)
+pure func parseOrderResponse(response: string, blocks: [Block]) -> Option[[Block]] {
+  match decode(response) {
+    Ok(json) => match asArray(json) {
+      Some(indices) => {
+        let reordered = reorderByIndices(extractInts(indices), blocks);
+        if countItems2(reordered) > 0 then Some(reordered)
+        else None
+      },
+      None => None
+    },
+    Err(_) => None
+  }
+}
+
+-- Extract integers from a JSON array of numbers
+pure func extractInts(jsons: [Json]) -> [int] =
+  flatMap(\j. match asNumber(j) {
+    Some(n) => [floatToInt(n)],
+    None => []
+  }, jsons)
+
+-- Reorder blocks by index list
+pure func reorderByIndices(indices: [int], blocks: [Block]) -> [Block] =
+  flatMap(\idx. match nth(blocks, idx) {
+    Some(b) => [b],
+    None => []
+  }, indices)
+
+-- Extract strings from JSON array
+pure func extractStrings(jsons: [Json]) -> [string] =
+  flatMap(\j. match asString(j) {
+    Some(s) => [s],
+    None => []
+  }, jsons)
+
+-- Extract arrays of strings from JSON array of arrays
+pure func extractStringArrays(jsons: [Json]) -> [[string]] =
+  map(\j. match getArray(j, "") {
+    Some(arr) => extractStrings(arr),
+    None => []
+  }, jsons)
