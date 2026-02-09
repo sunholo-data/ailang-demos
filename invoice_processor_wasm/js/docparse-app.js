@@ -39,10 +39,11 @@ async function init() {
     engine = new AilangEngine();
     await engine.init();
 
-    // Import additional stdlib modules needed by docparse (xml, list)
-    // AilangEngine.init() only imports json, option, result, string, math, ai
-    for (const lib of ['std/xml', 'std/list']) {
-      const r = engine.repl.eval(`:import ${lib}`);
+    // Import additional stdlib modules needed by docparse
+    // AilangEngine.init() already imports: json, option, result, string, math, ai
+    // Docparse also needs: xml, list, io
+    for (const lib of ['std/xml', 'std/list', 'std/io']) {
+      const r = engine.repl.importModule(lib);
       console.log(`Import ${lib}:`, r);
     }
 

@@ -18,5 +18,5 @@ Thumbs.db
 /invoice_processor_wasm/wasm/wasm_exec.js
 /invoice_processor_wasm/wasm/ailang-repl.js
 
-# Dev symlink (docparse modules served via symlink locally, copied in CI)
-/invoice_processor_wasm/ailang/docparse
+# Dev symlinks + browser stub (docparse modules, copied in CI)
+/invoice_processor_wasm/ailang/docparse/
