@@ -7,27 +7,11 @@
 import AilangEngine from './ailang-wrapper.js';
 import { renderBlocks, renderMarkdown, renderJson } from './docparse-output.js';
 import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
+import { loadDocParseModules, DOCPARSE_MODULE, DOCPARSE_MODULES } from './docparse-loader.js';
 
 // ── State ───────────────────────────────────────────────────────
 let engine = null;
 let moduleLoaded = false;
-
-// ── Module Configuration ────────────────────────────────────────
-
-// Module name used for callFunction (the browser adapter)
-const DOCPARSE_MODULE = 'docparse/services/docparse_browser';
-
-// Modules to load in dependency order (original source of truth)
-const DOCPARSE_MODULES = [
-  { name: 'docparse/types/document',           path: 'ailang/docparse/types/document.ail' },
-  { name: 'docparse/services/format_router',    path: 'ailang/docparse/services/format_router.ail' },
-  { name: 'docparse/services/zip_extract',      path: 'ailang/docparse/services/zip_extract.ail' },
-  { name: 'docparse/services/docx_parser',      path: 'ailang/docparse/services/docx_parser.ail' },
-  { name: 'docparse/services/pptx_parser',      path: 'ailang/docparse/services/pptx_parser.ail' },
-  { name: 'docparse/services/xlsx_parser',      path: 'ailang/docparse/services/xlsx_parser.ail' },
-  { name: 'docparse/services/output_formatter', path: 'ailang/docparse/services/output_formatter.ail' },
-  { name: 'docparse/services/docparse_browser', path: 'ailang/docparse/services/docparse_browser.ail' },
-];
 
 // ── Initialization ──────────────────────────────────────────────
 
@@ -39,29 +23,9 @@ async function init() {
     engine = new AilangEngine();
     await engine.init();
 
-    // Import additional stdlib modules needed by docparse
-    // AilangEngine.init() already imports: json, option, result, string, math, ai
-    // Docparse also needs: xml, list, io
-    for (const lib of ['std/xml', 'std/list', 'std/io']) {
-      const r = engine.repl.importModule(lib);
-      console.log(`Import ${lib}:`, r);
-    }
-
-    // Load original docparse modules in dependency order
-    for (let i = 0; i < DOCPARSE_MODULES.length; i++) {
-      const mod = DOCPARSE_MODULES[i];
-      updateStatus(`Loading module ${i + 1}/${DOCPARSE_MODULES.length}: ${mod.name}...`, 'loading');
-
-      const resp = await fetch(mod.path + '?v=' + Date.now());
-      if (!resp.ok) throw new Error(`Failed to fetch ${mod.path}`);
-      const code = await resp.text();
-
-      const result = engine.loadDynamicModule(mod.name, code);
-      if (!result.success) {
-        throw new Error(`Module ${mod.name} load failed: ${result.error}`);
-      }
-      console.log(`Loaded ${mod.name}: ${(result.exports || []).length} exports`);
-    }
+    await loadDocParseModules(engine, (i, total, name) => {
+      updateStatus(`Loading module ${i + 1}/${total}: ${name}...`, 'loading');
+    });
 
     moduleLoaded = true;
     updateStatus('Ready', 'ready');

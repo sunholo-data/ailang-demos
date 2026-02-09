@@ -148,6 +148,18 @@ jobs:
           cp docparse/services/docparse_browser.ail invoice_processor_wasm/ailang/docparse/services/
           echo "Copied $(find invoice_processor_wasm/ailang/docparse -name '*.ail' | wc -l) docparse modules"
 
+      - name: Copy demo Office files
+        run: |
+          # Copy representative test files for demo buttons
+          cp docparse/data/test_files/sample.docx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/tables.docx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/merged_cells.docx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/python_pptx_slides.pptx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/python_pptx_table.pptx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/pandoc_basic.pptx invoice_processor_wasm/assets/
+          cp docparse/data/test_files/pandoc_basic.xlsx invoice_processor_wasm/assets/
+          echo "Copied $(ls invoice_processor_wasm/assets/*.docx invoice_processor_wasm/assets/*.pptx invoice_processor_wasm/assets/*.xlsx 2>/dev/null | wc -l) demo Office files to assets/"
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

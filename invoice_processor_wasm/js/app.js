@@ -16,6 +16,8 @@ import { SchemaEditor } from './schema-editor.js';
 import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
 import { OutputFormatter } from './output-formatter.js';
 import { demoExamples } from './examples.js';
+import { loadDocParseModules, DOCPARSE_MODULE } from './docparse-loader.js';
+import { blockToMarkdown } from './docparse-output.js';
 
 // ── Globals ──────────────────────────────────────────────────
 let engine = null;
@@ -25,13 +27,22 @@ let formatter = null;
 let currentDemo = null;   // key into demoExamples, or null for custom
 let running = false;
 let uploadedBinary = null; // { base64, mimeType, fileName, fileSize, lastModified, uploadedAt }
+let docparseLoaded = false;
+let docparseLoading = false;
+let lastUploadWasOffice = false; // Track if DocParse step should stay visible
 
 // ── File Size Limits ────────────────────────────────────────
 const FILE_SIZE_LIMITS = {
   image: 10 * 1024 * 1024,   // 10 MB for images
   pdf: 20 * 1024 * 1024,     // 20 MB for PDFs
   text: 5 * 1024 * 1024,     // 5 MB for text files
+  office: 50 * 1024 * 1024,  // 50 MB for Office documents
 };
+
+const OFFICE_EXTENSIONS = ['.docx', '.pptx', '.xlsx'];
+function isOfficeFile(fileName) {
+  return OFFICE_EXTENSIONS.some(ext => fileName.toLowerCase().endsWith(ext));
+}
 
 // ── DOM References ───────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
@@ -172,8 +183,8 @@ function loadDemo(name) {
     btn.classList.toggle('active', btn.dataset.demo === name);
   });
 
-  // Load schema
-  if (schemaEditor) {
+  // Load schema (if provided — Office demos let the user define or auto-detect)
+  if (schemaEditor && demo.schema) {
     schemaEditor.loadSchema(demo.schema);
   }
 
@@ -182,6 +193,12 @@ function loadDemo(name) {
     const docInput = $('#documentInput');
     if (docInput) docInput.style.display = 'none';
     loadPdfDemo(demo);
+    return;
+  }
+
+  // If demo has an Office URL, fetch and process with DocParse
+  if (demo.officeUrl) {
+    loadOfficeDemo(demo);
     return;
   }
 
@@ -226,6 +243,41 @@ async function loadPdfDemo(demo) {
   }
 }
 
+async function loadOfficeDemo(demo) {
+  showLoading(`Loading ${demo.officeUrl.split('/').pop()}...`);
+  try {
+    const response = await fetch(demo.officeUrl);
+    if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+    const buffer = await response.arrayBuffer();
+    const fileName = demo.officeUrl.split('/').pop();
+
+    showLoading(`Parsing ${fileName} with DocParse (AILANG)...`);
+    const text = await processOfficeFile(fileName, buffer);
+
+    const textarea = $('#documentInput');
+    if (textarea) {
+      textarea.value = text;
+      textarea.style.display = '';
+    }
+    uploadedBinary = null;
+    hideFilePreview();
+    showOfficePreview(fileName, buffer.byteLength, text);
+
+    // If the demo has a schema, auto-run the full pipeline (DocParse → AI/demo → validate)
+    if (demo.schema && demo.preExtracted) {
+      runPipeline();
+    } else {
+      const resultsEl = $('#results');
+      if (resultsEl) {
+        resultsEl.innerHTML = `<p class="placeholder">Office document parsed by AILANG DocParse &mdash; ${text.split('\n').length} lines extracted.<br>Define a schema (or use <strong>Detect Schema</strong>) then click <strong>Extract &amp; Validate</strong>.</p>`;
+      }
+    }
+  } catch (err) {
+    showError(`Failed to load Office demo: ${err.message}`);
+    console.error('Office demo error:', err);
+  }
+}
+
 // ── Input Methods ────────────────────────────────────────────
 function setupInputMethods() {
   // Upload chip in toolbar triggers file picker
@@ -247,8 +299,11 @@ function setupInputMethods() {
       const textExts = ['.txt', '.json', '.csv'];
       const isText = textExts.some(ext => file.name.toLowerCase().endsWith(ext));
 
+      const isOffice = isOfficeFile(file.name);
+
       // Check file size limits
       const sizeLimit = isText ? FILE_SIZE_LIMITS.text
+        : isOffice ? FILE_SIZE_LIMITS.office
         : file.type === 'application/pdf' ? FILE_SIZE_LIMITS.pdf
         : FILE_SIZE_LIMITS.image;
       if (file.size > sizeLimit) {
@@ -259,6 +314,7 @@ function setupInputMethods() {
 
       if (isText) {
         // Text file: read as text, put in textarea
+        lastUploadWasOffice = false;
         const reader = new FileReader();
         reader.onload = () => {
           if (textarea) {
@@ -272,8 +328,33 @@ function setupInputMethods() {
           $('#uploadChip')?.classList.remove('has-file');
         };
         reader.readAsText(file);
+      } else if (isOffice) {
+        // Office file: pre-process with DocParse, put extracted text in textarea
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            showLoading(`Parsing ${file.name} with AILANG DocParse...`);
+            const text = await processOfficeFile(file.name, reader.result);
+            if (textarea) {
+              textarea.value = text;
+              textarea.style.display = '';
+            }
+            uploadedBinary = null;
+            showOfficePreview(file.name, file.size, text);
+            currentDemo = null;
+            $$('[data-demo]').forEach(b => b.classList.remove('active'));
+            $('#uploadChip')?.classList.add('has-file');
+            const resultsEl = $('#results');
+            if (resultsEl) resultsEl.innerHTML = `<p class="placeholder">Office document parsed by AILANG DocParse &mdash; ${text.split('\n').length} lines extracted. Click Extract &amp; Validate to process.</p>`;
+          } catch (err) {
+            showError(`Office document parsing failed: ${err.message}`);
+            console.error('DocParse error:', err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
       } else {
         // Binary file (PDF, image): read as ArrayBuffer, convert to base64
+        lastUploadWasOffice = false;
         const reader = new FileReader();
         reader.onload = () => {
           const bytes = new Uint8Array(reader.result);
@@ -398,11 +479,15 @@ function onSchemaChange(schema) {
 // ── Pipeline Steps UI ────────────────────────────────────────
 function resetPipelineSteps() {
   $$('.pipe-step').forEach(step => {
+    // Preserve DocParse step 0 if the last upload was an Office file
+    if (step.dataset.step === '0' && lastUploadWasOffice) return;
     step.classList.remove('active', 'complete', 'error');
     const log = step.querySelector('.pipe-log');
     if (log) log.textContent = '';
   });
-  $$('.pipe-connector').forEach(conn => {
+  $$('.pipe-connector').forEach((conn, i) => {
+    // Preserve first connector if DocParse step is complete
+    if (i === 0 && lastUploadWasOffice) return;
     conn.classList.remove('complete');
   });
 }
@@ -521,6 +606,7 @@ async function runPipeline() {
     setStepActive(2);
     setStepLog(2, 'Resetting WASM runtime...');
     await engine.reset();
+    docparseLoaded = false; // reset() wipes all dynamic modules
     setStepLog(2, 'Loading extractor module...');
     const loadResult = engine.loadDynamicModule('extractor', ailangSource);
     if (!loadResult.success) {
@@ -838,6 +924,169 @@ function hideFilePreview() {
   }
   previewEl.style.display = 'none';
   previewEl.innerHTML = '';
+}
+
+function showOfficePreview(fileName, fileSize, extractedText) {
+  const previewEl = $('#filePreview');
+  if (!previewEl) return;
+
+  const ext = fileName.split('.').pop().toUpperCase();
+  const lineCount = extractedText.split('\n').length;
+  const previewLines = extractedText.split('\n').slice(0, 8).join('\n');
+
+  previewEl.innerHTML =
+    `<div class="file-preview-header">` +
+      `<span class="file-preview-icon">\u{1F4C4}</span>` +
+      `<span class="file-preview-name">${escapeHtml(fileName)}</span>` +
+      `<span class="file-preview-size">${formatFileSize(fileSize)}</span>` +
+      `<span class="effect-badge pure" style="font-size:0.58rem;padding:1px 6px">AILANG DocParse</span>` +
+      `<button class="file-preview-remove" title="Remove file">&times;</button>` +
+    `</div>` +
+    `<div class="file-preview-body" style="flex-direction:column;align-items:stretch;text-align:left;padding:12px">` +
+      `<div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-bottom:8px">` +
+        `${ext} &rarr; ${lineCount} lines extracted via std/xml` +
+      `</div>` +
+      `<pre style="font-family:var(--font-mono);font-size:0.72rem;line-height:1.5;color:var(--text-secondary);` +
+        `white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;margin:0">${escapeHtml(previewLines)}</pre>` +
+    `</div>`;
+
+  previewEl.querySelector('.file-preview-remove').addEventListener('click', () => {
+    uploadedBinary = null;
+    lastUploadWasOffice = false;
+    hideFilePreview();
+    resetPipelineSteps();
+    const textarea = $('#documentInput');
+    if (textarea) {
+      textarea.value = '';
+      textarea.style.display = '';
+      textarea.placeholder = 'Paste document text here...';
+    }
+    $('#uploadChip')?.classList.remove('has-file');
+  });
+
+  previewEl.style.display = '';
+}
+
+// ── Office Document Pre-Processing (DocParse) ───────────────
+
+async function ensureDocParseLoaded() {
+  if (docparseLoaded) return;
+  if (docparseLoading) {
+    while (docparseLoading) await new Promise(r => setTimeout(r, 100));
+    return;
+  }
+  docparseLoading = true;
+  try {
+    await loadDocParseModules(engine, (i, total, name) => {
+      showLoading(`Loading DocParse module ${i + 1}/${total}...`);
+    });
+    docparseLoaded = true;
+  } finally {
+    docparseLoading = false;
+  }
+}
+
+async function processOfficeFile(fileName, buffer) {
+  // Activate pipeline step 0: DocParse
+  lastUploadWasOffice = true;
+  setStepActive(0);
+  setStepLog(0, `Loading DocParse modules...`);
+
+  await ensureDocParseLoaded();
+  setStepLog(0, `Parsing ${fileName}...`);
+
+  const formatResult = engine.callFunction(DOCPARSE_MODULE, 'getFormatInfo', fileName);
+  if (!formatResult.success) throw new Error('Format detection failed: ' + formatResult.error);
+  const formatInfo = JSON.parse(formatResult.result);
+  if (formatInfo.format !== 'zip-office') throw new Error(`Unexpected format: ${formatInfo.format}`);
+
+  const zip = await JSZip.loadAsync(buffer);
+  const entries = Object.keys(zip.files);
+  const allBlocks = [];
+
+  // Parse metadata
+  let metadata = null;
+  const coreXml = await readZipEntryText(zip, 'docProps/core.xml');
+  if (coreXml) {
+    const metaResult = engine.callFunction(DOCPARSE_MODULE, 'parseMetadataXml', coreXml);
+    if (metaResult.success) metadata = JSON.parse(metaResult.result);
+  }
+
+  // Format-specific parsing
+  if (formatInfo.officeType === 'word') {
+    await parseDocxBlocks(zip, entries, allBlocks);
+  } else if (formatInfo.officeType === 'powerpoint') {
+    await parsePptxBlocks(zip, entries, allBlocks);
+  } else if (formatInfo.officeType === 'excel') {
+    await parseXlsxBlocks(zip, entries, allBlocks);
+  }
+
+  // Convert blocks to markdown text
+  let text = '';
+  if (metadata?.title) text += `# ${metadata.title}\n\n`;
+  if (metadata?.author) text += `Author: ${metadata.author}\n\n`;
+  text += allBlocks.map(blockToMarkdown).join('');
+
+  // Complete pipeline step 0
+  setStepLog(0, `${allBlocks.length} blocks extracted via AILANG std/xml`);
+  setStepComplete(0);
+
+  return text.trim();
+}
+
+async function readZipEntryText(zip, path) {
+  const file = zip.file(path);
+  if (!file) return null;
+  try { return await file.async('string'); } catch { return null; }
+}
+
+async function parseDocxBlocks(zip, entries, allBlocks) {
+  const bodyXml = await readZipEntryText(zip, 'word/document.xml');
+  if (bodyXml) {
+    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxBody', bodyXml);
+    if (result.success) allBlocks.push(...JSON.parse(result.result));
+  }
+  for (const entry of entries.filter(e => e.startsWith('word/header') && e.endsWith('.xml'))) {
+    const xml = await readZipEntryText(zip, entry);
+    if (xml) {
+      const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', xml, 'header');
+      if (result.success) allBlocks.push(...JSON.parse(result.result));
+    }
+  }
+  for (const entry of entries.filter(e => e.startsWith('word/footer') && e.endsWith('.xml'))) {
+    const xml = await readZipEntryText(zip, entry);
+    if (xml) {
+      const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', xml, 'footer');
+      if (result.success) allBlocks.push(...JSON.parse(result.result));
+    }
+  }
+}
+
+async function parsePptxBlocks(zip, entries, allBlocks) {
+  const slideEntries = entries
+    .filter(e => e.startsWith('ppt/slides/slide') && e.endsWith('.xml') && !e.includes('_rels'))
+    .sort();
+  for (const slideEntry of slideEntries) {
+    const xml = await readZipEntryText(zip, slideEntry);
+    if (xml) {
+      const result = engine.callFunction(DOCPARSE_MODULE, 'parsePptxSlide', xml);
+      if (result.success) allBlocks.push(...JSON.parse(result.result));
+    }
+  }
+}
+
+async function parseXlsxBlocks(zip, entries, allBlocks) {
+  const sharedStringsXml = await readZipEntryText(zip, 'xl/sharedStrings.xml') || '';
+  const sheetEntries = entries
+    .filter(e => e.startsWith('xl/worksheets/sheet') && e.endsWith('.xml'))
+    .sort();
+  for (const sheetEntry of sheetEntries) {
+    const xml = await readZipEntryText(zip, sheetEntry);
+    if (xml) {
+      const result = engine.callFunction(DOCPARSE_MODULE, 'parseXlsxSheet', xml, sharedStringsXml, sheetEntry);
+      if (result.success) allBlocks.push(...JSON.parse(result.result));
+    }
+  }
 }
 
 // ── Bootstrap ────────────────────────────────────────────────

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <script src="wasm/wasm_exec.js"></script>
   <script src="wasm/ailang-repl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <header>
@@ -18,10 +19,10 @@
       <div class="header-left">
         <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
         <h1>AILANG Document Extractor</h1>
-        <span class="tagline">AI extraction validated by contracts &amp; effects</span>
+        <span class="tagline">AI extraction &amp; Office parsing via AILANG WebAssembly</span>
       </div>
       <div class="header-right">
-        <a href="docparse.html">DocParse</a>
+        <a href="docparse.html" class="nav-demo">DocParse</a>
         <a href="https://github.com/sunholo-data/ailang-demos/tree/main/invoice_processor_wasm" target="_blank" rel="noopener">Demo Source</a>
         <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a>
         <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Docs</a>
@@ -35,14 +36,24 @@
       <div class="toolbar-demos">
         <span class="toolbar-label">Try:</span>
         <button class="demo-chip" data-demo="invoice">Invoice</button>
-        <button class="demo-chip" data-demo="receipt">Receipt</button>
         <button class="demo-chip" data-demo="contract">Contract</button>
-        <button class="demo-chip" data-demo="bankStatement">Bank Statement</button>
-        <button class="demo-chip" data-demo="shippingLabel">Shipping</button>
         <button class="demo-chip" data-demo="resume">Resume</button>
         <button class="demo-chip" data-demo="pdfInvoice">
           <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
           PDF Invoice
+        </button>
+        <span class="toolbar-divider"></span>
+        <button class="demo-chip" data-demo="docxDemo">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+          Sports (DOCX)
+        </button>
+        <button class="demo-chip" data-demo="pptxDemo">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+          Slides (PPTX)
+        </button>
+        <button class="demo-chip" data-demo="xlsxDemo">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="10" height="14" rx="1.5"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+          People (XLSX)
         </button>
         <span class="toolbar-divider"></span>
         <button class="demo-chip upload-chip" id="uploadChip">
@@ -86,7 +97,7 @@
           </div>
           <div id="filePreview" class="file-preview" style="display:none"></div>
           <textarea id="documentInput" rows="10" placeholder="Paste document text here..." spellcheck="false"></textarea>
-          <input type="file" id="fileUpload" accept=".txt,.json,.csv,.pdf,.png,.jpg,.jpeg,.webp,.bmp,application/pdf,image/*" class="file-input-hidden">
+          <input type="file" id="fileUpload" accept=".txt,.json,.csv,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.docx,.pptx,.xlsx,application/pdf,image/*" class="file-input-hidden">
 
           <div class="col-header" style="margin-top:20px">
             <h2>Extraction Schema</h2>
@@ -118,6 +129,16 @@
         <div class="pipeline-col pipeline-output">
           <h2>Pipeline</h2>
           <div id="pipeline-steps" class="pipeline-steps">
+            <div class="pipe-step pipe-step-optional" data-step="0">
+              <div class="pipe-dot"></div>
+              <div class="pipe-label">
+                <span class="pipe-name">DocParse</span>
+                <span class="effect-badge pure">AILANG</span>
+                <span class="pipe-hint">Office docs</span>
+              </div>
+              <div class="pipe-log"></div>
+            </div>
+            <div class="pipe-connector"></div>
             <div class="pipe-step" data-step="1">
               <div class="pipe-dot"></div>
               <div class="pipe-label">
@@ -177,11 +198,15 @@
       <h2>AILANG Effects &amp; Stdlib in Action</h2>
       <p>
         See how AILANG's effect system, contracts, and stdlib modules work together
-        to create a trustworthy AI extraction pipeline. Every line below runs in this demo via WebAssembly.
+        to create a trustworthy AI extraction pipeline. Every line below runs in this demo via WebAssembly &mdash;
+        from parsing Office documents with <code>std/xml</code> to validating AI output with contracts.
       </p>
 
       <div class="showcase-tabs">
-        <input type="radio" name="fx-tab" id="fx-ai" checked>
+        <input type="radio" name="fx-tab" id="fx-docparse" checked>
+        <label for="fx-docparse"><span class="effect-badge pure inline">std/xml</span> DocParse</label>
+
+        <input type="radio" name="fx-tab" id="fx-ai">
         <label for="fx-ai"><span class="effect-badge ai inline">! {AI}</span> AI Effect</label>
 
         <input type="radio" name="fx-tab" id="fx-contracts">
@@ -195,6 +220,38 @@
 
         <input type="radio" name="fx-tab" id="fx-security">
         <label for="fx-security">Capability Security</label>
+
+        <!-- Panel: DocParse / std/xml -->
+        <div class="tab-panel" id="panel-fx-docparse">
+          <div class="tab-explanation">
+            <h3>DocParse: Office Documents via <code>std/xml</code></h3>
+            <p>
+              DOCX, PPTX, and XLSX files are ZIP archives containing XML. AILANG's
+              <code>std/xml</code> module parses document structure directly in WebAssembly &mdash;
+              no server needed. 8 AILANG modules handle format detection, XML parsing,
+              and block extraction, all running as pure functions in the browser.
+              <a href="docparse.html">Try DocParse standalone &rarr;</a>
+            </p>
+          </div>
+          <pre><code><span class="kw">import</span> std/xml (<span class="fn">parseXml</span>, <span class="fn">findAll</span>, <span class="fn">findFirst</span>, <span class="fn">getText</span>, <span class="fn">getAttr</span>)
+<span class="kw">import</span> std/string (<span class="fn">trim</span>, <span class="fn">endsWith</span>)
+<span class="kw">import</span> std/list (<span class="fn">map</span>, <span class="fn">flatMap</span>, <span class="fn">filter</span>)
+
+<span class="cm">-- Pure XML parsing: no effects, no AI, fully deterministic</span>
+<span class="kw">pure func</span> <span class="fn">parseDocxBody</span>(xml: <span class="ty">string</span>) -> <span class="ty">string</span> {
+  <span class="kw">let</span> doc = parseXml(xml)
+  <span class="kw">let</span> paragraphs = findAll(doc, <span class="st">"w:p"</span>)
+  <span class="kw">let</span> blocks = flatMap(\p. extractBlock(p), paragraphs)
+  encode(blocks)   <span class="cm">-- JSON array of structured blocks</span>
+}
+
+<span class="cm">-- Format detection: pure function matching file extensions</span>
+<span class="kw">pure func</span> <span class="fn">getFormatInfo</span>(filename: <span class="ty">string</span>) -> <span class="ty">string</span> {
+  <span class="kw">if</span> endsWith(filename, <span class="st">".docx"</span>) <span class="kw">then</span>
+    <span class="st">"{\"format\":\"zip-office\",\"officeType\":\"word\"}"</span>
+  <span class="kw">else</span> ...
+}</code></pre>
+        </div>
 
         <!-- Panel: AI Effect -->
         <div class="tab-panel" id="panel-fx-ai">
@@ -355,27 +412,27 @@
         <div class="step">
           <div class="step-number">1</div>
           <h3>Upload document</h3>
-          <p>Paste text or upload a file in any format</p>
+          <p>Paste text, upload PDF/images, or Office docs (DOCX, PPTX, XLSX)</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
-          <h3>Define schema</h3>
-          <p>Specify fields to extract with types and constraints</p>
+          <h3>DocParse <span class="effect-badge pure inline-sm">AILANG</span></h3>
+          <p>Office files are parsed locally via <a href="docparse.html">DocParse</a> &mdash; AILANG's <code>std/xml</code> extracts text from ZIP+XML archives</p>
         </div>
         <div class="step">
           <div class="step-number">3</div>
-          <h3>AI extracts <span class="effect-badge ai inline-sm">! {AI}</span></h3>
-          <p>Gemini Flash extracts structured data from your document</p>
+          <h3>Define schema</h3>
+          <p>Specify fields to extract &mdash; AILANG generates typed validation code</p>
         </div>
         <div class="step">
           <div class="step-number">4</div>
-          <h3>AILANG validates</h3>
-          <p>Contracts and type system guarantee correctness</p>
+          <h3>AI extracts <span class="effect-badge ai inline-sm">! {AI}</span></h3>
+          <p>Gemini Flash extracts structured data via AILANG's AI effect system</p>
         </div>
         <div class="step">
           <div class="step-number">5</div>
-          <h3>Trusted output</h3>
-          <p>Deterministic validation of stochastic AI output</p>
+          <h3>AILANG validates <span class="effect-badge contract inline-sm">contracts</span></h3>
+          <p>Contracts, types, and <code>std/json</code> guarantee correctness of AI output</p>
         </div>
       </div>
     </section>

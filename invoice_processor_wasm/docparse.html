@@ -500,6 +500,36 @@
       border: 1px solid var(--border);
     }
 
+    /* Demo file buttons bar */
+    .demo-files-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .demo-file {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .demo-file:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+      background: var(--primary-faded);
+    }
+    .demo-file:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* Image preview in blocks */
     .block-image-preview {
       margin-top: 8px;
@@ -523,10 +553,10 @@
       <div class="header-left">
         <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
         <h1>DocParse</h1>
-        <span class="tagline">Universal document parsing in the browser</span>
+        <span class="tagline">AILANG-powered document parsing via WebAssembly</span>
       </div>
       <div class="header-right">
-        <a href="index.html">Document Extractor</a>
+        <a href="index.html" class="nav-demo">Document Extractor</a>
         <a href="https://github.com/sunholo-data/ailang-demos/tree/main/invoice_processor_wasm" target="_blank" rel="noopener">Source</a>
         <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a>
         <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Docs</a>
@@ -577,7 +607,7 @@
           </svg>
         </div>
         <div class="dropzone-title">Drop a document here or click to browse</div>
-        <div class="dropzone-subtitle">Parse Office documents, PDFs, images, and text files</div>
+        <div class="dropzone-subtitle">Parse Office documents, PDFs, images, audio, video, and text files &mdash; powered by AILANG WebAssembly</div>
         <div class="dropzone-formats">
           <span class="format-tag office">DOCX</span>
           <span class="format-tag office">PPTX</span>
@@ -585,13 +615,27 @@
           <span class="format-tag ai">PDF</span>
           <span class="format-tag ai">PNG</span>
           <span class="format-tag ai">JPG</span>
+          <span class="format-tag ai">MP3</span>
+          <span class="format-tag ai">MP4</span>
           <span class="format-tag text">TXT</span>
           <span class="format-tag text">MD</span>
           <span class="format-tag text">CSV</span>
         </div>
-        <input type="file" id="fileInput" accept=".docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.txt,.md,.csv,.html,.xml,.json" disabled>
+        <input type="file" id="fileInput" class="file-input-hidden" accept=".docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.txt,.md,.csv,.html,.xml,.json,.mp3,.wav,.ogg,.mp4,.webm" disabled>
       </div>
     </section>
+
+    <!-- Demo Files -->
+    <div class="demo-files-bar">
+      <span class="toolbar-label">Try:</span>
+      <button class="demo-file" data-file="assets/sample.docx">Sample DOCX</button>
+      <button class="demo-file" data-file="assets/tables.docx">Tables DOCX</button>
+      <button class="demo-file" data-file="assets/python_pptx_slides.pptx">Slides PPTX</button>
+      <button class="demo-file" data-file="assets/merged_cells.docx">Merged Cells DOCX</button>
+      <button class="demo-file" data-file="assets/python_pptx_table.pptx">Table PPTX</button>
+      <button class="demo-file" data-file="assets/pandoc_basic.xlsx">Spreadsheet XLSX</button>
+      <button class="demo-file" data-file="assets/bristol-car-hire-demo.pdf" title="Requires Gemini API key">PDF Invoice</button>
+    </div>
 
     <!-- Parse Layout: Pipeline + Results -->
     <section class="parse-layout" id="results" style="display:none">
@@ -633,16 +677,22 @@
     <!-- Supported Formats -->
     <section>
       <h2>Supported Formats</h2>
+      <p>
+        DocParse uses 8 AILANG modules running in WebAssembly to parse documents entirely in your browser.
+        Office documents are handled by pure <code>std/xml</code> functions; PDFs, images, audio, and video use AILANG's
+        <code>! {AI}</code> effect with Gemini.
+      </p>
       <div class="formats-grid">
         <div class="format-card">
           <h3>
-            <span class="effect-badge pure">ZIP+XML</span>
+            <span class="effect-badge pure">AILANG std/xml</span>
             Office Documents
           </h3>
           <p>
             DOCX, PPTX, and XLSX files are ZIP archives containing XML.
-            DocParse extracts entries with JSZip and parses XML
-            into structured blocks using AILANG's pure <code>std/xml</code> functions.
+            JSZip extracts entries, then AILANG's <code>std/xml</code> module parses
+            document structure into typed blocks &mdash; headings, paragraphs,
+            tables, lists, and embedded images. Pure functions, no AI needed.
           </p>
           <div class="format-exts">
             <span class="format-ext">.docx</span>
@@ -653,18 +703,23 @@
         <div class="format-card">
           <h3>
             <span class="effect-badge ai">! {AI}</span>
-            PDFs &amp; Images
+            PDFs, Images, Audio &amp; Video
           </h3>
           <p>
-            Binary formats require AI multimodal extraction.
-            Coming soon to the browser &mdash; currently available via the CLI
-            with <code>--caps AI --ai gemini-3-flash-preview</code>.
+            Binary formats use AILANG's AI effect system with Gemini multimodal extraction.
+            Add a Gemini API key above to enable &mdash; or use the CLI with
+            <code>--caps AI --ai gemini-3-flash-preview</code>.
+            Embedded images in Office docs also get AI descriptions when a key is set.
           </p>
           <div class="format-exts">
             <span class="format-ext">.pdf</span>
             <span class="format-ext">.png</span>
             <span class="format-ext">.jpg</span>
             <span class="format-ext">.webp</span>
+            <span class="format-ext">.mp3</span>
+            <span class="format-ext">.wav</span>
+            <span class="format-ext">.mp4</span>
+            <span class="format-ext">.webm</span>
           </div>
         </div>
         <div class="format-card">
@@ -694,44 +749,45 @@
         <div class="step">
           <div class="step-number">1</div>
           <h3>Upload</h3>
-          <p>Drop a file or click to browse. Reads entirely in your browser.</p>
+          <p>Drop a file or click to browse. Everything runs in your browser via WebAssembly.</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
-          <h3>Format Detect</h3>
-          <p>AILANG pure function identifies format from extension.</p>
+          <h3>Format Detect <span class="effect-badge pure inline-sm">AILANG</span></h3>
+          <p>AILANG's <code>getFormatInfo</code> pure function identifies format and routes to the right parser.</p>
         </div>
         <div class="step">
           <div class="step-number">3</div>
-          <h3>ZIP Extract</h3>
-          <p>JSZip opens Office archives and extracts XML entries.</p>
+          <h3>ZIP + XML Parse <span class="effect-badge pure inline-sm">AILANG</span></h3>
+          <p>JSZip extracts entries, then AILANG's <code>std/xml</code> parses XML structure via <code>findAll</code>, <code>getText</code>, <code>getAttr</code>.</p>
         </div>
         <div class="step">
           <div class="step-number">4</div>
-          <h3>XML Parse</h3>
-          <p>AILANG's <code>std/xml</code> parses document structure in WASM.</p>
+          <h3>AI Describe <span class="effect-badge ai inline-sm">! {AI}</span></h3>
+          <p>Embedded images get AI descriptions via Gemini (optional &mdash; requires API key).</p>
         </div>
         <div class="step">
           <div class="step-number">5</div>
-          <h3>Block Output</h3>
-          <p>Headings, tables, lists, and images as structured JSON.</p>
+          <h3>Block Output <span class="effect-badge pure inline-sm">AILANG</span></h3>
+          <p>AILANG's <code>output_formatter</code> module produces structured JSON blocks, rendered HTML, or markdown.</p>
         </div>
       </div>
     </section>
 
     <!-- CTA -->
     <section class="cta">
-      <h2>Try DocParse on the Command Line</h2>
+      <h2>DocParse Powers the Document Extractor</h2>
       <p>
-        DocParse supports all formats including PDFs and images with AI.
-        Install AILANG and run it locally for the full experience.
+        DocParse is a general-purpose document parser built with AILANG. It's also integrated into the
+        <a href="index.html">AILANG Document Extractor</a>, where Office files are first parsed by DocParse
+        then processed through AI extraction and AILANG contract validation.
       </p>
       <div class="cta-buttons">
-        <a href="https://github.com/sunholo-data/ailang" class="btn btn-primary" target="_blank" rel="noopener">
-          Install AILANG
-        </a>
-        <a href="index.html" class="btn btn-secondary">
+        <a href="index.html" class="btn btn-primary">
           Document Extractor Demo
+        </a>
+        <a href="https://github.com/sunholo-data/ailang" class="btn btn-secondary" target="_blank" rel="noopener">
+          Install AILANG
         </a>
         <a href="https://ailang.sunholo.com/docs/guides/wasm-integration" class="btn btn-secondary" target="_blank" rel="noopener">
           WASM Guide

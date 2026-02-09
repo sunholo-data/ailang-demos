@@ -54,54 +54,6 @@ Due Date: February 14, 2024`,
     }
   },
 
-  receipt: {
-    label: 'Receipt',
-    description: 'Extract merchant, items, and total from a retail receipt',
-    document: `COFFEE HOUSE
-123 Main Street, Anytown CA 90210
-Tel: (555) 123-4567
-
-Date: 2024-02-20  Time: 14:30
-Server: Maria  Table: 7
-
-Latte (Large)           $5.50
-Blueberry Muffin        $3.25
-Bottled Water           $2.00
-Avocado Toast           $8.75
-
-Subtotal:              $19.50
-Tax (7.25%):            $1.41
-Total:                 $20.91
-
-Payment: Visa ***1234
-Auth: 847291
-
-Thank you for visiting Coffee House!`,
-
-    schema: {
-      name: 'ReceiptExtraction',
-      fields: [
-        { name: 'merchant_name', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'date', type: 'string', required: true, constraints: [] },
-        { name: 'subtotal_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'tax_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'total_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'payment_method', type: 'string', required: false, constraints: [] },
-        { name: 'item_count', type: 'int', required: false, constraints: ['>= 0'] }
-      ]
-    },
-
-    preExtracted: {
-      merchant_name: 'Coffee House',
-      date: '2024-02-20',
-      subtotal_cents: 1950,
-      tax_cents: 141,
-      total_cents: 2091,
-      payment_method: 'Visa',
-      item_count: 4
-    }
-  },
-
   pdfInvoice: {
     label: 'PDF Invoice',
     description: 'Extract fields from a real PDF car hire invoice using multimodal AI',
@@ -185,118 +137,6 @@ Signed on behalf of the parties on the date first written above.`,
     }
   },
 
-  bankStatement: {
-    label: 'Bank Statement',
-    description: 'Extract account details, balance, and transaction summary',
-    document: `NATIONAL BANK OF AUSTRALIA
-Monthly Statement — Personal Cheque Account
-
-Account Holder: Sarah J. Mitchell
-Account Number: 0621-4478-9903
-BSB: 082-140
-Statement Period: 1 March 2024 – 31 March 2024
-
-Opening Balance:                    $4,231.50
-
-TRANSACTIONS
-Date        Description                     Debit       Credit
-03 Mar      Direct Debit — Netflix           $22.99
-05 Mar      Salary — Sunholo Pty Ltd                    $6,450.00
-07 Mar      EFTPOS — Woolworths             $187.30
-12 Mar      Transfer to Savings             $500.00
-15 Mar      ATM Withdrawal                  $200.00
-18 Mar      BPAY — AGL Energy              $142.80
-22 Mar      EFTPOS — Bunnings               $89.50
-25 Mar      Direct Debit — Health Ins       $175.00
-28 Mar      Interest Earned                              $3.12
-
-Total Debits:    $1,317.59
-Total Credits:   $6,453.12
-
-Closing Balance:                    $9,367.03`,
-
-    schema: {
-      name: 'BankStatementExtraction',
-      fields: [
-        { name: 'account_holder', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'account_number', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'statement_period', type: 'string', required: true, constraints: [] },
-        { name: 'opening_balance_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'closing_balance_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'total_debits_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'total_credits_cents', type: 'int', required: true, constraints: ['>= 0'] },
-        { name: 'transaction_count', type: 'int', required: false, constraints: ['>= 0'] }
-      ]
-    },
-
-    preExtracted: {
-      account_holder: 'Sarah J. Mitchell',
-      account_number: '0621-4478-9903',
-      statement_period: '2024-03-01 to 2024-03-31',
-      opening_balance_cents: 423150,
-      closing_balance_cents: 936703,
-      total_debits_cents: 131759,
-      total_credits_cents: 645312,
-      transaction_count: 9
-    }
-  },
-
-  shippingLabel: {
-    label: 'Shipping',
-    description: 'Extract sender, recipient, and tracking info from a shipping label',
-    document: `═══════════════════════════════════════
-        AUSTRALIA POST — EXPRESS POST
-═══════════════════════════════════════
-
-FROM:
-  Sunholo Pty Ltd
-  Level 10, 100 Collins Street
-  Melbourne VIC 3000
-  AU
-
-TO:
-  James Chen
-  42 Harbour View Drive
-  Pyrmont NSW 2009
-  AU
-
-Tracking: EP349201847AU
-Service:  Express Post — Next Business Day
-Weight:   1.2 kg
-Declared Value: $85.00
-
-Parcel ID: PKG-2024-00417
-Date Shipped: 2024-03-15
-Signature Required: Yes
-
-═══════════════════════════════════════`,
-
-    schema: {
-      name: 'ShippingExtraction',
-      fields: [
-        { name: 'sender_name', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'recipient_name', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'recipient_city', type: 'string', required: true, constraints: [] },
-        { name: 'tracking_number', type: 'string', required: true, constraints: ['!= ""'] },
-        { name: 'service_type', type: 'string', required: true, constraints: [] },
-        { name: 'weight_grams', type: 'int', required: false, constraints: ['>= 0'] },
-        { name: 'declared_value_cents', type: 'int', required: false, constraints: ['>= 0'] },
-        { name: 'signature_required', type: 'string', required: false, constraints: [] }
-      ]
-    },
-
-    preExtracted: {
-      sender_name: 'Sunholo Pty Ltd',
-      recipient_name: 'James Chen',
-      recipient_city: 'Pyrmont',
-      tracking_number: 'EP349201847AU',
-      service_type: 'Express Post — Next Business Day',
-      weight_grams: 1200,
-      declared_value_cents: 8500,
-      signature_required: 'Yes'
-    }
-  },
-
   resume: {
     label: 'Resume',
     description: 'Extract candidate details, experience, and skills from a CV',
@@ -360,6 +200,87 @@ ML: PyTorch, TensorFlow, MLflow`,
       current_employer: 'Sunholo Pty Ltd',
       education: 'B.Sc. Computer Science, University of Melbourne',
       num_roles: 3
+    }
+  },
+
+  // ── Office Document Demos (DocParse → AI Extraction) ────────
+  // These demos showcase the full pipeline: DocParse extracts text,
+  // then AI extracts structured fields, then AILANG validates.
+  docxDemo: {
+    label: 'Sports Data (DOCX)',
+    description: 'DocParse extracts a sports table from Word, AI pulls structured athlete data',
+    document: '',
+    officeUrl: 'assets/tables.docx',
+    schema: {
+      name: 'SportsDataExtraction',
+      fields: [
+        { name: 'athlete_count', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'top_athlete', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'top_sport', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'highest_fame', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'sports_mentioned', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'has_controversy', type: 'string', required: false, constraints: [] }
+      ]
+    },
+    preExtracted: {
+      athlete_count: 3,
+      top_athlete: 'Lebron James',
+      top_sport: 'Basketball',
+      highest_fame: 'Very High',
+      sports_mentioned: 3,
+      has_controversy: 'Yes'
+    }
+  },
+
+  pptxDemo: {
+    label: 'Presentation (PPTX)',
+    description: 'DocParse extracts slides from PowerPoint, AI summarizes the presentation',
+    document: '',
+    officeUrl: 'assets/pandoc_basic.pptx',
+    schema: {
+      name: 'PresentationExtraction',
+      fields: [
+        { name: 'slide_count', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'main_topic', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'person_name', type: 'string', required: false, constraints: [] },
+        { name: 'person_age', type: 'int', required: false, constraints: ['>= 0'] },
+        { name: 'has_tables', type: 'string', required: false, constraints: [] },
+        { name: 'has_diagrams', type: 'string', required: false, constraints: [] }
+      ]
+    },
+    preExtracted: {
+      slide_count: 4,
+      main_topic: 'LLM Providers and AI',
+      person_name: 'Anton Antich',
+      person_age: 23,
+      has_tables: 'Yes',
+      has_diagrams: 'Yes'
+    }
+  },
+
+  xlsxDemo: {
+    label: 'People Data (XLSX)',
+    description: 'DocParse extracts spreadsheet cells, AI structures the person records',
+    document: '',
+    officeUrl: 'assets/pandoc_basic.xlsx',
+    schema: {
+      name: 'SpreadsheetExtraction',
+      fields: [
+        { name: 'row_count', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'column_count', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'first_person', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'first_location', type: 'string', required: true, constraints: ['!= ""'] },
+        { name: 'person_count', type: 'int', required: true, constraints: ['> 0'] },
+        { name: 'countries_mentioned', type: 'int', required: false, constraints: ['>= 0'] }
+      ]
+    },
+    preExtracted: {
+      row_count: 2,
+      column_count: 3,
+      first_person: 'Anton Antich',
+      first_location: 'Switzerland',
+      person_count: 2,
+      countries_mentioned: 2
     }
   }
 };

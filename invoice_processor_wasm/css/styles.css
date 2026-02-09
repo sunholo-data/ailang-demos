@@ -171,6 +171,18 @@ header .tagline {
   border-color: rgba(255,255,255,0.35);
 }
 
+.header-right a.nav-demo {
+  color: white;
+  background: rgba(231, 60, 23, 0.25);
+  border-color: var(--primary);
+  font-weight: 700;
+}
+
+.header-right a.nav-demo:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
 /* ── Toolbar (demos + API key) ─────────────────────────────── */
 .toolbar {
   background: var(--bg-card);
@@ -692,6 +704,25 @@ section p {
 
 .pipe-step.error .pipe-log {
   color: var(--error);
+}
+
+.pipe-hint {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  opacity: 0.7;
+}
+
+.pipe-step-optional {
+  opacity: 0.5;
+  transition: opacity 0.3s ease, background 0.25s ease;
+}
+
+.pipe-step-optional.active,
+.pipe-step-optional.complete {
+  opacity: 1;
 }
 
 .pipe-connector {

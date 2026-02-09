@@ -219,7 +219,7 @@ export function renderMarkdown(output) {
   return `<pre class="markdown-output"><code>${escapeHtml(md)}</code></pre>`;
 }
 
-function blockToMarkdown(block) {
+export function blockToMarkdown(block) {
   switch (block.type) {
     case 'heading': {
       const prefix = '#'.repeat(Math.min(block.level || 1, 6));
