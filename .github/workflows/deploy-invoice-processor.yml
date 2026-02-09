@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'invoice_processor_wasm/**'
+      - 'docparse/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -129,6 +130,22 @@ jobs:
           fi
 
           echo "All WASM files verified successfully"
+
+      - name: Copy docparse modules
+        run: |
+          # Replace the dev symlink with actual files for deployment
+          rm -f invoice_processor_wasm/ailang/docparse
+          mkdir -p invoice_processor_wasm/ailang/docparse/types
+          mkdir -p invoice_processor_wasm/ailang/docparse/services
+          cp docparse/types/document.ail invoice_processor_wasm/ailang/docparse/types/
+          cp docparse/services/format_router.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/zip_extract.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/docx_parser.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/pptx_parser.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/xlsx_parser.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/output_formatter.ail invoice_processor_wasm/ailang/docparse/services/
+          cp docparse/services/docparse_browser.ail invoice_processor_wasm/ailang/docparse/services/
+          echo "Copied $(find invoice_processor_wasm/ailang/docparse -name '*.ail' | wc -l) docparse modules"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

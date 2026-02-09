@@ -1,0 +1,98 @@
+module docparse/services/docparse_browser
+
+-- Browser adapter for DocParse
+-- Thin entry-point module that imports from the original CLI modules
+-- and exports WASM-callable functions for JavaScript.
+--
+-- JavaScript handles ZIP extraction (JSZip); this module handles
+-- pure XML -> Block -> JSON conversion.
+--
+-- This is NOT a standalone module — it requires all docparse modules
+-- to be loaded in the WASM REPL first (in dependency order).
+
+import std/xml (parse, findAll)
+import std/json (encode, jo, kv, js, jb, ja, jnum)
+import std/string (length)
+import std/math (intToFloat)
+import std/result (Ok, Err)
+import std/option (Some, None, getOrElse)
+import docparse/types/document (Block, SectionBlock, DocMetadata, emptyMetadata,
+    countBlocks, filterHeadings, filterTables, filterImages)
+import docparse/services/format_router (detectFormat, getExtension, officeType,
+    needsAI, strategyDescription)
+import docparse/services/docx_parser (extractBodyBlocks, parseSectionXml,
+    hasContent, extractMetadata)
+import docparse/services/pptx_parser (extractSlideBlocks)
+import docparse/services/xlsx_parser (extractSharedStrings, parseSheetXml)
+import docparse/services/output_formatter (blocksToJson, metadataToJson)
+
+-- Parse DOCX body XML (word/document.xml) -> JSON array of blocks
+export pure func parseDocxBody(xml: string) -> string {
+  match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(extractBodyBlocks(root)))),
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("XML parse error: " ++ e))])]))
+  }
+}
+
+-- Parse DOCX section XML (header/footer/footnote/endnote) -> JSON array of blocks
+export pure func parseDocxSection(xml: string, kind: string) -> string {
+  let blocks = parseSectionXml(xml);
+  if hasContent(blocks)
+  then encode(ja(blocksToJson([SectionBlock({kind: kind, blocks: blocks})])))
+  else encode(ja([]))
+}
+
+-- Parse metadata from core.xml -> JSON metadata object
+export pure func parseMetadataXml(coreXml: string) -> string {
+  match parse(coreXml) {
+    Ok(root) => encode(metadataToJson(extractMetadata(root))),
+    Err(_) => encode(metadataToJson(emptyMetadata()))
+  }
+}
+
+-- Parse a single PPTX slide XML -> JSON array of blocks
+export pure func parsePptxSlide(slideXml: string) -> string {
+  if length(slideXml) == 0 then encode(ja([]))
+  else match parse(slideXml) {
+    Ok(root) => {
+      let blocks = extractSlideBlocks(root);
+      if hasContent(blocks)
+      then encode(ja(blocksToJson([SectionBlock({kind: "slide", blocks: blocks})])))
+      else encode(ja([]))
+    },
+    Err(_) => encode(ja([]))
+  }
+}
+
+-- Parse XLSX shared strings XML into string list, then parse sheet XML
+export pure func parseXlsxSheet(sheetXml: string, sharedStringsXml: string, sheetName: string) -> string {
+  let sharedStrings = parseSharedStringsXml(sharedStringsXml);
+  let blocks = parseSheetXml(sheetXml, sharedStrings, sheetName);
+  encode(ja(blocksToJson(blocks)))
+}
+
+-- Get format info as JSON for a filename
+export pure func getFormatInfo(filename: string) -> string {
+  let ext = getExtension(filename);
+  let format = detectFormat(ext);
+  encode(jo([
+    kv("extension", js(ext)),
+    kv("format", js(format)),
+    kv("officeType", js(officeType(ext))),
+    kv("needsAI", jb(needsAI(format))),
+    kv("strategy", js(strategyDescription(format)))
+  ]))
+}
+
+-- Helper: parse shared strings XML into a list of strings
+-- Handles the same logic as xlsx_parser.loadSharedStrings but pure (no FS)
+pure func parseSharedStringsXml(xml: string) -> [string] {
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let items = findAll(root, "si");
+      extractSharedStrings(items)
+    },
+    Err(_) => []
+  }
+}

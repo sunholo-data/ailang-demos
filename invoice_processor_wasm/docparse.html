@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocParse — Universal Document Parsing</title>
+  <meta name="description" content="Parse DOCX, PPTX, XLSX documents in the browser using AILANG WebAssembly. No server required.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* ── DocParse-specific styles ──────────────────────────────── */
+
+    /* Status bar */
+    .status-bar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 0;
+    }
+    .status-bar .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease;
+    }
+    .status-dot.loading { background: var(--ai-orange); animation: pulse 1s ease infinite; }
+    .status-dot.ready { background: var(--success); }
+    .status-dot.processing { background: var(--primary); animation: pipePulse 1.5s ease infinite; }
+    .status-dot.error { background: var(--error); }
+    #status {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    #fileInfo {
+      display: none;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* Dropzone */
+    .dropzone-section {
+      margin-bottom: 24px;
+    }
+    #dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--bg-card);
+      position: relative;
+      overflow: hidden;
+    }
+    #dropzone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 400px 200px at 50% 120%, var(--primary-faded), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    #dropzone:hover::before,
+    #dropzone.dragover::before { opacity: 1; }
+    #dropzone:hover { border-color: var(--primary-light); }
+    #dropzone.dragover {
+      border-color: var(--primary);
+      border-style: solid;
+      background: var(--primary-faded);
+    }
+    #dropzone.ready { border-color: var(--border); }
+    .dropzone-icon {
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+    #dropzone:hover .dropzone-icon { color: var(--primary); transform: translateY(-2px); }
+    .dropzone-title {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .dropzone-subtitle {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .dropzone-formats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+    .format-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .format-tag.office { color: var(--indigo); border-color: rgba(79, 70, 229, 0.25); background: rgba(79, 70, 229, 0.06); }
+    .format-tag.ai { color: var(--ai-orange); border-color: rgba(245, 158, 11, 0.25); background: var(--ai-orange-bg); }
+    .format-tag.text { color: var(--success); border-color: rgba(5, 150, 105, 0.2); background: var(--success-bg); }
+
+    /* Two-column layout: pipeline log + results */
+    .parse-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 968px) {
+      .parse-layout { grid-template-columns: 1fr; }
+    }
+
+    /* Pipeline log panel */
+    .pipeline-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 20px;
+    }
+    .pipeline-panel h3 {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--charcoal);
+      margin-bottom: 12px;
+    }
+    #pipeline-log {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.8;
+      color: var(--text-secondary);
+      min-height: 80px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #pipeline-log:empty::after {
+      content: 'Upload a file to see the parsing pipeline...';
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .pipeline-line {
+      padding: 2px 0;
+      animation: fadeInUp 0.15s ease both;
+    }
+    .pipeline-stage {
+      display: inline-block;
+      min-width: 56px;
+      font-weight: 600;
+      color: var(--primary);
+      text-transform: uppercase;
+      font-size: 0.62rem;
+      letter-spacing: 0.3px;
+    }
+
+    /* Results panel */
+    .results-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+    }
+    #results { display: none; }
+
+    /* Output tabs */
+    .output-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .output-tab {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+      text-align: center;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .output-tab:hover { color: var(--text-primary); background: var(--bg-card); }
+    .output-tab.active {
+      color: var(--primary);
+      background: var(--bg-card);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Output panels */
+    .output-panel { display: none; padding: 20px; }
+    .output-panel.active { display: block; }
+
+    .results-empty {
+      text-align: center;
+      padding: 60px 28px;
+      color: var(--text-muted);
+    }
+    .results-empty-icon { margin-bottom: 16px; color: var(--border); }
+    .results-empty p {
+      font-size: 0.92rem;
+    }
+
+    /* ── Block rendering styles ──────────────────────────────── */
+    .docparse-blocks { }
+    .doc-info {
+      padding: 16px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+      border-left: 3px solid var(--primary);
+    }
+    .doc-info-row {
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .doc-label {
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      min-width: 56px;
+    }
+    .format-badge {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 20px;
+      background: var(--primary-faded);
+      color: var(--primary);
+      letter-spacing: 0.3px;
+    }
+    .doc-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .stat {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 3px 10px;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .blocks-list { }
+
+    .block {
+      margin-bottom: 8px;
+      animation: fadeInUp 0.2s ease both;
+    }
+    .block-heading {
+      font-family: var(--font-display);
+      color: var(--charcoal);
+      margin-top: 16px;
+    }
+    h1.block-heading { font-size: 1.3rem; }
+    h2.block-heading { font-size: 1.15rem; }
+    h3.block-heading { font-size: 1rem; }
+    h4.block-heading, h5.block-heading, h6.block-heading { font-size: 0.9rem; }
+
+    .block-text {
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: var(--text-primary);
+    }
+    .text-style {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .block-table {
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .block-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .block-table th {
+      padding: 8px 12px;
+      text-align: left;
+      font-family: var(--font-display);
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 2px solid var(--border);
+    }
+    .block-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-primary);
+    }
+    .block-table td.merged { color: var(--text-muted); font-style: italic; }
+    .block-table tbody tr:hover { background: rgba(231, 60, 23, 0.02); }
+
+    .block-list { margin: 8px 0 8px 20px; font-size: 0.88rem; }
+    .block-list li { margin: 4px 0; color: var(--text-primary); }
+
+    .block-image, .block-audio, .block-video {
+      padding: 10px 14px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .block-badge {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--charcoal);
+      color: white;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .block-mime {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .block-section {
+      border-left: 3px solid var(--indigo-light);
+      padding-left: 16px;
+      margin: 12px 0;
+    }
+    .block-section .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--indigo);
+      margin-bottom: 8px;
+    }
+
+    .block-error {
+      padding: 12px 16px;
+      background: var(--error-bg);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--error);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: var(--error-bg);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--error);
+      font-size: 0.88rem;
+    }
+    .info-msg {
+      padding: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.7;
+    }
+    .info-msg code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: var(--bg-code);
+      color: #e2e8f0;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    /* JSON + Markdown output */
+    .json-output, .markdown-output {
+      background: var(--bg-code);
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.75rem;
+      line-height: 1.6;
+      max-height: 600px;
+      overflow-y: auto;
+      margin: 0;
+    }
+    .json-output code, .markdown-output code {
+      font-family: var(--font-mono);
+      font-weight: 400;
+    }
+
+    /* ── Supported Formats grid ──────────────────────────────── */
+    .formats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) { .formats-grid { grid-template-columns: 1fr; } }
+
+    .format-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: all 0.2s ease;
+    }
+    .format-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+    .format-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .format-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+    .format-exts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .format-ext {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* Image preview in blocks */
+    .block-image-preview {
+      margin-top: 8px;
+    }
+    .block-image-preview img {
+      max-width: 100%;
+      max-height: 400px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      object-fit: contain;
+      background: var(--bg);
+    }
+  </style>
+  <script src="wasm/wasm_exec.js"></script>
+  <script src="wasm/ailang-repl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="container header-row">
+      <div class="header-left">
+        <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
+        <h1>DocParse</h1>
+        <span class="tagline">Universal document parsing in the browser</span>
+      </div>
+      <div class="header-right">
+        <a href="index.html">Document Extractor</a>
+        <a href="https://github.com/sunholo-data/ailang-demos/tree/main/invoice_processor_wasm" target="_blank" rel="noopener">Source</a>
+        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a>
+        <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Docs</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="container">
+      <div class="status-left">
+        <div class="status-dot loading" id="statusDot"></div>
+        <span id="status">Loading WASM runtime...</span>
+      </div>
+      <span id="fileInfo"></span>
+      <div class="toolbar-key">
+        <div class="api-key-panel" id="apiKeyPanel">
+          <div class="api-key-header" id="apiKeyToggle">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span class="demo-badge" id="demoBadge">Demo Mode</span>
+            <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="api-key-body" id="apiKeyBody">
+            <div class="api-key-input-row">
+              <input type="password" id="apiKeyInput" placeholder="Gemini API key" autocomplete="off">
+              <button id="saveKeyBtn" class="btn btn-primary btn-sm">Save</button>
+              <button id="clearKeyBtn" class="btn btn-secondary btn-sm">Clear</button>
+            </div>
+            <p class="api-key-note">
+              Stored in browser only.
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- Upload Dropzone -->
+    <section class="dropzone-section">
+      <div id="dropzone">
+        <div class="dropzone-icon">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M24 32V12m0 0l-8 8m8-8l8 8"/>
+            <path d="M8 28v8a4 4 0 004 4h24a4 4 0 004-4v-8"/>
+          </svg>
+        </div>
+        <div class="dropzone-title">Drop a document here or click to browse</div>
+        <div class="dropzone-subtitle">Parse Office documents, PDFs, images, and text files</div>
+        <div class="dropzone-formats">
+          <span class="format-tag office">DOCX</span>
+          <span class="format-tag office">PPTX</span>
+          <span class="format-tag office">XLSX</span>
+          <span class="format-tag ai">PDF</span>
+          <span class="format-tag ai">PNG</span>
+          <span class="format-tag ai">JPG</span>
+          <span class="format-tag text">TXT</span>
+          <span class="format-tag text">MD</span>
+          <span class="format-tag text">CSV</span>
+        </div>
+        <input type="file" id="fileInput" accept=".docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.txt,.md,.csv,.html,.xml,.json" disabled>
+      </div>
+    </section>
+
+    <!-- Parse Layout: Pipeline + Results -->
+    <section class="parse-layout" id="results" style="display:none">
+
+      <!-- Pipeline Log -->
+      <div class="pipeline-panel">
+        <h3>Parsing Pipeline</h3>
+        <div id="pipeline-log"></div>
+      </div>
+
+      <!-- Results -->
+      <div class="results-panel">
+        <div class="output-tabs">
+          <button class="output-tab active" data-panel="blocksPanel">Blocks</button>
+          <button class="output-tab" data-panel="jsonPanel">JSON</button>
+          <button class="output-tab" data-panel="markdownPanel">Markdown</button>
+        </div>
+        <div id="blocksPanel" class="output-panel active"></div>
+        <div id="jsonPanel" class="output-panel"></div>
+        <div id="markdownPanel" class="output-panel"></div>
+      </div>
+    </section>
+
+    <!-- Results placeholder (shown before upload) -->
+    <section class="results-panel" id="resultsPlaceholder">
+      <div class="results-empty">
+        <div class="results-empty-icon">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="10" y="6" width="26" height="34" rx="3"/>
+            <path d="M16 14h14M16 20h14M16 26h8"/>
+            <rect x="20" y="16" width="26" height="34" rx="3" fill="var(--bg-card)" stroke="currentColor"/>
+            <path d="M26 24h14M26 30h14M26 36h8"/>
+          </svg>
+        </div>
+        <p>Upload a document to see it parsed into structured blocks</p>
+      </div>
+    </section>
+
+    <!-- Supported Formats -->
+    <section>
+      <h2>Supported Formats</h2>
+      <div class="formats-grid">
+        <div class="format-card">
+          <h3>
+            <span class="effect-badge pure">ZIP+XML</span>
+            Office Documents
+          </h3>
+          <p>
+            DOCX, PPTX, and XLSX files are ZIP archives containing XML.
+            DocParse extracts entries with JSZip and parses XML
+            into structured blocks using AILANG's pure <code>std/xml</code> functions.
+          </p>
+          <div class="format-exts">
+            <span class="format-ext">.docx</span>
+            <span class="format-ext">.pptx</span>
+            <span class="format-ext">.xlsx</span>
+          </div>
+        </div>
+        <div class="format-card">
+          <h3>
+            <span class="effect-badge ai">! {AI}</span>
+            PDFs &amp; Images
+          </h3>
+          <p>
+            Binary formats require AI multimodal extraction.
+            Coming soon to the browser &mdash; currently available via the CLI
+            with <code>--caps AI --ai gemini-3-flash-preview</code>.
+          </p>
+          <div class="format-exts">
+            <span class="format-ext">.pdf</span>
+            <span class="format-ext">.png</span>
+            <span class="format-ext">.jpg</span>
+            <span class="format-ext">.webp</span>
+          </div>
+        </div>
+        <div class="format-card">
+          <h3>
+            <span class="effect-badge pure">pure</span>
+            Text Files
+          </h3>
+          <p>
+            Plain text, markdown, CSV, HTML, and XML files are read directly
+            as text blocks. No extraction or AI needed.
+          </p>
+          <div class="format-exts">
+            <span class="format-ext">.txt</span>
+            <span class="format-ext">.md</span>
+            <span class="format-ext">.csv</span>
+            <span class="format-ext">.html</span>
+            <span class="format-ext">.xml</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <h2>How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Upload</h3>
+          <p>Drop a file or click to browse. Reads entirely in your browser.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Format Detect</h3>
+          <p>AILANG pure function identifies format from extension.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>ZIP Extract</h3>
+          <p>JSZip opens Office archives and extracts XML entries.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>XML Parse</h3>
+          <p>AILANG's <code>std/xml</code> parses document structure in WASM.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">5</div>
+          <h3>Block Output</h3>
+          <p>Headings, tables, lists, and images as structured JSON.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+      <h2>Try DocParse on the Command Line</h2>
+      <p>
+        DocParse supports all formats including PDFs and images with AI.
+        Install AILANG and run it locally for the full experience.
+      </p>
+      <div class="cta-buttons">
+        <a href="https://github.com/sunholo-data/ailang" class="btn btn-primary" target="_blank" rel="noopener">
+          Install AILANG
+        </a>
+        <a href="index.html" class="btn btn-secondary">
+          Document Extractor Demo
+        </a>
+        <a href="https://ailang.sunholo.com/docs/guides/wasm-integration" class="btn btn-secondary" target="_blank" rel="noopener">
+          WASM Guide
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>
+        Built with <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG</a> &mdash;
+        The AI-First Programming Language
+      </p>
+      <p>
+        <a href="index.html">Document Extractor</a> |
+        <a href="https://github.com/sunholo-data/ailang-demos" target="_blank" rel="noopener">Demo Source</a> |
+        <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG GitHub</a> |
+        <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">Documentation</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/docparse-app.js"></script>
+</body>
+</html>

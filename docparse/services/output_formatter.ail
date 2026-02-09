@@ -43,7 +43,7 @@ pure func documentToJson(doc: ParsedDocument) -> Json {
 }
 
 -- Convert DocMetadata to JSON
-pure func metadataToJson(meta: DocMetadata) -> Json {
+export pure func metadataToJson(meta: DocMetadata) -> Json {
   jo([
     kv("title", js(meta.title)),
     kv("author", js(meta.author)),
@@ -54,7 +54,7 @@ pure func metadataToJson(meta: DocMetadata) -> Json {
 }
 
 -- Generate a summary section
-pure func summaryToJson(blocks: [Block]) -> Json {
+export pure func summaryToJson(blocks: [Block]) -> Json {
   let total = countBlocks(blocks);
   let headings = countBlocks(filterHeadings(blocks));
   let tables = countBlocks(filterTables(blocks));
@@ -68,14 +68,14 @@ pure func summaryToJson(blocks: [Block]) -> Json {
 }
 
 -- Convert a list of blocks to JSON
-pure func blocksToJson(blocks: [Block]) -> [Json]
+export pure func blocksToJson(blocks: [Block]) -> [Json]
   ensures { listLength(result) == listLength(blocks) }
 {
   map(blockToJson, blocks)
 }
 
 -- Convert a single Block to JSON
-pure func blockToJson(block: Block) -> Json =
+export pure func blockToJson(block: Block) -> Json =
   match block {
     TextBlock(b) => jo([
       kv("type", js("text")),
@@ -124,7 +124,7 @@ pure func blockToJson(block: Block) -> Json =
   }
 
 -- Convert rows of TableCells to JSON
-pure func cellRowsToJson(rows: [[TableCell]]) -> [Json]
+export pure func cellRowsToJson(rows: [[TableCell]]) -> [Json]
   ensures { listLength(result) == listLength(rows) }
 {
   map(\row. ja(cellsToJson(row)), rows)
@@ -132,7 +132,7 @@ pure func cellRowsToJson(rows: [[TableCell]]) -> [Json]
 
 -- Convert a list of TableCells to JSON values
 -- Cells with colSpan > 1 or merged=true include span metadata
-pure func cellsToJson(cells: [TableCell]) -> [Json]
+export pure func cellsToJson(cells: [TableCell]) -> [Json]
   ensures { listLength(result) == listLength(cells) }
 {
   map(cellToJson, cells)
@@ -141,7 +141,7 @@ pure func cellsToJson(cells: [TableCell]) -> [Json]
 -- Convert a single TableCell to JSON
 -- Simple cells (no merges) output as just the text string for compact JSON
 -- Merged/spanned cells include full metadata
-pure func cellToJson(cell: TableCell) -> Json {
+export pure func cellToJson(cell: TableCell) -> Json {
   if cell.colSpan == 1 && not cell.merged
   then js(cell.text)
   else jo([
@@ -152,7 +152,7 @@ pure func cellToJson(cell: TableCell) -> Json {
 }
 
 -- Convert a list of strings to JSON values
-pure func stringsToJson(strs: [string]) -> [Json]
+export pure func stringsToJson(strs: [string]) -> [Json]
   ensures { listLength(result) == listLength(strs) }
 {
   map(js, strs)

@@ -58,7 +58,7 @@ func loadSharedStrings(filepath: string) -> [string] ! {FS} {
 
 -- Extract text from each <si> element
 -- Handles both <si><t>text</t></si> and <si><r><t>text</t></r></si> (rich text)
-pure func extractSharedStrings(items: [XmlNode]) -> [string]
+export pure func extractSharedStrings(items: [XmlNode]) -> [string]
   ensures { listLength(result) == listLength(items) }
 {
   map(extractSiText, items)
@@ -94,7 +94,7 @@ func parseSheets(filepath: string, entries: [string], sharedStrings: [string]) -
   }
 
 -- Parse a single worksheet's XML into blocks
-pure func parseSheetXml(xml: string, sharedStrings: [string], sheetName: string) -> [Block] {
+export pure func parseSheetXml(xml: string, sharedStrings: [string], sheetName: string) -> [Block] {
   if length(xml) == 0 then []
   else match parse(xml) {
     Ok(root) => {

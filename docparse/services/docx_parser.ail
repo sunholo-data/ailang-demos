@@ -102,7 +102,7 @@ func parseSectionEntries(filepath: string, entries: [string], kind: string) -> [
   }
 
 -- Parse XML from a header/footer/footnote part into blocks
-pure func parseSectionXml(xml: string) -> [Block] {
+export pure func parseSectionXml(xml: string) -> [Block] {
   if length(xml) == 0 then []
   else match parse(xml) {
     Ok(root) => {
@@ -114,7 +114,7 @@ pure func parseSectionXml(xml: string) -> [Block] {
 }
 
 -- Check if a block list has any non-empty content
-pure func hasContent(blocks: [Block]) -> bool =
+export pure func hasContent(blocks: [Block]) -> bool =
   any(blockHasContent, blocks)
 
 -- Check if a single block has meaningful content
@@ -129,7 +129,7 @@ pure func blockHasContent(b: Block) -> bool =
   }
 
 -- Navigate to w:body and extract blocks from its children
-pure func extractBodyBlocks(root: XmlNode) -> [Block] {
+export pure func extractBodyBlocks(root: XmlNode) -> [Block] {
   match findFirst(root, "w:body") {
     Some(body) => {
       let children = getChildren(body);
@@ -370,7 +370,7 @@ pure func joinParagraphTexts(ps: [XmlNode]) -> string =
   join("\n", map(extractParagraphText, ps))
 
 -- Extract metadata from core.xml
-pure func extractMetadata(root: XmlNode) -> DocMetadata {
+export pure func extractMetadata(root: XmlNode) -> DocMetadata {
   let title = getMetaField(root, "dc:title");
   let author = getMetaField(root, "dc:creator");
   let created = getMetaField(root, "dcterms:created");
@@ -379,7 +379,7 @@ pure func extractMetadata(root: XmlNode) -> DocMetadata {
 }
 
 -- Get a text field from metadata XML
-pure func getMetaField(root: XmlNode, tagName: string) -> string =
+export pure func getMetaField(root: XmlNode, tagName: string) -> string =
   getOrElse(optMap(getText, findFirst(root, tagName)), "")
 
 -- Extract images from media entries

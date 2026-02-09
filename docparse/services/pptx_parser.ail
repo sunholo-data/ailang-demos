@@ -84,7 +84,7 @@ func parseSlides(filepath: string, entries: [string]) -> [Block] ! {FS} =
   }
 
 -- Parse a single slide's XML into blocks
-pure func parseSlideXml(xml: string) -> [Block] {
+export pure func parseSlideXml(xml: string) -> [Block] {
   if length(xml) == 0 then []
   else match parse(xml) {
     Ok(root) => extractSlideBlocks(root),
@@ -93,7 +93,7 @@ pure func parseSlideXml(xml: string) -> [Block] {
 }
 
 -- Extract blocks from a slide root element
-pure func extractSlideBlocks(root: XmlNode) -> [Block] =
+export pure func extractSlideBlocks(root: XmlNode) -> [Block] =
   getOrElse(
     optFlatMap(\csld.
       optMap(\spTree. processShapeTree(getChildren(spTree)),
