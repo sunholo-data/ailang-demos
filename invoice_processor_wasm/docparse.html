@@ -546,6 +546,7 @@
   <script src="wasm/wasm_exec.js"></script>
   <script src="wasm/ailang-repl.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
 </head>
 <body>
   <header>
@@ -650,10 +651,12 @@
       <div class="results-panel">
         <div class="output-tabs">
           <button class="output-tab active" data-panel="blocksPanel">Blocks</button>
+          <button class="output-tab" data-panel="previewPanel">Preview</button>
           <button class="output-tab" data-panel="jsonPanel">JSON</button>
           <button class="output-tab" data-panel="markdownPanel">Markdown</button>
         </div>
         <div id="blocksPanel" class="output-panel active"></div>
+        <div id="previewPanel" class="output-panel"></div>
         <div id="jsonPanel" class="output-panel"></div>
         <div id="markdownPanel" class="output-panel"></div>
       </div>

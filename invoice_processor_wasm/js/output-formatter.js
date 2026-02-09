@@ -29,8 +29,9 @@ export class OutputFormatter {
    * @param {Object} result - Parsed validation result from AILANG
    * @param {Object} schema - Schema definition
    * @param {HTMLElement} container - Target element
+   * @param {Array} [extraTabs] - Optional extra tabs: [{ key, label, html }]
    */
-  render(result, schema, container) {
+  render(result, schema, container, extraTabs) {
     container.innerHTML = '';
 
     if (!result) {
@@ -73,16 +74,35 @@ export class OutputFormatter {
 
     const tabs = document.createElement('div');
     tabs.className = 'output-format-tabs';
-    ['json', 'table', 'ailang'].forEach(fmt => {
+
+    const allFormats = ['json', 'table', 'ailang'];
+    const extraKeys = (extraTabs || []).map(t => t.key);
+
+    allFormats.forEach(fmt => {
       const btn = document.createElement('button');
       btn.className = `output-tab ${this.format === fmt ? 'active' : ''}`;
       btn.textContent = { json: 'JSON', table: 'Table', ailang: 'AILANG Record' }[fmt];
       btn.addEventListener('click', () => {
         this.format = fmt;
-        this.render(result, schema, container);
+        this.render(result, schema, container, extraTabs);
       });
       tabs.appendChild(btn);
     });
+
+    // Add extra tabs (Blocks, Preview)
+    if (extraTabs) {
+      for (const extra of extraTabs) {
+        const btn = document.createElement('button');
+        btn.className = `output-tab ${this.format === extra.key ? 'active' : ''}`;
+        btn.textContent = extra.label;
+        btn.addEventListener('click', () => {
+          this.format = extra.key;
+          this.render(result, schema, container, extraTabs);
+        });
+        tabs.appendChild(btn);
+      }
+    }
+
     toolbar.appendChild(tabs);
 
     // Copy button
@@ -110,7 +130,11 @@ export class OutputFormatter {
     const content = document.createElement('div');
     content.className = 'output-content';
 
-    if (this.format === 'json') {
+    // Check if current format is an extra tab
+    const extraTab = extraTabs?.find(t => t.key === this.format);
+    if (extraTab) {
+      content.innerHTML = extraTab.html;
+    } else if (this.format === 'json') {
       this._renderJSON(result, schema, content);
     } else if (this.format === 'table') {
       this._renderTable(result, schema, content);

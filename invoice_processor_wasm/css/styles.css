@@ -2231,3 +2231,264 @@ footer a:hover {
     padding: 4px 6px;
   }
 }
+
+/* ── Office Document Preview ──────────────────────────────── */
+.office-preview {
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.office-preview-loading {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.office-preview-fallback {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* DOCX preview — document-like page */
+.office-preview-docx {
+  padding: 0;
+}
+
+.office-preview-page {
+  background: white;
+  padding: 32px 40px;
+  max-width: 800px;
+  margin: 16px auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.office-preview-page h1 { font-size: 1.4rem; font-weight: 700; margin: 20px 0 12px; }
+.office-preview-page h2 { font-size: 1.15rem; font-weight: 700; margin: 18px 0 10px; }
+.office-preview-page h3 { font-size: 1rem; font-weight: 700; margin: 16px 0 8px; }
+.office-preview-page p { margin-bottom: 10px; }
+.office-preview-page ul, .office-preview-page ol { margin: 8px 0 12px 24px; }
+.office-preview-page li { margin-bottom: 4px; }
+.office-preview-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 0.82rem;
+}
+.office-preview-page th,
+.office-preview-page td {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.office-preview-page th {
+  background: var(--bg);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.office-preview-page img { max-width: 100%; height: auto; border-radius: 4px; }
+
+.office-preview-note {
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* XLSX preview — spreadsheet grid */
+.office-preview-xlsx {
+  padding: 0;
+}
+
+.xlsx-sheet-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+}
+
+.xlsx-sheet-tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+.xlsx-sheet-tab:hover { color: var(--text-primary); }
+
+.xlsx-sheet-tab.active {
+  color: var(--success);
+  border-bottom-color: var(--success);
+  background: var(--bg-card);
+}
+
+.xlsx-sheet-content {
+  display: none;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.xlsx-sheet-content.active {
+  display: block;
+}
+
+.xlsx-sheet-name {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--charcoal);
+  margin-bottom: 8px;
+}
+
+.xlsx-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.xlsx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.xlsx-table th {
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.xlsx-table td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.xlsx-table tbody tr:hover {
+  background: rgba(231, 60, 23, 0.02);
+}
+
+/* PPTX preview — slide cards */
+.office-preview-pptx {
+  padding: 16px;
+}
+
+.office-preview-thumb {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.office-preview-thumb img {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.pptx-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pptx-slide {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.pptx-slide-number {
+  background: var(--bg);
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pptx-slide-content {
+  padding: 20px 24px;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.pptx-slide-content h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+.pptx-slide-content h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+.pptx-slide-content p { margin-bottom: 8px; color: var(--text-secondary); }
+.pptx-slide-content ul, .pptx-slide-content ol { margin: 8px 0 12px 20px; }
+.pptx-slide-content li { margin-bottom: 4px; color: var(--text-secondary); }
+.pptx-slide-img { max-width: 100%; height: auto; border-radius: 4px; margin: 8px 0; }
+
+/* PDF preview */
+.office-preview-pdf object {
+  width: 100%;
+  min-height: 500px;
+  border: none;
+}
+
+/* Image preview */
+.office-preview-image {
+  text-align: center;
+}
+
+.office-preview-image img {
+  max-width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+/* Text preview */
+.office-preview-text pre {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* File preview body for Office docs */
+.file-preview-body.office-preview-body {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+}

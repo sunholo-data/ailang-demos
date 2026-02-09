@@ -17,7 +17,8 @@ import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-clie
 import { OutputFormatter } from './output-formatter.js';
 import { demoExamples } from './examples.js';
 import { loadDocParseModules, DOCPARSE_MODULE } from './docparse-loader.js';
-import { blockToMarkdown } from './docparse-output.js';
+import { blockToMarkdown, renderBlocks } from './docparse-output.js';
+import { renderDocxPreview, renderXlsxPreview, renderPptxPreview } from './office-preview.js';
 
 // ── Globals ──────────────────────────────────────────────────
 let engine = null;
@@ -30,6 +31,10 @@ let uploadedBinary = null; // { base64, mimeType, fileName, fileSize, lastModifi
 let docparseLoaded = false;
 let docparseLoading = false;
 let lastUploadWasOffice = false; // Track if DocParse step should stay visible
+let lastOfficeBuffer = null;     // ArrayBuffer of last Office file upload
+let lastOfficeBlocks = null;     // Parsed blocks from DocParse
+let lastOfficeType = null;       // 'word' | 'powerpoint' | 'excel'
+let lastOfficeMeta = null;       // { title, author, ... }
 
 // ── File Size Limits ────────────────────────────────────────
 const FILE_SIZE_LIMITS = {
@@ -177,6 +182,16 @@ function loadDemo(name) {
   uploadedBinary = null;
   hideFilePreview();
   $('#uploadChip')?.classList.remove('has-file');
+
+  // Reset pipeline and results from previous run
+  lastUploadWasOffice = false;
+  lastOfficeBuffer = null;
+  lastOfficeBlocks = null;
+  lastOfficeType = null;
+  lastOfficeMeta = null;
+  resetPipelineSteps();
+  const resultsEl = $('#results');
+  if (resultsEl) resultsEl.innerHTML = '<p class="placeholder">Loading...</p>';
 
   // Update active states on all demo selectors
   $$('[data-demo]').forEach(btn => {
@@ -793,8 +808,32 @@ function displayResult(rawResult, schema) {
     if (uploadedBinary.uploadedAt) parsed._file_uploaded = uploadedBinary.uploadedAt;
   }
 
+  // Build extra tabs for Office files (Blocks + Preview)
+  const extraTabs = buildOfficeExtraTabs();
+
   // Use the output formatter
-  formatter.render(parsed, schema, resultsEl);
+  formatter.render(parsed, schema, resultsEl, extraTabs);
+}
+
+function buildOfficeExtraTabs() {
+  if (!lastOfficeBlocks || lastOfficeBlocks.length === 0) return null;
+
+  const tabs = [];
+
+  // Blocks tab — use the DocParse block renderer
+  const output = {
+    filename: lastOfficeMeta?._file_name || '',
+    format: lastOfficeType || '',
+    metadata: lastOfficeMeta || { title: '', author: '' },
+    blocks: lastOfficeBlocks
+  };
+  tabs.push({
+    key: 'blocks',
+    label: 'Blocks',
+    html: renderBlocks(output)
+  });
+
+  return tabs;
 }
 
 // ── UI Helpers ───────────────────────────────────────────────
@@ -926,14 +965,13 @@ function hideFilePreview() {
   previewEl.innerHTML = '';
 }
 
-function showOfficePreview(fileName, fileSize, extractedText) {
+async function showOfficePreview(fileName, fileSize, extractedText) {
   const previewEl = $('#filePreview');
   if (!previewEl) return;
 
   const ext = fileName.split('.').pop().toUpperCase();
-  const lineCount = extractedText.split('\n').length;
-  const previewLines = extractedText.split('\n').slice(0, 8).join('\n');
 
+  // Render header immediately
   previewEl.innerHTML =
     `<div class="file-preview-header">` +
       `<span class="file-preview-icon">\u{1F4C4}</span>` +
@@ -942,17 +980,17 @@ function showOfficePreview(fileName, fileSize, extractedText) {
       `<span class="effect-badge pure" style="font-size:0.58rem;padding:1px 6px">AILANG DocParse</span>` +
       `<button class="file-preview-remove" title="Remove file">&times;</button>` +
     `</div>` +
-    `<div class="file-preview-body" style="flex-direction:column;align-items:stretch;text-align:left;padding:12px">` +
-      `<div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-bottom:8px">` +
-        `${ext} &rarr; ${lineCount} lines extracted via std/xml` +
-      `</div>` +
-      `<pre style="font-family:var(--font-mono);font-size:0.72rem;line-height:1.5;color:var(--text-secondary);` +
-        `white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;margin:0">${escapeHtml(previewLines)}</pre>` +
+    `<div class="file-preview-body office-preview-body">` +
+      `<div class="office-preview-loading">Generating preview...</div>` +
     `</div>`;
 
   previewEl.querySelector('.file-preview-remove').addEventListener('click', () => {
     uploadedBinary = null;
     lastUploadWasOffice = false;
+    lastOfficeBuffer = null;
+    lastOfficeBlocks = null;
+    lastOfficeType = null;
+    lastOfficeMeta = null;
     hideFilePreview();
     resetPipelineSteps();
     const textarea = $('#documentInput');
@@ -965,6 +1003,45 @@ function showOfficePreview(fileName, fileSize, extractedText) {
   });
 
   previewEl.style.display = '';
+
+  // Generate rich preview asynchronously
+  const body = previewEl.querySelector('.file-preview-body');
+  try {
+    let html = '';
+    if (lastOfficeType === 'word' && lastOfficeBuffer) {
+      html = await renderDocxPreview(lastOfficeBuffer);
+    } else if (lastOfficeType === 'excel' && lastOfficeBuffer) {
+      html = await renderXlsxPreview(lastOfficeBuffer, engine, DOCPARSE_MODULE);
+    } else if (lastOfficeType === 'powerpoint' && lastOfficeBuffer) {
+      html = await renderPptxPreview(lastOfficeBuffer, engine, DOCPARSE_MODULE);
+    } else {
+      // Fallback to text excerpt
+      const lineCount = extractedText.split('\n').length;
+      const previewLines = extractedText.split('\n').slice(0, 8).join('\n');
+      html = `<div style="text-align:left;padding:12px;width:100%">` +
+        `<div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-bottom:8px">` +
+          `${ext} &rarr; ${lineCount} lines extracted via std/xml` +
+        `</div>` +
+        `<pre style="font-family:var(--font-mono);font-size:0.72rem;line-height:1.5;color:var(--text-secondary);` +
+          `white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;margin:0">${escapeHtml(previewLines)}</pre>` +
+      `</div>`;
+    }
+    body.innerHTML = html;
+
+    // Wire up XLSX sheet tabs if present
+    body.querySelectorAll('.xlsx-sheet-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const idx = tab.dataset.sheet;
+        body.querySelectorAll('.xlsx-sheet-tab').forEach(t => t.classList.remove('active'));
+        body.querySelectorAll('.xlsx-sheet-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const content = body.querySelector(`.xlsx-sheet-content[data-sheet="${idx}"]`);
+        if (content) content.classList.add('active');
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<div class="office-preview-fallback">Preview error: ${err.message}</div>`;
+  }
 }
 
 // ── Office Document Pre-Processing (DocParse) ───────────────
@@ -1020,6 +1097,12 @@ async function processOfficeFile(fileName, buffer) {
   } else if (formatInfo.officeType === 'excel') {
     await parseXlsxBlocks(zip, entries, allBlocks);
   }
+
+  // Store blocks and buffer for preview/display
+  lastOfficeBuffer = buffer;
+  lastOfficeBlocks = allBlocks;
+  lastOfficeType = formatInfo.officeType;
+  lastOfficeMeta = metadata || { title: '', author: '' };
 
   // Convert blocks to markdown text
   let text = '';

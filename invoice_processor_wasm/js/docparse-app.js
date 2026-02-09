@@ -8,10 +8,13 @@ import AilangEngine from './ailang-wrapper.js';
 import { renderBlocks, renderMarkdown, renderJson } from './docparse-output.js';
 import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
 import { loadDocParseModules, DOCPARSE_MODULE, DOCPARSE_MODULES } from './docparse-loader.js';
+import { renderDocxPreview, renderXlsxPreview, renderPptxPreview, renderPdfPreview, renderImagePreview, renderTextPreview } from './office-preview.js';
 
 // ── State ───────────────────────────────────────────────────────
 let engine = null;
 let moduleLoaded = false;
+let lastFileBuffer = null;   // ArrayBuffer of last uploaded file
+let lastFileInfo = null;     // { name, mimeType, officeType, format, text }
 
 // ── Initialization ──────────────────────────────────────────────
 
@@ -127,6 +130,8 @@ async function parseOfficeDocument(file, formatInfo) {
 
   // Read file as ArrayBuffer
   const buffer = await file.arrayBuffer();
+  lastFileBuffer = buffer;
+  lastFileInfo = { name: file.name, mimeType: file.type, officeType: formatInfo.officeType, format: formatInfo.format };
 
   // Extract XML using JSZip
   const zip = await JSZip.loadAsync(buffer);
@@ -248,6 +253,8 @@ async function parseXlsx(zip, entries, allBlocks) {
 
 async function parseTextDocument(file, formatInfo) {
   const text = await file.text();
+  lastFileBuffer = null;
+  lastFileInfo = { name: file.name, mimeType: 'text/plain', officeType: 'text', format: 'text', text };
   renderOutput({
     filename: file.name,
     format: formatInfo.extension,
@@ -271,6 +278,8 @@ async function parseWithAI(file, formatInfo) {
 
   const gemini = new GeminiClient(apiKey);
   const buffer = await file.arrayBuffer();
+  lastFileBuffer = buffer;
+  lastFileInfo = { name: file.name, mimeType: getMimeType(file.name), officeType: 'ai', format: formatInfo.format };
   const base64 = arrayBufferToBase64(buffer);
   const mimeType = getMimeType(file.name);
 
@@ -562,7 +571,7 @@ function clearOutput() {
   const pipelineLog = document.getElementById('pipeline-log');
   if (pipelineLog) pipelineLog.innerHTML = '';
 
-  const panels = ['blocksPanel', 'jsonPanel', 'markdownPanel'];
+  const panels = ['blocksPanel', 'previewPanel', 'jsonPanel', 'markdownPanel'];
   panels.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '';
@@ -584,6 +593,9 @@ function renderOutput(output) {
   const markdownPanel = document.getElementById('markdownPanel');
   if (markdownPanel) markdownPanel.innerHTML = renderMarkdown(output);
 
+  // Render preview panel
+  renderPreviewPanel();
+
   const results = document.getElementById('results');
   if (results) results.style.display = 'block';
   const placeholder = document.getElementById('resultsPlaceholder');
@@ -591,6 +603,49 @@ function renderOutput(output) {
 
   const firstTab = document.querySelector('.output-tab');
   if (firstTab) firstTab.click();
+}
+
+async function renderPreviewPanel() {
+  const panel = document.getElementById('previewPanel');
+  if (!panel) return;
+
+  panel.innerHTML = '<div class="office-preview-loading">Generating preview...</div>';
+
+  try {
+    let html = '';
+    if (!lastFileInfo) {
+      html = '<div class="office-preview-fallback">No preview available</div>';
+    } else if (lastFileInfo.officeType === 'word' && lastFileBuffer) {
+      html = await renderDocxPreview(lastFileBuffer);
+    } else if (lastFileInfo.officeType === 'excel' && lastFileBuffer) {
+      html = await renderXlsxPreview(lastFileBuffer, engine, DOCPARSE_MODULE);
+    } else if (lastFileInfo.officeType === 'powerpoint' && lastFileBuffer) {
+      html = await renderPptxPreview(lastFileBuffer, engine, DOCPARSE_MODULE);
+    } else if (lastFileInfo.mimeType === 'application/pdf' && lastFileBuffer) {
+      html = renderPdfPreview(lastFileBuffer);
+    } else if (lastFileInfo.mimeType?.startsWith('image/') && lastFileBuffer) {
+      html = renderImagePreview(lastFileBuffer, lastFileInfo.mimeType);
+    } else if (lastFileInfo.text) {
+      html = renderTextPreview(lastFileInfo.text);
+    } else {
+      html = '<div class="office-preview-fallback">No preview available for this format</div>';
+    }
+    panel.innerHTML = html;
+
+    // Wire up XLSX sheet tabs if present
+    panel.querySelectorAll('.xlsx-sheet-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const sheetIdx = tab.dataset.sheet;
+        panel.querySelectorAll('.xlsx-sheet-tab').forEach(t => t.classList.remove('active'));
+        panel.querySelectorAll('.xlsx-sheet-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const content = panel.querySelector(`.xlsx-sheet-content[data-sheet="${sheetIdx}"]`);
+        if (content) content.classList.add('active');
+      });
+    });
+  } catch (err) {
+    panel.innerHTML = `<div class="office-preview-fallback">Preview error: ${err.message}</div>`;
+  }
 }
 
 function showError(msg) {
