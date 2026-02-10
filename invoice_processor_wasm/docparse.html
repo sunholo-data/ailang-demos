@@ -393,6 +393,82 @@
       margin-bottom: 8px;
     }
 
+    /* Track change blocks — legal redlining */
+    .block-change {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      line-height: 1.5;
+      border-left: 4px solid;
+      margin: 4px 0;
+    }
+    .change-insert {
+      background: rgba(5, 150, 105, 0.08);
+      border-left-color: #059669;
+    }
+    .change-insert .change-text ins {
+      text-decoration: none;
+      font-weight: 600;
+      color: #047857;
+    }
+    .change-delete {
+      background: rgba(220, 38, 38, 0.06);
+      border-left-color: #dc2626;
+    }
+    .change-delete .change-text del {
+      color: #b91c1c;
+    }
+    .change-move-to {
+      background: rgba(37, 99, 235, 0.06);
+      border-left-color: #2563eb;
+    }
+    .change-move-to .change-text ins {
+      text-decoration: none;
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+    .change-move-from {
+      background: rgba(217, 119, 6, 0.06);
+      border-left-color: #d97706;
+    }
+    .change-move-from .change-text del {
+      color: #b45309;
+    }
+    .change-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .change-insert .change-badge { background: #059669; color: white; }
+    .change-delete .change-badge { background: #dc2626; color: white; }
+    .change-move-to .change-badge { background: #2563eb; color: white; }
+    .change-move-from .change-badge { background: #d97706; color: white; }
+    .change-author {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .change-date {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .change-text {
+      flex: 1;
+    }
+
     .block-error {
       padding: 12px 16px;
       background: var(--error-bg);
@@ -635,6 +711,8 @@
       <button class="demo-file" data-file="assets/merged_cells.docx">Merged Cells DOCX</button>
       <button class="demo-file" data-file="assets/python_pptx_table.pptx">Table PPTX</button>
       <button class="demo-file" data-file="assets/pandoc_basic.xlsx">Spreadsheet XLSX</button>
+      <button class="demo-file" data-file="assets/track_changes_move.docx">Track Changes DOCX</button>
+      <button class="demo-file" data-file="assets/comments.docx">Comments DOCX</button>
       <button class="demo-file" data-file="assets/bristol-car-hire-demo.pdf" title="Requires Gemini API key">PDF Invoice</button>
     </div>
 

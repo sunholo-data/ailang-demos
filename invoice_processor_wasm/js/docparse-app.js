@@ -182,15 +182,86 @@ async function parseOfficeDocument(file, formatInfo) {
 }
 
 async function parseDocx(zip, entries, allBlocks) {
+  // 1. Parse comments first so we can interleave them with body blocks
+  const commentsXml = await readZipEntry(zip, 'word/comments.xml');
+  const commentBlocksById = {};
+  if (commentsXml) {
+    updatePipeline('parse', 'Parsing DOCX comments...');
+    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxComments', commentsXml);
+    if (result.success) {
+      const commentBlocks = JSON.parse(result.result);
+      // Parse comments.xml with DOMParser to map each block to its w:id
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(commentsXml, 'text/xml');
+        const commentEls = doc.querySelectorAll('comment');
+        commentEls.forEach((el, i) => {
+          const id = el.getAttribute('w:id');
+          if (id && commentBlocks[i]) commentBlocksById[id] = commentBlocks[i];
+        });
+      } catch (_) {}
+    }
+  }
+
+  // 2. Parse body, then interleave comments at the paragraphs that reference them
   const bodyXml = await readZipEntry(zip, 'word/document.xml');
   if (bodyXml) {
     updatePipeline('parse', 'Parsing DOCX body...');
     const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxBody', bodyXml);
     if (result.success) {
-      allBlocks.push(...JSON.parse(result.result));
+      const bodyBlocks = JSON.parse(result.result);
+
+      if (Object.keys(commentBlocksById).length > 0) {
+        // Find which paragraph index references which comment IDs
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(bodyXml, 'text/xml');
+          const body = doc.querySelector('body');
+          if (body) {
+            // Walk top-level children (w:p and w:tbl) to match AILANG block order
+            const topNodes = Array.from(body.children);
+            let blockIdx = 0;
+            const insertions = []; // {afterIdx, commentBlock}
+            for (const node of topNodes) {
+              // Count how many blocks this node produces:
+              // w:p -> 1 block + text boxes, w:tbl -> 1 block
+              const tag = node.localName;
+              if (tag === 'p') {
+                // Check for w:commentReference in this paragraph
+                const refs = node.querySelectorAll('commentReference');
+                // A paragraph produces 1 block + any text boxes
+                const txbxCount = node.querySelectorAll('txbxContent').length;
+                blockIdx += 1 + txbxCount;
+                // Insert comment blocks after this paragraph's blocks
+                refs.forEach(ref => {
+                  const id = ref.getAttribute('w:id');
+                  if (id && commentBlocksById[id]) {
+                    insertions.push({ afterIdx: blockIdx - 1, block: commentBlocksById[id] });
+                    delete commentBlocksById[id];
+                  }
+                });
+              } else if (tag === 'tbl') {
+                blockIdx += 1;
+              }
+            }
+            // Insert in reverse order so indices stay valid
+            insertions.sort((a, b) => b.afterIdx - a.afterIdx);
+            for (const ins of insertions) {
+              bodyBlocks.splice(ins.afterIdx + 1, 0, ins.block);
+            }
+          }
+        } catch (_) {}
+        // Append any remaining unmatched comments at the end
+        for (const block of Object.values(commentBlocksById)) {
+          bodyBlocks.push(block);
+        }
+      }
+
+      allBlocks.push(...bodyBlocks);
     }
   }
 
+  // 3. Headers, footers, footnotes, endnotes
   for (const entry of entries.filter(e => e.startsWith('word/header') && e.endsWith('.xml'))) {
     const xml = await readZipEntry(zip, entry);
     if (xml) {
@@ -210,6 +281,12 @@ async function parseDocx(zip, entries, allBlocks) {
   const footnoteXml = await readZipEntry(zip, 'word/footnotes.xml');
   if (footnoteXml) {
     const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', footnoteXml, 'footnote');
+    if (result.success) allBlocks.push(...JSON.parse(result.result));
+  }
+
+  const endnoteXml = await readZipEntry(zip, 'word/endnotes.xml');
+  if (endnoteXml) {
+    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', endnoteXml, 'endnote');
     if (result.success) allBlocks.push(...JSON.parse(result.result));
   }
 

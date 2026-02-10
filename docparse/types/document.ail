@@ -27,6 +27,7 @@ export type Block = TextBlock({text: string, style: string, level: int})
                   | ListBlock({items: [string], ordered: bool})
                   | HeadingBlock({text: string, level: int})
                   | SectionBlock({kind: string, blocks: [Block]})
+                  | ChangeBlock({changeType: string, author: string, date: string, text: string})
 
 -- Document metadata from core.xml / app.xml
 export type DocMetadata = {
@@ -63,7 +64,8 @@ export pure func blockText(block: Block) -> string =
     VideoBlock(b) => "[video: " ++ b.description ++ "]",
     ListBlock(b) => join(", ", b.items),
     HeadingBlock(b) => b.text,
-    SectionBlock(b) => "[" ++ b.kind ++ "]"
+    SectionBlock(b) => "[" ++ b.kind ++ "]",
+    ChangeBlock(b) => "[" ++ b.changeType ++ " by " ++ b.author ++ "] " ++ b.text
   }
 
 export pure func isHeading(block: Block) -> bool =
@@ -118,6 +120,18 @@ export pure func filterImages(blocks: [Block]) -> [Block]
   ensures { listLength(result) <= listLength(blocks) }
 {
   filter(isImage, blocks)
+}
+
+export pure func isChange(block: Block) -> bool =
+  match block {
+    ChangeBlock(_) => true,
+    _ => false
+  }
+
+export pure func filterChanges(blocks: [Block]) -> [Block]
+  ensures { listLength(result) <= listLength(blocks) }
+{
+  filter(isChange, blocks)
 }
 
 -- Create a simple (non-merged) table cell

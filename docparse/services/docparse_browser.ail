@@ -10,13 +10,14 @@ module docparse/services/docparse_browser
 -- This is NOT a standalone module — it requires all docparse modules
 -- to be loaded in the WASM REPL first (in dependency order).
 
-import std/xml (parse, findAll)
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren)
 import std/json (encode, jo, kv, js, jb, ja, jnum)
-import std/string (length)
+import std/string (length, join)
 import std/math (intToFloat)
 import std/result (Ok, Err)
-import std/option (Some, None, getOrElse)
-import docparse/types/document (Block, SectionBlock, DocMetadata, emptyMetadata,
+import std/option (Some, None, getOrElse, map as optMap)
+import std/list (map)
+import docparse/types/document (Block, TextBlock, SectionBlock, DocMetadata, emptyMetadata,
     countBlocks, filterHeadings, filterTables, filterImages)
 import docparse/services/format_router (detectFormat, getExtension, officeType,
     needsAI, strategyDescription)
@@ -83,6 +84,50 @@ export pure func getFormatInfo(filename: string) -> string {
     kv("strategy", js(strategyDescription(format)))
   ]))
 }
+
+-- Parse DOCX comments XML (word/comments.xml) -> JSON array of blocks
+-- Each comment becomes a SectionBlock with kind "comment" containing text blocks.
+-- The comment text includes the author prefix for context.
+export pure func parseDocxComments(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => {
+      let comments = findAll(root, "w:comment");
+      let blocks = parseCommentNodes(comments);
+      encode(ja(blocksToJson(blocks)))
+    },
+    Err(_) => encode(ja([]))
+  }
+}
+
+-- Parse a list of w:comment nodes into SectionBlocks
+pure func parseCommentNodes(nodes: [XmlNode]) -> [Block] =
+  match nodes {
+    [] => [],
+    node :: rest => {
+      let author = getOrElse(getAttr(node, "w:author"), "Unknown");
+      let paragraphs = findAll(node, "w:p");
+      let texts = extractCommentTexts(paragraphs);
+      let commentText = join(" ", texts);
+      let block = SectionBlock({kind: "comment", blocks: [
+        TextBlock({text: "[" ++ author ++ "] " ++ commentText, style: "CommentText", level: 0})
+      ]});
+      block :: parseCommentNodes(rest)
+    }
+  }
+
+-- Extract text from comment paragraphs (find all w:t nodes and join)
+pure func extractCommentTexts(paragraphs: [XmlNode]) -> [string] =
+  match paragraphs {
+    [] => [],
+    p :: rest => {
+      let tNodes = findAll(p, "w:t");
+      let pText = join("", map(getText, tNodes));
+      if length(pText) > 0
+      then pText :: extractCommentTexts(rest)
+      else extractCommentTexts(rest)
+    }
+  }
 
 -- Helper: parse shared strings XML into a list of strings
 -- Handles the same logic as xlsx_parser.loadSharedStrings but pure (no FS)

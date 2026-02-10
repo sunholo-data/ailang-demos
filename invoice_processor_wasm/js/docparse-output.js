@@ -31,11 +31,13 @@ export function renderBlocks(output) {
   const headings = blocks.filter(b => b.type === 'heading').length;
   const tables = countTables(blocks);
   const images = countImages(blocks);
+  const changes = countChanges(blocks);
   html += `<div class="doc-stats">`;
   html += `<span class="stat">${blocks.length} blocks</span>`;
   if (headings > 0) html += `<span class="stat">${headings} headings</span>`;
   if (tables > 0) html += `<span class="stat">${tables} tables</span>`;
   if (images > 0) html += `<span class="stat">${images} images</span>`;
+  if (changes > 0) html += `<span class="stat">${changes} changes</span>`;
   html += `</div>`;
   html += '</div>';
 
@@ -68,6 +70,8 @@ function renderBlock(block) {
       return renderVideo(block);
     case 'section':
       return renderSection(block);
+    case 'change':
+      return renderChange(block);
     case 'error':
       return `<div class="block block-error">${escapeHtml(block.text)}</div>`;
     default:
@@ -176,6 +180,32 @@ function renderSection(block) {
   return html;
 }
 
+function renderChange(block) {
+  const type = block.changeType || 'unknown';
+  const isDelete = type === 'delete' || type === 'move-from';
+  const typeClass = `change-${type}`;
+  const badge = type.toUpperCase().replace('-', ' ');
+  const date = block.date ? new Date(block.date).toLocaleDateString() : '';
+  const textHtml = isDelete
+    ? `<del>${escapeHtml(block.text)}</del>`
+    : `<ins>${escapeHtml(block.text)}</ins>`;
+  return `<div class="block block-change ${typeClass}">
+    <span class="change-badge">${escapeHtml(badge)}</span>
+    <span class="change-author">${escapeHtml(block.author || '')}</span>
+    ${date ? `<span class="change-date">${escapeHtml(date)}</span>` : ''}
+    <span class="change-text">${textHtml}</span>
+  </div>`;
+}
+
+function countChanges(blocks) {
+  let count = 0;
+  for (const b of blocks) {
+    if (b.type === 'change') count++;
+    if (b.type === 'section' && b.blocks) count += countChanges(b.blocks);
+  }
+  return count;
+}
+
 function countTables(blocks) {
   let count = 0;
   for (const b of blocks) {
@@ -247,6 +277,14 @@ export function blockToMarkdown(block) {
       else if (block.kind === 'sheet') label = '---\n\n### Sheet\n\n';
       else if (block.kind) label = `*${block.kind}:*\n`;
       return label + (block.blocks || []).map(blockToMarkdown).join('');
+    }
+    case 'change': {
+      const type = block.changeType || 'unknown';
+      const isDelete = type === 'delete' || type === 'move-from';
+      const attr = ` *(${type} by ${block.author || 'unknown'}${block.date ? ', ' + block.date : ''})*`;
+      return isDelete
+        ? `~~${block.text}~~${attr}\n\n`
+        : `**${block.text}**${attr}\n\n`;
     }
     default:
       return '';

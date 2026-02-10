@@ -5,7 +5,7 @@ import std/json (encode, jo, kv, js, jnum, ja, jb, jn)
 import std/string (length)
 import std/math (intToFloat)
 import std/list (map, foldl, filter, length as listLength, forEachE)
-import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, TableCell, ParsedDocument, ExtractionResult, DocMetadata, countBlocks, filterHeadings, filterTables, filterImages, filterSections, cellText)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, ExtractionResult, DocMetadata, countBlocks, filterHeadings, filterTables, filterImages, filterChanges, filterSections, cellText)
 
 -- Output Formatter
 -- Converts ParsedDocument to structured JSON output with validation.
@@ -59,11 +59,13 @@ export pure func summaryToJson(blocks: [Block]) -> Json {
   let headings = countBlocks(filterHeadings(blocks));
   let tables = countBlocks(filterTables(blocks));
   let images = countBlocks(filterImages(blocks));
+  let changes = countBlocks(filterChanges(blocks));
   jo([
     kv("totalBlocks", jnum(intToFloat(total))),
     kv("headings", jnum(intToFloat(headings))),
     kv("tables", jnum(intToFloat(tables))),
-    kv("images", jnum(intToFloat(images)))
+    kv("images", jnum(intToFloat(images))),
+    kv("changes", jnum(intToFloat(changes)))
   ])
 }
 
@@ -120,6 +122,13 @@ export pure func blockToJson(block: Block) -> Json =
       kv("type", js("section")),
       kv("kind", js(b.kind)),
       kv("blocks", ja(blocksToJson(b.blocks)))
+    ]),
+    ChangeBlock(b) => jo([
+      kv("type", js("change")),
+      kv("changeType", js(b.changeType)),
+      kv("author", js(b.author)),
+      kv("date", js(b.date)),
+      kv("text", js(b.text))
     ])
   }
 
@@ -170,6 +179,7 @@ export func printSummary(doc: ParsedDocument) -> () ! {IO} {
   println("Tables:   " ++ show(countBlocks(filterTables(doc.blocks))));
   println("Images:   " ++ show(countBlocks(filterImages(doc.blocks))));
   println("Sections: " ++ show(countBlocks(filterSections(doc.blocks))));
+  println("Changes:  " ++ show(countBlocks(filterChanges(doc.blocks))));
   println("========================")
 }
 
@@ -196,7 +206,9 @@ func printBlock(block: Block) -> () ! {IO} =
     SectionBlock(b) => {
       println("[" ++ b.kind ++ "]");
       printBlocks(b.blocks)
-    }
+    },
+    ChangeBlock(b) =>
+      println("[" ++ b.changeType ++ ":" ++ b.author ++ "] " ++ b.text)
   }
 
 pure func countCellRows(rows: [[TableCell]]) -> int = listLength(rows)
@@ -271,7 +283,9 @@ pure func renderBlockMd(block: Block) -> string =
       then "[Video: " ++ v.description ++ "]\n\n"
       else "[Video]\n\n",
     SectionBlock(s) =>
-      renderSectionMd(s.kind, s.blocks)
+      renderSectionMd(s.kind, s.blocks),
+    ChangeBlock(b) =>
+      renderChangeMd(b.changeType, b.author, b.date, b.text)
   }
 
 pure func headingPrefix(level: int) -> string =
@@ -293,6 +307,15 @@ pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
     else if kind == "textbox" then "> "
     else "";
   label ++ renderBlocksMd(blocks)
+}
+
+-- Render a track change annotation as markdown
+-- Deletions/move-from use strikethrough; insertions/move-to use bold
+pure func renderChangeMd(changeType: string, author: string, date: string, text: string) -> string {
+  let attribution = " *(" ++ changeType ++ " by " ++ author ++ ", " ++ date ++ ")*";
+  if changeType == "delete" || changeType == "move-from"
+  then "~~" ++ text ++ "~~" ++ attribution ++ "\n\n"
+  else "**" ++ text ++ "**" ++ attribution ++ "\n\n"
 }
 
 -- Render a table as markdown

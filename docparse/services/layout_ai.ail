@@ -7,7 +7,7 @@ import std/math (floatToInt)
 import std/option (Some, None, flatMap as optFlatMap, getOrElse)
 import std/result (Ok, Err)
 import std/list (map, foldl, length as listLength, flatMap, mapE, nth)
-import docparse/types/document (Block, TextBlock, TableBlock, ImageBlock, AudioBlock, VideoBlock, HeadingBlock, ListBlock, SectionBlock, TableCell, blockText, isImage, isTable, cellText, simpleCell)
+import docparse/types/document (Block, TextBlock, TableBlock, ImageBlock, AudioBlock, VideoBlock, HeadingBlock, ListBlock, SectionBlock, ChangeBlock, TableCell, blockText, isImage, isTable, cellText, simpleCell)
 
 -- AI-powered layout understanding
 -- Uses LLM to handle complex document structure that pure XML parsing misses:
@@ -191,7 +191,8 @@ pure func blockSummary(b: Block) -> string =
     ImageBlock(i) => "[image] " ++ i.mime,
     AudioBlock(a) => "[audio] " ++ a.mime,
     VideoBlock(v) => "[video] " ++ v.mime,
-    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(countItems2(s.blocks)) ++ " blocks"
+    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(countItems2(s.blocks)) ++ " blocks",
+    ChangeBlock(c) => "[" ++ c.changeType ++ "] " ++ truncateStr(c.text, 60)
   }
 
 pure func countItems2(blocks: [Block]) -> int = listLength(blocks)

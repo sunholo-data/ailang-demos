@@ -4,8 +4,8 @@ import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag
 import std/option (Some, None, flatMap as optFlatMap, map as optMap, getOrElse)
 import std/result (Ok, Err)
 import std/string (contains, length, trim, stringToInt, join)
-import std/list (map, flatMap, any, length as listLength)
-import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell)
+import std/list (map, flatMap, any, concat, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, ChangeBlock, TableCell, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell)
 import docparse/services/zip_extract (readDocxContent, readCoreProperties, readAppProperties, readDocxRelationships, findMediaEntries, readEmbeddedImage, mediaMimeType, findHeaderEntries, findFooterEntries, readZipEntry, findFootnoteEntries, findEndnoteEntries)
 
 -- DOCX Parser
@@ -125,7 +125,9 @@ pure func blockHasContent(b: Block) -> bool =
     TableBlock(_) => true,
     ListBlock(_) => true,
     ImageBlock(_) => true,
-    SectionBlock(s) => hasContent(s.blocks)
+    SectionBlock(s) => hasContent(s.blocks),
+    ChangeBlock(c) => length(trim(c.text)) > 0,
+    _ => true
   }
 
 -- Navigate to w:body and extract blocks from its children
@@ -148,8 +150,9 @@ pure func processBodyNode(node: XmlNode) -> [Block] {
   let tag = getTag(node);
   if tag == "w:p" then {
     let mainBlock = parseParagraph(node);
+    let changeBlocks = extractParagraphChanges(node);
     let textBoxBlocks = extractTextBoxes(node);
-    mainBlock :: textBoxBlocks
+    mainBlock :: concat(changeBlocks, textBoxBlocks)
   }
   else if tag == "w:tbl" then [parseTable(node)]
   else []
@@ -212,6 +215,50 @@ pure func childNodeText(node: XmlNode) -> string {
 pure func extractNestedRunText(parent: XmlNode) -> string {
   let runs = findAll(parent, "w:r");
   joinRunTexts(runs)
+}
+
+-- Extract track change annotations from a paragraph
+-- Finds w:ins, w:del, w:moveTo, w:moveFrom and creates ChangeBlocks
+-- with author, date, change type, and affected text.
+pure func extractParagraphChanges(p: XmlNode) -> [Block] {
+  let children = getChildren(p);
+  flatMap(extractChangeFromNode, children)
+}
+
+-- Extract a ChangeBlock from a node if it's a track change element
+pure func extractChangeFromNode(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+  if tag == "w:ins" then [makeChangeBlock("insert", node)]
+  else if tag == "w:del" then [makeChangeBlock("delete", node)]
+  else if tag == "w:moveTo" then [makeChangeBlock("move-to", node)]
+  else if tag == "w:moveFrom" then [makeChangeBlock("move-from", node)]
+  else []
+}
+
+-- Create a ChangeBlock from a track change XML node
+pure func makeChangeBlock(changeType: string, node: XmlNode) -> Block {
+  let author = getOrElse(getAttr(node, "w:author"), "Unknown");
+  let date = getOrElse(getAttr(node, "w:date"), "");
+  let text = extractChangeText(node);
+  ChangeBlock({changeType: changeType, author: author, date: date, text: text})
+}
+
+-- Extract text from a track change node (handles both w:t and w:delText)
+pure func extractChangeText(node: XmlNode) -> string {
+  let runs = findAll(node, "w:r");
+  join("", map(extractRunChangeText, runs))
+}
+
+-- Extract text from a run in a track change
+-- Checks w:delText first (used by w:del and w:moveFrom), then w:t
+pure func extractRunChangeText(run: XmlNode) -> string {
+  match findFirst(run, "w:delText") {
+    Some(t) => getText(t),
+    None => match findFirst(run, "w:t") {
+      Some(t) => getText(t),
+      None => ""
+    }
+  }
 }
 
 -- Extract text from structured document tags (w:sdt -> w:sdtContent)
