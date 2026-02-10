@@ -19,6 +19,28 @@ This demo showcases AILANG's effect system, contracts, and stdlib working togeth
 - **Multimodal** — images and PDFs are processed via base64 through AILANG's `std/ai.call()`, using the same pipeline as text. Base64 is just a string — AILANG passes it through, the host interprets it
 - **100% AI-Coded** — this entire demo was built by AI (Claude Code), from the WASM integration layer to the pipeline orchestrator to the CSS design system. AILANG's type system and contracts make AI-generated code trustworthy
 
+## DocParse: Office Document Parsing
+
+The Document Extractor includes **DocParse** — a full document parsing pipeline built from 8 AI-generated AILANG modules that parse DOCX, PPTX, and XLSX files directly in WebAssembly using `std/xml`. No server, no heavy dependencies.
+
+**[Try DocParse →](https://sunholo-data.github.io/ailang-demos/docparse.html)**
+
+![DocParse Demo](assets/doc_parse_demo_screenshot.png)
+
+Office documents are ZIP archives containing XML. DocParse uses AILANG's `std/xml` module — `parseXml`, `findAll`, `getText`, `getAttr` — to extract headings, paragraphs, tables (with merged cells), images, text boxes, headers/footers, footnotes, and more. All pure functions, all contract-verified.
+
+| Format | Content Extracted |
+|--------|-------------------|
+| **DOCX** | Headings, paragraphs, tables (merged cells), lists, images, headers/footers, footnotes, text boxes, track changes |
+| **PPTX** | Slide titles, body text, tables (merged cells), images, text boxes, group shapes |
+| **XLSX** | All worksheets, shared strings, inline strings, rich text, booleans, numbers |
+| **PDF** | Headings, paragraphs, tables, lists, image descriptions (via AI multimodal) |
+| **Images** | PNG, JPG, GIF, BMP, WebP, TIFF — AI describes content and visual structure |
+
+DocParse also integrates with the Document Extractor pipeline — Office demos (Sports DOCX, Presentation PPTX, People XLSX) parse the file with DocParse first, then pass the extracted text to AI for structured field extraction, then validate with AILANG contracts.
+
+See the [DocParse README](../docparse/README.md) for CLI usage and architecture details.
+
 ## How It Works
 
 ```
@@ -194,25 +216,31 @@ The key is stored in `localStorage` only — never sent anywhere except Google's
 
 ```
 invoice_processor_wasm/
-├── index.html                  # Main page — toolbar, pipeline, 3-column layout
+├── index.html                  # Document Extractor — toolbar, pipeline, 3-column layout
+├── docparse.html               # DocParse — drag-and-drop Office/PDF/image parser
 ├── css/
 │   └── styles.css              # Design system (Sunholo brand tokens)
 ├── js/
-│   ├── app.js                  # Pipeline orchestrator — 3-tier execution
+│   ├── app.js                  # Document Extractor pipeline orchestrator — 3-tier execution
+│   ├── docparse-app.js         # DocParse pipeline orchestrator
+│   ├── docparse-output.js      # DocParse output renderer — blocks, JSON, markdown views
+│   ├── docparse-loader.js      # Loads 8 AILANG modules into WASM for DocParse
+│   ├── office-preview.js       # Office document preview (Mammoth for DOCX)
 │   ├── ailang-wrapper.js       # WASM engine — module loading, AI handler, async calls
 │   ├── gemini-client.js        # Gemini Flash API client — text, multimodal, schema detect
 │   ├── schema-compiler.js      # Schema → AILANG module code generator
 │   ├── schema-editor.js        # Visual + AILANG type editor (two-mode, synced)
 │   ├── output-formatter.js     # Result display — JSON, table, AILANG views
-│   └── examples.js             # 7 demo scenarios with schemas and pre-extracted data
+│   └── examples.js             # Demo scenarios with schemas and pre-extracted data
+├── ailang/docparse/            # AILANG source modules (symlinks to ../../docparse/)
 ├── assets/
-│   ├── extraction-demo-ui.png  # Screenshot
+│   ├── extraction-demo-ui.png  # Document Extractor screenshot
+│   ├── doc_parse_demo_screenshot.png  # DocParse screenshot
 │   └── bristol-car-hire-demo.pdf  # PDF demo file
 ├── wasm/
 │   ├── ailang.wasm             # AILANG WASM interpreter (downloaded by CI)
 │   ├── wasm_exec.js            # Go WASM runtime
-│   ├── ailang-repl.js          # REPL wrapper with module API
-│   └── invoice_processor.ail   # Legacy invoice processor module
+│   └── ailang-repl.js          # REPL wrapper with module API
 └── README.md
 ```
 
@@ -229,19 +257,23 @@ Deployed to GitHub Pages via `.github/workflows/deploy-invoice-processor.yml`. T
 | Feature | How It's Used |
 |---------|---------------|
 | `! {AI}` effect | AI extraction functions declare the effect; host provides Gemini handler |
-| `requires`/`ensures` | Validation functions have non-empty input/output contracts |
+| `requires`/`ensures` | Validation functions have non-empty input/output contracts; 28 contracts across DocParse |
+| `std/xml` | DocParse parses DOCX/PPTX/XLSX XML — `parseXml`, `findAll`, `getText`, `getAttr` |
 | `std/json` | Type-safe JSON parsing — `getString`, `getInt` return `Option` |
 | `std/option` | `Some`/`None` pattern matching on every field access |
 | `std/result` | `Ok`/`Err` handling for JSON decode |
 | `std/ai` | `call()` invokes the registered AI handler |
-| `pure func` | Validation is side-effect free |
+| `pure func` | Validation and document parsing are side-effect free |
+| Algebraic data types | DocParse `Block` ADT: `TextBlock`, `TableBlock`, `ImageBlock`, `HeadingBlock`, `SectionBlock` |
 | Record types | Schema compiles to AILANG record type |
 | Capability security | WASM sandbox; AI capability injected by JS host |
 
 ## References
 
-- [Live Demo](https://sunholo-data.github.io/ailang-demos/)
+- [Document Extractor — Live Demo](https://sunholo-data.github.io/ailang-demos/)
+- [DocParse — Live Demo](https://sunholo-data.github.io/ailang-demos/docparse.html)
 - [Demo Source Code](https://github.com/sunholo-data/ailang-demos/tree/main/invoice_processor_wasm)
+- [DocParse AILANG Source](https://github.com/sunholo-data/ailang-demos/tree/main/docparse)
 - [AILANG Documentation](https://ailang.sunholo.com/)
 - [AILANG Source](https://github.com/sunholo-data/ailang)
 - [WASM Integration Guide](https://ailang.sunholo.com/docs/guides/wasm-integration)
