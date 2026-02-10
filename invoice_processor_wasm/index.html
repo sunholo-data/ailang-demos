@@ -227,31 +227,83 @@
           <div class="tab-explanation">
             <h3>DocParse: Office Documents via <code>std/xml</code></h3>
             <p>
-              DOCX, PPTX, and XLSX files are ZIP archives containing XML. AILANG's
-              <code>std/xml</code> module parses document structure directly in WebAssembly &mdash;
-              no server needed. 8 AILANG modules handle format detection, XML parsing,
-              and block extraction, all running as pure functions in the browser.
-              <a href="docparse.html">Try DocParse standalone &rarr;</a>
+              DOCX, PPTX, and XLSX files are ZIP archives containing XML. DocParse uses AILANG's
+              <code>std/xml</code> module &mdash; <code>parseXml</code>, <code>findAll</code>,
+              <code>getText</code>, <code>getAttr</code> &mdash; to extract document structure
+              directly in WebAssembly. No server, no heavy dependencies.
+              8 AI-generated AILANG modules handle the hard parts: merged table cells,
+              text boxes, headers/footers, footnotes, track changes, and hyperlinks.
+              All pure functions, all contract-verified. 17 real-world test files all parse successfully.
             </p>
           </div>
-          <pre><code><span class="kw">import</span> std/xml (<span class="fn">parseXml</span>, <span class="fn">findAll</span>, <span class="fn">findFirst</span>, <span class="fn">getText</span>, <span class="fn">getAttr</span>)
-<span class="kw">import</span> std/string (<span class="fn">trim</span>, <span class="fn">endsWith</span>)
-<span class="kw">import</span> std/list (<span class="fn">map</span>, <span class="fn">flatMap</span>, <span class="fn">filter</span>)
 
-<span class="cm">-- Pure XML parsing: no effects, no AI, fully deterministic</span>
-<span class="kw">pure func</span> <span class="fn">parseDocxBody</span>(xml: <span class="ty">string</span>) -> <span class="ty">string</span> {
-  <span class="kw">let</span> doc = parseXml(xml)
-  <span class="kw">let</span> paragraphs = findAll(doc, <span class="st">"w:p"</span>)
-  <span class="kw">let</span> blocks = flatMap(\p. extractBlock(p), paragraphs)
-  encode(blocks)   <span class="cm">-- JSON array of structured blocks</span>
+          <!-- Before/After: XML → Structured Output -->
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;margin-bottom:16px;align-items:stretch">
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px">Raw DOCX XML (inside .zip)</div>
+              <pre style="margin:0;font-size:0.68rem;line-height:1.5;background:var(--bg-code);color:#94a3b8;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);overflow-x:auto"><code>&lt;w:tbl&gt;
+  &lt;w:tr&gt;
+    &lt;w:tc&gt;
+      &lt;w:tcPr&gt;
+        &lt;w:gridSpan <span style="color:#e2e8f0">w:val="2"</span>/&gt;
+      &lt;/w:tcPr&gt;
+      &lt;w:p&gt;&lt;w:r&gt;&lt;w:t&gt;<span style="color:#e2e8f0">Merged Header</span>&lt;/w:t&gt;
+    &lt;/w:tc&gt;
+    &lt;w:tc&gt;
+      &lt;w:tcPr&gt;&lt;w:vMerge/&gt;&lt;/w:tcPr&gt;
+      &lt;w:p/&gt;
+    &lt;/w:tc&gt;
+  &lt;/w:tr&gt;
+&lt;/w:tbl&gt;</code></pre>
+            </div>
+            <div style="display:flex;align-items:center;color:var(--primary);font-size:1.2rem;font-weight:700;padding:0 4px">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--success);margin-bottom:6px">DocParse Output (structured JSON)</div>
+              <pre style="margin:0;font-size:0.68rem;line-height:1.5;background:var(--bg-code);color:#e2e8f0;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);overflow-x:auto"><code>{
+  <span style="color:#7dd3fc">"type"</span>: <span style="color:#86efac">"table"</span>,
+  <span style="color:#7dd3fc">"headers"</span>: [
+    { <span style="color:#7dd3fc">"text"</span>: <span style="color:#86efac">"Merged Header"</span>,
+      <span style="color:#7dd3fc">"colSpan"</span>: <span style="color:#fbbf24">2</span>,
+      <span style="color:#7dd3fc">"merged"</span>: <span style="color:#c084fc">false</span> },
+    { <span style="color:#7dd3fc">"text"</span>: <span style="color:#86efac">""</span>,
+      <span style="color:#7dd3fc">"colSpan"</span>: <span style="color:#fbbf24">1</span>,
+      <span style="color:#7dd3fc">"merged"</span>: <span style="color:#c084fc">true</span> }
+  ]
+}</code></pre>
+            </div>
+          </div>
+
+          <pre><code><span class="kw">import</span> std/xml (<span class="fn">parseXml</span>, <span class="fn">findAll</span>, <span class="fn">findFirst</span>, <span class="fn">getText</span>, <span class="fn">getAttr</span>)
+<span class="kw">import</span> std/list (<span class="fn">map</span>, <span class="fn">flatMap</span>, <span class="fn">filter</span>, <span class="fn">length</span> <span class="kw">as</span> <span class="fn">listLength</span>)
+
+<span class="cm">-- Algebraic data type: every document becomes typed blocks</span>
+<span class="kw">export type</span> <span class="ty">Block</span> = <span class="ct">TextBlock</span>({text: <span class="ty">string</span>, style: <span class="ty">string</span>, level: <span class="ty">int</span>})
+                  | <span class="ct">TableBlock</span>({rows: [[<span class="ty">TableCell</span>]], headers: [<span class="ty">TableCell</span>]})
+                  | <span class="ct">ImageBlock</span>({data: <span class="ty">string</span>, description: <span class="ty">string</span>, mime: <span class="ty">string</span>})
+                  | <span class="ct">HeadingBlock</span>({text: <span class="ty">string</span>, level: <span class="ty">int</span>})
+                  | <span class="ct">SectionBlock</span>({kind: <span class="ty">string</span>, blocks: [<span class="ty">Block</span>]})
+
+<span class="cm">-- Merged cell handling: reads gridSpan + vMerge from XML</span>
+<span class="kw">pure func</span> <span class="fn">parseTableCell</span>(node: <span class="ty">XmlNode</span>) -> <span class="ty">TableCell</span> {
+  <span class="kw">let</span> props = findFirst(node, <span class="st">"w:tcPr"</span>)
+  <span class="kw">let</span> span = optMap(\p. getAttr(findFirst(p, <span class="st">"w:gridSpan"</span>), <span class="st">"w:val"</span>), props)
+  <span class="kw">let</span> merge = optMap(\p. findFirst(p, <span class="st">"w:vMerge"</span>), props)
+  { text: getText(node), colSpan: getOrElse(span, 1),
+    rowSpan: 1, merged: isSome(merge) }
 }
 
-<span class="cm">-- Format detection: pure function matching file extensions</span>
-<span class="kw">pure func</span> <span class="fn">getFormatInfo</span>(filename: <span class="ty">string</span>) -> <span class="ty">string</span> {
-  <span class="kw">if</span> endsWith(filename, <span class="st">".docx"</span>) <span class="kw">then</span>
-    <span class="st">"{\"format\":\"zip-office\",\"officeType\":\"word\"}"</span>
-  <span class="kw">else</span> ...
-}</code></pre>
+<span class="cm">-- Contract: filters never grow the list</span>
+<span class="kw">pure func</span> <span class="fn">filterHeadings</span>(blocks: [<span class="ty">Block</span>]) -> [<span class="ty">Block</span>]
+  <span class="ct">ensures</span> { listLength(result) <= listLength(blocks) }
+{ filter(isHeading, blocks) }</code></pre>
+
+          <div style="margin-top:12px;text-align:center">
+            <a href="docparse.html" class="btn btn-primary" style="font-size:0.82rem;padding:8px 20px;color:#fff;text-decoration:none">
+              Try DocParse &mdash; drop a DOCX, PPTX, or XLSX
+            </a>
+          </div>
         </div>
 
         <!-- Panel: AI Effect -->

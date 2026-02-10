@@ -5,7 +5,7 @@
  */
 
 import AilangEngine from './ailang-wrapper.js';
-import { renderBlocks, renderMarkdown, renderJson } from './docparse-output.js';
+import { renderBlocks, renderMarkdown, renderJson, blockToMarkdown } from './docparse-output.js';
 import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
 import { loadDocParseModules, DOCPARSE_MODULE, DOCPARSE_MODULES } from './docparse-loader.js';
 import { renderDocxPreview, renderXlsxPreview, renderPptxPreview, renderPdfPreview, renderImagePreview, renderTextPreview } from './office-preview.js';
@@ -588,10 +588,23 @@ function renderOutput(output) {
   if (blocksPanel) blocksPanel.innerHTML = renderBlocks(output);
 
   const jsonPanel = document.getElementById('jsonPanel');
-  if (jsonPanel) jsonPanel.innerHTML = renderJson(output);
+  if (jsonPanel) {
+    jsonPanel.innerHTML = renderJson(output);
+    addCopyButton(jsonPanel, () => JSON.stringify(output, null, 2));
+  }
 
   const markdownPanel = document.getElementById('markdownPanel');
-  if (markdownPanel) markdownPanel.innerHTML = renderMarkdown(output);
+  if (markdownPanel) {
+    markdownPanel.innerHTML = renderMarkdown(output);
+    addCopyButton(markdownPanel, () => {
+      const { metadata, blocks } = output;
+      let md = '';
+      if (metadata.title) md += `# ${metadata.title}\n\n`;
+      if (metadata.author) md += `**Author:** ${metadata.author}\n\n`;
+      for (const block of blocks) md += blockToMarkdown(block);
+      return md;
+    });
+  }
 
   // Render preview panel
   renderPreviewPanel();
@@ -603,6 +616,27 @@ function renderOutput(output) {
 
   const firstTab = document.querySelector('.output-tab');
   if (firstTab) firstTab.click();
+}
+
+function addCopyButton(panel, getText) {
+  const btn = document.createElement('button');
+  btn.className = 'btn-copy';
+  btn.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg> Copy`;
+  btn.style.position = 'sticky';
+  btn.style.top = '0';
+  btn.style.float = 'right';
+  btn.style.zIndex = '1';
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(getText()).then(() => {
+      btn.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg> Copied!`;
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg> Copy`;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+  panel.prepend(btn);
 }
 
 async function renderPreviewPanel() {
