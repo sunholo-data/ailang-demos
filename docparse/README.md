@@ -68,6 +68,13 @@ Every run produces:
 With `summarize`, also produces:
 - `docparse/data/output_summary.txt` - AI-generated document summary
 
+Use `--output-dir DIR` to copy output files to a custom directory:
+
+```bash
+docparse report.docx --output-dir /tmp/parsed
+# Output copied to /tmp/parsed/
+```
+
 ## Use Case: Document-to-AI Pipeline
 
 DocParse is designed as a pipeline stage: document in, LLM-ready content out.
@@ -155,6 +162,7 @@ This markdown can be piped directly into any LLM API for Q&A, extraction, or ana
 | PDF/Image | *(auto)* | AI auto-enabled - content extracted via multimodal AI |
 | Verify contracts | `--verify` | Enable runtime contract verification |
 | Budget report | `--budget-report` | Show capability budget usage after run |
+| Output dir | `--output-dir DIR` | Copy output files to DIR after parsing |
 
 ## Supported Content
 
@@ -165,6 +173,42 @@ This markdown can be piped directly into any LLM API for Q&A, extraction, or ana
 | **XLSX** | Deterministic (ZIP+XML) | All worksheets, shared strings, inline strings, rich text, booleans, errors, numbers. First row as headers |
 | **PDF** | AI multimodal | Headings, paragraphs, tables, lists, image descriptions. AI extracts structure from rendered pages |
 | **Images** | AI multimodal | PNG, JPG, GIF, BMP, WebP, TIFF. AI describes content, text, data, and visual structure |
+
+## Track Changes & Comments (Redlining)
+
+DocParse extracts Word track changes and comments — useful for legal redlining, collaborative editing review, and audit trails.
+
+### Track Changes (CLI + Browser)
+
+Track changes are extracted inline from `word/document.xml` as `change` blocks. Each block carries the change type, author, date, and affected text:
+
+```json
+{"type": "change", "changeType": "insert", "author": "Jane Smith", "date": "2026-02-01T10:30:00Z", "text": "new clause"}
+{"type": "change", "changeType": "delete", "author": "Bob Lee", "date": "2026-02-02T14:00:00Z", "text": "old clause"}
+```
+
+| Change Type | XML Source | Meaning |
+|-------------|-----------|---------|
+| `insert` | `w:ins` | Text added |
+| `delete` | `w:del` | Text removed (uses `w:delText`) |
+| `move-to` | `w:moveTo` | Text moved here |
+| `move-from` | `w:moveFrom` | Text moved away (uses `w:delText`) |
+
+In markdown output, insertions render as **bold** and deletions as ~~strikethrough~~, with author/date attribution. In the browser, changes are color-coded: green (insert), red (delete), blue (move-to), orange (move-from).
+
+```bash
+docparse/docparse track_changes_move.docx
+```
+
+### Comments (Browser only)
+
+Comments are parsed from `word/comments.xml` and interleaved at the paragraph that references them. Each comment becomes a `section` block with `kind: "comment"` containing the comment text prefixed with the author name.
+
+```bash
+# Test files with track changes and comments
+docparse/docparse docparse/data/test_files/track_changes_move.docx
+docparse/docparse docparse/data/test_files/comments.docx
+```
 
 ## Output Format
 
@@ -188,9 +232,10 @@ This markdown can be piped directly into any LLM API for Q&A, extraction, or ana
       {"type": "table", "headers": ["Name", "Value"], "rows": [["A", "1"], ["B", "2"]]},
       {"type": "list", "items": ["Item 1", "Item 2"], "ordered": false},
       {"type": "image", "description": "A chart showing...", "mime": "image/png"},
-      {"type": "section", "kind": "slide", "blocks": [...]}
+      {"type": "section", "kind": "slide", "blocks": [...]},
+      {"type": "change", "changeType": "insert", "author": "Jane Smith", "date": "2026-01-20T09:00:00Z", "text": "Added clause"}
     ],
-    "summary": {"totalBlocks": 12, "headings": 3, "tables": 1, "images": 2}
+    "summary": {"totalBlocks": 12, "headings": 3, "tables": 1, "images": 2, "changes": 1}
   },
   "warnings": [],
   "aiCallsUsed": 0
@@ -322,6 +367,8 @@ The `docparse` CLI wrapper handles these automatically. For reference:
 |---------|----------|--------------------|----|--------|
 | DOCX merged cells | Yes | Buggy (duplicates) | Crashes | Loses spans |
 | Text boxes | Yes | Drops silently | No API | Drops silently |
+| Track changes | Yes (insert, delete, move) | No | Limited | No |
+| Comments | Yes (interleaved) | No | Basic | No |
 | Headers/footers | Yes | Limited | Limited | Partial |
 | PPTX tables | Yes | Basic | N/A | Lossy |
 | XLSX shared strings | Yes | Yes | N/A | N/A |
