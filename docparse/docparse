@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# DocParse CLI — Universal Document Parsing
+# Wrapper around ailang that handles caps, AI model, and flags automatically.
+
+# Resolve symlinks to find the real script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+MAIN_AIL="docparse/main.ail"
+DEFAULT_AI_MODEL="gemini-3-flash-preview"
+
+# Module list for --check and --test (relative to PROJECT_DIR)
+MODULES=(
+  docparse/types/document.ail
+  docparse/services/format_router.ail
+  docparse/services/zip_extract.ail
+  docparse/services/docx_parser.ail
+  docparse/services/pptx_parser.ail
+  docparse/services/xlsx_parser.ail
+  docparse/services/direct_ai_parser.ail
+  docparse/services/layout_ai.ail
+  docparse/services/output_formatter.ail
+  docparse/main.ail
+)
+
+TEST_MODULES=(
+  docparse/services/format_router.ail
+  docparse/services/zip_extract.ail
+  docparse/services/docx_parser.ail
+)
+
+usage() {
+  cat <<'EOF'
+DocParse — Universal Document Parsing
+
+Usage: docparse <file> [options]
+       docparse --check
+       docparse --test
+
+Examples:
+  docparse report.docx                  Parse Office document
+  docparse slides.pptx --describe       With AI image descriptions
+  docparse report.docx --summarize      With AI summary
+  docparse scan.pdf                     PDF (auto-enables AI)
+  docparse photo.png                    Image (auto-enables AI)
+
+Options:
+  --describe        Enable AI image descriptions
+  --summarize       Enable AI document summary
+  --ai MODEL        AI model (default: gemini-3-flash-preview)
+  --verify          Enable contract verification
+  --budget-report   Show capability budget usage after run
+  --output-dir DIR  Copy output files to DIR after parsing
+  --check           Type-check all 10 modules (no file needed)
+  --test            Run all inline tests (no file needed)
+  -h, --help        Show this help
+
+Supported formats:
+  Office:  .docx .pptx .xlsx  (deterministic XML parsing)
+  AI:      .pdf .png .jpg .gif .bmp .webp .tiff .mp3 .wav .mp4  (multimodal AI)
+
+Output:
+  docparse/data/output.json     Structured JSON with typed blocks
+  docparse/data/output.md       LLM-ready markdown
+EOF
+}
+
+# --- Dev commands ---
+
+do_check() {
+  echo "Type-checking all DocParse modules..."
+  local fail=0
+  for mod in "${MODULES[@]}"; do
+    local name
+    name="$(basename "$mod")"
+    if ailang check "$mod" 2>&1; then
+      echo "  $name  OK"
+    else
+      echo "  $name  FAIL"
+      fail=1
+    fi
+  done
+  if [ "$fail" -eq 0 ]; then
+    echo "All ${#MODULES[@]} modules type-check clean."
+  else
+    echo "Some modules failed type-checking."
+    exit 1
+  fi
+}
+
+do_test() {
+  echo "Running inline tests..."
+  for mod in "${TEST_MODULES[@]}"; do
+    echo ""
+    echo "--- $(basename "$mod") ---"
+    ailang test "$mod"
+  done
+}
+
+# --- Parse arguments ---
+
+FILE=""
+DESCRIBE=false
+SUMMARIZE=false
+AI_MODEL="$DEFAULT_AI_MODEL"
+VERIFY=false
+BUDGET=false
+OUTPUT_DIR=""
+EXTRA_FLAGS=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --check)
+      cd "$PROJECT_DIR"
+      do_check
+      exit 0
+      ;;
+    --test)
+      cd "$PROJECT_DIR"
+      do_test
+      exit 0
+      ;;
+    --describe)
+      DESCRIBE=true
+      shift
+      ;;
+    --summarize)
+      SUMMARIZE=true
+      shift
+      ;;
+    --ai)
+      AI_MODEL="$2"
+      shift 2
+      ;;
+    --verify)
+      VERIFY=true
+      shift
+      ;;
+    --budget-report)
+      BUDGET=true
+      shift
+      ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    -*)
+      EXTRA_FLAGS+=("$1")
+      shift
+      ;;
+    *)
+      if [ -z "$FILE" ]; then
+        FILE="$1"
+      else
+        EXTRA_FLAGS+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$FILE" ]; then
+  usage
+  exit 1
+fi
+
+# Resolve file path
+if [[ ! "$FILE" = /* ]]; then
+  FILE="$(pwd)/$FILE"
+fi
+
+if [ ! -f "$FILE" ]; then
+  echo "Error: File not found: $FILE"
+  exit 1
+fi
+
+# --- Detect if AI is needed ---
+
+EXT="${FILE##*.}"
+EXT_LOWER="$(echo "$EXT" | tr '[:upper:]' '[:lower:]')"
+
+NEEDS_AI=false
+case "$EXT_LOWER" in
+  pdf|png|jpg|jpeg|gif|bmp|webp|tiff|tif|mp3|wav|ogg|flac|mp4|mov|avi|mkv)
+    NEEDS_AI=true
+    ;;
+esac
+
+USE_AI=false
+if $NEEDS_AI || $DESCRIBE || $SUMMARIZE; then
+  USE_AI=true
+fi
+
+# --- Build ailang command ---
+
+CAPS="IO,FS,Env"
+if $USE_AI; then
+  CAPS="IO,FS,Env,AI"
+fi
+
+CMD=(ailang run --entry main --caps "$CAPS")
+
+if $USE_AI; then
+  CMD+=(--ai "$AI_MODEL")
+fi
+
+if $VERIFY; then
+  CMD+=(--verify-contracts)
+fi
+
+if $BUDGET; then
+  CMD+=(--budget-report)
+fi
+
+CMD+=("${EXTRA_FLAGS[@]+"${EXTRA_FLAGS[@]}"}")
+CMD+=("$MAIN_AIL" "$FILE")
+
+# Pass flags to AILANG main
+AILANG_ARGS=()
+if $DESCRIBE; then
+  AILANG_ARGS+=(describe)
+fi
+if $SUMMARIZE; then
+  AILANG_ARGS+=(summarize)
+fi
+CMD+=("${AILANG_ARGS[@]+"${AILANG_ARGS[@]}"}")
+
+# --- Resolve output dir to absolute path before cd ---
+
+if [ -n "$OUTPUT_DIR" ]; then
+  if [[ ! "$OUTPUT_DIR" = /* ]]; then
+    OUTPUT_DIR="$(pwd)/$OUTPUT_DIR"
+  fi
+fi
+
+# --- Run ---
+
+cd "$PROJECT_DIR"
+
+OUTPUT_BASE="docparse/data"
+
+if [ -n "$OUTPUT_DIR" ]; then
+  # Run (not exec) so we can copy output files afterwards
+  if $USE_AI; then
+    env GOOGLE_API_KEY="" "${CMD[@]}"
+  else
+    "${CMD[@]}"
+  fi
+  # Copy output files to the requested directory
+  mkdir -p "$OUTPUT_DIR"
+  for f in "$OUTPUT_BASE"/output.json "$OUTPUT_BASE"/output.md "$OUTPUT_BASE"/output_summary.txt; do
+    [ -f "$f" ] && cp "$f" "$OUTPUT_DIR/"
+  done
+  echo ""
+  echo "Output copied to $OUTPUT_DIR/"
+else
+  if $USE_AI; then
+    exec env GOOGLE_API_KEY="" "${CMD[@]}"
+  else
+    exec "${CMD[@]}"
+  fi
+fi

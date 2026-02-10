@@ -6,27 +6,58 @@ Universal document parsing in AILANG. Extracts structured content from DOCX, PPT
 
 ```bash
 # Parse any Office document
-ailang run --entry main --caps IO,FS,Env docparse/main.ail path/to/file.docx
+docparse/docparse report.docx
+docparse/docparse presentation.pptx
+docparse/docparse spreadsheet.xlsx
 
-# Office formats (deterministic XML parsing)
-ailang run --entry main --caps IO,FS,Env docparse/main.ail report.docx
-ailang run --entry main --caps IO,FS,Env docparse/main.ail presentation.pptx
-ailang run --entry main --caps IO,FS,Env docparse/main.ail spreadsheet.xlsx
-
-# PDF and images (AI multimodal extraction - always requires AI caps)
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail document.pdf
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail photo.png
+# PDF and images (AI auto-enabled)
+docparse/docparse document.pdf
+docparse/docparse photo.png
 
 # With AI image descriptions (Office formats)
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail presentation.pptx describe
+docparse/docparse presentation.pptx --describe
 
 # With AI document summary (any format)
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail report.docx summarize
+docparse/docparse report.docx --summarize
+
+# Dev commands
+docparse/docparse --check       # Type-check all 10 modules
+docparse/docparse --test        # Run all inline tests
+docparse/docparse --help        # Full usage info
 ```
+
+The `docparse` CLI wrapper handles capabilities, AI model selection, and the `GOOGLE_API_KEY` workaround automatically. PDF/image formats auto-enable AI; Office formats use deterministic parsing by default.
+
+### Install globally
+
+Symlink the CLI wrapper to a directory on your `PATH` so `docparse` works from anywhere:
+
+```bash
+ln -s "$(pwd)/docparse/docparse" /usr/local/bin/docparse
+```
+
+Then from any directory:
+
+```bash
+docparse ~/Documents/report.docx
+docparse /path/to/slides.pptx --describe
+```
+
+The script resolves paths relative to the project root automatically, so AILANG modules are always found regardless of your working directory.
+
+<details>
+<summary>Direct ailang invocation (without wrapper)</summary>
+
+```bash
+# Office formats (from project root)
+ailang run --entry main --caps IO,FS,Env docparse/main.ail report.docx
+
+# With AI
+GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
+  --ai gemini-3-flash-preview docparse/main.ail presentation.pptx describe
+```
+
+</details>
 
 ### Output Files
 
@@ -64,8 +95,7 @@ The markdown output combines text, tables (as markdown tables), image descriptio
 ### Example: Summarizing a presentation
 
 ```bash
-$ GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-    --ai gemini-3-flash-preview docparse/main.ail presentation.pptx summarize
+$ docparse/docparse presentation.pptx --summarize
 
 --- AI Summary ---
 The presentation covers LLMs, an architectural diagram, and data tables.
@@ -79,8 +109,7 @@ Summary written to docparse/data/output_summary.txt
 ### Example: PDF extraction via AI
 
 ```bash
-$ GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-    --ai gemini-3-flash-preview docparse/main.ail booking.pdf
+$ docparse/docparse booking.pdf
 
 --- Parsing PDF (AI) ---
 Extracting metadata via AI...
@@ -99,7 +128,7 @@ The PDF content is sent as a multimodal request (same pattern as invoice_process
 ### Example: Markdown output for downstream AI
 
 ```bash
-$ ailang run --entry main --caps IO,FS,Env docparse/main.ail data.xlsx
+$ docparse/docparse data.xlsx
 $ cat docparse/data/output.md
 
 **Author:** Anton Antic
@@ -118,12 +147,14 @@ This markdown can be piped directly into any LLM API for Q&A, extraction, or ana
 
 ## Modes
 
-| Mode | Flag | Caps Required | What It Does |
-|------|------|---------------|-------------|
-| Parse only | *(none)* | `IO,FS,Env` | Extract text, tables, images from Office formats. Write JSON + markdown |
-| Describe images | `describe` | `IO,FS,Env,AI` | Parse + AI describes each embedded image |
-| Summarize | `summarize` | `IO,FS,Env,AI` | Parse + describe images + AI summary of full document |
-| PDF/Image | *(auto)* | `IO,FS,Env,AI` | AI always required - content extracted via multimodal AI |
+| Mode | CLI Flag | What It Does |
+|------|----------|-------------|
+| Parse only | *(none)* | Extract text, tables, images from Office formats. Write JSON + markdown |
+| Describe images | `--describe` | Parse + AI describes each embedded image |
+| Summarize | `--summarize` | Parse + describe images + AI summary of full document |
+| PDF/Image | *(auto)* | AI auto-enabled - content extracted via multimodal AI |
+| Verify contracts | `--verify` | Enable runtime contract verification |
+| Budget report | `--budget-report` | Show capability budget usage after run |
 
 ## Supported Content
 
@@ -180,45 +211,24 @@ Renders blocks as clean markdown: headings, paragraphs, markdown tables, lists, 
 | `list` | `items`, `ordered` | Bullet and numbered lists |
 | `image` | `data` (base64), `description`, `mime` | Embedded images |
 | `section` | `kind`, `blocks` | Headers, footers, footnotes, slides, sheets |
+| `change` | `changeType`, `author`, `date`, `text` | Track changes (insert, delete, move-to, move-from) |
 
 ## AI Configuration
 
-DocParse uses Vertex AI via Application Default Credentials. If you have `GOOGLE_API_KEY` set in your environment, prefix commands with `GOOGLE_API_KEY=""` to force ADC:
+DocParse uses Vertex AI via Application Default Credentials. The `docparse` CLI wrapper handles the `GOOGLE_API_KEY` workaround automatically. Use `--ai MODEL` to override the default model:
 
 ```bash
-# Force Vertex AI (ADC) instead of Gemini API key
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail file.docx describe
+docparse/docparse report.docx --describe --ai claude-haiku-4-5
 ```
 
 AI usage is bounded by capability budgets (`AI @limit=20`), so costs are predictable.
 
 ## Running Tests
 
-### Inline Tests (41 tests)
-
 ```bash
-ailang test docparse/services/format_router.ail   # 26 tests
-ailang test docparse/services/zip_extract.ail      # 9 tests
-ailang test docparse/services/docx_parser.ail      # 6 tests
+docparse/docparse --test        # Run all inline tests (41 tests)
+docparse/docparse --check       # Type-check all 10 modules
 ```
-
-### Type Checking (all 10 modules)
-
-```bash
-ailang check docparse/main.ail
-ailang check docparse/types/document.ail
-ailang check docparse/services/format_router.ail
-ailang check docparse/services/zip_extract.ail
-ailang check docparse/services/docx_parser.ail
-ailang check docparse/services/pptx_parser.ail
-ailang check docparse/services/xlsx_parser.ail
-ailang check docparse/services/direct_ai_parser.ail
-ailang check docparse/services/layout_ai.ail
-ailang check docparse/services/output_formatter.ail
-```
-
-All 10 modules type-check cleanly.
 
 ### Real-World Test Files
 
@@ -234,18 +244,20 @@ All 10 modules type-check cleanly.
 
 ```
 docparse/
+├── docparse                    # CLI wrapper (handles caps, AI, flags)
 ├── main.ail                    # Entry point, CLI args, format routing
 ├── types/
 │   └── document.ail            # Block ADT, TableCell, metadata types
 ├── services/
-│   ├── format_router.ail       # Format detection (pure, 26 inline tests)
+│   ├── format_router.ail       # Format detection (pure, 36 inline tests)
 │   ├── zip_extract.ail         # ZIP layer wrapping std/zip (9 inline tests)
 │   ├── docx_parser.ail         # DOCX XML -> Blocks (6 inline tests)
 │   ├── pptx_parser.ail         # PPTX slides -> Blocks
 │   ├── xlsx_parser.ail         # XLSX worksheets -> Blocks
 │   ├── direct_ai_parser.ail    # PDF + image -> Blocks (AI multimodal)
 │   ├── layout_ai.ail           # AI image descriptions + self-healing (optional)
-│   └── output_formatter.ail    # JSON, markdown, console output
+│   ├── output_formatter.ail    # JSON, markdown, console output
+│   └── docparse_browser.ail    # WASM browser adapter
 └── data/
     ├── sample.docx             # Basic test document
     ├── output.json             # Structured JSON output
@@ -294,6 +306,8 @@ This hybrid approach means most documents use zero AI calls for parsing. AI is o
 5. **Lightweight.** No JVM, no 3GB ML models, no cloud dependency.
 
 ## Capabilities Required
+
+The `docparse` CLI wrapper handles these automatically. For reference:
 
 | Capability | Required | Purpose |
 |------------|----------|---------|

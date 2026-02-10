@@ -1,12 +1,25 @@
-**Author:** Jesse Rosenthal
+# DocParse Test Document
 
-Here is some text.
+**Author:** AILANG Demo
 
-Here is the text to be moved.
+# Introduction
 
-**Here is the text to be moved.** *(move-to by Jesse Rosenthal, 2016-04-16T08:20:00Z)*
+This is a test document for the AILANG DocParse demo. It contains headings, paragraphs, lists, and a table.
 
-Here is some more text.
+## Features
 
-~~Here is the text to be moved.~~ *(move-from by Jesse Rosenthal, 2016-04-16T08:20:00Z)*
+- Pure functional XML parsing
+
+- AI-augmented layout understanding
+
+- Bounded costs via capability budgets
+
+## Sample Data Table
+
+| 
+| 
+
+# Conclusion
+
+AILANG provides type-safe, contract-verified document parsing with bounded AI costs. Pattern matching on XML trees is elegant compared to imperative DOM traversal.
 
