@@ -1,0 +1,51 @@
+id: contract_booking_score
+description: "Priority ordering invariant: VIP > HIGH > STANDARD > LOW for all time slots"
+difficulty: medium
+category: relational_invariant
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Priority = VIP | HIGH | STANDARD | LOW
+  export type TimeSlot = MORNING | AFTERNOON | EVENING
+
+  export pure func priorityWeight(p: Priority) -> int
+    ensures { result >= 10, result <= 100 }
+
+  export pure func slotMultiplier(s: TimeSlot) -> int
+    ensures { result >= 80, result <= 150 }
+
+  export pure func bookingScore(p: Priority, s: TimeSlot) -> int
+    ensures { result >= 800 }
+
+  -- Z3 must prove these ordering invariants hold for ALL time slots
+  export pure func vipBeatsHigh(s: TimeSlot) -> bool
+    ensures { result == true }
+
+  export pure func highBeatsStandard(s: TimeSlot) -> bool
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module implementing a booking priority system:
+
+  Priority weights: VIP=100, HIGH=70, STANDARD=40, LOW=10
+  Time slot multipliers: MORNING=120, AFTERNOON=100, EVENING=80
+
+  `bookingScore(p, s)` = priorityWeight(p) * slotMultiplier(s) (keeping it in integer range)
+
+  You must also implement invariant-proving functions:
+  - `vipBeatsHigh(s)`: returns true, proving VIP always outscores HIGH
+  - `highBeatsStandard(s)`: returns true, proving HIGH always outscores STANDARD
+
+  Include a main function that prints (one per line):
+    bookingScore(VIP, MORNING)
+    bookingScore(LOW, EVENING)
+    vipBeatsHigh(EVENING)
+
+expected_stdout: |
+  12000
+  800
+  true
+
+reference_solution: reference/booking_score.ail

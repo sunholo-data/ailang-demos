@@ -1,0 +1,49 @@
+module benchmarks/contract_guided/reference/booking_score
+
+export type Priority = VIP | HIGH | STANDARD | LOW
+export type TimeSlot = MORNING | AFTERNOON | EVENING
+
+export pure func priorityWeight(p: Priority) -> int
+  ensures { result >= 10, result <= 100 }
+{
+  match p {
+    VIP      => 100,
+    HIGH     => 70,
+    STANDARD => 40,
+    LOW      => 10
+  }
+}
+
+export pure func slotMultiplier(s: TimeSlot) -> int
+  ensures { result >= 80, result <= 150 }
+{
+  match s {
+    MORNING   => 120,
+    AFTERNOON => 100,
+    EVENING   => 80
+  }
+}
+
+export pure func bookingScore(p: Priority, s: TimeSlot) -> int
+  ensures { result >= 800 }
+{
+  priorityWeight(p) * slotMultiplier(s) / 100 * 100
+}
+
+export pure func vipBeatsHigh(s: TimeSlot) -> bool
+  ensures { result == true }
+{
+  bookingScore(VIP, s) > bookingScore(HIGH, s)
+}
+
+export pure func highBeatsStandard(s: TimeSlot) -> bool
+  ensures { result == true }
+{
+  bookingScore(HIGH, s) > bookingScore(STANDARD, s)
+}
+
+export func main() -> () ! {IO} {
+  println(show(bookingScore(VIP, MORNING)));
+  println(show(bookingScore(LOW, EVENING)));
+  println(show(vipBeatsHigh(EVENING)))
+}

@@ -1,0 +1,16 @@
+module benchmarks/contract_guided/reference/prorated_refund
+
+export pure func proratedRefund(price: int, daysUsed: int, warrantyDays: int) -> int
+  requires { price >= 0, daysUsed >= 0, warrantyDays >= 1 }
+  ensures { result >= 0 }
+{
+  if daysUsed >= warrantyDays then 0
+  else price * (warrantyDays - daysUsed) / warrantyDays
+}
+
+export func main() -> () ! {IO} {
+  println(show(proratedRefund(365, 100, 365)));
+  println(show(proratedRefund(1000, 0, 30)));
+  println(show(proratedRefund(500, 400, 365)));
+  println(show(proratedRefund(100, 500, 365)))
+}

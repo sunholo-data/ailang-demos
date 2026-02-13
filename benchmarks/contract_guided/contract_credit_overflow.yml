@@ -1,0 +1,30 @@
+id: contract_credit_overflow
+description: "Apply credits to bill — naive subtraction goes negative. Z3 catches it."
+difficulty: medium
+category: edge_case_trap
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export pure func applyCredits(subtotal: int, credits: int) -> int
+    requires { subtotal >= 0, credits >= 0 }
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module with a pure function `applyCredits(subtotal, credits)`.
+
+  Customers earn credits from referral programs. When they checkout, credits
+  reduce their bill. The resulting bill should never be negative.
+
+  Include a main function that prints (one per line):
+    applyCredits(100, 30)
+    applyCredits(50, 50)
+    applyCredits(10, 100)
+
+expected_stdout: |
+  70
+  0
+  0
+
+reference_solution: reference/credit_overflow.ail

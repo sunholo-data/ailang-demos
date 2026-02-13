@@ -1,0 +1,46 @@
+module benchmarks/contract_guided/reference/interval_overlap
+
+pure func maxInt(a: int, b: int) -> int =
+  if a > b then a else b
+
+pure func minInt(a: int, b: int) -> int =
+  if a < b then a else b
+
+export pure func overlap(s1: int, e1: int, s2: int, e2: int) -> int
+  requires { s1 <= e1, s2 <= e2 }
+  ensures { result >= 0, result <= e1 - s1, result <= e2 - s2 }
+{
+  let raw = minInt(e1, e2) - maxInt(s1, s2) in
+  if raw < 0 then 0 else raw
+}
+
+export pure func overlap3(s1: int, e1: int, s2: int, e2: int, s3: int, e3: int) -> int
+  requires { s1 <= e1, s2 <= e2, s3 <= e3 }
+  ensures { result >= 0, result <= e1 - s1, result <= e2 - s2, result <= e3 - s3 }
+{
+  let lo = maxInt(maxInt(s1, s2), s3) in
+  let hi = minInt(minInt(e1, e2), e3) in
+  if hi - lo < 0 then 0 else hi - lo
+}
+
+export pure func unionLength(s1: int, e1: int, s2: int, e2: int) -> int
+  requires { s1 <= e1, s2 <= e2 }
+  ensures { result >= e1 - s1, result >= e2 - s2, result <= (e1 - s1) + (e2 - s2) }
+{
+  (e1 - s1) + (e2 - s2) - overlap(s1, e1, s2, e2)
+}
+
+export pure func inclusionExclusion(s1: int, e1: int, s2: int, e2: int) -> bool
+  requires { s1 <= e1, s2 <= e2 }
+  ensures { result == true }
+{
+  unionLength(s1, e1, s2, e2) == (e1 - s1) + (e2 - s2) - overlap(s1, e1, s2, e2)
+}
+
+export func main() -> () ! {IO} {
+  println(show(overlap(0, 10, 5, 15)));
+  println(show(overlap(0, 5, 10, 15)));
+  println(show(overlap3(0, 10, 3, 12, 6, 15)));
+  println(show(unionLength(0, 10, 5, 15)));
+  println(show(inclusionExclusion(0, 10, 5, 15)))
+}

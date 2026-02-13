@@ -1,0 +1,54 @@
+module benchmarks/contract_guided/reference/modular_pow
+
+export pure func modPow(base: int, exp: int, mod: int) -> int
+  requires { base >= 0, exp >= 0, mod > 0 }
+  ensures { result >= 0, result < mod }
+{
+  if exp == 0 then 1 % mod
+  else if exp % 2 == 0 then modPow(base * base % mod, exp / 2, mod)
+  else base * modPow(base, exp - 1, mod) % mod
+}
+
+-- Helper: single multiplication mod (non-recursive, Z3 can verify)
+export pure func mulMod(a: int, b: int, mod: int) -> int
+  requires { a >= 0, b >= 0, mod > 0 }
+  ensures { result >= 0, result < mod }
+{
+  (a * b) % mod
+}
+
+-- Helper: square mod (non-recursive, Z3 can verify)
+export pure func sqMod(a: int, mod: int) -> int
+  requires { a >= 0, mod > 0 }
+  ensures { result >= 0, result < mod }
+{
+  (a * a) % mod
+}
+
+-- Consistency: sqMod == mulMod(a, a, mod) — provable by Z3
+export pure func sqConsistent(a: int, mod: int) -> bool
+  requires { a >= 0, mod > 0 }
+  ensures { result == true }
+{
+  sqMod(a, mod) == mulMod(a, a, mod)
+}
+
+export pure func fermatCheck(a: int, p: int) -> bool
+  requires { a > 0, p > 1, a < p }
+{
+  modPow(a, p - 1, p) == 1
+}
+
+export pure func modPowConsistent(base: int, mod: int) -> bool
+  requires { base >= 0, mod > 0 }
+{
+  modPow(base, 2, mod) == sqMod(base, mod)
+}
+
+export func main() -> () ! {IO} {
+  println(show(modPow(2, 10, 1000)));
+  println(show(modPow(3, 13, 100)));
+  println(show(modPow(7, 256, 13)));
+  println(show(fermatCheck(2, 7)));
+  println(show(modPowConsistent(5, 13)))
+}

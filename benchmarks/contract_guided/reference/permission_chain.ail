@@ -1,0 +1,49 @@
+module benchmarks/contract_guided/reference/permission_chain
+
+export type Role = ADMIN | EDITOR | VIEWER | GUEST
+export type Action = READ | WRITE | DELETE
+
+export pure func roleWeight(role: Role) -> int
+  ensures { result >= 0, result <= 100 }
+{
+  match role {
+    ADMIN  => 100,
+    EDITOR => 60,
+    VIEWER => 30,
+    GUEST  => 10
+  }
+}
+
+export pure func actionThreshold(action: Action) -> int
+  ensures { result >= 10, result <= 80 }
+{
+  match action {
+    READ   => 10,
+    WRITE  => 50,
+    DELETE => 80
+  }
+}
+
+export pure func isAllowed(role: Role, action: Action) -> bool
+{
+  roleWeight(role) >= actionThreshold(action)
+}
+
+export pure func adminAlwaysAllowed(action: Action) -> bool
+  ensures { result == true }
+{
+  isAllowed(ADMIN, action)
+}
+
+export pure func guestCannotWrite() -> bool
+  ensures { result == true }
+{
+  isAllowed(GUEST, WRITE) == false
+}
+
+export func main() -> () ! {IO} {
+  println(show(isAllowed(ADMIN, DELETE)));
+  println(show(isAllowed(GUEST, WRITE)));
+  println(show(isAllowed(EDITOR, WRITE)));
+  println(show(isAllowed(VIEWER, READ)))
+}

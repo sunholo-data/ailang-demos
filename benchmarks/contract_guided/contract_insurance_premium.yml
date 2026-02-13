@@ -1,0 +1,53 @@
+id: contract_insurance_premium
+description: "Insurance premium with 4 interacting factors — compound bounds from multiple constraints"
+difficulty: medium
+category: compound_bounds
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Coverage = BASIC | STANDARD | PREMIUM
+  export type RiskClass = LOW_RISK | MEDIUM_RISK | HIGH_RISK
+
+  export pure func basePremium(coverage: Coverage) -> int
+    ensures { result >= 100, result <= 500 }
+
+  export pure func riskMultiplier(risk: RiskClass) -> int
+    ensures { result >= 100, result <= 300 }
+
+  export pure func ageAdjustment(age: int) -> int
+    requires { age >= 18, age <= 80 }
+    ensures { result >= 0, result <= 200 }
+
+  -- Total premium: base * riskMultiplier / 100 + ageAdjustment + deductibleDiscount
+  -- Must be non-negative even with maximum deductible discount.
+  export pure func totalPremium(coverage: Coverage, risk: RiskClass, age: int, deductibleDiscount: int) -> int
+    requires { age >= 18, age <= 80, deductibleDiscount >= 0, deductibleDiscount <= 300 }
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module for insurance premium calculation:
+
+  Base premiums: BASIC=100, STANDARD=250, PREMIUM=500
+  Risk multipliers (percentage): LOW_RISK=100, MEDIUM_RISK=200, HIGH_RISK=300
+  Age adjustment: ages 18-25 pay +200, 26-60 pay +50, 61-80 pay +150
+
+  `totalPremium(coverage, risk, age, deductibleDiscount)`:
+    = basePremium * riskMultiplier / 100 + ageAdjustment - deductibleDiscount
+
+  The deductible discount can be up to 300, so with BASIC + LOW_RISK + age 30
+  (100 + 50 = 150), a discount of 300 would make it -150.
+  The contract requires result >= 0, so you must floor at zero.
+
+  Include a main function that prints (one per line):
+    totalPremium(PREMIUM, HIGH_RISK, 20, 0)
+    totalPremium(BASIC, LOW_RISK, 30, 300)
+    totalPremium(STANDARD, MEDIUM_RISK, 65, 100)
+
+expected_stdout: |
+  1700
+  0
+  550
+
+reference_solution: reference/insurance_premium.ail

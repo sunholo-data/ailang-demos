@@ -1,0 +1,46 @@
+id: contract_risk_score
+description: "Audit risk scoring with compound bounds — sum of factors must stay within [0, 200]"
+difficulty: medium
+category: compound_bounds
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Severity = CRITICAL | HIGH | MEDIUM | LOW
+  export type Source = INTERNAL | EXTERNAL | AUTOMATED
+
+  export pure func severityScore(s: Severity) -> int
+    ensures { result >= 10, result <= 100 }
+
+  export pure func sourceModifier(s: Source) -> int
+    ensures { result >= 0, result <= 50 }
+
+  export pure func riskScore(sev: Severity, src: Source, repeated: int) -> int
+    requires { repeated >= 0, repeated <= 10 }
+    ensures { result >= 0, result <= 200 }
+
+task_prompt: |
+  Write an AILANG module for audit risk scoring:
+
+  Severity scores: CRITICAL=100, HIGH=70, MEDIUM=40, LOW=10
+  Source modifiers: INTERNAL=10, EXTERNAL=50, AUTOMATED=0
+  Repeat penalty: repeated * 5 (capped at 50)
+
+  `riskScore(sev, src, repeated)` = severityScore + sourceModifier + repeatPenalty
+  BUT the total must be capped at 200 (use min-like logic).
+
+  The contract requires result in [0, 200]. Without capping, CRITICAL + EXTERNAL + 10 repeats
+  = 100 + 50 + 50 = 200 (exactly at limit). But be careful — the formula must never exceed 200.
+
+  Include a main function that prints (one per line):
+    riskScore(CRITICAL, EXTERNAL, 10)
+    riskScore(LOW, AUTOMATED, 0)
+    riskScore(HIGH, INTERNAL, 5)
+
+expected_stdout: |
+  200
+  10
+  105
+
+reference_solution: reference/risk_score.ail

@@ -1,0 +1,75 @@
+id: contract_time_arithmetic
+description: "Time arithmetic with wraparound — modular arithmetic contracts catch off-by-one in hour/minute handling"
+difficulty: hard
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Time as minutes since midnight (0-1439).
+  -- Adding/subtracting minutes wraps around midnight.
+  -- Contracts enforce valid time range AND round-trip consistency.
+  export pure func toMinutes(hours: int, minutes: int) -> int
+    requires { hours >= 0, hours < 24, minutes >= 0, minutes < 60 }
+    ensures { result >= 0, result < 1440 }
+
+  export pure func getHours(totalMins: int) -> int
+    requires { totalMins >= 0, totalMins < 1440 }
+    ensures { result >= 0, result < 24 }
+
+  export pure func getMinutes(totalMins: int) -> int
+    requires { totalMins >= 0, totalMins < 1440 }
+    ensures { result >= 0, result < 60 }
+
+  -- Adding time wraps at midnight
+  export pure func addTime(totalMins: int, delta: int) -> int
+    requires { totalMins >= 0, totalMins < 1440 }
+    ensures { result >= 0, result < 1440 }
+
+  -- Difference in minutes (always positive, shortest path around clock)
+  export pure func timeDiff(t1: int, t2: int) -> int
+    requires { t1 >= 0, t1 < 1440, t2 >= 0, t2 < 1440 }
+    ensures { result >= 0, result <= 720 }
+
+  -- Round-trip: toMinutes then getHours/getMinutes recovers original
+  export pure func roundTrip(hours: int, minutes: int) -> bool
+    requires { hours >= 0, hours < 24, minutes >= 0, minutes < 60 }
+    ensures { result == true }
+
+  -- Adding then subtracting same delta recovers original
+  export pure func addSubCancel(totalMins: int, delta: int) -> bool
+    requires { totalMins >= 0, totalMins < 1440 }
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module for clock-time arithmetic (24-hour format, minutes since midnight).
+
+  - `toMinutes(hours, minutes)`: convert h:m to total minutes (e.g., 14:30 -> 870)
+  - `getHours(totalMins)`: extract hours (e.g., 870 -> 14)
+  - `getMinutes(totalMins)`: extract minutes (e.g., 870 -> 30)
+  - `addTime(totalMins, delta)`: add delta minutes, wrap at 1440 (midnight).
+    delta can be negative (subtract). Must handle wrapping correctly:
+    23:50 + 20 = 0:10, and 0:10 + (-20) = 23:50.
+    Use ((totalMins + delta) % 1440 + 1440) % 1440 for correct modular arithmetic.
+  - `timeDiff(t1, t2)`: shortest time difference (symmetric, max 720 = 12 hours).
+  - `roundTrip(hours, minutes)`: proves toMinutes then getHours/getMinutes == original
+  - `addSubCancel(totalMins, delta)`: proves addTime(addTime(t, d), -d) == t
+
+  Main prints (one per line):
+    toMinutes(14, 30)
+    addTime(toMinutes(23, 50), 20)
+    addTime(toMinutes(0, 10), -20)
+    timeDiff(toMinutes(23, 50), toMinutes(0, 10))
+    roundTrip(14, 30)
+    addSubCancel(870, 600)
+
+expected_stdout: |
+  870
+  10
+  1430
+  20
+  true
+  true
+
+reference_solution: reference/time_arithmetic.ail

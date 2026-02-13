@@ -1,0 +1,40 @@
+id: contract_promo_rebate
+description: "String validation + bounded rebate — contract constrains both format check and amount"
+difficulty: medium
+category: string_theory
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  import std/string (startsWith, length as strLen)
+
+  export pure func isValidPromo(code: string) -> bool
+    ensures { result == (startsWith(code, "PROMO-") && strLen(code) >= 10) }
+
+  export pure func promoRebate(code: string, amount: int) -> int
+    requires { amount >= 0 }
+    ensures { result >= 0, result <= amount }
+
+task_prompt: |
+  Write an AILANG module with two functions:
+
+  1. `isValidPromo(code)`: returns true if code starts with "PROMO-" and is >= 10 chars.
+     Import `startsWith` and `length as strLen` from `std/string`.
+
+  2. `promoRebate(code, amount)`: returns 20% rebate if valid promo, 0 otherwise.
+     The rebate must never exceed the original amount.
+
+  Include a main function that prints (one per line):
+    isValidPromo("PROMO-SAVE2024")
+    isValidPromo("DISCOUNT")
+    promoRebate("PROMO-SAVE2024", 1000)
+    promoRebate("bad", 1000)
+
+expected_stdout: |
+  true
+  false
+  200
+  0
+
+reference_solution: reference/promo_rebate.ail

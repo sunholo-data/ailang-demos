@@ -1,0 +1,56 @@
+module benchmarks/contract_guided/reference/multi_tier_tax
+
+export pure func taxableIncome(gross: int) -> int
+  requires { gross >= 0 }
+  ensures { result >= 0, result <= gross }
+{
+  if gross - 15000 < 0 then 0 else gross - 15000
+}
+
+export pure func bracketTax(taxable: int) -> int
+  requires { taxable >= 0 }
+  ensures { result >= 0, result <= taxable }
+{
+  let b1 = if taxable > 10000 then 0 else 0 in
+  let over10k = if taxable > 10000 then taxable - 10000 else 0 in
+  let b2 = if over10k > 20000 then 2000 else over10k / 10 in
+  let over30k = if taxable > 30000 then taxable - 30000 else 0 in
+  let b3 = if over30k > 30000 then 6000 else over30k / 5 in
+  let over60k = if taxable > 60000 then taxable - 60000 else 0 in
+  let b4 = if over60k > 40000 then 12000 else over60k * 3 / 10 in
+  let over100k = if taxable > 100000 then taxable - 100000 else 0 in
+  let b5 = over100k * 2 / 5 in
+  b1 + b2 + b3 + b4 + b5
+}
+
+export pure func minimumTax(gross: int) -> int
+  requires { gross >= 0 }
+  ensures { result >= 0, result <= gross }
+{
+  gross / 100
+}
+
+export pure func finalTax(gross: int, credits: int) -> int
+  requires { gross >= 0, credits >= 0 }
+  ensures { result >= 0, result <= gross }
+{
+  let tax = bracketTax(taxableIncome(gross)) in
+  let afterCredits = if tax - credits < 0 then 0 else tax - credits in
+  let minTax = minimumTax(gross) in
+  if afterCredits > minTax then afterCredits else minTax
+}
+
+export pure func minimumTaxHolds(gross: int, credits: int) -> bool
+  requires { gross >= 0, credits >= 0 }
+  ensures { result == true }
+{
+  finalTax(gross, credits) >= minimumTax(gross)
+}
+
+export func main() -> () ! {IO} {
+  println(show(finalTax(80000, 3000)));
+  println(show(finalTax(20000, 5000)));
+  println(show(finalTax(10000, 0)));
+  println(show(finalTax(200000, 50000)));
+  println(show(minimumTaxHolds(80000, 3000)))
+}

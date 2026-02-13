@@ -1,0 +1,14 @@
+module benchmarks/contract_guided/reference/abs_difference
+
+export pure func absDiff(a: int, b: int) -> int
+  ensures { result >= 0 }
+{
+  if a >= b then a - b
+  else b - a
+}
+
+export func main() -> () ! {IO} {
+  println(show(absDiff(10, 3)));
+  println(show(absDiff(3, 10)));
+  println(show(absDiff(5, 5)))
+}

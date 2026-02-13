@@ -1,0 +1,25 @@
+module benchmarks/contract_guided/reference/promo_rebate
+
+import std/string (startsWith, length as strLen)
+
+export pure func isValidPromo(code: string) -> bool
+  ensures { result == (startsWith(code, "PROMO-") && strLen(code) >= 10) }
+{
+  startsWith(code, "PROMO-") && strLen(code) >= 10
+}
+
+export pure func promoRebate(code: string, amount: int) -> int
+  requires { amount >= 0 }
+  ensures { result >= 0, result <= amount }
+{
+  if startsWith(code, "PROMO-") && strLen(code) >= 10
+  then amount * 20 / 100
+  else 0
+}
+
+export func main() -> () ! {IO} {
+  println(show(isValidPromo("PROMO-SAVE2024")));
+  println(show(isValidPromo("DISCOUNT")));
+  println(show(promoRebate("PROMO-SAVE2024", 1000)));
+  println(show(promoRebate("bad", 1000)))
+}

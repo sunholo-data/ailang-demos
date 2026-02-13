@@ -1,0 +1,37 @@
+id: contract_progressive_tax
+description: "Multi-bracket progressive tax where result must stay within [0, income]"
+difficulty: medium
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Tax brackets: first 10000 at 10%, next 40000 at 25%, rest at 40%.
+  -- Contract: tax is non-negative AND never exceeds income.
+  export pure func progressiveTax(income: int) -> int
+    requires { income >= 0 }
+    ensures { result >= 0, result <= income }
+
+task_prompt: |
+  Write an AILANG module with a pure function `progressiveTax(income)` that
+  computes tax using progressive brackets:
+    - First 10,000: taxed at 10%
+    - Next 40,000 (10,001 to 50,000): taxed at 25%
+    - Everything above 50,000: taxed at 40%
+
+  For example: income=70000 → 1000 + 10000 + 8000 = 19000
+
+  Include a main function that prints (one per line):
+    progressiveTax(5000)
+    progressiveTax(30000)
+    progressiveTax(70000)
+    progressiveTax(0)
+
+expected_stdout: |
+  500
+  6000
+  19000
+  0
+
+reference_solution: reference/progressive_tax.ail

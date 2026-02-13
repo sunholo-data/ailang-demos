@@ -1,0 +1,75 @@
+id: contract_multi_tier_tax
+description: "5-bracket tax with standard deduction, credits, and minimum tax — many interacting constraints"
+difficulty: hard
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- 5-bracket progressive tax on taxable income (income - deduction):
+  --   0-10000: 0%, 10001-30000: 10%, 30001-60000: 20%, 60001-100000: 30%, 100001+: 40%
+  -- After bracket calculation: subtract credits, but floor at minimumTax.
+  -- minimumTax = 1% of gross income (before deduction).
+  -- Standard deduction = 15000.
+  --
+  -- Key: gross->taxable->brackets->credits->minimum creates a 5-step chain
+  -- where each step's contract depends on the previous.
+
+  export pure func taxableIncome(gross: int) -> int
+    requires { gross >= 0 }
+    ensures { result >= 0, result <= gross }
+
+  export pure func bracketTax(taxable: int) -> int
+    requires { taxable >= 0 }
+    ensures { result >= 0, result <= taxable }
+
+  export pure func minimumTax(gross: int) -> int
+    requires { gross >= 0 }
+    ensures { result >= 0, result <= gross }
+
+  export pure func finalTax(gross: int, credits: int) -> int
+    requires { gross >= 0, credits >= 0 }
+    ensures { result >= 0, result <= gross }
+
+  -- The minimum tax floor is never violated
+  export pure func minimumTaxHolds(gross: int, credits: int) -> bool
+    requires { gross >= 0, credits >= 0 }
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module for a multi-tier tax calculation with 5 interacting steps.
+
+  1. `taxableIncome(gross)`: gross - 15000 standard deduction (floor at 0)
+  2. `bracketTax(taxable)`: 5-bracket progressive tax:
+     - 0-10000: 0%
+     - 10001-30000: 10%
+     - 30001-60000: 20%
+     - 60001-100000: 30%
+     - 100001+: 40%
+  3. `minimumTax(gross)`: 1% of gross income (gross / 100)
+  4. `finalTax(gross, credits)`: max(bracketTax(taxableIncome(gross)) - credits, minimumTax(gross))
+     Credits reduce tax but can never push it below the minimum tax.
+  5. `minimumTaxHolds(gross, credits)`: proves finalTax >= minimumTax always
+
+  Example: gross=80000, credits=3000
+    taxable = 80000-15000 = 65000
+    bracket = 0 + 2000 + 6000 + 1500 = 9500
+    minimum = 800
+    final = max(9500-3000, 800) = 6500
+
+  Main prints (one per line):
+    finalTax(80000, 3000)
+    finalTax(20000, 5000)
+    finalTax(10000, 0)
+    finalTax(200000, 50000)
+    minimumTaxHolds(80000, 3000)
+
+expected_stdout: |
+  6500
+  200
+  100
+  4000
+  true
+
+reference_solution: reference/multi_tier_tax.ail

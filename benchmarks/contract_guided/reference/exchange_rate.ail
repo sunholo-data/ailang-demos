@@ -1,0 +1,18 @@
+module benchmarks/contract_guided/reference/exchange_rate
+
+export pure func exchange(amount: int, rateBps: int, spreadBps: int, flatFee: int) -> int
+  requires { amount >= 0, rateBps >= 100, spreadBps >= 0, spreadBps <= 500, flatFee >= 0, flatFee <= 100 }
+  ensures { result >= 0, result <= amount * rateBps / 10000 }
+{
+  let raw = amount * rateBps / 10000;
+  let afterSpread = raw - raw * spreadBps / 10000;
+  let final = afterSpread - flatFee;
+  if final < 0 then 0 else final
+}
+
+export func main() -> () ! {IO} {
+  println(show(exchange(10000, 11500, 100, 10)));
+  println(show(exchange(100, 11500, 500, 50)));
+  println(show(exchange(0, 15000, 200, 25)));
+  println(show(exchange(1, 9000, 0, 50)))
+}

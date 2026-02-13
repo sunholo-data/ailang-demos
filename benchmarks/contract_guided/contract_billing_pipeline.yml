@@ -1,0 +1,50 @@
+id: contract_billing_pipeline
+description: "4-deep billing chain: unitCost → discount → tax → total, all contracts must hold"
+difficulty: medium
+category: cross_function
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Tier = ENTERPRISE | BUSINESS | STARTUP | FREE
+
+  export pure func unitCost(tier: Tier) -> int
+    ensures { result >= 10 }
+
+  export pure func discountBps(tier: Tier) -> int
+    ensures { result >= 0, result <= 3000 }
+
+  export pure func applyDiscount(amount: int, tier: Tier) -> int
+    requires { amount >= 0 }
+    ensures { result >= 0, result <= amount }
+
+  export pure func addTax(amount: int, rateBps: int) -> int
+    requires { amount >= 0, rateBps >= 0 }
+    ensures { result >= amount }
+
+  -- Top-level: total bill is always non-negative for any tier and quantity
+  export pure func totalBill(units: int, tier: Tier, taxBps: int) -> int
+    requires { units >= 0, taxBps >= 0 }
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module implementing a 4-function billing pipeline:
+
+  1. `unitCost(tier)`: ENTERPRISE=50, BUSINESS=100, STARTUP=200, FREE=500
+  2. `discountBps(tier)`: ENTERPRISE=3000 (30%), BUSINESS=1500, STARTUP=500, FREE=0
+  3. `applyDiscount(amount, tier)`: applies discount in basis points
+  4. `addTax(amount, rateBps)`: adds tax in basis points
+  5. `totalBill(units, tier, taxBps)`: units * unitCost → discount → tax → total
+
+  Include a main function that prints (one per line):
+    totalBill(100, ENTERPRISE, 875)
+    totalBill(10, FREE, 1000)
+    totalBill(0, STARTUP, 2000)
+
+expected_stdout: |
+  3806
+  5500
+  0
+
+reference_solution: reference/billing_pipeline.ail

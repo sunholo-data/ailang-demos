@@ -1,0 +1,20 @@
+module benchmarks/contract_guided/reference/progressive_tax
+
+export pure func progressiveTax(income: int) -> int
+  requires { income >= 0 }
+  ensures { result >= 0, result <= income }
+{
+  let bracket1 = if income > 10000 then 10000 else income;
+  let bracket2 = if income > 50000 then 40000
+                 else if income > 10000 then income - 10000
+                 else 0;
+  let bracket3 = if income > 50000 then income - 50000 else 0;
+  bracket1 * 10 / 100 + bracket2 * 25 / 100 + bracket3 * 40 / 100
+}
+
+export func main() -> () ! {IO} {
+  println(show(progressiveTax(5000)));
+  println(show(progressiveTax(30000)));
+  println(show(progressiveTax(70000)));
+  println(show(progressiveTax(0)))
+}

@@ -1,0 +1,49 @@
+module benchmarks/contract_guided/reference/insurance_premium
+
+export type Coverage = BASIC | STANDARD | PREMIUM
+export type RiskClass = LOW_RISK | MEDIUM_RISK | HIGH_RISK
+
+export pure func basePremium(coverage: Coverage) -> int
+  ensures { result >= 100, result <= 500 }
+{
+  match coverage {
+    BASIC    => 100,
+    STANDARD => 250,
+    PREMIUM  => 500
+  }
+}
+
+export pure func riskMultiplier(risk: RiskClass) -> int
+  ensures { result >= 100, result <= 300 }
+{
+  match risk {
+    LOW_RISK    => 100,
+    MEDIUM_RISK => 200,
+    HIGH_RISK   => 300
+  }
+}
+
+export pure func ageAdjustment(age: int) -> int
+  requires { age >= 18, age <= 80 }
+  ensures { result >= 0, result <= 200 }
+{
+  if age <= 25 then 200
+  else if age <= 60 then 50
+  else 150
+}
+
+export pure func totalPremium(coverage: Coverage, risk: RiskClass, age: int, deductibleDiscount: int) -> int
+  requires { age >= 18, age <= 80, deductibleDiscount >= 0, deductibleDiscount <= 300 }
+  ensures { result >= 0 }
+{
+  let base = basePremium(coverage) * riskMultiplier(risk) / 100;
+  let adjusted = base + ageAdjustment(age);
+  let final = adjusted - deductibleDiscount;
+  if final < 0 then 0 else final
+}
+
+export func main() -> () ! {IO} {
+  println(show(totalPremium(PREMIUM, HIGH_RISK, 20, 0)));
+  println(show(totalPremium(BASIC, LOW_RISK, 30, 300)));
+  println(show(totalPremium(STANDARD, MEDIUM_RISK, 65, 100)))
+}

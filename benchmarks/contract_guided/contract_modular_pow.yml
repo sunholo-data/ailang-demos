@@ -1,0 +1,63 @@
+id: contract_modular_pow
+description: "Modular exponentiation — contract IS the spec, LLM must derive fast algorithm"
+difficulty: hard
+category: algorithm_from_spec
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- modPow(base, exp, mod) computes (base^exp) % mod using integer arithmetic.
+  -- Recursive function — Z3 can't verify it directly, but helpers are verifiable.
+  export pure func modPow(base: int, exp: int, mod: int) -> int
+    requires { base >= 0, exp >= 0, mod > 0 }
+
+  -- Helper: multiplication mod (non-recursive, Z3-verifiable)
+  export pure func mulMod(a: int, b: int, mod: int) -> int
+    requires { a >= 0, b >= 0, mod > 0 }
+    ensures { result >= 0, result < mod }
+
+  -- Helper: square mod (non-recursive, Z3-verifiable)
+  export pure func sqMod(a: int, mod: int) -> int
+    requires { a >= 0, mod > 0 }
+    ensures { result >= 0, result < mod }
+
+  -- Consistency: sqMod == mulMod(a, a, mod) — provable by Z3
+  export pure func sqConsistent(a: int, mod: int) -> bool
+    requires { a >= 0, mod > 0 }
+    ensures { result == true }
+
+  export pure func fermatCheck(a: int, p: int) -> bool
+    requires { a > 0, p > 1, a < p }
+
+  export pure func modPowConsistent(base: int, mod: int) -> bool
+    requires { base >= 0, mod > 0 }
+
+task_prompt: |
+  Write an AILANG module for modular exponentiation.
+
+  - `modPow(base, exp, mod)`: compute (base^exp) % mod efficiently.
+    Use repeated squaring: if exp is even, modPow(base*base % mod, exp/2, mod).
+    If exp is odd, base * modPow(base, exp-1, mod) % mod. Base case: exp==0 -> 1.
+
+  - `fermatCheck(a, p)`: returns modPow(a, p-1, p) == 1
+    (Fermat's little theorem for primes)
+
+  - `modPowConsistent(base, mod)`: proves modPow(base, 2, mod) == (base * base) % mod
+    (squaring consistency check)
+
+  Main prints (one per line):
+    modPow(2, 10, 1000)
+    modPow(3, 13, 100)
+    modPow(7, 256, 13)
+    fermatCheck(2, 7)
+    modPowConsistent(5, 13)
+
+expected_stdout: |
+  24
+  23
+  9
+  true
+  true
+
+reference_solution: reference/modular_pow.ail

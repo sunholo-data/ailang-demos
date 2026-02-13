@@ -1,0 +1,81 @@
+id: contract_water_billing
+description: "4-tier water billing with seasonal multiplier, low-income cap, and minimum charge — 6 interacting constraints"
+difficulty: hard
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Water billing: usage in gallons, price in cents.
+  -- 4 tiers: 0-1000 gal at 3c, 1001-5000 at 5c, 5001-10000 at 8c, 10001+ at 12c
+  -- Seasonal multiplier: summer=150 (1.5x), winter=80 (0.8x), other=100 (1.0x)
+  --   applied as: baseCost * multiplier / 100
+  -- Low-income cap: if lowIncome, bill cannot exceed 5000 cents ($50)
+  -- Minimum charge: always at least 1500 cents ($15), even with low-income cap
+  --
+  -- Contract chain enforces: minimum <= result <= cap (when applicable)
+  -- AND result >= baseCost * 80 / 100 (winter floor)
+  -- AND result <= baseCost * 150 / 100 (summer ceiling)
+
+  export pure func baseCost(gallons: int) -> int
+    requires { gallons >= 0 }
+    ensures { result >= 0 }
+
+  export pure func seasonalCost(gallons: int, multiplier: int) -> int
+    requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+    ensures { result >= 0 }
+
+  export pure func finalBill(gallons: int, multiplier: int, lowIncome: bool) -> int
+    requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+    ensures { result >= 1500 }
+
+  -- Low-income cap is respected when applicable
+  export pure func lowIncomeCapped(gallons: int, multiplier: int) -> bool
+    requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+    ensures { result == true }
+
+  -- Minimum charge always holds regardless of inputs
+  export pure func minimumHolds(gallons: int, multiplier: int, lowIncome: bool) -> bool
+    requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module for a water utility billing system.
+
+  Tiered pricing (usage in gallons, price in cents):
+  - 0-1000 gallons: 3 cents/gallon
+  - 1001-5000 gallons: 5 cents/gallon
+  - 5001-10000 gallons: 8 cents/gallon
+  - 10001+ gallons: 12 cents/gallon
+
+  Functions:
+  - `baseCost(gallons)`: progressive tier pricing (like tax brackets)
+  - `seasonalCost(gallons, multiplier)`: baseCost * multiplier / 100
+    multiplier: 150 for summer, 80 for winter, 100 for spring/fall
+  - `finalBill(gallons, multiplier, lowIncome)`:
+    Start with seasonalCost. If lowIncome is true, cap at 5000 cents.
+    Then apply minimum charge of 1500 cents (even for low-income).
+    So: max(min(seasonalCost, cap_if_applicable), 1500)
+  - `lowIncomeCapped(gallons, multiplier)`: proves finalBill with lowIncome=true <= 5000
+  - `minimumHolds(gallons, multiplier, lowIncome)`: proves finalBill >= 1500 always
+
+  Main prints (one per line):
+    baseCost(3000)
+    seasonalCost(3000, 150)
+    finalBill(3000, 150, false)
+    finalBill(3000, 150, true)
+    finalBill(0, 100, false)
+    lowIncomeCapped(20000, 150)
+    minimumHolds(0, 80, true)
+
+expected_stdout: |
+  13000
+  19500
+  19500
+  5000
+  1500
+  true
+  true
+
+reference_solution: reference/water_billing.ail

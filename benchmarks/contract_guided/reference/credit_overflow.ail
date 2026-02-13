@@ -1,0 +1,15 @@
+module benchmarks/contract_guided/reference/credit_overflow
+
+export pure func applyCredits(subtotal: int, credits: int) -> int
+  requires { subtotal >= 0, credits >= 0 }
+  ensures { result >= 0 }
+{
+  if subtotal >= credits then subtotal - credits
+  else 0
+}
+
+export func main() -> () ! {IO} {
+  println(show(applyCredits(100, 30)));
+  println(show(applyCredits(50, 50)));
+  println(show(applyCredits(10, 100)))
+}

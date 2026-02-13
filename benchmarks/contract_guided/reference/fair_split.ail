@@ -1,0 +1,24 @@
+module benchmarks/contract_guided/reference/fair_split
+
+export pure func fairShare(total: int, people: int) -> int
+  requires { total >= 0, people >= 1 }
+  ensures { result >= 0, result * people <= total }
+{
+  total / people
+}
+
+export pure func fairRemainder(total: int, people: int) -> int
+  requires { total >= 0, people >= 1 }
+  ensures { result >= 0, result < people }
+{
+  total - (total / people) * people
+}
+
+export func main() -> () ! {IO} {
+  println(show(fairShare(10, 3)));
+  println(show(fairRemainder(10, 3)));
+  println(show(fairShare(100, 7)));
+  println(show(fairRemainder(100, 7)));
+  println(show(fairShare(6, 3)));
+  println(show(fairRemainder(6, 3)))
+}

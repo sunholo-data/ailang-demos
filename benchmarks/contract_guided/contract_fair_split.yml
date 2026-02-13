@@ -1,0 +1,48 @@
+id: contract_fair_split
+description: "Split N items among K people — sum must equal total AND per-person share bounded"
+difficulty: medium
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Each person gets at least floor(total/people), result is one person's share.
+  -- Key constraint: result * people <= total (no over-allocation).
+  -- AND result >= total / people (each gets their fair share, using floor division).
+  export pure func fairShare(total: int, people: int) -> int
+    requires { total >= 0, people >= 1 }
+    ensures { result >= 0, result * people <= total }
+
+  -- The remainder that goes to the first few people.
+  export pure func fairRemainder(total: int, people: int) -> int
+    requires { total >= 0, people >= 1 }
+    ensures { result >= 0, result < people }
+
+task_prompt: |
+  Write an AILANG module for fair resource splitting:
+
+  `fairShare(total, people)`: returns the base share each person gets (floor division).
+  `fairRemainder(total, people)`: returns how many people get +1 (the remainder).
+
+  The key invariant: fairShare * people + fairRemainder == total.
+
+  Common mistake: ceiling division gives each person too much, violating `result * people <= total`.
+
+  Include a main function that prints (one per line):
+    fairShare(10, 3)
+    fairRemainder(10, 3)
+    fairShare(100, 7)
+    fairRemainder(100, 7)
+    fairShare(6, 3)
+    fairRemainder(6, 3)
+
+expected_stdout: |
+  3
+  1
+  14
+  2
+  2
+  0
+
+reference_solution: reference/fair_split.ail

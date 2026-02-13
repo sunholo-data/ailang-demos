@@ -1,0 +1,36 @@
+module benchmarks/contract_guided/reference/loan_amortization
+
+export pure func monthlyInterest(principal: int, rateBps: int) -> int
+  requires { principal >= 0, rateBps >= 0 }
+  ensures { result >= 0, result <= principal }
+{
+  principal * rateBps / 120000
+}
+
+export pure func principalPayment(principal: int, rateBps: int, monthlyPay: int) -> int
+  requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps) }
+  ensures { result >= 0 }
+{
+  monthlyPay - monthlyInterest(principal, rateBps)
+}
+
+export pure func newBalance(principal: int, rateBps: int, monthlyPay: int) -> int
+  requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps), monthlyPay <= principal + monthlyInterest(principal, rateBps) }
+  ensures { result >= 0 }
+{
+  principal - principalPayment(principal, rateBps, monthlyPay)
+}
+
+export pure func paymentConsistent(principal: int, rateBps: int, monthlyPay: int) -> bool
+  requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps) }
+  ensures { result == true }
+{
+  monthlyInterest(principal, rateBps) + principalPayment(principal, rateBps, monthlyPay) == monthlyPay
+}
+
+export func main() -> () ! {IO} {
+  println(show(monthlyInterest(10000000, 500)));
+  println(show(principalPayment(10000000, 500, 53682)));
+  println(show(newBalance(10000000, 500, 53682)));
+  println(show(paymentConsistent(10000000, 500, 53682)))
+}

@@ -1,0 +1,27 @@
+id: contract_abs_difference
+description: "Absolute difference between two integers"
+difficulty: easy
+category: calibration
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export pure func absDiff(a: int, b: int) -> int
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module with a pure function `absDiff(a, b)` that returns
+  the absolute difference between two integers.
+
+  Include a main function that prints (one per line):
+    absDiff(10, 3)
+    absDiff(3, 10)
+    absDiff(5, 5)
+
+expected_stdout: |
+  7
+  7
+  0
+
+reference_solution: reference/abs_difference.ail

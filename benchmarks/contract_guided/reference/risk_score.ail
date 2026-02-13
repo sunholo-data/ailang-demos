@@ -1,0 +1,40 @@
+module benchmarks/contract_guided/reference/risk_score
+
+export type Severity = CRITICAL | HIGH | MEDIUM | LOW
+export type Source = INTERNAL | EXTERNAL | AUTOMATED
+
+export pure func severityScore(s: Severity) -> int
+  ensures { result >= 10, result <= 100 }
+{
+  match s {
+    CRITICAL => 100,
+    HIGH     => 70,
+    MEDIUM   => 40,
+    LOW      => 10
+  }
+}
+
+export pure func sourceModifier(s: Source) -> int
+  ensures { result >= 0, result <= 50 }
+{
+  match s {
+    INTERNAL  => 10,
+    EXTERNAL  => 50,
+    AUTOMATED => 0
+  }
+}
+
+export pure func riskScore(sev: Severity, src: Source, repeated: int) -> int
+  requires { repeated >= 0, repeated <= 10 }
+  ensures { result >= 0, result <= 200 }
+{
+  let repeatPenalty = if repeated * 5 > 50 then 50 else repeated * 5;
+  let raw = severityScore(sev) + sourceModifier(src) + repeatPenalty;
+  if raw > 200 then 200 else raw
+}
+
+export func main() -> () ! {IO} {
+  println(show(riskScore(CRITICAL, EXTERNAL, 10)));
+  println(show(riskScore(LOW, AUTOMATED, 0)));
+  println(show(riskScore(HIGH, INTERNAL, 5)))
+}

@@ -1,0 +1,51 @@
+id: contract_capacity_booking
+description: "Room capacity with cross-function contracts — remaining must be non-negative"
+difficulty: medium
+category: cross_function
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Room = SMALL | MEDIUM | LARGE
+
+  export pure func capacity(room: Room) -> int
+    ensures { result >= 4, result <= 200 }
+
+  export pure func fitsInRoom(headcount: int, room: Room) -> bool
+    requires { headcount >= 1 }
+    ensures { result == (headcount <= capacity(room)) }
+
+  export pure func remaining(room: Room, occupancy: int) -> int
+    requires { occupancy >= 0, occupancy <= capacity(room) }
+    ensures { result >= 0 }
+
+  export pure func surcharge(room: Room, headcount: int) -> int
+    requires { headcount >= 1, headcount <= capacity(room) }
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module for conference room booking:
+
+  Room capacities: SMALL=4, MEDIUM=20, LARGE=200.
+
+  Functions:
+  - `capacity(room)`: returns max occupancy
+  - `fitsInRoom(headcount, room)`: returns true if headcount <= capacity
+  - `remaining(room, occupancy)`: returns remaining spots
+  - `surcharge(room, headcount)`: extra cost per person above half capacity
+    (if headcount > capacity/2, charge 100 per extra person, else 0)
+
+  Include a main function that prints (one per line):
+    fitsInRoom(15, MEDIUM)
+    fitsInRoom(25, MEDIUM)
+    remaining(LARGE, 50)
+    surcharge(MEDIUM, 15)
+
+expected_stdout: |
+  true
+  false
+  150
+  500
+
+reference_solution: reference/capacity_booking.ail

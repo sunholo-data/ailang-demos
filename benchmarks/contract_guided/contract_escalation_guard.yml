@@ -1,0 +1,53 @@
+id: contract_escalation_guard
+description: "Privilege escalation check — bonus pushes level past role weight. Subtle cross-function bug."
+difficulty: medium
+category: security_invariant
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Role = ADMIN | EDITOR | VIEWER | GUEST
+  export type Action = READ | WRITE | DELETE
+
+  export pure func roleWeight(role: Role) -> int
+    ensures { result >= 0, result <= 100 }
+
+  export pure func actionThreshold(action: Action) -> int
+    ensures { result >= 10, result <= 80 }
+
+  -- The granted level must NEVER exceed the role's base weight.
+  -- A bonus for "trusted" actions must not break this invariant.
+  export pure func grantedLevel(role: Role, action: Action) -> int
+    ensures { result <= roleWeight(role) }
+
+task_prompt: |
+  Write an AILANG module implementing a privilege escalation guard:
+
+  Roles: ADMIN=100, EDITOR=60, VIEWER=30, GUEST=10
+  Action thresholds: READ=10, WRITE=50, DELETE=80
+
+  `grantedLevel(role, action)`: computes the effective permission level.
+  Formula: roleWeight(role) + actionBonus(action) - actionThreshold(action)
+
+  Action bonuses: READ=15, WRITE=5, DELETE=0
+
+  CONTRACT: The result must NEVER exceed roleWeight(role).
+  Without a guard, the READ bonus (+15) minus READ threshold (-10) = net +5,
+  which pushes EDITOR from 60 to 65 — exceeding roleWeight(EDITOR)=60.
+
+  You must add a cap/guard to satisfy the contract.
+
+  Include a main function that prints (one per line):
+    grantedLevel(ADMIN, READ)
+    grantedLevel(EDITOR, READ)
+    grantedLevel(EDITOR, WRITE)
+    grantedLevel(GUEST, DELETE)
+
+expected_stdout: |
+  100
+  60
+  15
+  0
+
+reference_solution: reference/escalation_guard.ail

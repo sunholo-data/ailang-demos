@@ -1,0 +1,59 @@
+id: contract_loan_amortization
+description: "Loan amortization step: interest/principal split with rounding invariant"
+difficulty: hard
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- All amounts in cents. Rate is annual basis points (e.g., 500 = 5.00%).
+  -- Monthly interest = principal * rate / 120000 (annual rate / 12 months / 100 for percent / 100 for bps)
+  -- Key invariant: interest + principalPayment == monthlyPayment (no penny lost)
+  -- AND newBalance == principal - principalPayment (balance tracks correctly)
+  export pure func monthlyInterest(principal: int, rateBps: int) -> int
+    requires { principal >= 0, rateBps >= 0 }
+    ensures { result >= 0, result <= principal }
+
+  export pure func principalPayment(principal: int, rateBps: int, monthlyPay: int) -> int
+    requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps) }
+    ensures { result >= 0 }
+
+  export pure func newBalance(principal: int, rateBps: int, monthlyPay: int) -> int
+    requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps), monthlyPay <= principal + monthlyInterest(principal, rateBps) }
+    ensures { result >= 0 }
+
+  -- The critical invariant: payments must be consistent
+  export pure func paymentConsistent(principal: int, rateBps: int, monthlyPay: int) -> bool
+    requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps) }
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module for a single loan amortization step.
+
+  All amounts are in cents. Rate is annual basis points (500 = 5.00% annual).
+  Monthly interest = principal * rateBps / 120000
+  (that's: principal * annualRate / 12 months, where rateBps/10000 = decimal rate)
+
+  Functions needed:
+  - `monthlyInterest(principal, rateBps)`: integer division, floor
+  - `principalPayment(principal, rateBps, monthlyPay)`: monthlyPay - interest
+  - `newBalance(principal, rateBps, monthlyPay)`: principal - principalPayment
+  - `paymentConsistent(principal, rateBps, monthlyPay)`: proves interest + principalPayment == monthlyPay
+
+  CRITICAL: The consistency check must ALWAYS return true. Think carefully about
+  how integer division rounding affects the identity.
+
+  Main prints (one per line):
+    monthlyInterest(10000000, 500)   -- $100k loan at 5%, monthly interest
+    principalPayment(10000000, 500, 53682)
+    newBalance(10000000, 500, 53682)
+    paymentConsistent(10000000, 500, 53682)
+
+expected_stdout: |
+  41666
+  12016
+  9987984
+  true
+
+reference_solution: reference/loan_amortization.ail

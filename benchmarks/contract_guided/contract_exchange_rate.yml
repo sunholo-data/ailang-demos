@@ -1,0 +1,43 @@
+id: contract_exchange_rate
+description: "Currency exchange with spread + fee — 3 simultaneous constraints on the result"
+difficulty: medium
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Exchange converts amount at a rate with a spread and flat fee.
+  -- Three constraints that must ALL hold:
+  -- 1. result >= 0 (never negative)
+  -- 2. result <= amount * rateBps / 10000 (never MORE than raw conversion)
+  -- 3. For non-zero amounts: result > 0 when amount * rate is large enough
+  export pure func exchange(amount: int, rateBps: int, spreadBps: int, flatFee: int) -> int
+    requires { amount >= 0, rateBps >= 100, spreadBps >= 0, spreadBps <= 500, flatFee >= 0, flatFee <= 100 }
+    ensures { result >= 0, result <= amount * rateBps / 10000 }
+
+task_prompt: |
+  Write an AILANG module for currency exchange:
+
+  `exchange(amount, rateBps, spreadBps, flatFee)`:
+    1. Convert: rawResult = amount * rateBps / 10000
+    2. Apply spread: afterSpread = rawResult - rawResult * spreadBps / 10000
+    3. Subtract flat fee: final = afterSpread - flatFee
+    4. Floor at zero: if final < 0, return 0
+
+  The contract says result >= 0 AND result <= amount * rateBps / 10000.
+  The spread and fee can make small conversions go negative.
+
+  Include a main function that prints (one per line):
+    exchange(10000, 11500, 100, 10)
+    exchange(100, 11500, 500, 50)
+    exchange(0, 15000, 200, 25)
+    exchange(1, 9000, 0, 50)
+
+expected_stdout: |
+  11375
+  65
+  0
+  0
+
+reference_solution: reference/exchange_rate.ail

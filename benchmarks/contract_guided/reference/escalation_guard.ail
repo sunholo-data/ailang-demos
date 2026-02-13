@@ -1,0 +1,48 @@
+module benchmarks/contract_guided/reference/escalation_guard
+
+export type Role = ADMIN | EDITOR | VIEWER | GUEST
+export type Action = READ | WRITE | DELETE
+
+export pure func roleWeight(role: Role) -> int
+  ensures { result >= 0, result <= 100 }
+{
+  match role {
+    ADMIN  => 100,
+    EDITOR => 60,
+    VIEWER => 30,
+    GUEST  => 10
+  }
+}
+
+export pure func actionThreshold(action: Action) -> int
+  ensures { result >= 10, result <= 80 }
+{
+  match action {
+    READ   => 10,
+    WRITE  => 50,
+    DELETE => 80
+  }
+}
+
+export pure func grantedLevel(role: Role, action: Action) -> int
+  ensures { result <= roleWeight(role) }
+{
+  let base = roleWeight(role);
+  let bonus = match action {
+    READ   => 15,
+    WRITE  => 5,
+    DELETE => 0
+  };
+  let raw = base + bonus - actionThreshold(action);
+  -- Guard: cap at roleWeight to prevent escalation
+  if raw > base then base
+  else if raw < 0 then 0
+  else raw
+}
+
+export func main() -> () ! {IO} {
+  println(show(grantedLevel(ADMIN, READ)));
+  println(show(grantedLevel(EDITOR, READ)));
+  println(show(grantedLevel(EDITOR, WRITE)));
+  println(show(grantedLevel(GUEST, DELETE)))
+}

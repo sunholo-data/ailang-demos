@@ -1,0 +1,37 @@
+id: contract_prorated_refund
+description: "Prorated warranty refund — goes negative after warranty expires. Classic edge case."
+difficulty: medium
+category: edge_case_trap
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export pure func proratedRefund(price: int, daysUsed: int, warrantyDays: int) -> int
+    requires { price >= 0, daysUsed >= 0, warrantyDays >= 1 }
+    ensures { result >= 0 }
+
+task_prompt: |
+  Write an AILANG module with `proratedRefund(price, daysUsed, warrantyDays)`.
+
+  Computes a refund proportional to the remaining warranty period:
+    refund = price * (warrantyDays - daysUsed) / warrantyDays
+
+  But if the customer contacts support AFTER the warranty expires,
+  daysUsed > warrantyDays makes the numerator negative.
+
+  The contract says result >= 0 — you must handle the post-warranty case.
+
+  Include a main function that prints (one per line):
+    proratedRefund(365, 100, 365)
+    proratedRefund(1000, 0, 30)
+    proratedRefund(500, 400, 365)
+    proratedRefund(100, 500, 365)
+
+expected_stdout: |
+  265
+  1000
+  0
+  0
+
+reference_solution: reference/prorated_refund.ail

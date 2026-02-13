@@ -1,0 +1,50 @@
+id: contract_permission_chain
+description: "3-function RBAC chain: roleWeight + actionThreshold + resourceSensitivity = isAllowed"
+difficulty: medium
+category: cross_function
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  export type Role = ADMIN | EDITOR | VIEWER | GUEST
+  export type Action = READ | WRITE | DELETE
+
+  export pure func roleWeight(role: Role) -> int
+    ensures { result >= 0, result <= 100 }
+
+  export pure func actionThreshold(action: Action) -> int
+    ensures { result >= 10, result <= 80 }
+
+  -- Security invariant: ADMIN always allowed, GUEST never writes.
+  export pure func isAllowed(role: Role, action: Action) -> bool
+
+  export pure func adminAlwaysAllowed(action: Action) -> bool
+    ensures { result == true }
+
+  export pure func guestCannotWrite() -> bool
+    ensures { result == true }
+
+task_prompt: |
+  Write an AILANG module implementing role-based access control:
+
+  Roles: ADMIN (weight 100), EDITOR (60), VIEWER (30), GUEST (10)
+  Actions: READ (threshold 10), WRITE (50), DELETE (80)
+
+  `isAllowed(role, action)` returns true if roleWeight >= actionThreshold.
+  `adminAlwaysAllowed(action)` must return true for any action (proves admin supremacy).
+  `guestCannotWrite()` must return true (proves guest can never write).
+
+  Include a main function that prints (one per line):
+    isAllowed(ADMIN, DELETE)
+    isAllowed(GUEST, WRITE)
+    isAllowed(EDITOR, WRITE)
+    isAllowed(VIEWER, READ)
+
+expected_stdout: |
+  true
+  false
+  true
+  true
+
+reference_solution: reference/permission_chain.ail

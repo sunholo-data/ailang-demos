@@ -1,0 +1,16 @@
+module benchmarks/contract_guided/reference/clamp_value
+
+export pure func clampValue(x: int, lo: int, hi: int) -> int
+  requires { lo >= 0, hi >= lo }
+  ensures { result >= lo, result <= hi }
+{
+  if x < lo then lo
+  else if x > hi then hi
+  else x
+}
+
+export func main() -> () ! {IO} {
+  println(show(clampValue(5, 1, 10)));
+  println(show(clampValue(-3, 0, 100)));
+  println(show(clampValue(999, 10, 50)))
+}

@@ -1,0 +1,37 @@
+id: contract_integer_sqrt
+description: "Integer square root — compound contract SPECIFIES the algorithm via result^2 <= n < (result+1)^2"
+difficulty: hard
+category: algorithm_from_spec
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- The contract IS the specification. The LLM must derive the algorithm.
+  -- result^2 <= n AND (result+1)^2 > n uniquely defines integer sqrt.
+  export pure func isqrt(n: int) -> int
+    requires { n >= 0 }
+    ensures { result >= 0, result * result <= n, (result + 1) * (result + 1) > n }
+
+task_prompt: |
+  Write an AILANG module with a pure function `isqrt(n)` that computes the
+  integer square root of n — the largest integer r such that r*r <= n.
+
+  Use integer arithmetic only (no floating point). A simple linear search
+  or any correct approach works.
+
+  Include a main function that prints (one per line):
+    isqrt(0)
+    isqrt(1)
+    isqrt(4)
+    isqrt(10)
+    isqrt(100)
+
+expected_stdout: |
+  0
+  1
+  2
+  3
+  10
+
+reference_solution: reference/integer_sqrt.ail

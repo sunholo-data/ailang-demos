@@ -1,0 +1,55 @@
+module benchmarks/contract_guided/reference/water_billing
+
+export pure func baseCost(gallons: int) -> int
+  requires { gallons >= 0 }
+  ensures { result >= 0 }
+{
+  let t1 = if gallons > 1000 then 1000 * 3 else gallons * 3 in
+  let over1k = if gallons > 1000 then gallons - 1000 else 0 in
+  let t2 = if over1k > 4000 then 4000 * 5 else over1k * 5 in
+  let over5k = if gallons > 5000 then gallons - 5000 else 0 in
+  let t3 = if over5k > 5000 then 5000 * 8 else over5k * 8 in
+  let over10k = if gallons > 10000 then gallons - 10000 else 0 in
+  let t4 = over10k * 12 in
+  t1 + t2 + t3 + t4
+}
+
+export pure func seasonalCost(gallons: int, multiplier: int) -> int
+  requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+  ensures { result >= 0 }
+{
+  baseCost(gallons) * multiplier / 100
+}
+
+export pure func finalBill(gallons: int, multiplier: int, lowIncome: bool) -> int
+  requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+  ensures { result >= 1500 }
+{
+  let cost = seasonalCost(gallons, multiplier) in
+  let capped = if lowIncome then (if cost > 5000 then 5000 else cost) else cost in
+  if capped > 1500 then capped else 1500
+}
+
+export pure func lowIncomeCapped(gallons: int, multiplier: int) -> bool
+  requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+  ensures { result == true }
+{
+  finalBill(gallons, multiplier, true) <= 5000
+}
+
+export pure func minimumHolds(gallons: int, multiplier: int, lowIncome: bool) -> bool
+  requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
+  ensures { result == true }
+{
+  finalBill(gallons, multiplier, lowIncome) >= 1500
+}
+
+export func main() -> () ! {IO} {
+  println(show(baseCost(3000)));
+  println(show(seasonalCost(3000, 150)));
+  println(show(finalBill(3000, 150, false)));
+  println(show(finalBill(3000, 150, true)));
+  println(show(finalBill(0, 100, false)));
+  println(show(lowIncomeCapped(20000, 150)));
+  println(show(minimumHolds(0, 80, true)))
+}

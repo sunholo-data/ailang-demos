@@ -1,0 +1,44 @@
+module benchmarks/contract_guided/reference/capacity_booking
+
+export type Room = SMALL | MEDIUM | LARGE
+
+export pure func capacity(room: Room) -> int
+  ensures { result >= 4, result <= 200 }
+{
+  match room {
+    SMALL  => 4,
+    MEDIUM => 20,
+    LARGE  => 200
+  }
+}
+
+export pure func fitsInRoom(headcount: int, room: Room) -> bool
+  requires { headcount >= 1 }
+  ensures { result == (headcount <= capacity(room)) }
+{
+  headcount <= capacity(room)
+}
+
+export pure func remaining(room: Room, occupancy: int) -> int
+  requires { occupancy >= 0, occupancy <= capacity(room) }
+  ensures { result >= 0 }
+{
+  capacity(room) - occupancy
+}
+
+export pure func surcharge(room: Room, headcount: int) -> int
+  requires { headcount >= 1, headcount <= capacity(room) }
+  ensures { result >= 0 }
+{
+  let halfCap = capacity(room) / 2;
+  if headcount > halfCap
+  then (headcount - halfCap) * 100
+  else 0
+}
+
+export func main() -> () ! {IO} {
+  println(show(fitsInRoom(15, MEDIUM)));
+  println(show(fitsInRoom(25, MEDIUM)));
+  println(show(remaining(LARGE, 50)));
+  println(show(surcharge(MEDIUM, 15)))
+}

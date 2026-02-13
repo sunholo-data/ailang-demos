@@ -1,0 +1,33 @@
+{
+  "id": "contract_credit_overflow",
+  "lang": "ailang",
+  "model": "claude-haiku-4-5",
+  "executor": "claude",
+  "seed": 42,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "total_tokens": 0,
+  "cost_usd": 0,
+  "compile_ok": false,
+  "runtime_ok": false,
+  "stdout_ok": false,
+  "duration_ms": 0,
+  "compile_ms": 0,
+  "execute_ms": 0,
+  "error_category": "api_error",
+  "stderr": "API Error: failed to generate prompts: failed to load system prompt: failed to create prompt loader: failed to read registry: open prompts/versions.json: no such file or directory",
+  "expected_stdout": "70\n0\n0\n",
+  "timestamp": "2026-02-13T17:29:59.098033+01:00",
+  "first_attempt_ok": false,
+  "repair_used": false,
+  "repair_ok": false,
+  "caps": [
+    "IO"
+  ],
+  "verify_ok": false,
+  "verify_verified": 0,
+  "verify_counterexample": 0,
+  "verify_skipped": 0,
+  "verify_errors": 0,
+  "eval_mode": "agent"
+}

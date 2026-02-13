@@ -1,0 +1,15 @@
+module benchmarks/contract_guided/reference/safe_subtract
+
+export pure func safeSub(a: int, b: int) -> int
+  requires { a >= 0, b >= 0 }
+  ensures { result >= 0 }
+{
+  if a >= b then a - b
+  else 0
+}
+
+export func main() -> () ! {IO} {
+  println(show(safeSub(10, 3)));
+  println(show(safeSub(5, 5)));
+  println(show(safeSub(2, 100)))
+}

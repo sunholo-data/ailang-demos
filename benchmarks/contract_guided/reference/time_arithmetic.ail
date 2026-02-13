@@ -1,0 +1,64 @@
+module benchmarks/contract_guided/reference/time_arithmetic
+
+export pure func toMinutes(hours: int, minutes: int) -> int
+  requires { hours >= 0, hours < 24, minutes >= 0, minutes < 60 }
+  ensures { result >= 0, result < 1440 }
+{
+  hours * 60 + minutes
+}
+
+export pure func getHours(totalMins: int) -> int
+  requires { totalMins >= 0, totalMins < 1440 }
+  ensures { result >= 0, result < 24 }
+{
+  totalMins / 60
+}
+
+export pure func getMinutes(totalMins: int) -> int
+  requires { totalMins >= 0, totalMins < 1440 }
+  ensures { result >= 0, result < 60 }
+{
+  totalMins % 60
+}
+
+export pure func addTime(totalMins: int, delta: int) -> int
+  requires { totalMins >= 0, totalMins < 1440 }
+  ensures { result >= 0, result < 1440 }
+{
+  ((totalMins + delta) % 1440 + 1440) % 1440
+}
+
+pure func absInt(x: int) -> int =
+  if x < 0 then 0 - x else x
+
+export pure func timeDiff(t1: int, t2: int) -> int
+  requires { t1 >= 0, t1 < 1440, t2 >= 0, t2 < 1440 }
+  ensures { result >= 0, result <= 720 }
+{
+  let diff = absInt(t1 - t2) in
+  if diff > 720 then 1440 - diff else diff
+}
+
+export pure func roundTrip(hours: int, minutes: int) -> bool
+  requires { hours >= 0, hours < 24, minutes >= 0, minutes < 60 }
+  ensures { result == true }
+{
+  let t = toMinutes(hours, minutes) in
+  getHours(t) == hours && getMinutes(t) == minutes
+}
+
+export pure func addSubCancel(totalMins: int, delta: int) -> bool
+  requires { totalMins >= 0, totalMins < 1440 }
+  ensures { result == true }
+{
+  addTime(addTime(totalMins, delta), 0 - delta) == totalMins
+}
+
+export func main() -> () ! {IO} {
+  println(show(toMinutes(14, 30)));
+  println(show(addTime(toMinutes(23, 50), 20)));
+  println(show(addTime(toMinutes(0, 10), 0 - 20)));
+  println(show(timeDiff(toMinutes(23, 50), toMinutes(0, 10))));
+  println(show(roundTrip(14, 30)));
+  println(show(addSubCancel(870, 600)))
+}

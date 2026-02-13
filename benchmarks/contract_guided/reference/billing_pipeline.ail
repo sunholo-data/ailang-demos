@@ -1,0 +1,54 @@
+module benchmarks/contract_guided/reference/billing_pipeline
+
+export type Tier = ENTERPRISE | BUSINESS | STARTUP | FREE
+
+export pure func unitCost(tier: Tier) -> int
+  ensures { result >= 10 }
+{
+  match tier {
+    ENTERPRISE => 50,
+    BUSINESS   => 100,
+    STARTUP    => 200,
+    FREE       => 500
+  }
+}
+
+export pure func discountBps(tier: Tier) -> int
+  ensures { result >= 0, result <= 3000 }
+{
+  match tier {
+    ENTERPRISE => 3000,
+    BUSINESS   => 1500,
+    STARTUP    => 500,
+    FREE       => 0
+  }
+}
+
+export pure func applyDiscount(amount: int, tier: Tier) -> int
+  requires { amount >= 0 }
+  ensures { result >= 0, result <= amount }
+{
+  amount - amount * discountBps(tier) / 10000
+}
+
+export pure func addTax(amount: int, rateBps: int) -> int
+  requires { amount >= 0, rateBps >= 0 }
+  ensures { result >= amount }
+{
+  amount + amount * rateBps / 10000
+}
+
+export pure func totalBill(units: int, tier: Tier, taxBps: int) -> int
+  requires { units >= 0, taxBps >= 0 }
+  ensures { result >= 0 }
+{
+  let raw = units * unitCost(tier);
+  let discounted = applyDiscount(raw, tier);
+  addTax(discounted, taxBps)
+}
+
+export func main() -> () ! {IO} {
+  println(show(totalBill(100, ENTERPRISE, 875)));
+  println(show(totalBill(10, FREE, 1000)));
+  println(show(totalBill(0, STARTUP, 2000)))
+}
