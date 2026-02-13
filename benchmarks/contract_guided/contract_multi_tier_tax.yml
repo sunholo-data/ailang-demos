@@ -37,6 +37,13 @@ contract_spec: |
     requires { gross >= 0, credits >= 0 }
     ensures { result == true }
 
+z3_hints: |
+  finalTax ensures result >= 0 AND result <= gross. Credits can push
+  bracketTax - credits below zero, but minimumTax (1% of gross) acts as floor.
+  Z3 counterexample: gross=20000, credits=5000 → taxable=5000, bracketTax=0
+  (first 10k is 0%), so bracketTax-credits=-5000, but minimumTax=200 saves it.
+  Each bracket boundary must be exact or the ensures result <= taxable breaks.
+
 task_prompt: |
   Write an AILANG module for a multi-tier tax calculation with 5 interacting steps.
 

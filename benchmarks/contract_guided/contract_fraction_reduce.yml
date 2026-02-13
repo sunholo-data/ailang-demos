@@ -1,0 +1,97 @@
+id: contract_fraction_reduce
+description: "Fraction reduction with GCD, sign normalization, addition, and commutativity proof — recursive GCD + cross-function consistency"
+difficulty: very_hard
+category: algorithm_from_spec
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- GCD, fraction reduction to lowest terms, sign normalization.
+  -- Denominator always positive in reduced form.
+  -- Fraction addition must preserve value AND be commutative.
+
+  export pure func gcd(a: int, b: int) -> int
+    requires { a >= 0, b >= 0 }
+
+  export pure func reducedNum(num: int, den: int) -> int
+    requires { den != 0 }
+
+  export pure func reducedDen(num: int, den: int) -> int
+    requires { den != 0 }
+    ensures { result > 0 }
+
+  -- a/b == c/d iff a*d == b*c
+  export pure func fractionEqual(n1: int, d1: int, n2: int, d2: int) -> bool
+    requires { d1 != 0, d2 != 0 }
+
+  -- Reduction preserves value: num/den == reducedNum/reducedDen
+  export pure func reductionPreservesValue(num: int, den: int) -> bool
+    requires { den != 0 }
+    ensures { result == true }
+
+  -- Add two fractions, return reduced numerator
+  export pure func addFractions(n1: int, d1: int, n2: int, d2: int) -> int
+    requires { d1 != 0, d2 != 0 }
+
+  -- Add two fractions, return reduced denominator
+  export pure func addFractionsDen(n1: int, d1: int, n2: int, d2: int) -> int
+    requires { d1 != 0, d2 != 0 }
+    ensures { result > 0 }
+
+  -- Addition is commutative: a/b + c/d == c/d + a/b
+  export pure func additionCommutative(n1: int, d1: int, n2: int, d2: int) -> bool
+    requires { d1 != 0, d2 != 0 }
+    ensures { result == true }
+
+z3_hints: |
+  Sign normalization: -3/-9 must reduce to 1/3 (positive denominator). Naive
+  reduction preserving signs gives -1/-3. reducedDen ensures result > 0 always.
+  gcd(0, x) edge case: gcd must handle zero numerator. reductionPreservesValue
+  uses cross-multiplication: num * reducedDen == den * reducedNum must hold.
+  additionCommutative requires BOTH numerator and denominator to match after
+  reduction, not just cross-multiply.
+
+task_prompt: |
+  Write an AILANG module for exact fraction arithmetic.
+
+  - `gcd(a, b)`: Euclidean algorithm (both args non-negative). gcd(0,0)=0.
+  - `reducedNum(num, den)`: numerator of num/den in lowest terms.
+    Sign normalization: denominator always positive.
+    So -3/-9 reduces to 1/3 (not -1/-3).
+  - `reducedDen(num, den)`: denominator, always positive.
+  - `fractionEqual(n1, d1, n2, d2)`: true if n1*d2 == n2*d1
+  - `reductionPreservesValue(num, den)`: proves reduced form equals original
+  - `addFractions(n1, d1, n2, d2)`: numerator of (n1/d1 + n2/d2) reduced.
+    Formula: (n1*d2 + n2*d1) / (d1*d2), then reduce.
+  - `addFractionsDen(...)`: denominator of sum, reduced, always positive.
+  - `additionCommutative(n1, d1, n2, d2)`: proves a/b+c/d == c/d+a/b
+
+  CAREFUL with signs: negative numerators and denominators must normalize.
+  Use absolute value helper for GCD.
+
+  Main prints (one per line):
+    gcd(48, 18)
+    reducedNum(6, 8)
+    reducedDen(6, 8)
+    reducedNum(-3, -9)
+    reducedDen(-3, -9)
+    addFractions(1, 3, 1, 6)
+    addFractionsDen(1, 3, 1, 6)
+    reductionPreservesValue(12, -8)
+    additionCommutative(2, 5, 3, 7)
+
+  Note: Use `0 - x` for negation in AILANG (no unary minus on literals).
+
+expected_stdout: |
+  6
+  3
+  4
+  1
+  3
+  1
+  2
+  true
+  true
+
+reference_solution: reference/fraction_reduce.ail

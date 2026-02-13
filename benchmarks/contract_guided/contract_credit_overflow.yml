@@ -11,6 +11,10 @@ contract_spec: |
     requires { subtotal >= 0, credits >= 0 }
     ensures { result >= 0 }
 
+z3_hints: |
+  Naive subtotal - credits goes negative when credits exceed subtotal.
+  Z3 counterexample: subtotal=50, credits=200 → result=-150 violates ensures { result >= 0 }.
+
 task_prompt: |
   Write an AILANG module with a pure function `applyCredits(subtotal, credits)`.
 

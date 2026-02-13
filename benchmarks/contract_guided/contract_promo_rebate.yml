@@ -16,6 +16,12 @@ contract_spec: |
     requires { amount >= 0 }
     ensures { result >= 0, result <= amount }
 
+z3_hints: |
+  isValidPromo ensures result equals the exact boolean expression
+  (startsWith(code, "PROMO-") && strLen(code) >= 10). Any deviation from this
+  exact formula violates the contract. promoRebate ensures result <= amount —
+  the 20% rebate on amount=0 is fine, but ensure non-negative for all inputs.
+
 task_prompt: |
   Write an AILANG module with two functions:
 

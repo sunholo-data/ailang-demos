@@ -13,6 +13,12 @@ contract_spec: |
     requires { income >= 0 }
     ensures { result >= 0, result <= income }
 
+z3_hints: |
+  Tax must never exceed income (ensures result <= income). Applying a flat
+  rate to the wrong bracket range overshoots. Also income=0 must give tax=0.
+  Integer division at bracket boundaries can produce off-by-one if bracket
+  limits are inclusive vs exclusive.
+
 task_prompt: |
   Write an AILANG module with a pure function `progressiveTax(income)` that
   computes tax using progressive brackets:

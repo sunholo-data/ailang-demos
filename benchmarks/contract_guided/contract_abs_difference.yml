@@ -10,6 +10,11 @@ contract_spec: |
   export pure func absDiff(a: int, b: int) -> int
     ensures { result >= 0 }
 
+z3_hints: |
+  Computing a - b directly goes negative when b > a.
+  Z3 counterexample: a=3, b=10 → result=-7 violates ensures { result >= 0 }.
+  Must handle both orderings.
+
 task_prompt: |
   Write an AILANG module with a pure function `absDiff(a, b)` that returns
   the absolute difference between two integers.

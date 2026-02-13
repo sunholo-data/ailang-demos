@@ -11,6 +11,13 @@ contract_spec: |
     requires { price >= 0, daysUsed >= 0, warrantyDays >= 1 }
     ensures { result >= 0 }
 
+z3_hints: |
+  Naive refund = price * (warrantyDays - daysUsed) / warrantyDays goes negative
+  when daysUsed > warrantyDays (post-warranty). Z3 counterexample: price=100,
+  daysUsed=500, warrantyDays=365 → numerator is negative.
+  Also integer division ordering matters: price * remaining / total vs
+  price / total * remaining give different results.
+
 task_prompt: |
   Write an AILANG module with `proratedRefund(price, daysUsed, warrantyDays)`.
 

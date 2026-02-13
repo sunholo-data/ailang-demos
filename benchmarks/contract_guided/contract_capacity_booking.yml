@@ -24,6 +24,12 @@ contract_spec: |
     requires { headcount >= 1, headcount <= capacity(room) }
     ensures { result >= 0 }
 
+z3_hints: |
+  remaining ensures result >= 0 given occupancy <= capacity(room). surcharge
+  ensures result >= 0 and uses capacity/2 — integer division matters.
+  fitsInRoom's ensures references capacity(room) in the contract itself — the
+  implementation must match the cross-function definition exactly.
+
 task_prompt: |
   Write an AILANG module for conference room booking:
 

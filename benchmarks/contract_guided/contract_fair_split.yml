@@ -19,6 +19,12 @@ contract_spec: |
     requires { total >= 0, people >= 1 }
     ensures { result >= 0, result < people }
 
+z3_hints: |
+  Using ceiling division instead of floor breaks result * people <= total.
+  Z3 counterexample: total=10, people=3 → ceil gives share=4, 4*3=12 > 10.
+  Also fairRemainder ensures result < people — remainder is strictly less
+  than the divisor.
+
 task_prompt: |
   Write an AILANG module for fair resource splitting:
 

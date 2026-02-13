@@ -28,6 +28,13 @@ contract_spec: |
     requires { units >= 0, taxBps >= 0 }
     ensures { result >= 0 }
 
+z3_hints: |
+  applyDiscount ensures result <= amount — discount must subtract, not add.
+  Integer division truncation: amount * discountBps / 10000 loses precision.
+  addTax ensures result >= amount — tax adds, never subtracts.
+  FREE tier unitCost must be >= 10 (ensures { result >= 10 }). Cross-function:
+  totalBill chains all four, so any single function violating its contract cascades.
+
 task_prompt: |
   Write an AILANG module implementing a 4-function billing pipeline:
 

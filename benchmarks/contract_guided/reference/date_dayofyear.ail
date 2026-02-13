@@ -1,0 +1,82 @@
+module benchmarks/contract_guided/reference/date_dayofyear
+
+export pure func isLeapYear(year: int) -> bool
+  requires { year >= 1 }
+{
+  (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+export pure func daysInMonth(year: int, month: int) -> int
+  requires { year >= 1, month >= 1, month <= 12 }
+  ensures { result >= 28, result <= 31 }
+{
+  match month {
+    1  => 31,
+    2  => if isLeapYear(year) then 29 else 28,
+    3  => 31,
+    4  => 30,
+    5  => 31,
+    6  => 30,
+    7  => 31,
+    8  => 31,
+    9  => 30,
+    10 => 31,
+    11 => 30,
+    _  => 31
+  }
+}
+
+pure func daysBeforeMonth(year: int, month: int) -> int
+  requires { year >= 1, month >= 1, month <= 12 }
+{
+  if month == 1 then 0
+  else daysBeforeMonth(year, month - 1) + daysInMonth(year, month - 1)
+}
+
+export pure func dayOfYear(year: int, month: int, day: int) -> int
+  requires { year >= 1, month >= 1, month <= 12, day >= 1, day <= 31 }
+  ensures { result >= 1, result <= 366 }
+{
+  daysBeforeMonth(year, month) + day
+}
+
+export pure func daysInYear(year: int) -> int
+  requires { year >= 1 }
+  ensures { result >= 365, result <= 366 }
+{
+  if isLeapYear(year) then 366 else 365
+}
+
+export pure func lastDayConsistent(year: int) -> bool
+  requires { year >= 1 }
+  ensures { result == true }
+{
+  dayOfYear(year, 12, 31) == daysInYear(year)
+}
+
+export pure func leapFebConsistent(year: int) -> bool
+  requires { year >= 1 }
+  ensures { result == true }
+{
+  if isLeapYear(year) then daysInMonth(year, 2) == 29
+  else daysInMonth(year, 2) == 28
+}
+
+export pure func marchFirstConsistent(year: int) -> bool
+  requires { year >= 1 }
+  ensures { result == true }
+{
+  if isLeapYear(year) then dayOfYear(year, 3, 1) == 61
+  else dayOfYear(year, 3, 1) == 60
+}
+
+export func main() -> () ! {IO} {
+  println(show(dayOfYear(2024, 3, 1)));
+  println(show(dayOfYear(2023, 3, 1)));
+  println(show(dayOfYear(2024, 12, 31)));
+  println(show(dayOfYear(1900, 3, 1)));
+  println(show(daysInYear(2000)));
+  println(show(lastDayConsistent(2024)));
+  println(show(leapFebConsistent(1900)));
+  println(show(marchFirstConsistent(2024)))
+}

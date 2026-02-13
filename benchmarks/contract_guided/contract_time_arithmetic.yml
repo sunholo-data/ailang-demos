@@ -42,6 +42,14 @@ contract_spec: |
     requires { totalMins >= 0, totalMins < 1440 }
     ensures { result == true }
 
+z3_hints: |
+  addTime must wrap at 1440 (midnight). Naive (totalMins + delta) % 1440 fails
+  for negative delta because AILANG % can return negative values.
+  Z3 counterexample: totalMins=10, delta=-20 → (10-20)%1440 = -10, violates
+  ensures result >= 0. Fix: ((totalMins + delta) % 1440 + 1440) % 1440.
+  timeDiff ensures result <= 720 (shortest path around clock) — naive absolute
+  difference can exceed 720.
+
 task_prompt: |
   Write an AILANG module for clock-time arithmetic (24-hour format, minutes since midnight).
 

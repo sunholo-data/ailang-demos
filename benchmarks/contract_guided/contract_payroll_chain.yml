@@ -1,0 +1,102 @@
+id: contract_payroll_chain
+description: "8-function payroll chain with cascading dependencies — getting one function wrong breaks everything downstream"
+difficulty: very_hard
+category: multi_constraint
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- All amounts in cents. Hours as integer (no overtime distinction).
+  -- 8-function chain: each depends on previous results.
+  -- Getting any single function wrong cascades through the rest.
+
+  export pure func grossPay(hourlyRate: int, hours: int) -> int
+    requires { hourlyRate >= 0, hours >= 0 }
+    ensures { result >= 0 }
+
+  export pure func standardDeduction() -> int
+    ensures { result == 1250000 }
+
+  export pure func taxableIncome(gross: int) -> int
+    requires { gross >= 0 }
+    ensures { result >= 0, result <= gross }
+
+  -- Federal tax: 3-bracket (0-3M: 10%, 3M-7M: 22%, 7M+: 32%)
+  export pure func federalTax(taxable: int) -> int
+    requires { taxable >= 0 }
+    ensures { result >= 0, result <= taxable }
+
+  -- State tax: flat 5%
+  export pure func stateTax(taxable: int) -> int
+    requires { taxable >= 0 }
+    ensures { result >= 0, result <= taxable }
+
+  -- FICA: 765 basis points of gross (not taxable), capped at 16020000 cents wage base
+  export pure func ficaTax(gross: int) -> int
+    requires { gross >= 0 }
+    ensures { result >= 0 }
+
+  export pure func totalDeductions(gross: int) -> int
+    requires { gross >= 0 }
+    ensures { result >= 0 }
+
+  export pure func netPay(hourlyRate: int, hours: int) -> int
+    requires { hourlyRate >= 0, hours >= 0 }
+    ensures { result >= 0 }
+
+  -- Consistency: deductions never exceed gross
+  export pure func deductionsValid(gross: int) -> bool
+    requires { gross >= 0 }
+    ensures { result == true }
+
+z3_hints: |
+  8-function chain where any single mistake cascades. netPay ensures result >= 0,
+  meaning totalDeductions must never exceed grossPay. deductionsValid must prove
+  this for ALL valid gross values. ficaTax uses basis points (765/10000) with
+  a wage base cap — forgetting the cap makes FICA grow without bound.
+  federalTax ensures result <= taxable — bracket math must be progressive
+  (each bracket applies only to income IN that bracket, not total income).
+  Z3 counterexample for netPay < 0: very low hourly rates where deductions
+  exceed gross.
+
+task_prompt: |
+  Write an AILANG module for a complete payroll calculation chain.
+  ALL amounts are in CENTS (integer arithmetic, no floats).
+
+  8 functions that form a dependency chain:
+
+  1. `grossPay(hourlyRate, hours)` = hourlyRate * hours
+  2. `standardDeduction()` = 1250000 (fixed $12,500)
+  3. `taxableIncome(gross)` = max(0, gross - standardDeduction())
+  4. `federalTax(taxable)` — 3-bracket progressive:
+     - 0 to 3000000: 10%
+     - 3000001 to 7000000: 22%
+     - 7000001+: 32%
+     (Use integer division: amount * rate / 100)
+  5. `stateTax(taxable)` = taxable * 5 / 100
+  6. `ficaTax(gross)` — 765 basis points of gross, but only on first 16020000 cents:
+     ficaTax = min(gross, 16020000) * 765 / 10000
+  7. `totalDeductions(gross)` = federalTax(taxableIncome(gross)) + stateTax(taxableIncome(gross)) + ficaTax(gross)
+  8. `netPay(hourlyRate, hours)` = grossPay(hourlyRate, hours) - totalDeductions(grossPay(hourlyRate, hours))
+  9. `deductionsValid(gross)` — proves totalDeductions <= gross for all valid inputs
+
+  Main prints (one per line):
+    grossPay(5000, 2080)
+    taxableIncome(10400000)
+    federalTax(9150000)
+    ficaTax(10400000)
+    totalDeductions(10400000)
+    netPay(5000, 2080)
+    deductionsValid(10400000)
+
+expected_stdout: |
+  10400000
+  9150000
+  1868000
+  795600
+  3121100
+  7278900
+  true
+
+reference_solution: reference/payroll_chain.ail

@@ -25,6 +25,12 @@ contract_spec: |
   export pure func guestCannotWrite() -> bool
     ensures { result == true }
 
+z3_hints: |
+  adminAlwaysAllowed ensures result == true for any action. The implementation
+  must use roleWeight >= actionThreshold comparison — if ADMIN weight (100) is
+  less than DELETE threshold (80) this fails. guestCannotWrite ensures GUEST(10)
+  < WRITE(50), which holds, but ensure the comparison direction is correct.
+
 task_prompt: |
   Write an AILANG module implementing role-based access control:
 

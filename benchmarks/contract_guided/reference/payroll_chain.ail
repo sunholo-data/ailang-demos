@@ -1,0 +1,82 @@
+module benchmarks/contract_guided/reference/payroll_chain
+
+export pure func grossPay(hourlyRate: int, hours: int) -> int
+  requires { hourlyRate >= 0, hours >= 0 }
+  ensures { result >= 0 }
+{
+  hourlyRate * hours
+}
+
+export pure func standardDeduction() -> int
+  ensures { result == 1250000 }
+{
+  1250000
+}
+
+export pure func taxableIncome(gross: int) -> int
+  requires { gross >= 0 }
+  ensures { result >= 0, result <= gross }
+{
+  let ti = gross - standardDeduction() in
+  if ti < 0 then 0 else ti
+}
+
+export pure func federalTax(taxable: int) -> int
+  requires { taxable >= 0 }
+  ensures { result >= 0, result <= taxable }
+{
+  let b1 = if taxable > 3000000 then 3000000 * 10 / 100 else taxable * 10 / 100 in
+  let over3m = if taxable > 3000000 then taxable - 3000000 else 0 in
+  let b2 = if over3m > 4000000 then 4000000 * 22 / 100 else over3m * 22 / 100 in
+  let over7m = if taxable > 7000000 then taxable - 7000000 else 0 in
+  let b3 = over7m * 32 / 100 in
+  b1 + b2 + b3
+}
+
+export pure func stateTax(taxable: int) -> int
+  requires { taxable >= 0 }
+  ensures { result >= 0, result <= taxable }
+{
+  taxable * 5 / 100
+}
+
+export pure func ficaTax(gross: int) -> int
+  requires { gross >= 0 }
+  ensures { result >= 0 }
+{
+  let base = if gross > 16020000 then 16020000 else gross in
+  base * 765 / 10000
+}
+
+export pure func totalDeductions(gross: int) -> int
+  requires { gross >= 0 }
+  ensures { result >= 0 }
+{
+  let ti = taxableIncome(gross) in
+  federalTax(ti) + stateTax(ti) + ficaTax(gross)
+}
+
+export pure func netPay(hourlyRate: int, hours: int) -> int
+  requires { hourlyRate >= 0, hours >= 0 }
+  ensures { result >= 0 }
+{
+  let gross = grossPay(hourlyRate, hours) in
+  gross - totalDeductions(gross)
+}
+
+export pure func deductionsValid(gross: int) -> bool
+  requires { gross >= 0 }
+  ensures { result == true }
+{
+  totalDeductions(gross) <= gross
+}
+
+export func main() -> () ! {IO} {
+  println(show(grossPay(5000, 2080)));
+  println(show(taxableIncome(10400000)));
+  println(show(federalTax(9150000)));
+  println(show(ficaTax(10400000)));
+  println(show(totalDeductions(10400000)));
+  println(show(netPay(5000, 2080)));
+  println(show(deductionsValid(10400000)))
+}

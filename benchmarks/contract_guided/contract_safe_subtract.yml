@@ -11,6 +11,10 @@ contract_spec: |
     requires { a >= 0, b >= 0 }
     ensures { result >= 0 }
 
+z3_hints: |
+  Naive subtraction a - b goes negative when b > a.
+  Z3 counterexample: a=2, b=100 → result=-98 violates ensures { result >= 0 }.
+
 task_prompt: |
   Write an AILANG module with a pure function `safeSub(a, b)` that subtracts
   b from a, but floors the result at zero (never returns a negative number).

@@ -11,6 +11,11 @@ contract_spec: |
     requires { lo >= 0, hi >= lo }
     ensures { result >= lo, result <= hi }
 
+z3_hints: |
+  Returning x unchanged when x < lo violates ensures { result >= lo }.
+  Z3 counterexample: x=-5, lo=0, hi=100 → result=-5.
+  Similarly returning x when x > hi violates ensures { result <= hi }.
+
 task_prompt: |
   Write an AILANG module with a pure function `clampValue(x, lo, hi)` that
   clamps an integer to the range [lo, hi].

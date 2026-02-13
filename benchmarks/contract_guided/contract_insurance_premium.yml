@@ -26,6 +26,12 @@ contract_spec: |
     requires { age >= 18, age <= 80, deductibleDiscount >= 0, deductibleDiscount <= 300 }
     ensures { result >= 0 }
 
+z3_hints: |
+  totalPremium ensures result >= 0. With BASIC(100) * LOW_RISK(100)/100 = 100
+  + age 30 adjustment(50) = 150, minus max deductible(300) = -150.
+  Z3 counterexample: coverage=BASIC, risk=LOW_RISK, age=30, deductibleDiscount=300
+  → result=-150. Must floor at zero.
+
 task_prompt: |
   Write an AILANG module for insurance premium calculation:
 

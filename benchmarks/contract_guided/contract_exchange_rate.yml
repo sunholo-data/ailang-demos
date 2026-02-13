@@ -16,6 +16,13 @@ contract_spec: |
     requires { amount >= 0, rateBps >= 100, spreadBps >= 0, spreadBps <= 500, flatFee >= 0, flatFee <= 100 }
     ensures { result >= 0, result <= amount * rateBps / 10000 }
 
+z3_hints: |
+  After applying spread and flat fee, small conversions go negative.
+  Z3 counterexample: amount=1, rateBps=9000 → rawResult=0 (integer division),
+  then -flatFee makes result negative. Must floor at zero. Also ensures
+  result <= amount * rateBps / 10000 — the spread/fee must only decrease,
+  never increase the result above raw conversion.
+
 task_prompt: |
   Write an AILANG module for currency exchange:
 

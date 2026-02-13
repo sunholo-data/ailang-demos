@@ -21,6 +21,13 @@ contract_spec: |
   export pure func grantedLevel(role: Role, action: Action) -> int
     ensures { result <= roleWeight(role) }
 
+z3_hints: |
+  grantedLevel ensures result <= roleWeight(role). The naive formula
+  roleWeight + actionBonus - actionThreshold can EXCEED roleWeight when bonus
+  exceeds threshold. Z3 counterexample: EDITOR(60) + READ bonus(15) - READ
+  threshold(10) = 65, which exceeds roleWeight(EDITOR)=60. Must cap the
+  result at roleWeight.
+
 task_prompt: |
   Write an AILANG module implementing a privilege escalation guard:
 

@@ -33,6 +33,12 @@ contract_spec: |
   export pure func modPowConsistent(base: int, mod: int) -> bool
     requires { base >= 0, mod > 0 }
 
+z3_hints: |
+  mulMod ensures result < mod. Naive (a*b) % mod can overflow for large a,b
+  before the modulo. sqMod must equal mulMod(a, a, mod) exactly for
+  sqConsistent to hold. modPow itself is recursive and hard for Z3 to verify,
+  but the helper contracts catch implementation bugs in the building blocks.
+
 task_prompt: |
   Write an AILANG module for modular exponentiation.
 

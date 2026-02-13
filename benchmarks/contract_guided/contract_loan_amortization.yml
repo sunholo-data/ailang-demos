@@ -28,6 +28,13 @@ contract_spec: |
     requires { principal >= 0, rateBps >= 0, monthlyPay >= monthlyInterest(principal, rateBps) }
     ensures { result == true }
 
+z3_hints: |
+  paymentConsistent requires interest + principalPayment == monthlyPay to hold
+  EXACTLY. If principalPayment is computed via a different integer division path
+  than monthlyPay - interest, rounding diverges. Z3 finds the gap.
+  monthlyInterest ensures result <= principal — for very high rateBps,
+  principal * rateBps / 120000 could theoretically exceed principal.
+
 task_prompt: |
   Write an AILANG module for a single loan amortization step.
 

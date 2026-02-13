@@ -1,0 +1,83 @@
+id: contract_date_dayofyear
+description: "Day-of-year with leap year logic — recursive daysBeforeMonth + 12-way match + 100/400 rule traps"
+difficulty: very_hard
+category: algorithm_from_spec
+languages: ["ailang"]
+entrypoint: "main"
+caps: ["IO"]
+
+contract_spec: |
+  -- Leap year: divisible by 4 BUT NOT by 100, UNLESS also by 400.
+  -- 1900 is NOT a leap year. 2000 IS. Common LLM trap.
+  export pure func isLeapYear(year: int) -> bool
+    requires { year >= 1 }
+
+  export pure func daysInMonth(year: int, month: int) -> int
+    requires { year >= 1, month >= 1, month <= 12 }
+    ensures { result >= 28, result <= 31 }
+
+  export pure func dayOfYear(year: int, month: int, day: int) -> int
+    requires { year >= 1, month >= 1, month <= 12, day >= 1, day <= 31 }
+    ensures { result >= 1, result <= 366 }
+
+  export pure func daysInYear(year: int) -> int
+    requires { year >= 1 }
+    ensures { result >= 365, result <= 366 }
+
+  -- Dec 31 must equal daysInYear
+  export pure func lastDayConsistent(year: int) -> bool
+    requires { year >= 1 }
+    ensures { result == true }
+
+  -- Feb days must match leap year status
+  export pure func leapFebConsistent(year: int) -> bool
+    requires { year >= 1 }
+    ensures { result == true }
+
+  -- March 1 = day 61 in leap year, day 60 in non-leap
+  export pure func marchFirstConsistent(year: int) -> bool
+    requires { year >= 1 }
+    ensures { result == true }
+
+z3_hints: |
+  isLeapYear: 1900 is NOT leap (div by 100 but not 400). 2000 IS leap (div by
+  400). LLMs frequently get the 100/400 rule wrong or reversed.
+  dayOfYear ensures result >= 1 AND result <= 366. A recursive daysBeforeMonth
+  helper must sum correctly — off-by-one in recursion base case shifts all dates.
+  lastDayConsistent proves dayOfYear(y,12,31) == daysInYear(y) — if any month's
+  day count is wrong, this fails.
+
+task_prompt: |
+  Write an AILANG module for calendar day-of-year calculations.
+
+  - `isLeapYear(year)`: true if (div by 4 AND not div by 100) OR div by 400.
+    CAREFUL: 1900 is NOT a leap year, 2000 IS.
+  - `daysInMonth(year, month)`: 12-way match. Feb depends on leap year.
+  - `dayOfYear(year, month, day)`: sum of days in all previous months + day.
+    Needs a recursive or accumulating helper `daysBeforeMonth(year, month)`.
+  - `daysInYear(year)`: 366 if leap, 365 otherwise.
+  - `lastDayConsistent(year)`: proves dayOfYear(y, 12, 31) == daysInYear(y)
+  - `leapFebConsistent(year)`: proves Feb days match leap status
+  - `marchFirstConsistent(year)`: proves March 1 = day 61 (leap) or 60 (non-leap)
+
+  Main prints (one per line):
+    dayOfYear(2024, 3, 1)
+    dayOfYear(2023, 3, 1)
+    dayOfYear(2024, 12, 31)
+    dayOfYear(1900, 3, 1)
+    daysInYear(2000)
+    lastDayConsistent(2024)
+    leapFebConsistent(1900)
+    marchFirstConsistent(2024)
+
+expected_stdout: |
+  61
+  60
+  366
+  60
+  366
+  true
+  true
+  true
+
+reference_solution: reference/date_dayofyear.ail

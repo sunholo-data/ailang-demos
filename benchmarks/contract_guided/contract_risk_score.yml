@@ -20,6 +20,13 @@ contract_spec: |
     requires { repeated >= 0, repeated <= 10 }
     ensures { result >= 0, result <= 200 }
 
+z3_hints: |
+  riskScore ensures result <= 200. Without capping: CRITICAL(100) + EXTERNAL(50)
+  + 10 repeats * 5 = 200 (exactly at limit). But repeat penalty must be capped
+  at 50 — without the cap, repeated=11 gives penalty=55 and total=205.
+  Z3 counterexample: sev=CRITICAL, src=EXTERNAL, repeated=10 → sum could
+  exceed 200 if repeat penalty isn't capped.
+
 task_prompt: |
   Write an AILANG module for audit risk scoring:
 

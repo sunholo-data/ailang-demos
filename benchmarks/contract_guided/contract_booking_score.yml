@@ -26,6 +26,12 @@ contract_spec: |
   export pure func highBeatsStandard(s: TimeSlot) -> bool
     ensures { result == true }
 
+z3_hints: |
+  bookingScore ensures result >= 800. LOW priority (10) * EVENING slot (80)
+  = 800 exactly at the limit. If slot multiplier for EVENING is less than 80,
+  the minimum breaks. vipBeatsHigh must hold for ALL time slots — if weight
+  gap is insufficient for some multiplier, Z3 finds the violating slot.
+
 task_prompt: |
   Write an AILANG module implementing a booking priority system:
 

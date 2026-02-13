@@ -29,6 +29,14 @@ contract_spec: |
     requires { s1 <= e1, s2 <= e2 }
     ensures { result == true }
 
+z3_hints: |
+  overlap ensures result <= e1 - s1 AND result <= e2 - s2 (can't exceed either
+  interval length). Off-by-one in min/max logic breaks this.
+  overlap3 must compose correctly — nested overlap calls must maintain all three
+  upper bounds. unionLength ensures result >= max(either length) — under-counting
+  violates the lower bound. inclusionExclusion links overlap and union — if
+  either function is off, the identity breaks.
+
 task_prompt: |
   Write an AILANG module for interval overlap calculations on half-open intervals [s,e).
 

@@ -40,6 +40,13 @@ contract_spec: |
     requires { gallons >= 0, multiplier >= 80, multiplier <= 150 }
     ensures { result == true }
 
+z3_hints: |
+  finalBill ensures result >= 1500 (minimum charge). Zero gallons with winter
+  multiplier: baseCost(0)=0, seasonalCost=0, but minimum is 1500. With
+  low-income cap at 5000 AND minimum at 1500, the ordering matters:
+  apply cap first, then max with minimum. If reversed, cap could push below minimum.
+  Z3 counterexample: gallons=0, multiplier=80, lowIncome=true → must still be 1500.
+
 task_prompt: |
   Write an AILANG module for a water utility billing system.
 

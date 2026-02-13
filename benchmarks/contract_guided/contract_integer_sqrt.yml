@@ -13,6 +13,12 @@ contract_spec: |
     requires { n >= 0 }
     ensures { result >= 0, result * result <= n, (result + 1) * (result + 1) > n }
 
+z3_hints: |
+  The contract IS the specification: result*result <= n AND (result+1)*(result+1) > n.
+  A naive approach that returns n/2 fails for most inputs. Off-by-one in binary
+  search or linear scan returns result where (result+1)^2 <= n.
+  Z3 counterexample: n=4, naive result=1 → 2*2=4 <= 4 but 1*1=1 ≠ largest r.
+
 task_prompt: |
   Write an AILANG module with a pure function `isqrt(n)` that computes the
   integer square root of n — the largest integer r such that r*r <= n.
