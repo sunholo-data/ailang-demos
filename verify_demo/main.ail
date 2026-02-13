@@ -9,6 +9,8 @@ module verify_demo/main
 --   ailang run --entry main --caps IO verify_demo/main.ail
 --   ailang run --entry main --caps IO --verify-contracts verify_demo/main.ail
 
+import std/string (startsWith, length as strLen)
+import std/list (length as listLen)
 import verify_demo/verify_showcase (
   clampPrice, applyTax, safeSubtract, tierDiscount,
   priceDifference, factorial

@@ -1,5 +1,8 @@
 module verify_demo/billing
 
+import std/string (startsWith, length as strLen)
+import std/list (length as listLen)
+
 -- ============================================================================
 -- Provably Correct Cloud Billing
 -- ============================================================================
@@ -110,9 +113,9 @@ ensures { result >= 0 }
 -- Valid promo codes start with "CLOUD-" and are ≥ 10 chars.
 -- Z3 proves: the result is exactly the conjunction of both checks (tautology).
 export func isValidPromo(code: string) -> bool ! {}
-ensures { result == (_str_startsWith(code, "CLOUD-") && _str_len(code) >= 10) }
+ensures { result == (startsWith(code, "CLOUD-") && strLen(code) >= 10) }
 {
-  _str_startsWith(code, "CLOUD-") && _str_len(code) >= 10
+  startsWith(code, "CLOUD-") && strLen(code) >= 10
 }
 
 -- Promo rebate: 15% off if valid, 0 otherwise.
@@ -121,7 +124,7 @@ export func promoRebate(code: string, amount: int) -> int ! {}
 requires { amount >= 0 }
 ensures { result >= 0, result <= amount }
 {
-  if _str_startsWith(code, "CLOUD-") && _str_len(code) >= 10
+  if startsWith(code, "CLOUD-") && strLen(code) >= 10
   then amount * 15 / 100
   else 0
 }
@@ -134,15 +137,15 @@ ensures { result >= 0, result <= amount }
 export func lineItemCount(items: [int]) -> int ! {}
 ensures { result >= 0 }
 {
-  _list_length(items)
+  listLen(items)
 }
 
 -- Adding a line item always increases count by exactly 1.
 -- Z3 proves via sequence theory: len(x :: xs) = len(xs) + 1.
 export func addLineItem(cost: int, items: [int]) -> int ! {}
-ensures { result == _list_length(items) + 1 }
+ensures { result == listLen(items) + 1 }
 {
-  _list_length(cost :: items)
+  listLen(cost :: items)
 }
 
 -- ============================================================================
