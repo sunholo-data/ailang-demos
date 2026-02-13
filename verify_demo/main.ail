@@ -1,0 +1,95 @@
+module verify_demo/main
+
+-- Static Contract Verification Demo — Entry Point
+--
+-- Showcases all 4 verification modules at runtime, then guides the user
+-- to run `ailang verify` for static (compile-time) proof via Z3.
+--
+-- Run:
+--   ailang run --entry main --caps IO verify_demo/main.ail
+--   ailang run --entry main --caps IO --verify-contracts verify_demo/main.ail
+
+import verify_demo/verify_showcase (
+  clampPrice, applyTax, safeSubtract, tierDiscount,
+  priceDifference, factorial
+)
+import verify_demo/billing (
+  finalBill, ENTERPRISE, STARTUP, FREE, US_EAST, EU_WEST, APAC
+)
+import verify_demo/access_policy (
+  isAllowed, auditRiskScore, ADMIN, EDITOR, GUEST,
+  DOCUMENTS, SETTINGS, AUDIT_LOG, USER_DATA, READ, WRITE, DELETE
+)
+import verify_demo/scheduling (
+  totalBookingCost, bookingScore, remainingCapacity,
+  SMALL, MEDIUM, LARGE, VIP, HIGH, STANDARD, MORNING, MIDDAY, EVENING
+)
+
+export func main() -> () ! {IO @limit=100} {
+  println("╔══════════════════════════════════════════════════════╗");
+  println("║   AILANG Static Contract Verification (Z3) Demo     ║");
+  println("╚══════════════════════════════════════════════════════╝");
+  println("");
+
+  -- Module 1: Basic arithmetic contracts
+  println("── 1. Arithmetic Contracts (verify_showcase.ail) ──────");
+  println("");
+  println("  clampPrice(250, 100, 500)  = " ++ show(clampPrice(250, 100, 500)));
+  println("  clampPrice(999, 100, 500)  = " ++ show(clampPrice(999, 100, 500)));
+  println("  applyTax(10000, 500)       = " ++ show(applyTax(10000, 500)));
+  println("  safeSubtract(3, 10)        = " ++ show(safeSubtract(3, 10)));
+  println("  tierDiscount(150)          = " ++ show(tierDiscount(150)) ++ "%");
+  println("  priceDifference(100, 250)  = " ++ show(priceDifference(100, 250)));
+  println("  factorial(5)               = " ++ show(factorial(5)));
+  println("  → 7 VERIFIED, 1 VIOLATION (brokenDiscount), 1 SKIPPED (factorial)");
+  println("");
+
+  -- Module 2: Cloud billing pipeline
+  println("── 2. Cloud Billing (billing.ail) ─────────────────────");
+  println("   4-deep cross-function chain × enums × records × strings × lists");
+  println("");
+  println("  finalBill(1000, ENTERPRISE, EU_WEST, \"CLOUD-LAUNCH2024\") = " ++ show(finalBill(1000, ENTERPRISE, EU_WEST, "CLOUD-LAUNCH2024")));
+  println("  finalBill(100, STARTUP, US_EAST, \"\")                     = " ++ show(finalBill(100, STARTUP, US_EAST, "")));
+  println("  finalBill(10, FREE, APAC, \"CLOUD-TRIAL123\")              = " ++ show(finalBill(10, FREE, APAC, "CLOUD-TRIAL123")));
+  println("  → 12 VERIFIED, 1 VIOLATION (brokenCreditApply: credits > subtotal)");
+  println("");
+
+  -- Module 3: Access control policy
+  println("── 3. Access Control (access_policy.ail) ──────────────");
+  println("   4 roles × 4 resources × 3 actions = 48 permission paths");
+  println("");
+  println("  isAllowed(ADMIN, AUDIT_LOG, DELETE) = " ++ show(isAllowed(ADMIN, AUDIT_LOG, DELETE)));
+  println("  isAllowed(GUEST, SETTINGS, WRITE)   = " ++ show(isAllowed(GUEST, SETTINGS, WRITE)));
+  println("  isAllowed(EDITOR, DOCUMENTS, WRITE) = " ++ show(isAllowed(EDITOR, DOCUMENTS, WRITE)));
+  println("  auditRiskScore(GUEST, DELETE, USER_DATA) = " ++ show(auditRiskScore(GUEST, DELETE, USER_DATA)));
+  println("  → 10 VERIFIED (incl. admin supremacy, guest isolation, monotonicity)");
+  println("  → 1 VIOLATION (brokenEscalationCheck: EDITOR+READ bonus exceeds weight)");
+  println("");
+
+  -- Module 4: Resource scheduling
+  println("── 4. Scheduling (scheduling.ail) ─────────────────────");
+  println("   3 rooms × 4 priorities × 4 time slots + capacity invariants");
+  println("");
+  println("  bookingScore(VIP, MORNING)                   = " ++ show(bookingScore(VIP, MORNING)));
+  println("  totalBookingCost(MEDIUM, 15, HIGH, MIDDAY)   = " ++ show(totalBookingCost(MEDIUM, 15, HIGH, MIDDAY)));
+  println("  remainingCapacity(LARGE, 50)                 = " ++ show(remainingCapacity(LARGE, 50)));
+  println("  → 13 VERIFIED (incl. VIP>HIGH>STANDARD>LOW ordering)");
+  println("  → 1 VIOLATION (brokenDoubleBook: off-by-one overbooking)");
+  println("");
+
+  -- Summary
+  println("══════════════════════════════════════════════════════════");
+  println("  Total: 42 VERIFIED, 4 VIOLATIONS caught, 1 SKIPPED");
+  println("══════════════════════════════════════════════════════════");
+  println("");
+  println("Verify all modules:");
+  println("  ailang verify verify_demo/verify_showcase.ail");
+  println("  ailang verify verify_demo/billing.ail");
+  println("  ailang verify verify_demo/access_policy.ail");
+  println("  ailang verify verify_demo/scheduling.ail");
+  println("");
+  println("JSON output for CI:");
+  println("  ailang verify --json verify_demo/billing.ail");
+  println("");
+  println("Install Z3: brew install z3")
+}

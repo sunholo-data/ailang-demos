@@ -1,0 +1,218 @@
+module verify_demo/billing
+
+-- ============================================================================
+-- Provably Correct Cloud Billing
+-- ============================================================================
+--
+-- Cloud infrastructure billing with tiered pricing, regional tax, promo codes,
+-- usage metering, and volume discounts. Z3 proves every invariant across
+-- 5 tiers × 4 regions × any usage × any promo code = infinite input space.
+--
+-- Features demonstrated:
+--   ✓ Enum ADTs (CustomerTier × Region = 20 tax combinations)
+--   ✓ Cross-function chains (4-deep: finalBill → applyTier → computeTax → taxRate)
+--   ✓ Record contracts (BillSummary field invariants)
+--   ✓ String verification (promo code format validation via Z3 string theory)
+--   ✓ List verification (line item count via Z3 sequence theory)
+--   ✓ Counterexample (Z3 catches a subtle credit overflow bug)
+--
+-- Run:
+--   ailang verify verify_demo/billing.ail
+--   ailang verify --verbose verify_demo/billing.ail
+-- ============================================================================
+
+-- Domain types
+
+export type CustomerTier = ENTERPRISE | BUSINESS | STARTUP | FREE
+export type Region = US_EAST | EU_WEST | APAC | LATAM
+
+-- ============================================================================
+-- Tax calculations (basis points: 875 = 8.75%)
+-- ============================================================================
+
+-- Regional tax rate. Z3 proves: bounded [0, 2300].
+export func taxRate(region: Region) -> int ! {}
+ensures { result >= 0, result <= 2300 }
+{
+  match region {
+    US_EAST => 875,
+    EU_WEST => 2100,
+    APAC    => 1000,
+    LATAM   => 1800
+  }
+}
+
+-- Compute tax on an amount. CALLS taxRate (cross-function).
+-- Z3 inlines taxRate and proves: tax is non-negative for any amount ≥ 0 × any region.
+export func computeTax(amount: int, region: Region) -> int ! {}
+requires { amount >= 0 }
+ensures { result >= 0 }
+{
+  amount * taxRate(region) / 10000
+}
+
+-- ============================================================================
+-- Tier-based pricing
+-- ============================================================================
+
+-- Per-unit price in microcents by tier.
+-- Z3 proves: price is always positive (no free tier gets $0 pricing).
+export func unitPrice(tier: CustomerTier) -> int ! {}
+ensures { result >= 10 }
+{
+  match tier {
+    ENTERPRISE => 50,
+    BUSINESS   => 100,
+    STARTUP    => 200,
+    FREE       => 500
+  }
+}
+
+-- Tier discount rate (basis points). Enterprise gets 30%, Free gets 0%.
+-- Z3 proves: discount is bounded [0, 3000].
+export func tierDiscountBps(tier: CustomerTier) -> int ! {}
+ensures { result >= 0, result <= 3000 }
+{
+  match tier {
+    ENTERPRISE => 3000,
+    BUSINESS   => 1500,
+    STARTUP    => 500,
+    FREE       => 0
+  }
+}
+
+-- Apply tier discount to an amount. CALLS tierDiscountBps (cross-function).
+-- Z3 proves: discounted amount is non-negative AND ≤ original.
+export func applyTierDiscount(amount: int, tier: CustomerTier) -> int ! {}
+requires { amount >= 0 }
+ensures { result >= 0, result <= amount }
+{
+  amount - amount * tierDiscountBps(tier) / 10000
+}
+
+-- ============================================================================
+-- Usage metering
+-- ============================================================================
+
+-- Compute raw usage cost. CALLS unitPrice (cross-function).
+-- Z3 proves: cost is non-negative when units ≥ 0.
+export func usageCost(units: int, tier: CustomerTier) -> int ! {}
+requires { units >= 0 }
+ensures { result >= 0 }
+{
+  units * unitPrice(tier)
+}
+
+-- ============================================================================
+-- Promo code validation (Z3 string theory)
+-- ============================================================================
+
+-- Valid promo codes start with "CLOUD-" and are ≥ 10 chars.
+-- Z3 proves: the result is exactly the conjunction of both checks (tautology).
+export func isValidPromo(code: string) -> bool ! {}
+ensures { result == (_str_startsWith(code, "CLOUD-") && _str_len(code) >= 10) }
+{
+  _str_startsWith(code, "CLOUD-") && _str_len(code) >= 10
+}
+
+-- Promo rebate: 15% off if valid, 0 otherwise.
+-- Z3 proves: rebate is always non-negative and bounded by amount.
+export func promoRebate(code: string, amount: int) -> int ! {}
+requires { amount >= 0 }
+ensures { result >= 0, result <= amount }
+{
+  if _str_startsWith(code, "CLOUD-") && _str_len(code) >= 10
+  then amount * 15 / 100
+  else 0
+}
+
+-- ============================================================================
+-- Line item operations (Z3 sequence theory)
+-- ============================================================================
+
+-- Count of line items. Z3 proves: always non-negative.
+export func lineItemCount(items: [int]) -> int ! {}
+ensures { result >= 0 }
+{
+  _list_length(items)
+}
+
+-- Adding a line item always increases count by exactly 1.
+-- Z3 proves via sequence theory: len(x :: xs) = len(xs) + 1.
+export func addLineItem(cost: int, items: [int]) -> int ! {}
+ensures { result == _list_length(items) + 1 }
+{
+  _list_length(cost :: items)
+}
+
+-- ============================================================================
+-- Invoice summary (record verification)
+-- ============================================================================
+
+-- Net amount from a bill summary record.
+-- Z3 proves: net is non-negative when discount ≤ subtotal.
+export func netFromBill(bill: {subtotal: int, tax: int, discount: int, credits: int}) -> int ! {}
+requires { bill.subtotal >= 0, bill.tax >= 0, bill.discount >= 0, bill.credits >= 0, bill.discount <= bill.subtotal }
+ensures { result >= 0 }
+{
+  bill.subtotal - bill.discount + bill.tax
+}
+
+-- ============================================================================
+-- Full billing pipeline (4-deep cross-function chain)
+-- ============================================================================
+
+-- Compute final bill: usage → tier discount → tax → promo rebate.
+-- CALLS: usageCost, applyTierDiscount, computeTax, promoRebate (4-deep chain).
+-- Z3 inlines ALL callees and proves: total is ALWAYS non-negative
+-- for ANY units × tier × region × promo code combination.
+export func finalBill(units: int, tier: CustomerTier, region: Region, promoCode: string) -> int ! {}
+requires { units >= 0 }
+ensures { result >= 0 }
+{
+  let raw = usageCost(units, tier);
+  let afterDiscount = applyTierDiscount(raw, tier);
+  let tax = computeTax(afterDiscount, region);
+  let rebate = promoRebate(promoCode, afterDiscount);
+  afterDiscount + tax - rebate
+}
+
+-- ============================================================================
+-- BROKEN: Credit overflow — Z3 catches the bug
+-- ============================================================================
+
+-- Developer assumed credits can't exceed the bill. But if a customer accumulates
+-- large credits from referrals ($100 credit) and orders a small plan ($5),
+-- the subtraction goes negative — effectively AILANG would owe the customer.
+-- Z3 finds: subtotal=0, credits=1 → result=-1.
+export func brokenCreditApply(subtotal: int, credits: int) -> int ! {}
+requires { subtotal >= 0, credits >= 0 }
+ensures { result >= 0 }
+{
+  subtotal - credits
+}
+
+-- ============================================================================
+-- BROKEN: Prorated refund — Z3 catches the bug
+-- ============================================================================
+
+-- Developer computes refund proportional to remaining warranty.
+-- Looks correct: refund = price × (warrantyDays - daysUsed) / warrantyDays.
+-- But if the customer contacts support AFTER warranty expires,
+-- daysUsed > warrantyDays makes the numerator negative.
+-- Z3 finds: price=1, daysUsed=2, warrantyDays=1 → 1×(1-2)/1 = -1.
+export func proratedRefund(price: int, daysUsed: int, warrantyDays: int) -> int ! {}
+requires { price >= 0, daysUsed >= 0, warrantyDays >= 1 }
+ensures { result >= 0 }
+{
+  price * (warrantyDays - daysUsed) / warrantyDays
+}
+
+-- Entry point
+export func main() -> int ! {}
+{
+  let enterprise = finalBill(1000, ENTERPRISE, EU_WEST, "CLOUD-LAUNCH2024");
+  let startup = finalBill(100, STARTUP, US_EAST, "");
+  let free = finalBill(10, FREE, APAC, "CLOUD-TRIAL123");
+  enterprise + startup + free
+}

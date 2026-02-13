@@ -1,0 +1,231 @@
+module verify_demo/scheduling
+
+-- ============================================================================
+-- Provably Correct Resource Scheduling
+-- ============================================================================
+--
+-- Conference room booking system with capacity rules, priority queuing,
+-- time slot validation, and overbooking prevention.
+-- 3 rooms × 4 priorities × 4 time slots × any headcount = complex interaction.
+-- Z3 proves: no overbooking, priority ordering, capacity bounds.
+--
+-- Features demonstrated:
+--   ✓ Enum ADTs (RoomType × Priority × TimeSlot = 48 combinations)
+--   ✓ Cross-function chains (bookingCost → baseCost → capacityFee → prioritySurcharge)
+--   ✓ Record contracts (Booking field invariants and cross-field constraints)
+--   ✓ Relational properties (VIP always outprioritizes STANDARD)
+--   ✓ Capacity invariants (never exceed room maximum)
+--   ✓ Counterexample (Z3 catches overbooking from double-count bug)
+--
+-- Run:
+--   ailang verify verify_demo/scheduling.ail
+-- ============================================================================
+
+-- Domain types
+
+export type RoomType = SMALL | MEDIUM | LARGE
+export type Priority = VIP | HIGH | STANDARD | LOW
+export type TimeSlot = MORNING | MIDDAY | AFTERNOON | EVENING
+
+-- ============================================================================
+-- Room capacity
+-- ============================================================================
+
+-- Maximum occupancy per room type.
+-- Z3 proves: all rooms have capacity > 0 and ≤ 200.
+export func roomCapacity(room: RoomType) -> int ! {}
+ensures { result >= 4, result <= 200 }
+{
+  match room {
+    SMALL  => 4,
+    MEDIUM => 20,
+    LARGE  => 200
+  }
+}
+
+-- ============================================================================
+-- Availability check (cross-function with records)
+-- ============================================================================
+
+-- Check if a booking fits. CALLS roomCapacity.
+-- Z3 proves: if headcount ≤ room capacity, booking is valid.
+export func fitsInRoom(headcount: int, room: RoomType) -> bool ! {}
+requires { headcount >= 1 }
+ensures { result == (headcount <= roomCapacity(room)) }
+{
+  headcount <= roomCapacity(room)
+}
+
+-- Remaining capacity after a booking. CALLS roomCapacity.
+-- Z3 proves: remaining is always non-negative when current ≤ capacity.
+export func remainingCapacity(room: RoomType, currentOccupancy: int) -> int ! {}
+requires { currentOccupancy >= 0, currentOccupancy <= roomCapacity(room) }
+ensures { result >= 0 }
+{
+  roomCapacity(room) - currentOccupancy
+}
+
+-- ============================================================================
+-- Priority scoring
+-- ============================================================================
+
+-- Priority weight (higher = more important).
+-- Z3 proves: bounded [10, 100].
+export func priorityWeight(priority: Priority) -> int ! {}
+ensures { result >= 10, result <= 100 }
+{
+  match priority {
+    VIP      => 100,
+    HIGH     => 70,
+    STANDARD => 40,
+    LOW      => 10
+  }
+}
+
+-- Time slot demand multiplier (percentage).
+-- Z3 proves: bounded [80, 150].
+export func slotDemand(slot: TimeSlot) -> int ! {}
+ensures { result >= 80, result <= 150 }
+{
+  match slot {
+    MORNING   => 120,
+    MIDDAY    => 150,
+    AFTERNOON => 100,
+    EVENING   => 80
+  }
+}
+
+-- Combined booking score: priority × demand. CALLS priorityWeight, slotDemand.
+-- Z3 proves: score is always positive (since both factors are > 0).
+export func bookingScore(priority: Priority, slot: TimeSlot) -> int ! {}
+ensures { result >= 800 }
+{
+  priorityWeight(priority) * slotDemand(slot) / 100 * 100
+}
+
+-- ============================================================================
+-- Relational invariants
+-- ============================================================================
+
+-- VIP SUPREMACY: VIP bookings always outscore any other priority.
+-- Z3 proves: for ANY time slot, VIP score > HIGH score.
+export func vipOutranksHigh(slot: TimeSlot) -> bool ! {}
+ensures { result == true }
+{
+  bookingScore(VIP, slot) > bookingScore(HIGH, slot)
+}
+
+-- PRIORITY MONOTONICITY: Higher priority always means higher score.
+-- Z3 proves: HIGH always outscores STANDARD for any slot.
+export func highOutranksStandard(slot: TimeSlot) -> bool ! {}
+ensures { result == true }
+{
+  bookingScore(HIGH, slot) > bookingScore(STANDARD, slot)
+}
+
+-- STANDARD beats LOW: Z3 proves ordering is complete.
+export func standardOutranksLow(slot: TimeSlot) -> bool ! {}
+ensures { result == true }
+{
+  bookingScore(STANDARD, slot) > bookingScore(LOW, slot)
+}
+
+-- ============================================================================
+-- Booking cost calculation (multi-level cross-function)
+-- ============================================================================
+
+-- Base room cost per slot (cents).
+-- Z3 proves: cost is positive.
+export func baseRoomCost(room: RoomType) -> int ! {}
+ensures { result >= 500 }
+{
+  match room {
+    SMALL  => 500,
+    MEDIUM => 1500,
+    LARGE  => 5000
+  }
+}
+
+-- Capacity surcharge: extra cost per person above half capacity.
+-- CALLS roomCapacity.
+-- Z3 proves: surcharge is non-negative.
+export func capacitySurcharge(room: RoomType, headcount: int) -> int ! {}
+requires { headcount >= 1, headcount <= roomCapacity(room) }
+ensures { result >= 0 }
+{
+  let halfCap = roomCapacity(room) / 2;
+  if headcount > halfCap
+  then (headcount - halfCap) * 100
+  else 0
+}
+
+-- Priority premium percentage.
+-- Z3 proves: premium is bounded [0, 50].
+export func priorityPremium(priority: Priority) -> int ! {}
+ensures { result >= 0, result <= 50 }
+{
+  match priority {
+    VIP      => 50,
+    HIGH     => 25,
+    STANDARD => 10,
+    LOW      => 0
+  }
+}
+
+-- Full booking cost: base + capacity surcharge + priority premium + demand.
+-- CALLS: baseRoomCost, capacitySurcharge, priorityPremium, slotDemand (4-deep chain).
+-- Z3 proves: total cost is always positive.
+-- Note: demand adjustment can be negative (evening = 80%, so -20% off base),
+-- but base + premium always covers it since premium ≥ 0 and base ≥ 500.
+export func totalBookingCost(room: RoomType, headcount: int, priority: Priority, slot: TimeSlot) -> int ! {}
+requires { headcount >= 1, headcount <= roomCapacity(room) }
+ensures { result >= 0 }
+{
+  let base = baseRoomCost(room);
+  let surcharge = capacitySurcharge(room, headcount);
+  let premium = base * priorityPremium(priority) / 100;
+  let demand = base * slotDemand(slot) / 100;
+  surcharge + premium + demand
+}
+
+-- ============================================================================
+-- BROKEN: Double-booking check — Z3 catches the bug
+-- ============================================================================
+
+-- Developer checks if two bookings can share a room by comparing
+-- their combined headcount against capacity. But they used + 1
+-- thinking it's "inclusive" — this means 2 bookings exactly filling
+-- the room would be rejected, AND allows off-by-one overbooking.
+-- Z3 finds: headcountA + headcountB + 1 can exceed capacity.
+export func brokenDoubleBook(room: RoomType, headcountA: int, headcountB: int) -> bool ! {}
+requires { headcountA >= 1, headcountB >= 1 }
+ensures { result == (headcountA + headcountB <= roomCapacity(room)) }
+{
+  -- Bug: the +1 makes this disagree with the contract
+  headcountA + headcountB + 1 <= roomCapacity(room)
+}
+
+-- ============================================================================
+-- BROKEN: Overtime cost — Z3 catches the bug
+-- ============================================================================
+
+-- Developer adds a 1.5x overtime premium for hours beyond the base booking.
+-- Subtracts a flat "admin fee waiver" of 50 cents to reward loyalty.
+-- Looks harmless — but with 0 overtime hours and a free room (base=0),
+-- the waiver makes the total negative.
+-- Z3 finds: baseRate=0, overtimeHours=0 → 0 + 0 - 50 = -50.
+export func overtimeCost(baseRate: int, overtimeHours: int) -> int ! {}
+requires { baseRate >= 0, overtimeHours >= 0 }
+ensures { result >= 0 }
+{
+  baseRate + overtimeHours * 150 / 100 - 50
+}
+
+-- Entry point
+export func main() -> int ! {}
+{
+  let score = bookingScore(VIP, MORNING);
+  let cost = totalBookingCost(MEDIUM, 15, HIGH, MIDDAY);
+  let remaining = remainingCapacity(LARGE, 50);
+  score + cost + remaining
+}

@@ -1,0 +1,211 @@
+module verify_demo/access_policy
+
+-- ============================================================================
+-- Provably Correct Access Control
+-- ============================================================================
+--
+-- Role-based access control for a document management system.
+-- 4 roles × 4 resources × 3 actions = 48 permission combinations.
+-- Z3 proves security invariants that are impossible to verify by hand:
+--   - Admins can ALWAYS access everything
+--   - Guests can NEVER write or delete
+--   - Editors can NEVER delete admin resources
+--   - Permission escalation is impossible
+--
+-- Features demonstrated:
+--   ✓ Enum ADTs (Role × Resource × Action = 48 paths)
+--   ✓ Cross-function chains (isAllowed → permissionLevel → basePermission)
+--   ✓ Relational properties (role A always has >= permissions of role B)
+--   ✓ Security invariants (guest isolation, admin supremacy)
+--   ✓ Counterexample (Z3 catches a privilege escalation bug)
+--
+-- Run:
+--   ailang verify verify_demo/access_policy.ail
+-- ============================================================================
+
+-- Domain types
+
+export type Role = ADMIN | EDITOR | VIEWER | GUEST
+export type Resource = DOCUMENTS | SETTINGS | AUDIT_LOG | USER_DATA
+export type Action = READ | WRITE | DELETE
+
+-- ============================================================================
+-- Permission model
+-- ============================================================================
+
+-- Base permission score for a role (higher = more access).
+-- Z3 proves: bounded [0, 100].
+export func roleWeight(role: Role) -> int ! {}
+ensures { result >= 0, result <= 100 }
+{
+  match role {
+    ADMIN  => 100,
+    EDITOR => 60,
+    VIEWER => 30,
+    GUEST  => 10
+  }
+}
+
+-- Minimum permission level required for an action.
+-- Z3 proves: bounded [10, 80].
+export func actionThreshold(action: Action) -> int ! {}
+ensures { result >= 10, result <= 80 }
+{
+  match action {
+    READ   => 10,
+    WRITE  => 50,
+    DELETE => 80
+  }
+}
+
+-- Resource sensitivity modifier (adds to threshold).
+-- Z3 proves: bounded [0, 20].
+export func resourceSensitivity(resource: Resource) -> int ! {}
+ensures { result >= 0, result <= 20 }
+{
+  match resource {
+    DOCUMENTS => 0,
+    SETTINGS  => 10,
+    AUDIT_LOG => 15,
+    USER_DATA => 20
+  }
+}
+
+-- Combined permission check. CALLS roleWeight, actionThreshold, resourceSensitivity.
+-- Z3 inlines all three and proves: result is a boolean for all 48 combinations.
+export func isAllowed(role: Role, resource: Resource, action: Action) -> bool ! {}
+{
+  roleWeight(role) >= actionThreshold(action) + resourceSensitivity(resource)
+}
+
+-- ============================================================================
+-- Security invariants (relational properties)
+-- ============================================================================
+
+-- ADMIN SUPREMACY: Admins can always do anything.
+-- Z3 proves: for ANY resource and ANY action, admin is always allowed.
+export func adminAlwaysAllowed(resource: Resource, action: Action) -> bool ! {}
+ensures { result == true }
+{
+  isAllowed(ADMIN, resource, action)
+}
+
+-- GUEST ISOLATION: Guests can never write.
+-- Z3 proves: for ANY resource, guests cannot write.
+export func guestCannotWrite(resource: Resource) -> bool ! {}
+ensures { result == true }
+{
+  isAllowed(GUEST, resource, WRITE) == false
+}
+
+-- GUEST DELETE ISOLATION: Guests can never delete.
+-- Z3 proves: for ANY resource, guests cannot delete.
+export func guestCannotDelete(resource: Resource) -> bool ! {}
+ensures { result == true }
+{
+  isAllowed(GUEST, resource, DELETE) == false
+}
+
+-- VIEWER WRITE ISOLATION: Viewers can never write to sensitive resources.
+-- Z3 proves: viewers cannot write to settings, audit_log, or user_data.
+export func viewerCannotWriteSensitive(resource: Resource) -> bool ! {}
+ensures { result == true }
+{
+  if resourceSensitivity(resource) > 0
+  then isAllowed(VIEWER, resource, WRITE) == false
+  else true
+}
+
+-- ROLE ORDERING: Admins always have >= permissions than editors.
+-- Z3 proves: if an editor is allowed, admin is always also allowed.
+export func adminOutranksEditor(resource: Resource, action: Action) -> bool ! {}
+ensures { result == true }
+{
+  if isAllowed(EDITOR, resource, action)
+  then isAllowed(ADMIN, resource, action)
+  else true
+}
+
+-- MONOTONICITY: Higher roles never lose permissions.
+-- Z3 proves: editor >= viewer for all operations.
+export func editorOutranksViewer(resource: Resource, action: Action) -> bool ! {}
+ensures { result == true }
+{
+  if isAllowed(VIEWER, resource, action)
+  then isAllowed(EDITOR, resource, action)
+  else true
+}
+
+-- ============================================================================
+-- Audit scoring (cross-function with enums)
+-- ============================================================================
+
+-- Risk score for an action attempt. Higher = more suspicious.
+-- Z3 proves: risk score is bounded [0, 200].
+export func auditRiskScore(role: Role, action: Action, resource: Resource) -> int ! {}
+ensures { result >= 0, result <= 200 }
+{
+  let roleFactor = match role {
+    ADMIN  => 10,
+    EDITOR => 30,
+    VIEWER => 60,
+    GUEST  => 100
+  };
+  let actionFactor = match action {
+    READ   => 10,
+    WRITE  => 50,
+    DELETE => 100
+  };
+  let sensitivityFactor = resourceSensitivity(resource);
+  -- Combine factors: suspicious = low-privilege role + high-impact action + sensitive resource
+  (roleFactor + actionFactor + sensitivityFactor * 5) / 2
+}
+
+-- ============================================================================
+-- BROKEN: Escalation check — Z3 catches the bug
+-- ============================================================================
+
+-- Developer tried to prevent privilege escalation by checking
+-- that the granted level doesn't exceed the role weight.
+-- But the bonus for "trusted" actions (read) can push the level
+-- above the role's base weight. Z3 finds the exact combination.
+export func brokenEscalationCheck(role: Role, action: Action) -> int ! {}
+ensures { result <= roleWeight(role) }
+{
+  let base = roleWeight(role);
+  let bonus = match action {
+    READ   => 15,
+    WRITE  => 5,
+    DELETE => 0
+  };
+  -- Bug: bonus can push result above role weight
+  base + bonus - actionThreshold(action)
+}
+
+-- ============================================================================
+-- BROKEN: Permission upgrade gain — Z3 catches the bug
+-- ============================================================================
+
+-- Developer calculates the "net permission gain" when upgrading a user's role.
+-- Subtracts resource sensitivity as a security buffer.
+-- Looks reasonable: higher role → more permissions → positive gain.
+-- But when both roles are the SAME and the resource is sensitive,
+-- the sensitivity subtraction makes the gain negative.
+-- Z3 finds: fromRole=VIEWER, toRole=VIEWER, resource=AUDIT_LOG
+--   → 30 - 30 - 20 = -20, violates result >= 0.
+export func upgradeGain(fromRole: Role, toRole: Role, resource: Resource) -> int ! {}
+requires { roleWeight(toRole) >= roleWeight(fromRole) }
+ensures { result >= 0 }
+{
+  roleWeight(toRole) - roleWeight(fromRole) - resourceSensitivity(resource)
+}
+
+-- Entry point
+export func main() -> int ! {}
+{
+  let adminRead = if isAllowed(ADMIN, DOCUMENTS, READ) then 1 else 0;
+  let guestWrite = if isAllowed(GUEST, SETTINGS, WRITE) then 1 else 0;
+  let editorDelete = if isAllowed(EDITOR, AUDIT_LOG, DELETE) then 1 else 0;
+  let risk = auditRiskScore(GUEST, DELETE, USER_DATA);
+  adminRead + guestWrite + editorDelete + risk
+}

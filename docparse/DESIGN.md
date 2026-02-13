@@ -253,6 +253,7 @@ ailang check docparse/services/output_formatter.ail
 - **Option chaining** (`flatMap`, `map`, `getOrElse` in std/option) — replaced all 3-4 level nested matches
 - **List HOFs** (`map`, `flatMap`, `foldl`, `any`, `nth`, `concat` in std/list) — replaced 54 hand-rolled recursive functions
 - **Contracts** — `ensures { ... }` works with `--verify-contracts --experimental-binop-shim`. 28 contracts across 7 modules.
+- **Static Verification (Z3)** — `ailang verify` proves contracts for all inputs via Z3 SMT solver. Run `docparse --prove`.
 - **Structured AI output** — `callJson(prompt, schema)` and `callJsonSimple(prompt)` from `std/ai`. 6 AI calls use schema-enforced JSON output.
 
 ### Pending
@@ -260,3 +261,28 @@ ailang check docparse/services/output_formatter.ail
 
 ### Known Bugs
 - Test harness: inline tests on pure functions calling stdlib imports fail with "cannot apply non-function value: nil" — **reported**, workaround in place (test via main() instead)
+
+## Static Verification (Z3)
+
+Run `docparse --prove` or `ailang verify docparse/types/document.ail` etc.
+
+### Results Summary
+
+| Module | Verified | Skipped | Errors | Notes |
+|--------|----------|---------|--------|-------|
+| `types/document.ail` | 0 | 5 | 5 | Filter contracts use HOFs (SKIPPED); record constructors fail encoding (ERROR) |
+| `services/docx_parser.ail` | 1 | 3 | 0 | `headingLevelFromStyle` VERIFIED (range 1..6) |
+| `services/pptx_parser.ail` | 0 | 3 | 0 | All use HOFs or list types |
+| `services/xlsx_parser.ail` | 0 | 2 | 0 | All use HOFs or list types |
+| `services/layout_ai.ail` | 0 | 5 | 0 | All have effects (! {AI}) — SKIPPED by design |
+| `services/output_formatter.ail` | 0 | 4 | 1 | `formatResult` uses imported record types (ERROR) |
+
+**1 verified**: `headingLevelFromStyle` — Z3 proves `result >= 1 && result <= 6` for all inputs.
+
+**Most contracts SKIPPED**: DocParse contracts use `listLength`+`filter` (higher-order) or effect annotations — outside the decidable fragment. This is expected; runtime `--verify-contracts` still enforces them.
+
+### Potential AILANG Bugs (Z3 Encoding)
+
+1. **Record construction encoding fails** — `simpleCell`, `mergedCell`, `spanCell`, `emptyMetadata` all produce ERROR: "unknown record type with fields [...] (not declared in function signature)". These are simple pure functions returning record literals — should be encodable.
+2. **Imported record types fail** — `formatResult` produces ERROR: "unknown sort 'ParsedDocument'" — Z3 can't resolve types imported from other modules.
+3. **Builtin calls unresolvable** — `intToFloat` (from std/math) produces ERROR in ecommerce `calculateTotal`: "unknown constant intToFloat". Builtins should either encode or gracefully SKIP.

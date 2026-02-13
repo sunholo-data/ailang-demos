@@ -6,6 +6,7 @@ on:
     paths:
       - 'invoice_processor_wasm/**'
       - 'docparse/**'
+      - 'verify_demo/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -147,6 +148,19 @@ jobs:
           cp docparse/services/output_formatter.ail invoice_processor_wasm/ailang/docparse/services/
           cp docparse/services/docparse_browser.ail invoice_processor_wasm/ailang/docparse/services/
           echo "Copied $(find invoice_processor_wasm/ailang/docparse -name '*.ail' | wc -l) docparse modules"
+
+      - name: Copy verify_demo modules
+        run: |
+          # Clean up any dev symlinks and set up real files for deployment
+          rm -rf invoice_processor_wasm/ailang/verify_demo
+          mkdir -p invoice_processor_wasm/ailang/verify_demo
+          # Copy verification demo source modules
+          cp verify_demo/verify_showcase.ail invoice_processor_wasm/ailang/verify_demo/
+          cp verify_demo/billing.ail invoice_processor_wasm/ailang/verify_demo/
+          cp verify_demo/access_policy.ail invoice_processor_wasm/ailang/verify_demo/
+          cp verify_demo/scheduling.ail invoice_processor_wasm/ailang/verify_demo/
+          cp verify_demo/main.ail invoice_processor_wasm/ailang/verify_demo/
+          echo "Copied $(find invoice_processor_wasm/ailang/verify_demo -name '*.ail' | wc -l) verify_demo modules"
 
       - name: Copy demo Office files
         run: |

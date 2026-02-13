@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AILANG Contract Verification — Z3 Static Proof</title>
+  <meta name="description" content="52 contracts, 43 proven correct for ALL inputs, 9 bugs caught at compile time. AILANG Z3-powered static verification demo with live WebAssembly execution.">
+
+  <!-- OpenGraph for social sharing -->
+  <meta property="og:title" content="AILANG Contract Verification — Z3 Static Proof">
+  <meta property="og:description" content="43 functions proven correct for ALL possible inputs — including recursive ones via bounded unrolling. 9 bugs caught before runtime. Z3 SMT solver meets functional programming.">
+  <meta property="og:type" content="website">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <style>
+    /* ── Verify-specific styles ──────────────────────────────────── */
+
+    /* Hero scoreboard */
+    .hero-verify {
+      background: var(--bg-code);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-verify::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 600px 300px at 20% 50%, rgba(5, 150, 105, 0.08), transparent),
+        radial-gradient(ellipse 400px 200px at 80% 50%, rgba(231, 60, 23, 0.06), transparent);
+      pointer-events: none;
+    }
+    .hero-inner {
+      position: relative;
+      padding: 36px 0 32px;
+      text-align: center;
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #e2e8f0;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .hero-title .z3 {
+      color: var(--contract-purple);
+    }
+    .hero-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+    .hero-subtitle code {
+      color: #94a3b8;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* Score counters */
+    .score-row {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+    .score-item {
+      text-align: center;
+      animation: fadeInUp 0.5s ease both;
+    }
+    .score-item:nth-child(1) { animation-delay: 0.1s; }
+    .score-item:nth-child(2) { animation-delay: 0.25s; }
+    .score-item:nth-child(3) { animation-delay: 0.4s; }
+    .score-number {
+      font-family: var(--font-mono);
+      font-size: 2.8rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .score-number.verified { color: var(--success); }
+    .score-number.violation { color: var(--error); }
+    .score-number.skipped { color: var(--text-muted); }
+    .score-label {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+    }
+
+    /* Status icon inside score */
+    .score-icon {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+    .score-icon.verified {
+      background: var(--success);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 6l2 2 3-3.5' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-size: 10px; background-repeat: no-repeat; background-position: center;
+    }
+    .score-icon.violation {
+      background: var(--error);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4 4l4 4M8 4l-4 4' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-size: 10px; background-repeat: no-repeat; background-position: center;
+    }
+    .score-icon.skipped {
+      background: var(--text-muted);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-size: 10px; background-repeat: no-repeat; background-position: center;
+    }
+
+    /* Module selector toolbar */
+    .verify-toolbar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .verify-toolbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      gap: 12px;
+    }
+    .module-chips {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .module-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg);
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .module-chip:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+    }
+    .module-chip.active {
+      border-color: var(--primary);
+      background: var(--primary-faded);
+      color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-faded);
+    }
+    .chip-count {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(5, 150, 105, 0.2);
+    }
+    .chip-count.has-violation {
+      background: var(--error-bg);
+      color: var(--error);
+      border-color: rgba(220, 38, 38, 0.2);
+    }
+
+    .wasm-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .wasm-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease;
+    }
+    .wasm-dot.loading { background: var(--ai-orange); animation: pulse 1s ease infinite; }
+    .wasm-dot.ready { background: var(--success); }
+    .wasm-dot.error { background: var(--error); }
+
+    /* Main content area */
+    .verify-main {
+      padding: 20px 0 40px;
+    }
+
+    /* Module header */
+    .module-header {
+      margin-bottom: 16px;
+      animation: fadeInUp 0.3s ease both;
+    }
+    .module-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.2px;
+      margin-bottom: 4px;
+    }
+    .module-desc {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Split view: source + pipeline */
+    .verify-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .verify-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Source code panel */
+    .source-panel {
+      background: var(--bg-code);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.05s;
+    }
+    .source-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .source-filename {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+    .source-badge {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--contract-purple-bg);
+      color: var(--contract-purple);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      letter-spacing: 0.3px;
+    }
+    .source-code {
+      padding: 16px;
+      max-height: 600px;
+      overflow-y: auto;
+      overflow-x: auto;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .source-code::-webkit-scrollbar { width: 6px; }
+    .source-code::-webkit-scrollbar-track { background: transparent; }
+    .source-code::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .source-code pre {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+      white-space: pre;
+      tab-size: 2;
+    }
+    /* AILANG syntax highlighting */
+    .source-code .kw { color: #c792ea; }
+    .source-code .fn { color: #82aaff; }
+    .source-code .ty { color: #ffcb6b; }
+    .source-code .ct { color: #f78c6c; }
+    .source-code .st { color: #c3e88d; }
+    .source-code .cm { color: #546e7a; }
+    .source-code .num { color: #f78c6c; }
+    .source-code .fn.source-highlight {
+      background: rgba(130, 170, 255, 0.25);
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      animation: highlight-fade 1.5s ease-out forwards;
+    }
+    @keyframes highlight-fade {
+      0% { background: rgba(130, 170, 255, 0.4); }
+      100% { background: transparent; }
+    }
+    .source-code .contract-line {
+      background: rgba(139, 92, 246, 0.08);
+      display: inline-block;
+      width: 100%;
+      margin: 0 -16px;
+      padding: 0 16px;
+    }
+
+    /* Pipeline panel */
+    .pipeline-panel {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.1s;
+    }
+    .pipeline-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .pipeline-title {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--charcoal);
+    }
+    .pipeline-stats {
+      display: flex;
+      gap: 8px;
+    }
+    .pipeline-stat {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .pipeline-stat.verified {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(5, 150, 105, 0.2);
+    }
+    .pipeline-stat.violation {
+      background: var(--error-bg);
+      color: var(--error);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+    .pipeline-stat.skipped {
+      background: var(--bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .pipeline-body {
+      padding: 12px 16px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    /* Verification steps */
+    .verify-step {
+      display: grid;
+      grid-template-columns: 16px 1fr auto;
+      gap: 0 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      animation: fadeInUp 0.3s ease both;
+    }
+    .verify-step:hover {
+      background: var(--bg);
+    }
+    .verify-step.expanded {
+      background: var(--bg);
+    }
+
+    /* Status dot */
+    .v-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+    .v-dot.verified {
+      background: var(--success);
+      border-color: var(--success);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 6l2 2 3-3.5' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-size: 12px; background-repeat: no-repeat; background-position: center;
+    }
+    .v-dot.violation {
+      background: var(--error);
+      border-color: var(--error);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4 4l4 4M8 4l-4 4' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-size: 10px; background-repeat: no-repeat; background-position: center;
+    }
+    .v-dot.skipped {
+      background: var(--text-muted);
+      border-color: var(--text-muted);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-size: 10px; background-repeat: no-repeat; background-position: center;
+    }
+    .v-dot.pending {
+      border-color: var(--border);
+      animation: pulse 1.5s ease infinite;
+    }
+    .v-dot.active {
+      border-color: var(--primary);
+      animation: pipePulse 1.5s ease infinite;
+    }
+
+    .v-info {
+      min-width: 0;
+    }
+    .v-name {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .v-desc {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .v-badge {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .v-badge.verified {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+    .v-badge.violation {
+      background: var(--error-bg);
+      color: var(--error);
+    }
+    .v-badge.skipped {
+      background: var(--bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    /* Connector lines between steps */
+    .v-connector {
+      width: 2px;
+      height: 6px;
+      background: var(--border);
+      margin-left: 17px;
+      transition: background 0.3s ease;
+    }
+    .v-connector.verified { background: var(--success); }
+    .v-connector.violation { background: var(--error); }
+
+    /* Expandable detail card */
+    .v-detail {
+      grid-column: 1 / -1;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;
+    }
+    .verify-step.expanded .v-detail {
+      max-height: 300px;
+      opacity: 1;
+      margin-top: 8px;
+    }
+    .v-detail-inner {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.6;
+    }
+
+    /* Contract display inside detail */
+    .v-contract {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .v-contract-label {
+      font-family: var(--font-display);
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .v-contract code {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--contract-purple);
+    }
+
+    /* Counterexample card */
+    .counterexample {
+      background: var(--error-bg);
+      border: 1px solid rgba(220, 38, 38, 0.15);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+    .counterexample-title {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--error);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .counterexample-inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .cx-param {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid rgba(220, 38, 38, 0.15);
+    }
+    .cx-param .cx-name { color: var(--text-muted); }
+    .cx-param .cx-val { color: var(--error); font-weight: 600; }
+    .counterexample-explain {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Bounded recursion card */
+    .bounded-card {
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+    .bounded-card-title {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--success);
+      margin-bottom: 4px;
+    }
+    .v-bounded {
+      font-size: 0.6rem;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 4px;
+    }
+
+    /* Skip reason card */
+    .skip-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+    .skip-card-title {
+      font-family: var(--font-display);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    /* ── Try It panel ────────────────────────────────────────────── */
+    .tryit-section {
+      margin-bottom: 20px;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.15s;
+    }
+    .tryit-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .tryit-title {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--charcoal);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tryit-title .effect-badge {
+      font-size: 0.58rem;
+    }
+    .tryit-body {
+      padding: 20px;
+    }
+    .tryit-empty {
+      text-align: center;
+      padding: 32px 20px;
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    .tryit-func-name {
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+    .tryit-params {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .tryit-param {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tryit-param label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .tryit-param input,
+    .tryit-param select {
+      padding: 7px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      transition: all 0.15s ease;
+      min-width: 100px;
+    }
+    .tryit-param input:focus,
+    .tryit-param select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-faded);
+      background: var(--bg-card);
+    }
+    .tryit-param input[type="text"] {
+      min-width: 180px;
+    }
+
+    .tryit-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* Result display */
+    .tryit-result {
+      display: none;
+      background: var(--bg-code);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .tryit-result.visible { display: block; }
+    .tryit-result-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .tryit-result-row:last-child { margin-bottom: 0; }
+    .tryit-result-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      min-width: 64px;
+    }
+    .tryit-result-value {
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .tryit-contract-check {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+    .tryit-contract-check.pass {
+      background: rgba(5, 150, 105, 0.15);
+      color: var(--success);
+    }
+    .tryit-contract-check.fail {
+      background: rgba(220, 38, 38, 0.15);
+      color: var(--error);
+    }
+
+    /* ── How It Works section ────────────────────────────────────── */
+    .how-section {
+      margin-top: 32px;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      padding: 28px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.2s;
+    }
+    .how-title {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+    .how-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .how-grid { grid-template-columns: 1fr; }
+    }
+    .how-card {
+      padding: 16px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--border);
+    }
+    .how-card.runtime { border-left-color: var(--ai-orange); }
+    .how-card.static { border-left-color: var(--contract-purple); }
+    .how-card.z3 { border-left-color: var(--success); }
+    .how-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .how-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+    .how-card code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: var(--bg-card);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--primary-dark);
+    }
+
+    /* ── About Z3/SMT section ────────────────────────────────────── */
+    .about-section {
+      margin-top: 24px;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      padding: 28px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.25s;
+    }
+    .about-section h2 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .about-grid { grid-template-columns: 1fr; }
+    }
+    .about-card {
+      padding: 18px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .about-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .about-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .about-card p:last-child { margin-bottom: 0; }
+    .about-card a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .about-card a:hover { text-decoration: underline; }
+    .about-card code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: var(--bg-card);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--primary-dark);
+    }
+    .about-card .about-tag {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .about-tag.smt { background: var(--contract-purple-bg); color: var(--contract-purple); }
+    .about-tag.z3 { background: var(--success-bg); color: var(--success); }
+    .about-tag.ailang { background: rgba(231, 60, 23, 0.1); color: var(--primary); }
+    .about-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .about-links a {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .about-links a:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .verify-footer {
+      text-align: center;
+      padding: 24px 0 32px;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+    .verify-footer a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .verify-footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .score-row { gap: 24px; }
+      .score-number { font-size: 2rem; }
+      .hero-title { font-size: 1.2rem; }
+      .module-chips { flex-wrap: wrap; }
+    }
+  </style>
+
+  <script src="wasm/wasm_exec.js"></script>
+  <script src="wasm/ailang-repl.js"></script>
+</head>
+<body>
+
+  <!-- ── Header ───────────────────────────────────────────────── -->
+  <header>
+    <div class="container header-row">
+      <div class="header-left">
+        <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
+        <h1>AILANG Contract Verification</h1>
+        <span class="tagline">Z3-powered static proof via <code>ailang verify</code></span>
+      </div>
+      <div class="header-right">
+        <a href="index.html" class="nav-demo">Extractor</a>
+        <a href="docparse.html" class="nav-demo">DocParse</a>
+        <a href="https://github.com/sunholo-data/ailang-demos/tree/main/verify_demo" target="_blank" rel="noopener">Source</a>
+        <a href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">Docs</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero Scoreboard ──────────────────────────────────────── -->
+  <section class="hero-verify">
+    <div class="container hero-inner">
+      <h2 class="hero-title">Prove Your Code Correct with <span class="z3">Z3</span></h2>
+      <p class="hero-subtitle">
+        <code>ailang verify</code> translates contracts to SMT-LIB and proves them for <strong style="color:#e2e8f0">all possible inputs</strong>
+      </p>
+      <div class="score-row">
+        <div class="score-item">
+          <div class="score-number verified" id="scoreVerified">0</div>
+          <div class="score-label"><span class="score-icon verified"></span> Proven</div>
+        </div>
+        <div class="score-item">
+          <div class="score-number violation" id="scoreViolation">0</div>
+          <div class="score-label"><span class="score-icon violation"></span> Bugs Caught</div>
+        </div>
+        <div class="score-item">
+          <div class="score-number skipped" id="scoreSkipped">0</div>
+          <div class="score-label"><span class="score-icon skipped"></span> Skipped</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Module Selector Toolbar ──────────────────────────────── -->
+  <div class="verify-toolbar">
+    <div class="container verify-toolbar-inner">
+      <div class="module-chips">
+        <span class="toolbar-label">Module:</span>
+        <button class="module-chip active" data-module="verify_showcase">
+          Arithmetic
+          <span class="chip-count has-violation">8+3</span>
+        </button>
+        <button class="module-chip" data-module="billing">
+          Cloud Billing
+          <span class="chip-count has-violation">12+2</span>
+        </button>
+        <button class="module-chip" data-module="access_policy">
+          Access Control
+          <span class="chip-count has-violation">10+2</span>
+        </button>
+        <button class="module-chip" data-module="scheduling">
+          Scheduling
+          <span class="chip-count has-violation">13+2</span>
+        </button>
+      </div>
+      <div class="wasm-status">
+        <div class="wasm-dot" id="wasmDot"></div>
+        <span id="wasmLabel">WASM loading...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <main class="container verify-main">
+
+    <!-- Module header -->
+    <div class="module-header" id="moduleHeader">
+      <div class="module-title" id="moduleTitle">Arithmetic Contracts</div>
+      <div class="module-desc" id="moduleDesc">Basic contracts on pure integer functions — clamping, tax, safe subtraction, tier discounts.</div>
+    </div>
+
+    <!-- Try It Panel -->
+    <section class="tryit-section">
+      <div class="tryit-header">
+        <span class="tryit-title">
+          Try It Live
+          <span class="effect-badge pure">WASM</span>
+        </span>
+        <span style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted)">
+          Click any function below, then run it in the browser
+        </span>
+      </div>
+      <div class="tryit-body" id="tryitBody">
+        <div class="tryit-empty" id="tryitEmpty">
+          Select a function from the pipeline to execute it live via WebAssembly
+        </div>
+        <div id="tryitContent" style="display:none">
+          <div class="tryit-func-name" id="tryitFuncName"></div>
+          <div class="tryit-params" id="tryitParams"></div>
+          <div class="tryit-actions">
+            <button class="btn btn-primary btn-sm" id="tryitRunBtn">
+              <svg class="btn-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run in WASM
+            </button>
+            <span id="tryitStatus" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted)"></span>
+          </div>
+          <div class="tryit-result" id="tryitResult">
+            <div class="tryit-result-row">
+              <span class="tryit-result-label">Result</span>
+              <span class="tryit-result-value" id="tryitResultValue"></span>
+            </div>
+            <div class="tryit-result-row">
+              <span class="tryit-result-label">Contract</span>
+              <span class="tryit-contract-check" id="tryitContractCheck"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Split view: source code + verification pipeline -->
+    <div class="verify-grid">
+
+      <!-- Left: Source Code -->
+      <div class="source-panel">
+        <div class="source-header">
+          <span class="source-filename" id="sourceFilename">verify_demo/verify_showcase.ail</span>
+          <span class="source-badge">AILANG</span>
+        </div>
+        <div class="source-code" id="sourceCode">
+          <pre><code>-- Loading...</code></pre>
+        </div>
+      </div>
+
+      <!-- Right: Verification Pipeline -->
+      <div class="pipeline-panel">
+        <div class="pipeline-header">
+          <span class="pipeline-title">Verification Results</span>
+          <div class="pipeline-stats" id="pipelineStats">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+        <div class="pipeline-body" id="pipelineBody">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- How It Works -->
+    <section class="how-section">
+      <h2 class="how-title">Runtime vs Static Verification</h2>
+      <div class="how-grid">
+        <div class="how-card runtime">
+          <h3>Runtime Contracts</h3>
+          <p>
+            <code>--verify-contracts</code> checks contracts during execution on <em>actual inputs</em>.
+            Fast, works everywhere, but only catches bugs on tested paths.
+          </p>
+        </div>
+        <div class="how-card static">
+          <h3>Static Verification</h3>
+          <p>
+            <code>ailang verify</code> translates pure functions to SMT-LIB formulas and invokes
+            the Z3 theorem prover. Proves contracts for <strong>all valid inputs</strong> at compile time.
+          </p>
+        </div>
+        <div class="how-card z3">
+          <h3>What Z3 Proves</h3>
+          <p>
+            For each <code>ensures</code> clause, Z3 searches for a counterexample. If none exists,
+            the contract is <strong>proven correct</strong> for every possible input satisfying <code>requires</code>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- About Z3 & SMT -->
+    <section class="about-section">
+      <h2>What Are Z3 and SMT Solvers?</h2>
+      <div class="about-grid">
+        <div class="about-card">
+          <h3>
+            SMT Solvers
+            <span class="about-tag smt">theory</span>
+          </h3>
+          <p>
+            <strong>Satisfiability Modulo Theories</strong> (SMT) solvers decide whether logical formulas
+            over integers, booleans, strings, arrays, and other types have a satisfying assignment.
+            They extend SAT solvers with built-in decision procedures for arithmetic, bit-vectors,
+            and data structures — enabling automated reasoning about real programs, not just propositional logic.
+          </p>
+          <p>
+            The <a href="https://smt-lib.org/" target="_blank" rel="noopener">SMT-LIB</a> standard
+            defines a common input format that all major solvers understand. AILANG's <code>ailang verify</code>
+            compiles contracts to SMT-LIB v2 and feeds them to Z3.
+          </p>
+        </div>
+        <div class="about-card">
+          <h3>
+            Z3 Theorem Prover
+            <span class="about-tag z3">solver</span>
+          </h3>
+          <p>
+            <a href="https://github.com/Z3Prover/z3" target="_blank" rel="noopener">Z3</a> is
+            Microsoft Research's high-performance SMT solver, used in production by compilers, operating systems,
+            and security tools worldwide. It combines DPLL(T) search with specialized solvers for linear arithmetic,
+            non-linear arithmetic, strings, sequences, and algebraic datatypes.
+          </p>
+          <p>
+            When AILANG asks "does this contract hold for all valid inputs?", Z3 either proves it
+            universally or returns a concrete counterexample — the exact input values that break the contract.
+          </p>
+        </div>
+        <div class="about-card">
+          <h3>
+            Why AILANG Is a Natural Fit
+            <span class="about-tag ailang">language</span>
+          </h3>
+          <p>
+            AILANG's <code>pure func</code> declarations guarantee no side effects — exactly the fragment
+            Z3 can reason about. Algebraic data types (enums, records) map directly to Z3's datatype theory.
+            First-class <code>requires</code>/<code>ensures</code> contracts are the specification language,
+            so there's nothing extra to write — your contracts <em>are</em> your proofs.
+          </p>
+          <p>
+            Cross-function calls are automatically inlined as Z3 <code>define-fun</code> declarations,
+            letting the solver verify entire call chains (like the 4-deep billing pipeline above) in one pass.
+          </p>
+        </div>
+        <div class="about-card">
+          <h3>
+            The Decidable Fragment
+            <span class="about-tag smt">scope</span>
+          </h3>
+          <p>
+            Z3 can verify pure functions using: <code>int</code>, <code>bool</code>, <code>float</code>,
+            <code>string</code>, lists, records, and enum ADTs. Arithmetic, comparisons, <code>if</code>/<code>match</code>,
+            string operations (<code>++</code>, <code>startsWith</code>, <code>find</code>), and list operations
+            are all supported. Recursive functions are verified via bounded unrolling with
+            <code>--verify-recursive-depth</code>.
+          </p>
+          <p>
+            Higher-order functions and effect-ful code are outside the decidable fragment — these get
+            runtime contract checking via <code>--verify-contracts</code> instead.
+          </p>
+          <div class="about-links">
+            <a href="https://github.com/Z3Prover/z3" target="_blank" rel="noopener">Z3 on GitHub</a>
+            <a href="https://smt-lib.org/" target="_blank" rel="noopener">SMT-LIB Standard</a>
+            <a href="https://microsoft.github.io/z3guide/" target="_blank" rel="noopener">Z3 Guide</a>
+            <a href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">AILANG Contracts Docs</a>
+            <a href="https://en.wikipedia.org/wiki/Satisfiability_modulo_theories" target="_blank" rel="noopener">SMT on Wikipedia</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <footer class="verify-footer container">
+    Built with <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">AILANG</a> +
+    <a href="https://github.com/Z3Prover/z3" target="_blank" rel="noopener">Z3</a> +
+    WebAssembly &mdash;
+    <a href="https://github.com/sunholo-data/ailang-demos" target="_blank" rel="noopener">View Source</a>
+  </footer>
+
+  <script type="module" src="js/verify-app.js"></script>
+</body>
+</html>

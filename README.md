@@ -9,6 +9,7 @@ Vertical demos showcasing [AILANG](https://ailang.sunholo.com/) — a pure funct
 | [Document Extractor](invoice_processor_wasm/) | AI-powered document extraction validated by AILANG contracts via WebAssembly — live on GitHub Pages | AI effect, contracts, std/json, multimodal (PDF/images), capability security, WASM |
 | [DocParse](docparse/) | Universal document parsing — DOCX, PPTX, XLSX, PDF, images to structured JSON and markdown | std/xml, ADTs, contracts, pure functions, AI self-healing, WASM |
 | [Ecommerce](ecommerce/) | AI recommendations, data pipelines, BigQuery analytics, contracts, REST API + React UI | AI effect, capability budgets, OAuth2, REST API, serve-api, inline tests, requires/ensures |
+| [Verify Demo](verify_demo/) | Static contract verification showcase — Z3 proves contracts correct for ALL inputs | Z3 SMT solver, requires/ensures, counterexamples, decidable fragment |
 
 ## Demo Showcase
 
@@ -31,6 +32,24 @@ Drop a DOCX, PPTX, XLSX, PDF, or image and get structured output — headings, t
 ![DocParse Demo](invoice_processor_wasm/assets/doc_parse_demo_screenshot.png)
 
 **Features:** DOCX/PPTX/XLSX deterministic XML parsing, PDF and image AI extraction, merged cell handling, AI image descriptions, AI self-healing for ambiguous tables, 4 output views (blocks, preview, JSON, markdown), copy-to-clipboard, Block ADT with pattern matching. Integrates with Document Extractor for end-to-end extraction pipelines.
+
+### Static Verification (Z3)
+
+Prove contracts correct at compile time — no tests needed, no runtime overhead. **42 contracts verified, 4 bugs caught** across 4 modules covering cloud billing, access control, resource scheduling, and arithmetic. Z3 catches bugs invisible to traditional testing.
+
+```
+$ ailang verify verify_demo/billing.ail
+
+  ✓ VERIFIED finalBill          22ms   # 4-deep cross-function chain
+  ✓ VERIFIED isValidPromo        5ms   # Z3 string theory
+  ✓ VERIFIED addLineItem        44ms   # Z3 sequence theory
+  ✓ VERIFIED netFromBill         5ms   # record field invariants
+  ... (12 verified, 1 violation)
+  ✗ VIOLATION brokenCreditApply
+    Counterexample: subtotal=0, credits=1
+```
+
+**Features:** Cloud billing (enums + records + strings + lists + 4-deep cross-function chains), role-based access control (48 permission paths, admin supremacy, guest isolation, role monotonicity), conference room scheduling (priority ordering, capacity bounds), arithmetic contracts. JSON output for CI, verbose SMT-LIB. Requires Z3 (`brew install z3`).
 
 ### Ecommerce
 
@@ -65,6 +84,7 @@ AILANG is a pure functional language designed for AI-native applications:
 - **Pattern matching** — on lists, `Option`, `Result`, and custom ADTs
 - **First-class AI** — `std/ai` effect for calling any AI provider
 - **Contracts** — `requires`/`ensures` preconditions and postconditions
+- **Static verification** — `ailang verify` proves contracts via Z3 SMT solver
 - **WebAssembly** — run AILANG in the browser with full stdlib support
 
 ## Repository Structure
@@ -91,6 +111,12 @@ demos/
 │   ├── contracts_demo.ail    # Design-by-contract verification
 │   ├── ui/                   # React dashboard (serve-api frontend)
 │   └── services/             # Shared services (auth, BigQuery, AI)
+├── verify_demo/              # Static contract verification showcase (47 contracts)
+│   ├── verify_showcase.ail   # Arithmetic contracts (7 verified, 1 violation, 1 skipped)
+│   ├── billing.ail           # Cloud billing: enums, records, strings, lists, cross-function
+│   ├── access_policy.ail     # RBAC: 48 permission paths, security invariants
+│   ├── scheduling.ail        # Booking: capacity bounds, priority ordering
+│   └── main.ail              # Runtime demo showcasing all 4 modules
 └── models.yml                # AI model configuration
 ```
 

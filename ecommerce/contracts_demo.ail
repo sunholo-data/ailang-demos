@@ -7,11 +7,14 @@ module ecommerce/contracts_demo
 -- Contracts specify preconditions and postconditions that are:
 --   - Always documented as comments in generated code
 --   - Optionally enforced at runtime with --verify-contracts
---   - A stepping stone toward SMT-based formal verification (v0.8.0)
+--   - Statically proven via Z3 with: ailang verify ecommerce/contracts_demo.ail
 --
 -- Run:
 --   ailang run --entry main --caps IO ecommerce/contracts_demo.ail
 --   ailang run --entry main --caps IO --verify-contracts ecommerce/contracts_demo.ail
+--   ailang verify ecommerce/contracts_demo.ail
+
+import std/math (intToFloat)
 
 -- Apply a percentage discount to a price
 -- Contracts guarantee: valid inputs produce valid outputs
@@ -31,11 +34,13 @@ ensures { result > 0 }
 }
 
 -- Calculate total price with quantity bounds
+-- Note: Z3 verify skips this — intToFloat is a builtin outside the decidable fragment.
+-- See clampQuantity/applyDiscount/validateQuantity for verified contracts.
 export func calculateTotal(unitPrice: float, quantity: int) -> float ! {}
 requires { unitPrice >= 0.0, quantity > 0 }
 ensures { result >= 0.0 }
 {
-  unitPrice * toFloat(quantity)
+  unitPrice * intToFloat(quantity)
 }
 
 -- Clamp a value within bounds (e.g., inventory limits)
@@ -46,17 +51,6 @@ ensures { result >= minQty }
   if qty < minQty then minQty
   else if qty > maxQty then maxQty
   else qty
-}
-
--- Helper: convert int to float
-pure func toFloat(n: int) -> float ! {}
-requires { n >= 0 }
-ensures { result >= 0.0 }
-{
-  match n {
-    0 => 0.0,
-    _ => 1.0 + toFloat(n - 1)
-  }
 }
 
 -- Entry point
@@ -92,6 +86,9 @@ export func main() -> () ! {IO @limit=20} {
   println("   ensures:  result >= minQty");
   println("");
 
-  println("All contracts verified. Run with --verify-contracts for runtime enforcement.");
+  println("All contracts passed at runtime.");
+  println("");
+  println("Runtime:  ailang run --verify-contracts ecommerce/contracts_demo.ail");
+  println("Static:   ailang verify ecommerce/contracts_demo.ail");
   println("=== Demo Complete ===")
 }

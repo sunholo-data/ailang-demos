@@ -55,11 +55,12 @@ Options:
   --describe        Enable AI image descriptions
   --summarize       Enable AI document summary
   --ai MODEL        AI model (default: gemini-3-flash-preview)
-  --verify          Enable contract verification
+  --verify          Enable runtime contract verification
   --budget-report   Show capability budget usage after run
   --output-dir DIR  Copy output files to DIR after parsing
   --check           Type-check all 10 modules (no file needed)
   --test            Run all inline tests (no file needed)
+  --prove           Static Z3 contract verification (no file needed, requires z3)
   -h, --help        Show this help
 
 Supported formats:
@@ -104,6 +105,26 @@ do_test() {
   done
 }
 
+do_prove() {
+  echo "Static contract verification (Z3)..."
+  echo ""
+  local total_verified=0
+  local total_skipped=0
+  local total_violations=0
+  local total_errors=0
+  for mod in "${MODULES[@]}"; do
+    local name
+    name="$(basename "$mod")"
+    local output
+    if output=$(ailang verify "$mod" 2>&1); then
+      echo "$output"
+    else
+      echo "$output"
+    fi
+    echo ""
+  done
+}
+
 # --- Parse arguments ---
 
 FILE=""
@@ -129,6 +150,11 @@ while [ $# -gt 0 ]; do
     --test)
       cd "$PROJECT_DIR"
       do_test
+      exit 0
+      ;;
+    --prove)
+      cd "$PROJECT_DIR"
+      do_prove
       exit 0
       ;;
     --describe)
