@@ -288,7 +288,9 @@ pure func renderBlockMd(block: Block) -> string =
       renderChangeMd(b.changeType, b.author, b.date, b.text)
   }
 
-pure func headingPrefix(level: int) -> string =
+pure func headingPrefix(level: int) -> string
+  ensures { length(result) >= 2 }
+{
   if level == 1 then "# "
   else if level == 2 then "## "
   else if level == 3 then "### "
@@ -296,6 +298,7 @@ pure func headingPrefix(level: int) -> string =
   else if level == 5 then "##### "
   else if level == 6 then "###### "
   else "## "
+}
 
 pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
   let label = if kind == "slide" then "---\n\n"
@@ -311,7 +314,9 @@ pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
 
 -- Render a track change annotation as markdown
 -- Deletions/move-from use strikethrough; insertions/move-to use bold
-pure func renderChangeMd(changeType: string, author: string, date: string, text: string) -> string {
+pure func renderChangeMd(changeType: string, author: string, date: string, text: string) -> string
+  ensures { length(result) > 0 }
+{
   let attribution = " *(" ++ changeType ++ " by " ++ author ++ ", " ++ date ++ ")*";
   if changeType == "delete" || changeType == "move-from"
   then "~~" ++ text ++ "~~" ++ attribution ++ "\n\n"

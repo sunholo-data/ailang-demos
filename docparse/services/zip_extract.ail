@@ -205,6 +205,7 @@ pure func isMediaEntry(entry: string) -> bool {
 
 -- Determine the MIME type from a media filename
 export pure func mediaMimeType(filename: string) -> string
+  ensures { length(result) > 0 }
   tests [
     ("image1.png", "image/png"),
     ("image2.jpg", "image/jpeg"),

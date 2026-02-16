@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AILANG — Contracts Improve AI Code Generation</title>
+  <meta name="description" content="Experimental evidence that Z3 contract verification tools improve AI code generation. 88.5% pass rate with contracts vs 80.8% baseline. Very hard benchmarks: 33% → 100%.">
+
+  <!-- OpenGraph for social sharing -->
+  <meta property="og:title" content="AILANG — Contracts Improve AI Code Generation">
+  <meta property="og:description" content="Teaching AI to write and verify formal contracts improves code quality. 26 benchmarks, 2 conditions, measurable improvement on hard problems.">
+  <meta property="og:type" content="website">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <style>
+    /* ── Contracts AI page styles ─────────────────────────────── */
+
+    /* Hero */
+    .hero-contracts {
+      background: var(--bg-code);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-contracts::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 600px 300px at 30% 50%, rgba(139, 92, 246, 0.1), transparent),
+        radial-gradient(ellipse 400px 200px at 70% 50%, rgba(231, 60, 23, 0.08), transparent);
+      pointer-events: none;
+    }
+    .hero-inner {
+      position: relative;
+      padding: 48px 0 40px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--contract-purple);
+      margin-bottom: 12px;
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #e2e8f0;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+    .hero-title .accent { color: var(--contract-purple); }
+    .hero-title .orange { color: var(--primary); }
+    .hero-subtitle {
+      font-family: var(--font-display);
+      font-size: 0.92rem;
+      color: #94a3b8;
+      margin-bottom: 32px;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.6;
+    }
+    .hero-subtitle a {
+      color: var(--contract-purple);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .hero-subtitle a:hover { text-decoration: underline; }
+
+    /* Score row */
+    .score-row {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+    .score-item {
+      text-align: center;
+      animation: fadeInUp 0.5s ease both;
+    }
+    .score-item:nth-child(1) { animation-delay: 0.1s; }
+    .score-item:nth-child(2) { animation-delay: 0.2s; }
+    .score-item:nth-child(3) { animation-delay: 0.3s; }
+    .score-item:nth-child(4) { animation-delay: 0.4s; }
+    .score-number {
+      font-family: var(--font-mono);
+      font-size: 2.4rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .score-number.baseline { color: #64748b; }
+    .score-number.tool-aware { color: var(--contract-purple); }
+    .score-number.delta { color: var(--success); }
+    .score-number.hard { color: var(--primary); }
+    .score-label {
+      font-family: var(--font-display);
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+    }
+    .score-sublabel {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: #475569;
+      margin-top: 2px;
+    }
+
+    /* Paper reference banner */
+    .paper-banner {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.1s;
+    }
+    .paper-icon {
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      background: var(--contract-purple-bg);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .paper-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--contract-purple);
+      fill: none;
+    }
+    .paper-body h3 {
+      font-family: var(--font-display);
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .paper-body p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .paper-body a {
+      color: var(--contract-purple);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .paper-body a:hover { text-decoration: underline; }
+    .paper-body code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: var(--bg-input);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--primary-dark);
+    }
+
+    /* Methodology section */
+    .method-section {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      padding: 28px;
+      margin-bottom: 32px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.15s;
+    }
+    .method-section h2 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: -0.2px;
+    }
+    .method-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .method-grid { grid-template-columns: 1fr; }
+    }
+    .method-card {
+      padding: 18px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--border);
+    }
+    .method-card.baseline { border-left-color: #64748b; }
+    .method-card.tool-aware { border-left-color: var(--contract-purple); }
+    .method-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .method-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .method-card ul {
+      list-style: none;
+      margin-top: 8px;
+    }
+    .method-card li {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      padding: 3px 0;
+    }
+    .method-card li::before {
+      content: '→ ';
+      color: var(--text-muted);
+    }
+    .cond-tag {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .cond-tag.bl { background: rgba(100,116,139,0.1); color: #64748b; }
+    .cond-tag.ta { background: var(--contract-purple-bg); color: var(--contract-purple); }
+
+    /* Results breakdown */
+    .results-section {
+      margin-bottom: 32px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.2s;
+    }
+    .results-section h2 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+    .results-table-wrap {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+    }
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .results-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-family: var(--font-display);
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 2px solid var(--border);
+    }
+    .results-table td {
+      padding: 10px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border);
+    }
+    .results-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .results-table tbody tr:hover {
+      background: rgba(139, 92, 246, 0.03);
+    }
+    .results-table .diff-name {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+    .diff-easy { color: var(--success); }
+    .diff-medium { color: var(--ai-orange); }
+    .diff-hard { color: var(--primary); }
+    .diff-very_hard { color: var(--error); }
+    .rate-good { color: var(--success); font-weight: 600; }
+    .rate-ok { color: var(--text-primary); }
+    .rate-bad { color: var(--error); font-weight: 600; }
+    .delta-up { color: var(--success); font-weight: 700; }
+    .delta-down { color: var(--error); font-weight: 700; }
+    .delta-same { color: var(--text-muted); }
+
+    /* Benchmark showcase */
+    .benchmark-section {
+      margin-bottom: 32px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.25s;
+    }
+    .benchmark-section > h2 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    /* Benchmark tabs */
+    .bench-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .bench-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg);
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .bench-tab:hover {
+      border-color: var(--contract-purple);
+      color: var(--contract-purple);
+    }
+    .bench-tab.active {
+      border-color: var(--contract-purple);
+      background: var(--contract-purple-bg);
+      color: var(--contract-purple);
+      box-shadow: 0 0 0 2px var(--contract-purple-bg);
+    }
+    .bench-diff {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+    .bench-diff.easy { background: var(--success-bg); color: var(--success); }
+    .bench-diff.medium { background: var(--warning-bg); color: var(--warning); }
+    .bench-diff.hard { background: rgba(231,60,23,0.08); color: var(--primary); }
+    .bench-diff.very_hard { background: var(--error-bg); color: var(--error); }
+
+    /* Benchmark detail panels */
+    .bench-panel {
+      display: none;
+    }
+    .bench-panel.active {
+      display: block;
+    }
+    .bench-header {
+      margin-bottom: 16px;
+    }
+    .bench-title {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .bench-desc {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Trap callout */
+    .trap-callout {
+      background: var(--error-bg);
+      border: 1px solid rgba(220,38,38,0.15);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .trap-callout h4 {
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--error);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .trap-callout p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .trap-callout code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: rgba(220,38,38,0.08);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--error);
+    }
+
+    /* Contract spec callout */
+    .contract-callout {
+      background: var(--contract-purple-bg);
+      border: 1px solid rgba(139,92,246,0.2);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .contract-callout h4 {
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--contract-purple);
+      margin-bottom: 6px;
+    }
+    .contract-callout pre {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      margin: 0;
+    }
+
+    /* Source code panel (reused from verify) */
+    .source-panel {
+      background: var(--bg-code);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .source-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .source-filename {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+    .source-badge {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.3px;
+    }
+    .source-badge.contract {
+      background: var(--contract-purple-bg);
+      color: var(--contract-purple);
+      border: 1px solid rgba(139,92,246,0.25);
+    }
+    .source-badge.ref {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(5,150,105,0.25);
+    }
+    .source-code {
+      padding: 16px;
+      max-height: 500px;
+      overflow-y: auto;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .source-code::-webkit-scrollbar { width: 6px; }
+    .source-code::-webkit-scrollbar-track { background: transparent; }
+    .source-code::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .source-code pre {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+      white-space: pre;
+      tab-size: 2;
+    }
+    .source-code .kw { color: #c792ea; }
+    .source-code .fn { color: #82aaff; }
+    .source-code .ty { color: #ffcb6b; }
+    .source-code .ct { color: #f78c6c; }
+    .source-code .st { color: #c3e88d; }
+    .source-code .cm { color: #546e7a; }
+    .source-code .num { color: #f78c6c; }
+    .source-code .contract-line {
+      background: rgba(139, 92, 246, 0.08);
+      display: inline-block;
+      width: calc(100% + 32px);
+      margin: 0 -16px;
+      padding: 0 16px;
+    }
+
+    /* Key insight cards */
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+      animation: fadeInUp 0.4s ease both;
+      animation-delay: 0.3s;
+    }
+    @media (max-width: 768px) {
+      .insight-grid { grid-template-columns: 1fr; }
+    }
+    .insight-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      padding: 20px;
+    }
+    .insight-card h3 {
+      font-family: var(--font-display);
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .insight-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .insight-card code {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      background: var(--bg-input);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--primary-dark);
+    }
+    .insight-stat {
+      font-family: var(--font-mono);
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      line-height: 1;
+    }
+    .insight-stat.purple { color: var(--contract-purple); }
+    .insight-stat.green { color: var(--success); }
+    .insight-stat.orange { color: var(--primary); }
+
+    /* Footer */
+    .page-footer {
+      text-align: center;
+      padding: 24px 0 32px;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+    .page-footer a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .page-footer a:hover { text-decoration: underline; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-title { font-size: 1.3rem; }
+      .score-row { gap: 24px; }
+      .score-number { font-size: 1.8rem; }
+      .paper-banner { flex-direction: column; }
+      .bench-tabs { gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ───────────────────────────────────────────────── -->
+  <header>
+    <div class="container header-row">
+      <div class="header-left">
+        <img src="sunholo-logo.svg" alt="Sunholo" width="28" height="28">
+        <h1>Contracts Improve AI Coding</h1>
+        <span class="tagline">Experimental evidence from 26 benchmarks</span>
+      </div>
+      <div class="header-right">
+        <a href="index.html" class="nav-demo">Extractor</a>
+        <a href="docparse.html" class="nav-demo">DocParse</a>
+        <a href="verify.html" class="nav-demo">Z3 Verify</a>
+        <a href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">Docs</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero ─────────────────────────────────────────────────── -->
+  <section class="hero-contracts">
+    <div class="container hero-inner">
+      <div class="hero-eyebrow">Experimental Results</div>
+      <h2 class="hero-title">
+        Teaching AI to Write <span class="accent">Contracts</span><br>
+        Improves <span class="orange">Code Quality</span>
+      </h2>
+      <p class="hero-subtitle">
+        When an LLM agent learns to write <code>ensures</code>/<code>requires</code> contracts
+        and verify them with <code>ailang ai-check</code>, it solves harder problems more reliably.
+        Inspired by <a href="https://arxiv.org/abs/2511.09008" target="_blank" rel="noopener">neurosymbolic verification research</a>.
+      </p>
+      <div class="score-row">
+        <div class="score-item">
+          <div class="score-number baseline">80.8%</div>
+          <div class="score-label">Baseline</div>
+          <div class="score-sublabel">21/26 pass</div>
+        </div>
+        <div class="score-item">
+          <div class="score-number tool-aware">88.5%</div>
+          <div class="score-label">With Contracts</div>
+          <div class="score-sublabel">23/26 pass</div>
+        </div>
+        <div class="score-item">
+          <div class="score-number delta">+7.7%</div>
+          <div class="score-label">Overall Delta</div>
+          <div class="score-sublabel">+2 benchmarks</div>
+        </div>
+        <div class="score-item">
+          <div class="score-number hard">33→100%</div>
+          <div class="score-label">Very Hard</div>
+          <div class="score-sublabel">1/3 → 3/3</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <main class="container" style="padding-top: 24px;">
+
+    <!-- Paper Reference -->
+    <div class="paper-banner">
+      <div class="paper-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </div>
+      <div class="paper-body">
+        <h3>Research Context</h3>
+        <p>
+          This experiment extends ideas from
+          <a href="https://arxiv.org/abs/2511.09008" target="_blank" rel="noopener">"Towards Trustworthy AI-Generated Code: A Neurosymbolic Approach"</a>
+          (Pei et al., 2025), which showed that combining LLM code generation with formal verification
+          produces more reliable software. We test a specific hypothesis: does teaching an AI agent to
+          write <code>requires</code>/<code>ensures</code> contracts and use <code>ailang ai-check</code>
+          (Z3 SMT verification) as a debugging tool improve its ability to solve programming benchmarks?
+        </p>
+      </div>
+    </div>
+
+    <!-- Methodology -->
+    <section class="method-section">
+      <h2>Experiment Design</h2>
+      <p style="font-size:0.88rem;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;">
+        26 contract-guided benchmarks ranging from easy to very hard. Each benchmark has a task description,
+        expected output, and a reference solution with formal contracts. An AI agent (Claude Haiku 4.5)
+        solves each benchmark under two conditions — same task, same model, different prompt.
+      </p>
+      <div class="method-grid">
+        <div class="method-card baseline">
+          <h3>
+            Baseline
+            <span class="cond-tag bl">Control</span>
+          </h3>
+          <p>Standard prompt: task description + expected output. No mention of contracts or verification tools.</p>
+          <ul>
+            <li>Write code to match expected output</li>
+            <li>Run and compare output</li>
+            <li>Fix and retry if wrong</li>
+          </ul>
+        </div>
+        <div class="method-card tool-aware">
+          <h3>
+            Tool-Aware
+            <span class="cond-tag ta">Treatment</span>
+          </h3>
+          <p>Same task + guidance on writing contracts and using <code>ailang ai-check</code> as a debugging tool. No contract spec given.</p>
+          <ul>
+            <li>Write code with ensures/requires contracts</li>
+            <li>Run ailang ai-check to find bugs via Z3</li>
+            <li>Fix counterexamples, then run for output</li>
+            <li>Contracts are self-authored, not given</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Breakdown -->
+    <section class="results-section">
+      <h2>Results by Difficulty</h2>
+      <div class="results-table-wrap">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Difficulty</th>
+              <th>Count</th>
+              <th>Baseline</th>
+              <th>Tool-Aware</th>
+              <th>Delta</th>
+              <th>Z3 Used (Tool-Aware)</th>
+              <th>Contracts Written</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="diff-name diff-easy">Easy</span></td>
+              <td>6</td>
+              <td class="rate-good">100% (6/6)</td>
+              <td class="rate-good">100% (6/6)</td>
+              <td class="delta-same">0</td>
+              <td>5/6</td>
+              <td>6/6</td>
+            </tr>
+            <tr>
+              <td><span class="diff-name diff-medium">Medium</span></td>
+              <td>9</td>
+              <td class="rate-ok">89% (8/9)</td>
+              <td class="rate-ok">89% (8/9)</td>
+              <td class="delta-same">0</td>
+              <td>6/9</td>
+              <td>8/9</td>
+            </tr>
+            <tr>
+              <td><span class="diff-name diff-hard">Hard</span></td>
+              <td>8</td>
+              <td class="rate-ok">75% (6/8)</td>
+              <td class="rate-good">88% (7/8)</td>
+              <td class="delta-up">+13%</td>
+              <td>4/8</td>
+              <td>7/8</td>
+            </tr>
+            <tr>
+              <td><span class="diff-name diff-very_hard">Very Hard</span></td>
+              <td>3</td>
+              <td class="rate-bad">33% (1/3)</td>
+              <td class="rate-good">100% (3/3)</td>
+              <td class="delta-up">+67%</td>
+              <td>2/3</td>
+              <td>2/3</td>
+            </tr>
+            <tr style="background:var(--bg);font-weight:600;">
+              <td><span class="diff-name" style="color:var(--text-primary)">Total</span></td>
+              <td>26</td>
+              <td>80.8% (21/26)</td>
+              <td style="color:var(--contract-purple);font-weight:700;">88.5% (23/26)</td>
+              <td class="delta-up">+7.7%</td>
+              <td>17/26 (65%)</td>
+              <td>23/26 (88%)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Key Insights -->
+    <div class="insight-grid">
+      <div class="insight-card">
+        <div class="insight-stat purple">17/26</div>
+        <h3>Used Z3 Verification</h3>
+        <p>
+          65% of tool-aware runs actually invoked <code>ailang ai-check</code> to verify contracts,
+          compared to just 1/26 in baseline (where the agent had no knowledge of the tool).
+        </p>
+      </div>
+      <div class="insight-card">
+        <div class="insight-stat green">23/26</div>
+        <h3>Wrote Contracts</h3>
+        <p>
+          88% of tool-aware solutions included <code>ensures</code>/<code>requires</code> contracts,
+          even though they weren't given a spec. Only 46% of baseline solutions wrote any contracts.
+        </p>
+      </div>
+      <div class="insight-card">
+        <div class="insight-stat orange">3/3</div>
+        <h3>Very Hard Solved</h3>
+        <p>
+          All three very hard benchmarks passed with contracts. These involve recursive functions,
+          8-deep dependency chains, and subtle leap year traps that baseline consistently missed.
+        </p>
+      </div>
+    </div>
+
+    <!-- Benchmark Showcase -->
+    <section class="benchmark-section">
+      <h2>Benchmark Deep Dives</h2>
+
+      <div class="bench-tabs">
+        <button class="bench-tab active" data-bench="safe_subtract">
+          Safe Subtract
+          <span class="bench-diff easy">Easy</span>
+        </button>
+        <button class="bench-tab" data-bench="escalation_guard">
+          Escalation Guard
+          <span class="bench-diff medium">Medium</span>
+        </button>
+        <button class="bench-tab" data-bench="date_dayofyear">
+          Date Day-of-Year
+          <span class="bench-diff very_hard">Very Hard</span>
+        </button>
+        <button class="bench-tab" data-bench="payroll_chain">
+          Payroll Chain
+          <span class="bench-diff very_hard">Very Hard</span>
+        </button>
+      </div>
+
+      <!-- ─── Safe Subtract ─────────────────────────────────────── -->
+      <div class="bench-panel active" id="panel-safe_subtract">
+        <div class="bench-header">
+          <div class="bench-title">Safe Subtract — The Simplest Contract</div>
+          <div class="bench-desc">
+            Subtraction that floors at zero. Both conditions pass this easily, but it demonstrates
+            the core principle: a contract makes implicit requirements explicit.
+          </div>
+        </div>
+
+        <div class="trap-callout">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            The Trap
+          </h4>
+          <p>
+            Naive <code>a - b</code> goes negative when <code>b > a</code>.
+            Z3 counterexample: <code>a=2, b=100 → result=-98</code> violates <code>ensures { result >= 0 }</code>.
+          </p>
+        </div>
+
+        <div class="contract-callout">
+          <h4>Contract Spec</h4>
+          <pre><span class="kw">export pure func</span> <span class="fn">safeSub</span>(a: <span class="ty">int</span>, b: <span class="ty">int</span>) -> <span class="ty">int</span>
+  <span class="kw">requires</span> { a >= <span class="num">0</span>, b >= <span class="num">0</span> }
+  <span class="kw">ensures</span>  { result >= <span class="num">0</span> }</pre>
+        </div>
+
+        <div class="source-panel">
+          <div class="source-header">
+            <span class="source-filename">reference/safe_subtract.ail</span>
+            <span class="source-badge ref">Reference Solution</span>
+          </div>
+          <div class="source-code"><pre><code><span class="kw">module</span> benchmarks/contract_guided/reference/safe_subtract
+
+<span class="kw">export pure func</span> <span class="fn">safeSub</span>(a: <span class="ty">int</span>, b: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { a >= <span class="num">0</span>, b >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span> }</span>
+{
+  <span class="kw">if</span> a >= b <span class="kw">then</span> a - b
+  <span class="kw">else</span> <span class="num">0</span>
+}
+
+<span class="kw">export func</span> <span class="fn">main</span>() -> () ! {<span class="ty">IO</span>} {
+  <span class="fn">println</span>(<span class="fn">show</span>(<span class="fn">safeSub</span>(<span class="num">10</span>, <span class="num">3</span>)));
+  <span class="fn">println</span>(<span class="fn">show</span>(<span class="fn">safeSub</span>(<span class="num">5</span>, <span class="num">5</span>)));
+  <span class="fn">println</span>(<span class="fn">show</span>(<span class="fn">safeSub</span>(<span class="num">2</span>, <span class="num">100</span>)))
+}</code></pre></div>
+        </div>
+      </div>
+
+      <!-- ─── Escalation Guard ──────────────────────────────────── -->
+      <div class="bench-panel" id="panel-escalation_guard">
+        <div class="bench-header">
+          <div class="bench-title">Escalation Guard — Security Invariant</div>
+          <div class="bench-desc">
+            A privilege escalation check where a "bonus" for trusted actions can push the granted level
+            past the role's base weight. The contract catches a subtle cross-function bug.
+          </div>
+        </div>
+
+        <div class="trap-callout">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            The Trap
+          </h4>
+          <p>
+            The naive formula <code>roleWeight + actionBonus - actionThreshold</code> can exceed
+            <code>roleWeight</code> when the bonus exceeds the threshold. Z3 counterexample:
+            <code>EDITOR(60) + READ bonus(15) - READ threshold(10) = 65</code>, which exceeds
+            <code>roleWeight(EDITOR) = 60</code>. Must cap the result.
+          </p>
+        </div>
+
+        <div class="contract-callout">
+          <h4>Key Contract</h4>
+          <pre><span class="cm">-- The granted level must NEVER exceed the role's base weight.</span>
+<span class="kw">export pure func</span> <span class="fn">grantedLevel</span>(role: <span class="ty">Role</span>, action: <span class="ty">Action</span>) -> <span class="ty">int</span>
+  <span class="kw">ensures</span> { result <= <span class="fn">roleWeight</span>(role) }</pre>
+        </div>
+
+        <div class="source-panel">
+          <div class="source-header">
+            <span class="source-filename">reference/escalation_guard.ail</span>
+            <span class="source-badge ref">Reference Solution</span>
+          </div>
+          <div class="source-code"><pre><code><span class="kw">module</span> benchmarks/contract_guided/reference/escalation_guard
+
+<span class="kw">export type</span> <span class="ty">Role</span> = <span class="ct">ADMIN</span> | <span class="ct">EDITOR</span> | <span class="ct">VIEWER</span> | <span class="ct">GUEST</span>
+<span class="kw">export type</span> <span class="ty">Action</span> = <span class="ct">READ</span> | <span class="ct">WRITE</span> | <span class="ct">DELETE</span>
+
+<span class="kw">export pure func</span> <span class="fn">roleWeight</span>(role: <span class="ty">Role</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">ensures</span> { result >= <span class="num">0</span>, result <= <span class="num">100</span> }</span>
+{
+  <span class="kw">match</span> role {
+    <span class="ct">ADMIN</span>  => <span class="num">100</span>,
+    <span class="ct">EDITOR</span> => <span class="num">60</span>,
+    <span class="ct">VIEWER</span> => <span class="num">30</span>,
+    <span class="ct">GUEST</span>  => <span class="num">10</span>
+  }
+}
+
+<span class="kw">export pure func</span> <span class="fn">actionThreshold</span>(action: <span class="ty">Action</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">ensures</span> { result >= <span class="num">10</span>, result <= <span class="num">80</span> }</span>
+{
+  <span class="kw">match</span> action {
+    <span class="ct">READ</span>   => <span class="num">10</span>,
+    <span class="ct">WRITE</span>  => <span class="num">50</span>,
+    <span class="ct">DELETE</span> => <span class="num">80</span>
+  }
+}
+
+<span class="kw">export pure func</span> <span class="fn">grantedLevel</span>(role: <span class="ty">Role</span>, action: <span class="ty">Action</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">ensures</span> { result <= <span class="fn">roleWeight</span>(role) }</span>
+{
+  <span class="kw">let</span> base = <span class="fn">roleWeight</span>(role);
+  <span class="kw">let</span> bonus = <span class="kw">match</span> action {
+    <span class="ct">READ</span>   => <span class="num">15</span>,
+    <span class="ct">WRITE</span>  => <span class="num">5</span>,
+    <span class="ct">DELETE</span> => <span class="num">0</span>
+  };
+  <span class="kw">let</span> raw = base + bonus - <span class="fn">actionThreshold</span>(action);
+  <span class="cm">-- Guard: cap at roleWeight to prevent escalation</span>
+  <span class="kw">if</span> raw > base <span class="kw">then</span> base
+  <span class="kw">else if</span> raw < <span class="num">0</span> <span class="kw">then</span> <span class="num">0</span>
+  <span class="kw">else</span> raw
+}</code></pre></div>
+        </div>
+      </div>
+
+      <!-- ─── Date Day of Year ──────────────────────────────────── -->
+      <div class="bench-panel" id="panel-date_dayofyear">
+        <div class="bench-header">
+          <div class="bench-title">Date Day-of-Year — Recursive Calendar with Leap Year Traps</div>
+          <div class="bench-desc">
+            8 functions including recursive <code>daysBeforeMonth</code>, 12-way month match,
+            leap year with the 100/400 rule, and 3 consistency proofs. The baseline agent got 1900 wrong
+            (treated it as a leap year). The tool-aware agent caught this via <code>ai-check</code>.
+          </div>
+        </div>
+
+        <div class="trap-callout">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            The Traps
+          </h4>
+          <p>
+            <strong>Leap year 100/400 rule:</strong> 1900 is NOT a leap year (divisible by 100 but not 400).
+            2000 IS a leap year (divisible by 400). LLMs frequently get this wrong or reversed.
+            <br><br>
+            <strong>Recursive accumulation:</strong> <code>daysBeforeMonth</code> must correctly sum
+            all previous months. An off-by-one in the recursion base case shifts all dates.
+            <br><br>
+            <strong>Consistency proofs:</strong> <code>lastDayConsistent</code> proves
+            <code>dayOfYear(y, 12, 31) == daysInYear(y)</code> — if any month's day count is wrong,
+            this fails immediately.
+          </p>
+        </div>
+
+        <div class="contract-callout">
+          <h4>Key Contracts (3 consistency proofs)</h4>
+          <pre><span class="kw">export pure func</span> <span class="fn">lastDayConsistent</span>(year: <span class="ty">int</span>) -> <span class="ty">bool</span>
+  <span class="kw">requires</span> { year >= <span class="num">1</span> }
+  <span class="kw">ensures</span>  { result == <span class="ct">true</span> }
+<span class="cm">-- proves dayOfYear(y, 12, 31) == daysInYear(y)</span>
+
+<span class="kw">export pure func</span> <span class="fn">leapFebConsistent</span>(year: <span class="ty">int</span>) -> <span class="ty">bool</span>
+  <span class="kw">requires</span> { year >= <span class="num">1</span> }
+  <span class="kw">ensures</span>  { result == <span class="ct">true</span> }
+<span class="cm">-- proves Feb days match leap year status</span>
+
+<span class="kw">export pure func</span> <span class="fn">marchFirstConsistent</span>(year: <span class="ty">int</span>) -> <span class="ty">bool</span>
+  <span class="kw">requires</span> { year >= <span class="num">1</span> }
+  <span class="kw">ensures</span>  { result == <span class="ct">true</span> }
+<span class="cm">-- proves March 1 = day 61 (leap) or 60 (non-leap)</span></pre>
+        </div>
+
+        <div class="source-panel">
+          <div class="source-header">
+            <span class="source-filename">reference/date_dayofyear.ail</span>
+            <span class="source-badge ref">Reference Solution</span>
+          </div>
+          <div class="source-code"><pre><code><span class="kw">module</span> benchmarks/contract_guided/reference/date_dayofyear
+
+<span class="kw">export pure func</span> <span class="fn">isLeapYear</span>(year: <span class="ty">int</span>) -> <span class="ty">bool</span>
+<span class="contract-line">  <span class="kw">requires</span> { year >= <span class="num">1</span> }</span>
+{
+  (year % <span class="num">4</span> == <span class="num">0</span> && year % <span class="num">100</span> != <span class="num">0</span>) || year % <span class="num">400</span> == <span class="num">0</span>
+}
+
+<span class="kw">export pure func</span> <span class="fn">daysInMonth</span>(year: <span class="ty">int</span>, month: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { year >= <span class="num">1</span>, month >= <span class="num">1</span>, month <= <span class="num">12</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">28</span>, result <= <span class="num">31</span> }</span>
+{
+  <span class="kw">match</span> month {
+    <span class="num">1</span>  => <span class="num">31</span>,
+    <span class="num">2</span>  => <span class="kw">if</span> <span class="fn">isLeapYear</span>(year) <span class="kw">then</span> <span class="num">29</span> <span class="kw">else</span> <span class="num">28</span>,
+    <span class="num">3</span>  => <span class="num">31</span>,  <span class="num">4</span>  => <span class="num">30</span>,  <span class="num">5</span>  => <span class="num">31</span>,  <span class="num">6</span>  => <span class="num">30</span>,
+    <span class="num">7</span>  => <span class="num">31</span>,  <span class="num">8</span>  => <span class="num">31</span>,  <span class="num">9</span>  => <span class="num">30</span>,  <span class="num">10</span> => <span class="num">31</span>,
+    <span class="num">11</span> => <span class="num">30</span>,  _  => <span class="num">31</span>
+  }
+}
+
+<span class="kw">pure func</span> <span class="fn">daysBeforeMonth</span>(year: <span class="ty">int</span>, month: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { year >= <span class="num">1</span>, month >= <span class="num">1</span>, month <= <span class="num">12</span> }</span>
+{
+  <span class="kw">if</span> month == <span class="num">1</span> <span class="kw">then</span> <span class="num">0</span>
+  <span class="kw">else</span> <span class="fn">daysBeforeMonth</span>(year, month - <span class="num">1</span>) + <span class="fn">daysInMonth</span>(year, month - <span class="num">1</span>)
+}
+
+<span class="kw">export pure func</span> <span class="fn">dayOfYear</span>(year: <span class="ty">int</span>, month: <span class="ty">int</span>, day: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { year >= <span class="num">1</span>, month >= <span class="num">1</span>, month <= <span class="num">12</span>, day >= <span class="num">1</span>, day <= <span class="num">31</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">1</span>, result <= <span class="num">366</span> }</span>
+{
+  <span class="fn">daysBeforeMonth</span>(year, month) + day
+}
+
+<span class="kw">export pure func</span> <span class="fn">lastDayConsistent</span>(year: <span class="ty">int</span>) -> <span class="ty">bool</span>
+<span class="contract-line">  <span class="kw">requires</span> { year >= <span class="num">1</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result == <span class="ct">true</span> }</span>
+{
+  <span class="fn">dayOfYear</span>(year, <span class="num">12</span>, <span class="num">31</span>) == <span class="fn">daysInYear</span>(year)
+}</code></pre></div>
+        </div>
+      </div>
+
+      <!-- ─── Payroll Chain ─────────────────────────────────────── -->
+      <div class="bench-panel" id="panel-payroll_chain">
+        <div class="bench-header">
+          <div class="bench-title">Payroll Chain — 8-Function Dependency Cascade</div>
+          <div class="bench-desc">
+            A complete payroll calculation in cents: gross pay → taxable income → federal tax (3-bracket) →
+            state tax → FICA → total deductions → net pay → consistency proof. Getting any single function
+            wrong cascades through every downstream result.
+          </div>
+        </div>
+
+        <div class="trap-callout">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            The Traps
+          </h4>
+          <p>
+            <strong>Cascading errors:</strong> 8 functions in a dependency chain. If <code>federalTax</code>
+            computes brackets wrong, <code>totalDeductions</code> is wrong, <code>netPay</code> is wrong, and
+            <code>deductionsValid</code> fails.
+            <br><br>
+            <strong>Progressive brackets:</strong> Each tax bracket applies only to income <em>in that bracket</em>,
+            not total income. Naive <code>taxable * rate / 100</code> overtaxes.
+            <br><br>
+            <strong>FICA wage base cap:</strong> Forgetting <code>min(gross, 16020000)</code> makes FICA grow
+            without bound, breaking <code>netPay ensures result >= 0</code>.
+            <br><br>
+            <strong>Basis points:</strong> FICA is 765/10000 (7.65%), not 765/1000. Easy integer math error.
+          </p>
+        </div>
+
+        <div class="contract-callout">
+          <h4>Key Contracts (chain invariants)</h4>
+          <pre><span class="kw">export pure func</span> <span class="fn">taxableIncome</span>(gross: <span class="ty">int</span>) -> <span class="ty">int</span>
+  <span class="kw">ensures</span> { result >= <span class="num">0</span>, result <= gross }
+
+<span class="kw">export pure func</span> <span class="fn">federalTax</span>(taxable: <span class="ty">int</span>) -> <span class="ty">int</span>
+  <span class="kw">ensures</span> { result >= <span class="num">0</span>, result <= taxable }
+
+<span class="kw">export pure func</span> <span class="fn">netPay</span>(hourlyRate: <span class="ty">int</span>, hours: <span class="ty">int</span>) -> <span class="ty">int</span>
+  <span class="kw">ensures</span> { result >= <span class="num">0</span> }
+
+<span class="kw">export pure func</span> <span class="fn">deductionsValid</span>(gross: <span class="ty">int</span>) -> <span class="ty">bool</span>
+  <span class="kw">ensures</span> { result == <span class="ct">true</span> }
+<span class="cm">-- proves totalDeductions <= gross for ALL valid inputs</span></pre>
+        </div>
+
+        <div class="source-panel">
+          <div class="source-header">
+            <span class="source-filename">reference/payroll_chain.ail</span>
+            <span class="source-badge ref">Reference Solution</span>
+          </div>
+          <div class="source-code"><pre><code><span class="kw">module</span> benchmarks/contract_guided/reference/payroll_chain
+
+<span class="kw">export pure func</span> <span class="fn">grossPay</span>(hourlyRate: <span class="ty">int</span>, hours: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { hourlyRate >= <span class="num">0</span>, hours >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span> }</span>
+{ hourlyRate * hours }
+
+<span class="kw">export pure func</span> <span class="fn">standardDeduction</span>() -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">ensures</span> { result == <span class="num">1250000</span> }</span>
+{ <span class="num">1250000</span> }
+
+<span class="kw">export pure func</span> <span class="fn">taxableIncome</span>(gross: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { gross >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span>, result <= gross }</span>
+{
+  <span class="kw">let</span> ti = gross - <span class="fn">standardDeduction</span>() <span class="kw">in</span>
+  <span class="kw">if</span> ti < <span class="num">0</span> <span class="kw">then</span> <span class="num">0</span> <span class="kw">else</span> ti
+}
+
+<span class="kw">export pure func</span> <span class="fn">federalTax</span>(taxable: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { taxable >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span>, result <= taxable }</span>
+{
+  <span class="kw">let</span> b1 = <span class="kw">if</span> taxable > <span class="num">3000000</span> <span class="kw">then</span> <span class="num">3000000</span> * <span class="num">10</span> / <span class="num">100</span>
+           <span class="kw">else</span> taxable * <span class="num">10</span> / <span class="num">100</span> <span class="kw">in</span>
+  <span class="kw">let</span> over3m = <span class="kw">if</span> taxable > <span class="num">3000000</span> <span class="kw">then</span> taxable - <span class="num">3000000</span> <span class="kw">else</span> <span class="num">0</span> <span class="kw">in</span>
+  <span class="kw">let</span> b2 = <span class="kw">if</span> over3m > <span class="num">4000000</span> <span class="kw">then</span> <span class="num">4000000</span> * <span class="num">22</span> / <span class="num">100</span>
+           <span class="kw">else</span> over3m * <span class="num">22</span> / <span class="num">100</span> <span class="kw">in</span>
+  <span class="kw">let</span> over7m = <span class="kw">if</span> taxable > <span class="num">7000000</span> <span class="kw">then</span> taxable - <span class="num">7000000</span> <span class="kw">else</span> <span class="num">0</span> <span class="kw">in</span>
+  <span class="kw">let</span> b3 = over7m * <span class="num">32</span> / <span class="num">100</span> <span class="kw">in</span>
+  b1 + b2 + b3
+}
+
+<span class="kw">export pure func</span> <span class="fn">ficaTax</span>(gross: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { gross >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span> }</span>
+{
+  <span class="kw">let</span> base = <span class="kw">if</span> gross > <span class="num">16020000</span> <span class="kw">then</span> <span class="num">16020000</span> <span class="kw">else</span> gross <span class="kw">in</span>
+  base * <span class="num">765</span> / <span class="num">10000</span>
+}
+
+<span class="kw">export pure func</span> <span class="fn">netPay</span>(hourlyRate: <span class="ty">int</span>, hours: <span class="ty">int</span>) -> <span class="ty">int</span>
+<span class="contract-line">  <span class="kw">requires</span> { hourlyRate >= <span class="num">0</span>, hours >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result >= <span class="num">0</span> }</span>
+{
+  <span class="kw">let</span> gross = <span class="fn">grossPay</span>(hourlyRate, hours) <span class="kw">in</span>
+  gross - <span class="fn">totalDeductions</span>(gross)
+}
+
+<span class="kw">export pure func</span> <span class="fn">deductionsValid</span>(gross: <span class="ty">int</span>) -> <span class="ty">bool</span>
+<span class="contract-line">  <span class="kw">requires</span> { gross >= <span class="num">0</span> }</span>
+<span class="contract-line">  <span class="kw">ensures</span>  { result == <span class="ct">true</span> }</span>
+{ <span class="fn">totalDeductions</span>(gross) <= gross }</code></pre></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- How It Works -->
+    <section class="method-section" style="animation-delay:0.35s;">
+      <h2>Why Contracts Help AI Coding</h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+        <div style="padding:16px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid var(--contract-purple);">
+          <h3 style="font-family:var(--font-display);font-size:0.88rem;font-weight:700;margin-bottom:6px;">Implicit → Explicit</h3>
+          <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">
+            Writing <code style="font-family:var(--font-mono);font-size:0.72rem;background:var(--bg-card);padding:1px 5px;border-radius:3px;">ensures { result >= 0 }</code>
+            forces the agent to think about edge cases it would otherwise ignore.
+            The contract is a thinking tool, not just a verification tool.
+          </p>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid var(--success);">
+          <h3 style="font-family:var(--font-display);font-size:0.88rem;font-weight:700;margin-bottom:6px;">Counterexample Debugging</h3>
+          <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">
+            When <code style="font-family:var(--font-mono);font-size:0.72rem;background:var(--bg-card);padding:1px 5px;border-radius:3px;">ailang ai-check</code>
+            returns a Z3 counterexample like <code style="font-family:var(--font-mono);font-size:0.72rem;background:var(--bg-card);padding:1px 5px;border-radius:3px;">a=2, b=100</code>,
+            the agent gets a concrete failing case to fix — much more useful than "wrong output".
+          </p>
+        </div>
+        <div style="padding:16px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid var(--primary);">
+          <h3 style="font-family:var(--font-display);font-size:0.88rem;font-weight:700;margin-bottom:6px;">Cascading Confidence</h3>
+          <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">
+            In payroll_chain, verifying <code style="font-family:var(--font-mono);font-size:0.72rem;background:var(--bg-card);padding:1px 5px;border-radius:3px;">federalTax</code>
+            individually before composing it into <code style="font-family:var(--font-mono);font-size:0.72rem;background:var(--bg-card);padding:1px 5px;border-radius:3px;">totalDeductions</code>
+            prevents cascading errors. Each function is proven correct in isolation.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta" style="animation-delay:0.4s;">
+      <h2>Try It Yourself</h2>
+      <p>
+        AILANG's contract verification is available now. Write <code style="font-family:var(--font-mono);font-size:0.82rem;">ensures</code>/<code style="font-family:var(--font-mono);font-size:0.82rem;">requires</code>
+        contracts on your pure functions, then run <code style="font-family:var(--font-mono);font-size:0.82rem;">ailang ai-check</code>
+        to verify them with Z3.
+      </p>
+      <div class="cta-buttons">
+        <a href="verify.html" class="btn btn-primary">
+          <svg class="btn-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Live Z3 Demo
+        </a>
+        <a href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener" class="btn btn-secondary">
+          Contract Docs
+        </a>
+        <a href="https://github.com/sunholo-data/ailang-demos/tree/main/benchmarks/contract_guided" target="_blank" rel="noopener" class="btn btn-secondary">
+          Benchmark Source
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <footer class="page-footer container">
+    Built with <a href="https://ailang.sunholo.com" target="_blank" rel="noopener">AILANG</a> +
+    <a href="https://github.com/Z3Prover/z3" target="_blank" rel="noopener">Z3</a> &mdash;
+    26 benchmarks, 2 conditions, measurable improvement &mdash;
+    <a href="https://github.com/sunholo-data/ailang-demos" target="_blank" rel="noopener">View Source</a>
+  </footer>
+
+  <script>
+    // Benchmark tab switching
+    document.querySelectorAll('.bench-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.bench-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.bench-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.bench).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import std/option (Some, None)
 -- Format detection and routing
 -- Determines the file format from extension and selects parsing strategy.
 -- All functions are pure with inline tests.
+-- Uses if-else chains instead of match on strings for Z3 verifiability.
 
 -- Supported format categories
 -- "zip-office" = docx, pptx, xlsx (ZIP archives with XML)
@@ -18,6 +19,10 @@ import std/option (Some, None)
 -- "unknown"    = Unrecognized format
 
 export pure func detectFormat(ext: string) -> string
+  ensures {
+    result == "zip-office" || result == "pdf" || result == "image" ||
+    result == "audio" || result == "video" || result == "text" || result == "unknown"
+  }
   tests [
     ("docx", "zip-office"),
     ("pptx", "zip-office"),
@@ -39,45 +44,25 @@ export pure func detectFormat(ext: string) -> string
     ("foo", "unknown")
   ]
 {
-  match ext {
-    "docx" => "zip-office",
-    "pptx" => "zip-office",
-    "xlsx" => "zip-office",
-    "pdf" => "pdf",
-    "png" => "image",
-    "jpg" => "image",
-    "jpeg" => "image",
-    "gif" => "image",
-    "bmp" => "image",
-    "webp" => "image",
-    "tiff" => "image",
-    "wav" => "audio",
-    "mp3" => "audio",
-    "aiff" => "audio",
-    "aac" => "audio",
-    "ogg" => "audio",
-    "flac" => "audio",
-    "mp4" => "video",
-    "mpeg" => "video",
-    "mov" => "video",
-    "avi" => "video",
-    "flv" => "video",
-    "mpg" => "video",
-    "webm" => "video",
-    "wmv" => "video",
-    "3gpp" => "video",
-    "txt" => "text",
-    "md" => "text",
-    "csv" => "text",
-    "html" => "text",
-    "xml" => "text",
-    "json" => "text",
-    _ => "unknown"
-  }
+  if ext == "docx" || ext == "pptx" || ext == "xlsx" then "zip-office"
+  else if ext == "pdf" then "pdf"
+  else if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "gif" ||
+          ext == "bmp" || ext == "webp" || ext == "tiff" then "image"
+  else if ext == "wav" || ext == "mp3" || ext == "aiff" || ext == "aac" ||
+          ext == "ogg" || ext == "flac" then "audio"
+  else if ext == "mp4" || ext == "mpeg" || ext == "mov" || ext == "avi" ||
+          ext == "flv" || ext == "mpg" || ext == "webm" || ext == "wmv" ||
+          ext == "3gpp" then "video"
+  else if ext == "txt" || ext == "md" || ext == "csv" || ext == "html" ||
+          ext == "xml" || ext == "json" then "text"
+  else "unknown"
 }
 
 -- Determine the specific Office format type
 export pure func officeType(ext: string) -> string
+  ensures {
+    result == "word" || result == "powerpoint" || result == "excel" || result == "unknown"
+  }
   tests [
     ("docx", "word"),
     ("pptx", "powerpoint"),
@@ -85,12 +70,10 @@ export pure func officeType(ext: string) -> string
     ("txt", "unknown")
   ]
 {
-  match ext {
-    "docx" => "word",
-    "pptx" => "powerpoint",
-    "xlsx" => "excel",
-    _ => "unknown"
-  }
+  if ext == "docx" then "word"
+  else if ext == "pptx" then "powerpoint"
+  else if ext == "xlsx" then "excel"
+  else "unknown"
 }
 
 -- Extract file extension from a filename
@@ -124,15 +107,13 @@ export pure func needsAI(format: string) -> bool
     ("unknown", true)
   ]
 {
-  match format {
-    "zip-office" => false,
-    "text" => false,
-    _ => true
-  }
+  if format == "zip-office" || format == "text" then false
+  else true
 }
 
 -- Describe what parsing strategy will be used
 export pure func strategyDescription(format: string) -> string
+  ensures { length(result) > 0 }
   tests [
     ("zip-office", "ZIP extraction + XML parsing + optional AI for layout"),
     ("pdf", "AI multimodal extraction"),
@@ -143,13 +124,11 @@ export pure func strategyDescription(format: string) -> string
     ("unknown", "AI multimodal extraction (best effort)")
   ]
 {
-  match format {
-    "zip-office" => "ZIP extraction + XML parsing + optional AI for layout",
-    "pdf" => "AI multimodal extraction",
-    "image" => "AI multimodal extraction",
-    "audio" => "AI multimodal extraction (transcription + understanding)",
-    "video" => "AI multimodal extraction (visual + audio understanding)",
-    "text" => "Direct text reading",
-    _ => "AI multimodal extraction (best effort)"
-  }
+  if format == "zip-office" then "ZIP extraction + XML parsing + optional AI for layout"
+  else if format == "pdf" then "AI multimodal extraction"
+  else if format == "image" then "AI multimodal extraction"
+  else if format == "audio" then "AI multimodal extraction (transcription + understanding)"
+  else if format == "video" then "AI multimodal extraction (visual + audio understanding)"
+  else if format == "text" then "Direct text reading"
+  else "AI multimodal extraction (best effort)"
 }
