@@ -1,0 +1,182 @@
+-- Gemini Live API WebSocket client for Voice Document Analyst
+--
+-- Same protocol as voice_analytics/services/gemini_live.ail
+-- but configured with document analysis tools and system instruction.
+
+module streaming/voice_docparse/services/gemini_live
+
+import std/stream (connect, transmit, disconnect,
+                   StreamConn, StreamErrorKind)
+import std/json (encode, decode, getString, getObject, getArray, getBool,
+                 jo, kv, js, ja, jb)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+import std/list (map, nth)
+import streaming/voice_docparse/types/live_types (
+  GeminiSetup, ToolDecl, ToolCall, ServerMessage,
+  SetupComplete, ToolCallMsg, TextResponse, AudioResponse,
+  TurnComplete, Interrupted, Unknown
+)
+
+-- Gemini Live API WebSocket URL (Vertex AI with ADC)
+export pure func geminiLiveUrl(region: string) -> string
+  ensures { length(result) > 50 }
+{
+  if region == "global"
+    then "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+    else "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+}
+
+-- Connect to Gemini Live API using ADC (Bearer token auth)
+export func connectGemini(token: string, region: string) -> Result[StreamConn, string] ! {Stream}
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  let url = geminiLiveUrl(region);
+  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+  match connect(url, config) {
+    Ok(conn) => Ok(conn),
+    Err(e) => Err("Failed to connect to Gemini Live API: " ++ show(e))
+  }
+}
+
+-- Send setup message
+export func sendSetup(conn: StreamConn, setup: GeminiSetup) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = buildSetupMessage(setup);
+  transmit(conn, msg)
+}
+
+-- Build setup JSON
+export func buildSetupMessage(setup: GeminiSetup) -> string
+  ensures { length(result) > 20 }
+{
+  let toolDefs = map(\t. match t {
+    ToolDecl({name, description, parameters}) =>
+      match decode(parameters) {
+        Ok(params) => jo([
+          kv("name", js(name)),
+          kv("description", js(description)),
+          kv("parameters", params)
+        ]),
+        Err(_) => jo([
+          kv("name", js(name)),
+          kv("description", js(description))
+        ])
+      }
+  }, setup.tools);
+  let modalities = map(\s. js(s), setup.responseModalities);
+
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(setup.model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja(modalities))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(setup.systemInstruction))])]))
+      ])),
+      kv("tools", ja([jo([
+        kv("functionDeclarations", ja(toolDefs))
+      ])]))
+    ]))
+  ]))
+}
+
+-- Build tool response
+export func buildToolResponse(callId: string, result: string) -> string
+  ensures { length(result) > 10 }
+{
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js("")),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+}
+
+-- Send text message
+export func sendTextMessage(conn: StreamConn, text: string) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(text))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
+  transmit(conn, msg)
+}
+
+-- Parse server message (same protocol as voice_analytics)
+export func parseServerMessage(msg: string) -> ServerMessage {
+  match decode(msg) {
+    Ok(json) => {
+      match getObject(json, "setupComplete") {
+        Some(_) => SetupComplete,
+        None => {
+          match getObject(json, "toolCall") {
+            Some(tc) => parseToolCall(tc),
+            None => {
+              match getObject(json, "serverContent") {
+                Some(sc) => parseServerContent(sc),
+                None => Unknown(msg)
+              }
+            }
+          }
+        }
+      }
+    },
+    Err(_) => Unknown(msg)
+  }
+}
+
+func parseToolCall(tc: Json) -> ServerMessage {
+  match getArray(tc, "functionCalls") {
+    Some(calls) => {
+      match nth(calls, 0) {
+        Some(call) => {
+          let id = getOrElse(getString(call, "id"), "");
+          let name = getOrElse(getString(call, "name"), "");
+          let args = match getObject(call, "args") {
+            Some(a) => encode(a),
+            None => "{}"
+          };
+          ToolCallMsg({ id: id, name: name, args: args })
+        },
+        None => Unknown("")
+      }
+    },
+    None => Unknown("")
+  }
+}
+
+func parseServerContent(sc: Json) -> ServerMessage {
+  match getBool(sc, "turnComplete") {
+    Some(true) => TurnComplete,
+    _ => {
+      match getObject(sc, "modelTurn") {
+        Some(turn) => {
+          match getArray(turn, "parts") {
+            Some(parts) => {
+              match nth(parts, 0) {
+                Some(part) => {
+                  match getString(part, "text") {
+                    Some(text) => TextResponse(text),
+                    None => AudioResponse("")
+                  }
+                },
+                None => Unknown("")
+              }
+            },
+            None => Unknown("")
+          }
+        },
+        None => Unknown("")
+      }
+    }
+  }
+}

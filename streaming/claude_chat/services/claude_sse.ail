@@ -1,0 +1,175 @@
+-- Anthropic Claude Messages API SSE streaming client
+--
+-- Demonstrates the SSE (Server-Sent Events) protocol variant of std/stream.
+-- Claude uses SSE over HTTP POST — not WebSocket — making this the
+-- canonical SSE demo for AILANG.
+--
+-- Protocol: SSE (POST https://api.anthropic.com/v1/messages with stream: true)
+-- Auth: x-api-key header + anthropic-version header
+--
+-- SSE wire format:
+--   event: message_start
+--   data: {"type":"message_start","message":{"id":"msg_01...","model":"claude-sonnet-4-5-20250929",...}}
+--
+--   event: content_block_delta
+--   data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+--
+--   event: message_stop
+--   data: {"type":"message_stop"}
+--
+-- Reference: https://docs.anthropic.com/en/api/messages-streaming
+
+module streaming/claude_chat/services/claude_sse
+
+import std/stream (ssePost, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamErrorKind)
+import std/json (decode, encode, getString, getNumber, getObject,
+                 jo, kv, js, ja, jb, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, startsWith)
+import std/list (map)
+import streaming/claude_chat/types/claude_types (
+  ClaudeEvent, TextDelta, MessageStart, ContentBlockStart,
+  ContentBlockStop, MessageStop, MessageDelta, ClaudeError, UnknownEvent,
+  ChatMessage
+)
+
+-- Connect to Claude Messages API with SSE streaming
+-- Note: Claude SSE requires a POST body, which may need special handling.
+-- In browser, this would use fetch() with ReadableStream rather than EventSource
+-- (since EventSource only supports GET).
+export func connectClaude(apiKey: string, model: string, messages: [ChatMessage], systemPrompt: string) -> Result[StreamConn, StreamErrorKind] ! {Stream}
+{
+  let url = "https://api.anthropic.com/v1/messages";
+  let config = { headers: [
+    { name: "x-api-key", value: apiKey },
+    { name: "anthropic-version", value: "2023-06-01" },
+    { name: "content-type", value: "application/json" }
+  ] };
+  let body = buildRequestBody(model, messages, systemPrompt);
+  -- ssePost sends POST with body and reads SSE response stream
+  ssePost(url, body, config)
+}
+
+-- Build the Messages API request body
+export func buildRequestBody(model: string, messages: [ChatMessage], systemPrompt: string) -> string
+  ensures { length(result) > 10 }
+{
+  let msgArray = map(\m. jo([
+    kv("role", js(m.role)),
+    kv("content", js(m.content))
+  ]), messages);
+
+  let fields = [
+    kv("model", js(model)),
+    kv("max_tokens", jnum(4096.0)),
+    kv("stream", jb(true)),
+    kv("messages", ja(msgArray))
+  ];
+
+  -- Add system prompt if provided
+  let allFields = if length(systemPrompt) > 0
+    then kv("system", js(systemPrompt)) :: fields
+    else fields;
+
+  encode(jo(allFields))
+}
+
+-- Dispatch parsed JSON to the appropriate event parser
+-- Extracted to avoid Result type leak bug in the outer decode match
+func dispatchEvent(json: Json) -> Result[ClaudeEvent, string] {
+  let eventType = getOrElse(getString(json, "type"), "");
+  match eventType {
+    "message_start" => parseMessageStart(json),
+    "content_block_start" => parseContentBlockStart(json),
+    "content_block_delta" => parseContentBlockDelta(json),
+    "content_block_stop" => parseContentBlockStop(json),
+    "message_delta" => parseMessageDelta(json),
+    "message_stop" => Ok(MessageStop),
+    "error" => parseError(json),
+    _ => Ok(UnknownEvent(eventType))
+  }
+}
+
+-- Parse an SSE event data payload into a structured ClaudeEvent
+-- Each SSE event has a `type` field that determines the variant
+export func parseClaudeEvent(data: string) -> Result[ClaudeEvent, string]
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  match decode(data) {
+    Ok(json) => dispatchEvent(json),
+    Err(e) => Err("JSON parse error: " ++ e)
+  }
+}
+
+-- Build MessageStart event wrapped in Ok
+-- Extracted to avoid Result type leak bug (Ok(ADT({record})) / Err(string) in same match)
+func buildMessageStartOk(msg: Json) -> Result[ClaudeEvent, string] {
+  let id = getOrElse(getString(msg, "id"), "");
+  let model = getOrElse(getString(msg, "model"), "");
+  Ok(MessageStart({ id: id, model: model }))
+}
+
+-- Parse message_start: extract message id and model
+func parseMessageStart(json: Json) -> Result[ClaudeEvent, string] {
+  match getObject(json, "message") {
+    Some(msg) => buildMessageStartOk(msg),
+    None => Err("No message object in message_start")
+  }
+}
+
+-- Parse content_block_start: extract block index
+func parseContentBlockStart(json: Json) -> Result[ClaudeEvent, string] {
+  match getNumber(json, "index") {
+    Some(idx) => Ok(ContentBlockStart(floatToInt(idx))),
+    None => Ok(ContentBlockStart(0))
+  }
+}
+
+-- Build TextDelta event wrapped in Ok
+-- Extracted to avoid Result type leak bug
+func buildTextDeltaOk(delta: Json) -> Result[ClaudeEvent, string] {
+  let text = getOrElse(getString(delta, "text"), "");
+  Ok(TextDelta(text))
+}
+
+-- Parse content_block_delta: extract the text delta
+-- This is the main streaming event — each carries a text fragment
+func parseContentBlockDelta(json: Json) -> Result[ClaudeEvent, string] {
+  match getObject(json, "delta") {
+    Some(delta) => buildTextDeltaOk(delta),
+    None => Err("No delta in content_block_delta")
+  }
+}
+
+-- Parse content_block_stop
+func parseContentBlockStop(json: Json) -> Result[ClaudeEvent, string] {
+  match getNumber(json, "index") {
+    Some(idx) => Ok(ContentBlockStop(floatToInt(idx))),
+    None => Ok(ContentBlockStop(0))
+  }
+}
+
+-- Parse message_delta: extract stop reason
+func parseMessageDelta(json: Json) -> Result[ClaudeEvent, string] {
+  match getObject(json, "delta") {
+    Some(delta) => {
+      let stopReason = getOrElse(getString(delta, "stop_reason"), "end_turn");
+      Ok(MessageDelta({ stopReason: stopReason }))
+    },
+    None => Ok(MessageDelta({ stopReason: "unknown" }))
+  }
+}
+
+-- Parse error event
+func parseError(json: Json) -> Result[ClaudeEvent, string] {
+  match getObject(json, "error") {
+    Some(err) => {
+      let errType = getOrElse(getString(err, "type"), "unknown");
+      let message = getOrElse(getString(err, "message"), "Unknown error");
+      Ok(ClaudeError({ errType: errType, message: message }))
+    },
+    None => Ok(ClaudeError({ errType: "unknown", message: "Unparseable error" }))
+  }
+}

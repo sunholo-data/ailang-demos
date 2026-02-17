@@ -1,0 +1,88 @@
+-- Text processing stage of the voice pipeline
+--
+-- Sits between STT (Deepgram) and TTS (ElevenLabs).
+-- Transforms transcribed text before it's spoken back.
+
+module streaming/voice_pipeline/services/text_processor
+
+import std/string (length, split, join, toUpper, substring)
+import std/list (map, filter, length as listLength)
+import streaming/voice_pipeline/types/pipeline_types (ProcessingMode, Echo, Summarize, Translate, ExtractEntities)
+
+-- Process text based on the selected mode
+-- In Echo mode, text passes through unchanged.
+-- Other modes apply transformations before sending to TTS.
+export func processText(text: string, mode: ProcessingMode) -> string
+  ensures { length(result) > 0 || length(text) == 0 }
+{
+  if length(text) == 0 then ""
+  else {
+    match mode {
+      Echo => text,
+      Summarize => summarizeText(text),
+      Translate => translateText(text),
+      ExtractEntities => extractEntities(text)
+    }
+  }
+}
+
+-- Simple summarization: take first sentence
+-- (In production, this would call std/ai for AI-powered summarization)
+func summarizeText(text: string) -> string {
+  let sentences = split(text, ". ");
+  match sentences {
+    [] => text,
+    first :: _ => {
+      if length(first) > 100 then
+        substring(first, 0, 100) ++ "..."
+      else
+        first
+    }
+  }
+}
+
+-- Placeholder for translation
+-- (In production, would call a translation API via std/net)
+func translateText(text: string) -> string {
+  "Translation: " ++ text
+}
+
+-- Simple entity extraction (names, numbers, dates)
+-- Returns a formatted string of detected entities
+func extractEntities(text: string) -> string {
+  let words = split(text, " ");
+  let capitalized = filter(\w. length(w) > 0 && isUpperChar(substring(w, 0, 1)), words);
+  let numbers = filter(\w. isNumeric(w), words);
+  let entities = if listLength(capitalized) > 0
+    then "Names: " ++ join(", ", capitalized)
+    else "No named entities found";
+  let nums = if listLength(numbers) > 0
+    then ". Numbers: " ++ join(", ", numbers)
+    else "";
+  entities ++ nums
+}
+
+-- Check if a character is uppercase
+pure func isUpperChar(c: string) -> bool {
+  c == "A" || c == "B" || c == "C" || c == "D" || c == "E" ||
+  c == "F" || c == "G" || c == "H" || c == "I" || c == "J" ||
+  c == "K" || c == "L" || c == "M" || c == "N" || c == "O" ||
+  c == "P" || c == "Q" || c == "R" || c == "S" || c == "T" ||
+  c == "U" || c == "V" || c == "W" || c == "X" || c == "Y" || c == "Z"
+}
+
+-- Check if a string is numeric
+pure func isNumeric(s: string) -> bool {
+  length(s) > 0 && allDigits(s, 0)
+}
+
+pure func allDigits(s: string, idx: int) -> bool {
+  if idx >= length(s) then true
+  else {
+    let c = substring(s, idx, idx + 1);
+    if c == "0" || c == "1" || c == "2" || c == "3" || c == "4" ||
+       c == "5" || c == "6" || c == "7" || c == "8" || c == "9" then
+      allDigits(s, idx + 1)
+    else false
+  }
+}

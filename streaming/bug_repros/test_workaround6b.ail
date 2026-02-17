@@ -1,0 +1,50 @@
+-- Workaround test for Bug 6 (attempt 2): dispatch table approach
+module streaming/bug_repros/test_workaround6b
+
+import std/result (Ok, Err)
+
+func clamp(x: int) -> int {
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+-- Map op string to int code (no arithmetic in this function)
+func opCode(op: string) -> int =
+  match op {
+    "add" => 1,
+    "subtract" => 2,
+    "multiply" => 3,
+    "divide" => 4,
+    "modulo" => 5,
+    _ => 0
+  }
+
+-- Dispatch on int code (no string comparison in this function)
+func calculateByCode(code: int, ca: int, cb: int) -> Result[int, string] {
+  if code == 1 then Ok(ca + cb)
+  else if code == 2 then Ok(ca - cb)
+  else if code == 3 then {
+    let product = ca * cb;
+    if product > 1000000 then Ok(1000000)
+    else if product < -1000000 then Ok(-1000000)
+    else Ok(product)
+  }
+  else if code == 4 then {
+    if cb == 0 then Err("Division by zero")
+    else Ok(ca / cb)
+  }
+  else if code == 5 then {
+    if cb == 0 then Err("Modulo by zero")
+    else Ok(ca - (ca / cb) * cb)
+  }
+  else Err("Unknown operation")
+}
+
+-- Main: separate string matching from arithmetic
+func calculate(op: string, a: int, b: int) -> Result[int, string] {
+  let ca = clamp(a);
+  let cb = clamp(b);
+  let code = opCode(op);
+  calculateByCode(code, ca, cb)
+}

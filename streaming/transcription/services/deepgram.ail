@@ -1,0 +1,123 @@
+-- Deepgram WebSocket speech-to-text client
+--
+-- Connects to Deepgram's streaming API, sends binary PCM audio chunks,
+-- and receives JSON transcript responses.
+--
+-- Protocol: WebSocket
+-- Audio format: 16-bit PCM, 16kHz, mono (linear16)
+-- Auth: Authorization: Token <key> header
+--
+-- Reference: https://developers.deepgram.com/reference/speech-to-text/listen-streaming
+
+module streaming/transcription/services/deepgram
+
+import std/stream (connect, transmit, disconnect, StreamConn, StreamErrorKind)
+import std/json (decode, encode, getString, getNumber, getArray, getObject, getBool, jo, kv, js, ja)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+import std/list (map, nth, length as listLength)
+import streaming/transcription/types/transcript_types (TranscriptResult, WordTiming)
+
+-- Build Deepgram WebSocket URL with model configuration
+-- nova-2 is Deepgram's latest model with best accuracy
+-- smart_format adds punctuation and casing
+export pure func deepgramUrl() -> string
+  ensures { length(result) > 30 }
+= "wss://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&encoding=linear16&sample_rate=16000&channels=1"
+
+-- Connect to Deepgram streaming API
+-- Auth via Authorization header (not query parameter)
+export func connectDeepgram(apiKey: string) -> Result[StreamConn, string] ! {Stream}
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  let url = deepgramUrl();
+  let config = { headers: [{ name: "Authorization", value: "Token " ++ apiKey }] };
+  match connect(url, config) {
+    Ok(conn) => Ok(conn),
+    Err(e) => Err("Deepgram connection failed: " ++ show(e))
+  }
+}
+
+-- Send a binary audio chunk (PCM 16-bit, 16kHz)
+-- Each chunk is typically 100ms = 3,200 bytes
+export func sendAudioChunk(conn: StreamConn, audioData: bytes) -> Result[unit, StreamErrorKind] ! {Stream} {
+  transmit(conn, audioData)
+}
+
+-- Send end-of-stream marker to signal no more audio
+-- Deepgram responds with final transcript after receiving this
+export func sendEndOfStream(conn: StreamConn) -> Result[unit, StreamErrorKind] ! {Stream} {
+  transmit(conn, "{\"type\":\"CloseStream\"}")
+}
+
+-- Send keep-alive to prevent idle timeout
+export func sendKeepAlive(conn: StreamConn) -> Result[unit, StreamErrorKind] ! {Stream} {
+  transmit(conn, "{\"type\":\"KeepAlive\"}")
+}
+
+-- Parse a Deepgram transcript response from JSON
+-- Deepgram format:
+--   {"type":"Results","channel_index":[0,1],"duration":...,
+--    "is_final":true,"channel":{"alternatives":[{"transcript":"hello","confidence":0.98,"words":[...]}]}}
+export func parseTranscript(msg: string) -> Result[TranscriptResult, string]
+  ensures { match result { Ok(tr) => true, Err(e) => length(e) > 0 } }
+{
+  match decode(msg) {
+    Ok(json) => {
+      let msgType = getOrElse(getString(json, "type"), "");
+      if msgType == "Results" then
+        extractTranscriptFromResults(json)
+      else
+        Err("Not a transcript message: " ++ msgType)
+    },
+    Err(e) => Err("JSON parse error: " ++ e)
+  }
+}
+
+-- Build a TranscriptResult wrapped in Ok from an alternative JSON and finality flag
+-- Extracted to a separate function to avoid Result type leak bug
+-- (nested Ok(record) / Err(string) causes record type to leak into Err parameter)
+func buildTranscriptOk(alt: Json, isFinal: bool) -> Result[TranscriptResult, string] {
+  let transcript = getOrElse(getString(alt, "transcript"), "");
+  let confidence = getOrElse(getNumber(alt, "confidence"), 0.0);
+  let words = extractWords(alt);
+  let tr: TranscriptResult = { transcript: transcript, confidence: confidence, isFinal: isFinal, words: words };
+  Ok(tr)
+}
+
+-- Extract transcript data from a Results message
+func extractTranscriptFromResults(json: Json) -> Result[TranscriptResult, string] {
+  let isFinal = getOrElse(getBool(json, "is_final"), false);
+  -- Navigate: channel.alternatives[0]
+  match getObject(json, "channel") {
+    Some(ch) => {
+      match getArray(ch, "alternatives") {
+        Some(alts) => {
+          match nth(alts, 0) {
+            Some(alt) => buildTranscriptOk(alt, isFinal),
+            None => Err("No alternatives in channel")
+          }
+        },
+        None => Err("No alternatives array")
+      }
+    },
+    None => Err("No channel object")
+  }
+}
+
+-- Extract word timings from an alternative
+func extractWords(alt: Json) -> [WordTiming] {
+  match getArray(alt, "words") {
+    Some(wordList) => map(\w.
+      {
+        word: getOrElse(getString(w, "word"), ""),
+        start: getOrElse(getNumber(w, "start"), 0.0),
+        end: getOrElse(getNumber(w, "end"), 0.0),
+        confidence: getOrElse(getNumber(w, "confidence"), 0.0)
+      },
+      wordList
+    ),
+    None => []
+  }
+}

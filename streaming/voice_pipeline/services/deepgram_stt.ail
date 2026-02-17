@@ -1,0 +1,79 @@
+-- Deepgram speech-to-text WebSocket client for the voice pipeline
+--
+-- Handles the STT leg of the pipeline: mic audio in → text transcripts out.
+
+module streaming/voice_pipeline/services/deepgram_stt
+
+import std/stream (connect, transmit, disconnect, StreamConn, StreamErrorKind)
+import std/json (decode, encode, getString, getObject, getArray, getNumber, getBool, jo, kv, js, ja)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+import std/list (nth, length as listLength)
+
+-- Deepgram STT WebSocket URL
+export pure func sttUrl() -> string
+  ensures { length(result) > 30 }
+= "wss://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&encoding=linear16&sample_rate=16000&channels=1&interim_results=true&utterance_end_ms=1000"
+
+-- Connect to Deepgram STT
+export func connectSTT(apiKey: string) -> Result[StreamConn, string] ! {Stream}
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  let config = { headers: [{ name: "Authorization", value: "Token " ++ apiKey }] };
+  match connect(sttUrl(), config) {
+    Ok(conn) => Ok(conn),
+    Err(_) => Err("Failed to connect to Deepgram STT")
+  }
+}
+
+-- Send binary audio chunk
+export func sendAudio(conn: StreamConn, audioData: bytes) -> Result[unit, StreamErrorKind] ! {Stream} {
+  transmit(conn, audioData)
+}
+
+-- Signal end of audio
+export func sendClose(conn: StreamConn) -> Result[unit, StreamErrorKind] ! {Stream} {
+  transmit(conn, "{\"type\":\"CloseStream\"}")
+}
+
+-- Build transcript result wrapped in Ok from an alternative JSON
+-- Extracted to avoid Result type leak bug (Ok(record) / Err(string) in same match)
+func buildTranscriptOk(alt: Json, isFinal: bool) -> Result[{text: string, isFinal: bool, wordCount: int}, string] {
+  let text = getOrElse(getString(alt, "transcript"), "");
+  let words = match getArray(alt, "words") {
+    Some(ws) => listLength(ws),
+    None => 0
+  };
+  let r = { text: text, isFinal: isFinal, wordCount: words };
+  Ok(r)
+}
+
+-- Extract transcript text from a Deepgram response
+-- Returns (transcript, isFinal, wordCount)
+export func extractTranscript(msg: string) -> Result[{text: string, isFinal: bool, wordCount: int}, string] {
+  match decode(msg) {
+    Ok(json) => {
+      let msgType = getOrElse(getString(json, "type"), "");
+      if msgType == "Results" then {
+        let isFinal = getOrElse(getBool(json, "is_final"), false);
+        match getObject(json, "channel") {
+          Some(ch) => {
+            match getArray(ch, "alternatives") {
+              Some(alts) => {
+                match nth(alts, 0) {
+                  Some(alt) => buildTranscriptOk(alt, isFinal),
+                  None => Err("No alternatives")
+                }
+              },
+              None => Err("No alternatives array")
+            }
+          },
+          None => Err("No channel")
+        }
+      }
+      else Err("Not a Results message")
+    },
+    Err(e) => Err("Parse error: " ++ e)
+  }
+}

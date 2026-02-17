@@ -1,0 +1,27 @@
+-- Bug 6: Num[string] inference leak from match scrutinee
+-- When matching on a string value and using arithmetic in match arms,
+-- the string type from the scrutinee leaks into the Num constraint.
+--
+-- Expected: `ca + cb` resolves to int (since ca, cb are int)
+-- Actual: "No instance for Num[string]" because match scrutinee is string
+
+module streaming/bug_repros/bug6_num_string
+
+import std/result (Ok, Err)
+
+func clamp(x: int) -> int {
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+-- This fails: matching on `op: string` causes Num[string] error on arithmetic
+func calculate(op: string, a: int, b: int) -> Result[int, string] {
+  let ca: int = clamp(a);
+  let cb: int = clamp(b);
+  match op {
+    "add" => Ok(ca + cb),
+    "sub" => Ok(ca - cb),
+    _ => Err("Unknown op")
+  }
+}

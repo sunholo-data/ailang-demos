@@ -1,0 +1,19 @@
+-- Workaround: use pattern match in lambda instead of field access
+module streaming/bug_repros/test_map_workaround
+
+import std/list (map)
+import std/json (jo, kv, js, Json)
+
+type Item = Item({name: string, desc: string})
+
+-- Workaround A: pattern match to extract record, then access fields
+func mapItemsA(items: [Item]) -> [string] =
+  map(\i. match i { Item(rec) => rec.name }, items)
+
+-- Workaround B: full destructure in pattern
+func mapItemsB(items: [Item]) -> [Json] =
+  map(\i. match i { Item({name, desc}) => jo([kv("name", js(name)), kv("desc", js(desc))]) }, items)
+
+-- Workaround C: direct field access (known to fail)
+-- func mapItemsFails(items: [Item]) -> [string] =
+--   map(\i. i.name, items)

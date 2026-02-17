@@ -1,0 +1,22 @@
+-- Workaround test for Bug 6: move arithmetic out of string match
+module streaming/bug_repros/test_workaround6
+
+import std/result (Ok, Err)
+
+func clamp(x: int) -> int {
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+-- Workaround: separate arithmetic helper, match only selects which to call
+func doAdd(a: int, b: int) -> int = a + b
+func doSub(a: int, b: int) -> int = a - b
+
+func calculate(op: string, a: int, b: int) -> Result[int, string] {
+  let ca = clamp(a);
+  let cb = clamp(b);
+  if op == "add" then Ok(doAdd(ca, cb))
+  else if op == "sub" then Ok(doSub(ca, cb))
+  else Err("Unknown op")
+}

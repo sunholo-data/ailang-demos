@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG × Gemini Live — Text to Audio</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #050506;
+    --bg-deep: #0a0a0c;
+    --bg-panel: #0f1012;
+    --bg-raised: #151618;
+    --bg-surface: #1b1c1f;
+    --bg-hover: #222326;
+    --border: #1e1f22;
+    --border-warm: #2a2520;
+    --border-active: #3a3530;
+    --text: #c8c4bc;
+    --text-muted: #706b62;
+    --text-dim: #3d3a35;
+    --amber: #d4a046;
+    --amber-bright: #e8b85a;
+    --amber-hot: #f0c464;
+    --amber-glow: rgba(212,160,70,0.12);
+    --amber-dim: rgba(212,160,70,0.06);
+    --green: #4ade80;
+    --green-dim: #0d2818;
+    --red: #ef4444;
+    --red-dim: #2a0f0f;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Outfit', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-void);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px;
+  }
+
+  /* ── App grid ── */
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(212,160,70,0.03) 0%, transparent 100%);
+    animation: headerReveal 0.6s ease-out;
+  }
+  @keyframes headerReveal {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--amber);
+    letter-spacing: -0.3px;
+  }
+  .logo span {
+    color: var(--text-dim);
+    font-weight: 300;
+    margin: 0 2px;
+  }
+
+  .badge {
+    font-size: 9px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .badge-model {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .badge-wss {
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid #1a3a28;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .badge-wss .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .badge-wss.live .dot {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(74,222,128,0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 4px rgba(74,222,128,0.3); }
+    50% { box-shadow: 0 0 10px rgba(74,222,128,0.6); }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-sm {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 500;
+    padding: 4px 10px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--border-warm); color: var(--amber); }
+
+  /* ── Config panel ── */
+  .config {
+    background: var(--bg-deep);
+    border-bottom: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+    padding: 0 24px;
+  }
+  .config.open { max-height: 90px; padding: 14px 24px; }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .config-row label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 60px;
+  }
+  .config-input {
+    flex: 1;
+    background: var(--bg-void);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .config-input:focus { border-color: var(--border-warm); }
+  .config-input::placeholder { color: var(--text-dim); }
+
+  .config-warn {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* ── Main content ── */
+  .main {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    padding: 0 24px;
+  }
+
+  /* ── Scope / Waveform ── */
+  .scope-container {
+    position: relative;
+    padding: 20px 0 12px;
+    animation: scopeFadeIn 0.8s ease-out 0.2s both;
+  }
+  @keyframes scopeFadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .scope-frame {
+    position: relative;
+    border: 1px solid var(--border-warm);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-void);
+    box-shadow:
+      inset 0 0 60px rgba(0,0,0,0.5),
+      0 0 30px rgba(212,160,70,0.03);
+    transition: box-shadow 0.5s;
+  }
+  .scope-frame.active {
+    box-shadow:
+      inset 0 0 60px rgba(0,0,0,0.3),
+      0 0 40px rgba(212,160,70,0.08),
+      0 0 80px rgba(212,160,70,0.03);
+    border-color: var(--border-active);
+  }
+
+  .scope-label {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    z-index: 2;
+    user-select: none;
+  }
+  .scope-label-right {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 2;
+    user-select: none;
+  }
+
+  #waveform {
+    width: 100%;
+    height: 180px;
+    display: block;
+  }
+
+  /* ── Scope VU meter ── */
+  .vu-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.3);
+  }
+  .vu-label {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    min-width: 28px;
+  }
+  .vu-track {
+    flex: 1;
+    height: 3px;
+    background: var(--bg-surface);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .vu-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--amber) 0%, var(--amber-hot) 80%, var(--red) 100%);
+    border-radius: 2px;
+    transition: width 0.1s ease-out;
+  }
+  .vu-db {
+    font-size: 8px;
+    color: var(--text-dim);
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Event log ── */
+  .log-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 0;
+    background: var(--bg-deep);
+    animation: logFadeIn 0.8s ease-out 0.4s both;
+  }
+  @keyframes logFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .log-title {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+  }
+  .log-clear {
+    font-size: 8px;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+    background: none;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: 2px;
+    transition: color 0.15s;
+  }
+  .log-clear:hover { color: var(--text-muted); }
+
+  .log-entries {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+    min-height: 80px;
+    max-height: 200px;
+  }
+  .log-entries::-webkit-scrollbar { width: 4px; }
+  .log-entries::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 12px;
+    font-size: 11px;
+    line-height: 1.5;
+    animation: logSlide 0.15s ease-out;
+  }
+  @keyframes logSlide {
+    from { opacity: 0; transform: translateX(-4px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-time {
+    color: var(--text-dim);
+    font-size: 9px;
+    flex-shrink: 0;
+    min-width: 56px;
+    font-variant-numeric: tabular-nums;
+    padding-top: 1px;
+  }
+  .log-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .log-dot.ok { background: var(--green); }
+  .log-dot.warn { background: var(--amber); }
+  .log-dot.err { background: var(--red); }
+  .log-dot.audio { background: var(--amber); box-shadow: 0 0 4px rgba(212,160,70,0.4); }
+  .log-dot.info { background: var(--text-dim); }
+
+  .log-text { color: var(--text-muted); }
+  .log-text .hl { color: var(--amber); }
+  .log-text .val { color: var(--text); }
+
+  /* ── Input area ── */
+  .input-area {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    background: linear-gradient(180deg, transparent 0%, rgba(212,160,70,0.02) 100%);
+    animation: inputReveal 0.6s ease-out 0.3s both;
+  }
+  @keyframes inputReveal {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .text-input {
+    flex: 1;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .text-input:focus {
+    border-color: var(--border-warm);
+    box-shadow: 0 0 0 2px var(--amber-dim);
+  }
+  .text-input::placeholder { color: var(--text-dim); }
+  .text-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .send-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--amber) 0%, #c89038 100%);
+    color: var(--bg-void);
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(212,160,70,0.2);
+  }
+  .send-btn:hover {
+    background: linear-gradient(135deg, var(--amber-bright) 0%, var(--amber) 100%);
+    box-shadow: 0 4px 16px rgba(212,160,70,0.3);
+    transform: translateY(-1px);
+  }
+  .send-btn:active { transform: translateY(0); }
+  .send-btn:disabled {
+    background: var(--bg-surface);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-deep);
+    animation: statsReveal 0.6s ease-out 0.5s both;
+  }
+  @keyframes statsReveal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-val {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 24px;
+  }
+  .stat-val.active { color: var(--amber); }
+  .stat-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--border);
+  }
+
+  /* ── Idle animation on scope ── */
+  .scope-idle-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.5s;
+  }
+  .scope-idle-text.hidden { opacity: 0; }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .app { max-width: 100%; }
+    .header { padding: 10px 14px; }
+    .main { padding: 0 14px; }
+    .input-area { padding: 10px 14px; }
+    .stats-bar { padding: 6px 14px; gap: 12px; flex-wrap: wrap; }
+    .badge-model { display: none; }
+    #waveform { height: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Header ── -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">AILANG<span>×</span>Gemini Live</div>
+      <span class="badge badge-model">gemini-live-2.5-flash-native-audio</span>
+      <span class="badge badge-wss" id="wssBadge"><span class="dot"></span>WSS</span>
+    </div>
+    <div class="header-right">
+      <button class="btn-sm" onclick="toggleConfig()" id="cfgBtn">Config</button>
+      <button class="btn-sm" onclick="reconnect()" id="reconnBtn">Connect</button>
+    </div>
+  </div>
+
+  <!-- ── Config ── -->
+  <div class="config" id="configPanel">
+    <div class="config-row">
+      <label>API Key</label>
+      <input type="password" class="config-input" id="apiKey"
+             placeholder="Gemini API key (AI Studio)"
+             value="">
+    </div>
+    <div class="config-warn">
+      API calls go directly from your browser to Google's API. Key is stored in localStorage.
+    </div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <!-- Oscilloscope / Waveform -->
+    <div class="scope-container">
+      <div class="scope-frame" id="scopeFrame">
+        <span class="scope-label">Audio Scope</span>
+        <span class="scope-label-right" id="scopeRate">24kHz · 16-bit · mono</span>
+        <span class="scope-idle-text" id="scopeIdle">awaiting signal</span>
+        <canvas id="waveform"></canvas>
+        <div class="vu-strip">
+          <span class="vu-label">VU</span>
+          <div class="vu-track"><div class="vu-fill" id="vuFill"></div></div>
+          <span class="vu-db" id="vuDb">-∞ dB</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="log-panel">
+      <div class="log-header">
+        <span class="log-title">Event Log</span>
+        <button class="log-clear" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="log-entries" id="logEntries"></div>
+    </div>
+  </div>
+
+  <!-- ── Input ── -->
+  <div class="input-area">
+    <div class="input-row">
+      <input type="text" class="text-input" id="textInput"
+             placeholder="Type a message to hear Gemini speak..."
+             disabled>
+      <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
+    </div>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div class="stats-bar">
+    <div class="stat">
+      <span>State</span>
+      <span class="stat-val" id="fState">idle</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <span>Frames</span>
+      <span class="stat-val" id="fFrames">0</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <span>Audio</span>
+      <span class="stat-val" id="fBytes">0 B</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <span>Duration</span>
+      <span class="stat-val" id="fDuration">0.0s</span>
+    </div>
+    <div class="stat-sep"></div>
+    <div class="stat">
+      <span>Latency</span>
+      <span class="stat-val" id="fLatency">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// Gemini Live — Text to Audio (Browser)
+// ═══════════════════════════════════════════════════
+
+let ws = null;
+let audioCtx = null;
+let playbackNode = null;
+let sessionReady = false;
+let promptSentAt = 0;
+let totalFrames = 0;
+let totalBytes = 0;
+let totalSamples = 0;
+let lastPcmChunk = null; // for waveform drawing
+
+// ── Config ──
+function toggleConfig() {
+  const p = document.getElementById('configPanel');
+  p.classList.toggle('open');
+}
+
+function loadConfig() {
+  const saved = localStorage.getItem('gemini_live_key');
+  if (saved) document.getElementById('apiKey').value = saved;
+}
+
+function saveConfig() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (key) localStorage.setItem('gemini_live_key', key);
+}
+
+// ── Logging ──
+function addLog(type, html) {
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  const now = new Date();
+  const ts = String(now.getHours()).padStart(2,'0') + ':' +
+             String(now.getMinutes()).padStart(2,'0') + ':' +
+             String(now.getSeconds()).padStart(2,'0') + '.' +
+             String(now.getMilliseconds()).padStart(3,'0').slice(0,2);
+  el.innerHTML = `<span class="log-time">${ts}</span><span class="log-dot ${type}"></span><span class="log-text">${html}</span>`;
+  const container = document.getElementById('logEntries');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('logEntries').innerHTML = '';
+}
+
+// ── Format helpers ──
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(2) + ' MB';
+}
+
+function updateStats() {
+  document.getElementById('fFrames').textContent = totalFrames;
+  document.getElementById('fBytes').textContent = fmtBytes(totalBytes);
+  // Duration: totalSamples at 24kHz
+  const dur = totalSamples / 24000;
+  document.getElementById('fDuration').textContent = dur.toFixed(1) + 's';
+  if (totalFrames > 0) {
+    document.getElementById('fFrames').classList.add('active');
+    document.getElementById('fBytes').classList.add('active');
+    document.getElementById('fDuration').classList.add('active');
+  }
+}
+
+function setState(s) {
+  const el = document.getElementById('fState');
+  el.textContent = s;
+  el.classList.toggle('active', s !== 'idle' && s !== 'closed');
+}
+
+// ── WebSocket ──
+function reconnect() {
+  if (ws) { ws.close(); ws = null; }
+  const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini_live_key');
+  if (!key) {
+    toggleConfig();
+    addLog('warn', 'Enter your Gemini API key');
+    return;
+  }
+  saveConfig();
+
+  sessionReady = false;
+  totalFrames = 0;
+  totalBytes = 0;
+  totalSamples = 0;
+  updateStats();
+  setState('connecting');
+  addLog('info', 'Connecting to Gemini Live API...');
+
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('textInput').disabled = true;
+
+  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    document.getElementById('wssBadge').classList.add('live');
+    setState('connected');
+    addLog('ok', 'WebSocket connected');
+    sendSetup();
+  };
+
+  ws.onmessage = (e) => {
+    // In browser, Gemini Live sends text frames with JSON
+    try {
+      const data = JSON.parse(e.data);
+      handleServerMessage(data);
+    } catch (err) {
+      addLog('err', 'Failed to parse message');
+    }
+  };
+
+  ws.onerror = (e) => {
+    addLog('err', 'WebSocket error');
+  };
+
+  ws.onclose = (e) => {
+    document.getElementById('wssBadge').classList.remove('live');
+    sessionReady = false;
+    document.getElementById('sendBtn').disabled = true;
+    document.getElementById('textInput').disabled = true;
+    setState('closed');
+    addLog('err', `WebSocket closed <span class="val">${e.code}</span>`);
+  };
+}
+
+function sendSetup() {
+  if (!ws) return;
+  const setup = {
+    setup: {
+      model: 'models/gemini-live-2.5-flash-native-audio',
+      generationConfig: {
+        responseModalities: ['AUDIO']
+      },
+      systemInstruction: {
+        parts: [{ text: 'You are a friendly, expressive assistant. Keep responses short and conversational. Speak naturally.' }]
+      }
+    }
+  };
+  ws.send(JSON.stringify(setup));
+  addLog('info', 'Setup sent — <span class="hl">AUDIO</span> modality');
+}
+
+function handleServerMessage(data) {
+  // setupComplete
+  if (data.setupComplete !== undefined) {
+    sessionReady = true;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textInput').focus();
+    setState('ready');
+    addLog('ok', '<span class="hl">Setup complete</span> — session ready');
+    document.getElementById('scopeIdle').textContent = 'ready for input';
+    return;
+  }
+
+  // serverContent
+  if (data.serverContent) {
+    const sc = data.serverContent;
+
+    // turnComplete
+    if (sc.turnComplete) {
+      setState('ready');
+      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('textInput').disabled = false;
+      document.getElementById('textInput').focus();
+      return;
+    }
+
+    // modelTurn with audio parts
+    if (sc.modelTurn && sc.modelTurn.parts) {
+      sc.modelTurn.parts.forEach(part => {
+        if (part.inlineData && part.inlineData.data) {
+          // First audio frame — record latency
+          if (totalFrames === 0 && promptSentAt > 0) {
+            const latency = Date.now() - promptSentAt;
+            document.getElementById('fLatency').textContent = latency + 'ms';
+            document.getElementById('fLatency').classList.add('active');
+            addLog('info', 'First audio in <span class="val">' + latency + 'ms</span>');
+          }
+
+          totalFrames++;
+          const b64 = part.inlineData.data;
+          const rawBytes = atob(b64);
+          const byteLen = rawBytes.length;
+          totalBytes += byteLen;
+
+          // Decode base64 → Int16Array
+          const buf = new ArrayBuffer(byteLen);
+          const view = new Uint8Array(buf);
+          for (let i = 0; i < byteLen; i++) view[i] = rawBytes.charCodeAt(i);
+          const pcm16 = new Int16Array(buf);
+          totalSamples += pcm16.length;
+
+          // Feed to worklet for playback
+          enqueueAudio(pcm16);
+
+          // Store for waveform
+          lastPcmChunk = pcm16;
+          updateVU(pcm16);
+
+          // Activate scope
+          document.getElementById('scopeFrame').classList.add('active');
+          document.getElementById('scopeIdle').classList.add('hidden');
+
+          // Log every 5th frame to avoid spam
+          if (totalFrames <= 3 || totalFrames % 5 === 0) {
+            addLog('audio', '<span class="hl">Audio</span> frame <span class="val">#' + totalFrames + '</span> — ' + fmtBytes(byteLen) + ' (' + pcm16.length + ' samples)');
+          }
+
+          updateStats();
+        }
+      });
+    }
+    return;
+  }
+
+  // Unknown
+  addLog('info', 'Message: ' + JSON.stringify(data).substring(0, 80));
+}
+
+// ── Audio playback ──
+async function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  await audioCtx.audioWorklet.addModule('../shared/audio-worklet.js');
+  playbackNode = new AudioWorkletNode(audioCtx, 'pcm-playback', {
+    processorOptions: { sourceRate: 24000 }
+  });
+  playbackNode.connect(audioCtx.destination);
+  addLog('ok', 'Audio engine initialized — <span class="val">24kHz → 48kHz</span>');
+}
+
+function enqueueAudio(pcm16) {
+  if (!playbackNode) return;
+  playbackNode.port.postMessage({
+    type: 'enqueue',
+    pcmData: pcm16.buffer
+  }, [pcm16.buffer]);
+}
+
+// ── VU meter ──
+function updateVU(pcm16) {
+  // Calculate RMS in dB
+  let sum = 0;
+  for (let i = 0; i < pcm16.length; i++) {
+    const s = pcm16[i] / 32768;
+    sum += s * s;
+  }
+  const rms = Math.sqrt(sum / pcm16.length);
+  const db = rms > 0 ? 20 * Math.log10(rms) : -60;
+  const clamped = Math.max(-60, Math.min(0, db));
+  const pct = ((clamped + 60) / 60) * 100;
+
+  document.getElementById('vuFill').style.width = pct + '%';
+  document.getElementById('vuDb').textContent = db > -60 ? db.toFixed(1) + ' dB' : '-∞ dB';
+}
+
+// ── Send text ──
+async function sendText() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text || !ws || ws.readyState !== 1 || !sessionReady) return;
+
+  // Init audio on first user gesture
+  await initAudio();
+
+  // Reset per-turn counters
+  totalFrames = 0;
+  totalBytes = 0;
+  totalSamples = 0;
+  promptSentAt = Date.now();
+  document.getElementById('fLatency').textContent = '—';
+  document.getElementById('fLatency').classList.remove('active');
+  updateStats();
+
+  // Clear playback buffer
+  if (playbackNode) {
+    playbackNode.port.postMessage({ command: 'clear' });
+  }
+
+  addLog('info', 'Sending: <span class="val">' + escapeHtml(text) + '</span>');
+
+  ws.send(JSON.stringify({
+    clientContent: {
+      turns: [{ role: 'user', parts: [{ text }] }],
+      turnComplete: true
+    }
+  }));
+
+  input.value = '';
+  input.disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  setState('streaming');
+  document.getElementById('scopeIdle').textContent = 'receiving audio';
+  document.getElementById('scopeIdle').classList.remove('hidden');
+  setTimeout(() => document.getElementById('scopeIdle').classList.add('hidden'), 1500);
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Waveform visualization ──
+const canvas = document.getElementById('waveform');
+const ctx = canvas.getContext('2d');
+let animId = null;
+let waveData = new Float32Array(1024).fill(0);
+let targetWave = new Float32Array(1024).fill(0);
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = 180 * dpr;
+  canvas.style.height = '180px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawGrid() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = 180;
+
+  // Subtle grid lines
+  ctx.strokeStyle = 'rgba(212,160,70,0.04)';
+  ctx.lineWidth = 0.5;
+
+  // Horizontal grid
+  for (let i = 1; i < 6; i++) {
+    const y = (h / 6) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // Vertical grid
+  const cols = Math.floor(w / 40);
+  for (let i = 1; i < cols; i++) {
+    const x = (w / cols) * i;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+
+  // Center line (brighter)
+  ctx.strokeStyle = 'rgba(212,160,70,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+}
+
+function drawWaveform() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = 180;
+  const mid = h / 2;
+
+  ctx.clearRect(0, 0, w, h);
+  drawGrid();
+
+  // Interpolate toward target
+  for (let i = 0; i < waveData.length; i++) {
+    waveData[i] += (targetWave[i] - waveData[i]) * 0.18;
+  }
+
+  // Glow layer
+  ctx.shadowColor = 'rgba(212,160,70,0.3)';
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = 'rgba(212,160,70,0.25)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor((i / w) * waveData.length);
+    const y = mid + waveData[idx] * mid * 0.85;
+    if (i === 0) ctx.moveTo(i, y);
+    else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+
+  // Main line
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(212,160,70,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor((i / w) * waveData.length);
+    const y = mid + waveData[idx] * mid * 0.85;
+    if (i === 0) ctx.moveTo(i, y);
+    else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+
+  // Bright peak dots
+  ctx.fillStyle = 'rgba(232,184,90,0.6)';
+  for (let i = 0; i < w; i += 6) {
+    const idx = Math.floor((i / w) * waveData.length);
+    const val = Math.abs(waveData[idx]);
+    if (val > 0.3) {
+      const y = mid + waveData[idx] * mid * 0.85;
+      const r = val * 1.5;
+      ctx.beginPath();
+      ctx.arc(i, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Decay toward silence
+  for (let i = 0; i < targetWave.length; i++) {
+    targetWave[i] *= 0.97;
+  }
+
+  animId = requestAnimationFrame(drawWaveform);
+}
+
+// Feed PCM into waveform target
+function feedWaveform(pcm16) {
+  const len = targetWave.length;
+  const step = Math.max(1, Math.floor(pcm16.length / len));
+  for (let i = 0; i < len; i++) {
+    const idx = Math.min(i * step, pcm16.length - 1);
+    targetWave[i] = pcm16[idx] / 32768;
+  }
+}
+
+// Watch for new PCM data
+let lastFedFrame = 0;
+setInterval(() => {
+  if (lastPcmChunk && totalFrames > lastFedFrame) {
+    feedWaveform(lastPcmChunk);
+    lastFedFrame = totalFrames;
+  }
+}, 50);
+
+// ── Keyboard ──
+document.getElementById('textInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendText();
+  }
+});
+
+// ── Init ──
+window.addEventListener('load', () => {
+  loadConfig();
+  resizeCanvas();
+  drawWaveform();
+
+  addLog('info', 'Gemini Live text-to-audio demo');
+  addLog('info', 'Model: <span class="hl">gemini-live-2.5-flash-native-audio</span>');
+  addLog('info', 'Click <span class="val">Connect</span> to start');
+});
+
+window.addEventListener('resize', resizeCanvas);
+</script>
+<script src="../shared/nav.js"></script>
+</body>
+</html>

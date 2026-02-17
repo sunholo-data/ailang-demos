@@ -1,0 +1,53 @@
+-- Claude API streaming event types
+--
+-- Models the SSE event stream from Anthropic's Messages API.
+-- Reference: https://docs.anthropic.com/en/api/messages-streaming
+
+module streaming/claude_chat/types/claude_types
+
+import std/string (length)
+
+-- Parsed SSE event from Claude's streaming API
+-- Each variant corresponds to a distinct event type in the wire protocol
+export type ClaudeEvent =
+  | TextDelta(string)
+  | MessageStart({id: string, model: string})
+  | ContentBlockStart(int)
+  | ContentBlockStop(int)
+  | MessageStop
+  | MessageDelta({stopReason: string})
+  | ClaudeError({errType: string, message: string})
+  | UnknownEvent(string)
+
+-- Chat message (user or assistant)
+export type ChatMessage = {
+  role: string,
+  content: string
+}
+
+-- Accumulates streaming response text
+export type StreamAccumulator = {
+  messageId: string,
+  model: string,
+  textSoFar: string,
+  blockCount: int,
+  eventsReceived: int,
+  isComplete: bool
+}
+
+-- Initialize empty accumulator
+export func emptyStreamAccumulator() -> StreamAccumulator = {
+  messageId: "",
+  model: "",
+  textSoFar: "",
+  blockCount: 0,
+  eventsReceived: 0,
+  isComplete: false
+}
+
+-- Check if a message role is valid
+export pure func isValidRole(role: string) -> bool
+  ensures { result == (role == "user" || role == "assistant") }
+{
+  role == "user" || role == "assistant"
+}

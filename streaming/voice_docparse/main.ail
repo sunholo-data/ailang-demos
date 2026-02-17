@@ -1,0 +1,214 @@
+-- Voice Document Analyst
+--
+-- Ask questions about documents using your voice. The Gemini Live API
+-- connects via WebSocket and invokes DocParse tools to analyze DOCX,
+-- PPTX, and XLSX files in real-time.
+--
+-- Demonstrates:
+--   - Gemini Live API WebSocket bidirectional streaming
+--   - Tool calling: voice agent invokes DocParse for document analysis
+--   - Composition with existing DocParse infrastructure
+--   - Browser-first: WASM + getUserMedia() for mic + Web Audio for speaker
+--
+-- Run (text mode):
+--   GEMINI_API_KEY=xxx ailang run --entry main \
+--     --caps IO,FS,Stream,Env \
+--     streaming/voice_docparse/main.ail data/sample.docx "What tables are in this document?"
+--
+-- Run (voice mode):
+--   GEMINI_API_KEY=xxx ailang run --entry main \
+--     --caps IO,FS,Stream,Env \
+--     streaming/voice_docparse/main.ail data/sample.docx
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=200      - Console output (transcription + results)
+--   FS @limit=30       - Document parsing (ZIP entries for DOCX)
+--   Stream @limit=100  - WebSocket messages (voice session)
+--   Env                - Read GEMINI_API_KEY
+
+module streaming/voice_docparse/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, StreamErrorKind, defaultConfig,
+                   Message, Binary, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/env (getEnv, getEnvOr, getArgs)
+import std/net (httpRequest)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import std/option (Some, None, getOrElse, flatMap as optFlatMap, map as optMap)
+import std/result (Ok, Err)
+import std/string (length, join, substring, intToStr, find, contains, trim,
+                   stringToInt, split, startsWith, endsWith)
+import std/list (length as listLength, map, nth, filter, flatMap, any, concat,
+                 foldl, forEachE, last)
+import std/json (encode, decode, getString, getObject, getArray, getBool,
+                 jo, kv, js, ja, jb, jnum, jn, getNumber)
+import std/fs (fileExists, readFile)
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/zip (listEntries, readEntry, readEntryBytes)
+import std/math (intToFloat)
+import streaming/voice_docparse/services/gemini_live (
+  connectGemini, sendSetup, sendTextMessage,
+  parseServerMessage, buildToolResponse
+)
+import streaming/voice_docparse/services/tool_registry (
+  getDocToolDeclarations, dispatchToolCall
+)
+import streaming/voice_docparse/types/live_types (
+  GeminiSetup, ToolDecl, ToolCall, ServerMessage,
+  SetupComplete, ToolCallMsg, TextResponse, AudioResponse,
+  TurnComplete, Interrupted, Unknown,
+  DocSession, emptyDocSession
+)
+
+export func main() -> () ! {IO @limit=200, FS @limit=30, Stream @limit=100, Net @limit=5, Env} {
+  println("=== Voice Document Analyst ===");
+  println("Parse and analyze documents using your voice.");
+  println("Budget: Stream @limit=100, FS @limit=30");
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      match getAccessToken() {
+        Ok(token) => {
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+          let args = getArgs();
+          match args {
+            [] => {
+              println("Usage: ... streaming/voice_docparse/main.ail <document> [question]");
+              println("Example: ... main.ail data/sample.docx \"What tables are in this?\"")
+            },
+            filepath :: rest => {
+              let question = if listLength(rest) > 0
+                then join(" ", rest)
+                else "";
+              startDocSession(token, region, projectId, filepath, question)
+            }
+          }
+        },
+        Err(e) => {
+          println("Error: ADC authentication failed: " ++ e);
+          println("Run: gcloud auth application-default login")
+        }
+      }
+    },
+    Err(e) => println("Error: Project detection failed: " ++ e)
+  }
+}
+
+-- Helpers to construct GeminiSetup in two stages.
+-- Works around AILANG record-type-leak bug where [ToolDecl] unifies into [string].
+func makeSetupBase(model: string, instruction: string, tools: [ToolDecl]) -> GeminiSetup = {
+  model: model,
+  systemInstruction: instruction,
+  tools: tools,
+  responseModalities: []
+}
+
+func withModalities(s: GeminiSetup, modalities: [string]) -> GeminiSetup =
+  {s | responseModalities: modalities}
+
+func startDocSession(token: string, region: string, projectId: string, filepath: string, question: string) -> () ! {IO, FS, Stream} {
+  println("Document: " ++ filepath);
+  println("");
+
+  match connectGemini(token, region) {
+    Ok(conn) => {
+      -- Configure with document analysis tools
+      let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++ "/publishers/google/models/gemini-live-2.5-flash-native-audio";
+      let base = makeSetupBase(
+        modelId,
+        "You are a document analyst assistant. You can parse and analyze " ++
+          "documents using the available tools. The user has loaded the file '" ++ filepath ++ "'. " ++
+          "When asked about the document, use parseDocument to get content, extractTables for tables, " ++
+          "extractHeadings for the outline, countContent for statistics, or searchDocument to find text. " ++
+          "Always pass the filepath '" ++ filepath ++ "' to the tools. " ++
+          "Summarize results clearly in natural language.",
+        getDocToolDeclarations()
+      );
+      let setup = withModalities(base, ["AUDIO"]);
+
+      match sendSetup(conn, setup) {
+        Ok(_) => {
+          println("Session configured. Waiting for setup confirmation...");
+
+          -- Register event handler
+          onEvent(conn, \event. handleEvent(event, conn));
+
+          -- If a question was provided, send it after setup
+          if length(question) > 0 then {
+            match sendTextMessage(conn, question) {
+              Ok(_) => println("Question: " ++ question),
+              Err(e) => println("Failed to send question: " ++ show(e))
+            }
+          }
+          else
+            println("Ready for voice input.");
+
+          println("");
+          runEventLoop(conn);
+
+          println("");
+          println("=== Session Complete ===")
+        },
+        Err(e) => println("Setup failed: " ++ show(e))
+      }
+    },
+    Err(e) => println("Connection failed: " ++ show(e))
+  }
+}
+
+func handleEvent(event: StreamEvent, conn: StreamConn) -> bool ! {IO, FS, Stream} =
+  match event {
+    Message(msg) => {
+      let serverMsg = parseServerMessage(msg);
+      match serverMsg {
+        SetupComplete => {
+          println("[Ready] Ask me about the document.");
+          true
+        },
+        ToolCallMsg(call) => {
+          println("[Tool] " ++ call.name);
+          match dispatchToolCall(call) {
+            Ok(result) => {
+              -- Truncate long results for voice
+              let truncated = if length(result) > 2000
+                then substring(result, 0, 2000) ++ "... (truncated)"
+                else result;
+              let response = buildToolResponse(call.id, truncated);
+              match transmit(conn, response) {
+                Ok(_) => true,
+                Err(_) => { println("[Error] Failed to send tool response"); true }
+              }
+            },
+            Err(e) => {
+              println("[Tool Error] " ++ e);
+              let response = buildToolResponse(call.id, "Error: " ++ e);
+              transmit(conn, response);
+              true
+            }
+          }
+        },
+        TextResponse(text) => {
+          println("[Gemini] " ++ text);
+          true
+        },
+        AudioResponse(_) => {
+          println("[Audio] Response received");
+          true
+        },
+        TurnComplete => {
+          println("");
+          true
+        },
+        Interrupted => { println("[Interrupted]"); true },
+        Unknown(_) => true
+      }
+    },
+    Opened(_) => { println("[Connected]"); true },
+    Closed(code, _) => { println("[Closed " ++ show(code) ++ "]"); false },
+    StreamError(_) => { println("[Error]"); false },
+    Binary(_) => true,
+    Ping(_) => true
+  }

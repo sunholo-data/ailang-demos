@@ -1,0 +1,18 @@
+-- Test: ADT with record payload vs ADT with simple payload
+module streaming/bug_repros/test_map_record4
+
+import std/list (map)
+
+-- ADT wrapping a record
+type RecordADT = RecordADT({name: string, val: int})
+
+-- ADT wrapping primitives
+type SimpleADT = SimpleADT(string, int)
+
+-- Test 1: FAILS - map over ADT-wrapped records with field access
+func testRecordADT(xs: [RecordADT]) -> [string] =
+  map(\r. r.name, xs)
+
+-- Test 2: map over list of the ADT but NOT accessing fields
+func testRecordADTNoAccess(xs: [RecordADT]) -> [RecordADT] =
+  map(\r. r, xs)

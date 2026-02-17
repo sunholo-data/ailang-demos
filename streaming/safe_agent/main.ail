@@ -1,0 +1,402 @@
+-- Contract-Verified Safe Agent
+--
+-- An AI agent where EVERY tool function has requires/ensures contracts.
+-- Demonstrates AILANG's unique value: formal safety guarantees for AI agents.
+--
+-- Architecture: hybrid REST + SSE streaming
+--   Step 1: REST POST to generateContent with tools (triggers tool calling)
+--   Step 2: Contract-verified tool dispatch
+--   Step 3: SSE streaming of final response (with tool results in context)
+--
+-- Contracts guarantee:
+--   - Calculator: results always in [-1000000, 1000000] (Z3-provable)
+--   - File access: no directory traversal, restricted to allowed path
+--   - SQL queries: SELECT-only, no mutations
+--   - Input clamping: prevents integer overflow
+--   - Dispatch: always returns Result, never crashes
+--
+-- Verify statically (Z3):
+--   ailang verify streaming/safe_agent/services/verified_tools.ail
+--   ailang verify streaming/safe_agent/services/safety_monitor.ail
+--
+-- Run with runtime contract checking:
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,Stream,Net,Env --verify-contracts \
+--     streaming/safe_agent/main.ail "Calculate 500 times 300"
+--
+-- Run without contracts (faster):
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,Stream,Net,Env \
+--     streaming/safe_agent/main.ail
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=100      - Console output + safety report
+--   FS @limit=10       - Safe file reads (restricted to allowed path)
+--   Stream @limit=200  - SSE events for streaming response
+--   Net @limit=10      - REST API calls + tool execution
+--   Env                - Read environment variables
+
+module streaming/safe_agent/main
+
+import std/stream (ssePost, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, SSEData,
+                   Message, Opened, Closed, StreamError, Ping)
+import std/io (println, print)
+import std/env (getEnvOr, getArgs)
+import std/net (httpRequest)
+import std/fs (readFile, fileExists)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, startsWith)
+import std/list (length as listLength, nth, map)
+import std/json (encode, decode, getString, getObject, getArray,
+                 getNumber, jo, kv, js, ja, jnum)
+import streaming/safe_agent/services/verified_tools (
+  dispatchVerifiedTool, safeCalculate, isPathSafe, isSafeQuery, clampInput
+)
+import streaming/safe_agent/services/safety_monitor (
+  recordSuccess, recordFailure, safetyReport, safetyOneLiner
+)
+import streaming/safe_agent/types/agent_types (
+  ToolDecl, ToolCall, SafetyStats, emptySafetyStats
+)
+
+-- Allowed path prefix for file operations
+func allowedPath() -> string = "/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/"
+
+export func main() -> () ! {IO @limit=100, FS @limit=10, Stream @limit=200, Net @limit=10, Env} {
+  println("=== Contract-Verified Safe Agent ===");
+  println("Every tool call is contract-verified at runtime.");
+  println("");
+  println("Contracts:");
+  println("  Calculator: result in [-1000000, 1000000]");
+  println("  File read:  path under allowed prefix, no '..' traversal");
+  println("  SQL query:  SELECT-only (no INSERT/UPDATE/DELETE/DROP)");
+  println("  Dispatch:   always returns Result (never crashes)");
+  println("");
+  println("Protocol: REST (tool turn) + SSE (streaming response)");
+  println("Budget: Stream @limit=200, FS @limit=10, Net @limit=10");
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      match getAccessToken() {
+        Ok(token) => {
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+          let args = getArgs();
+          let question = if listLength(args) > 0 then join(" ", args)
+            else "Calculate 500 times 300";
+          runSafeAgent(token, projectId, region, question)
+        },
+        Err(e) => {
+          println("Error: ADC authentication failed: " ++ e);
+          println("Run: gcloud auth application-default login")
+        }
+      }
+    },
+    Err(e) => println("Error: Project detection failed: " ++ e)
+  }
+}
+
+-- Model and URL helpers
+func model() -> string = "gemini-2.5-flash"
+
+func restUrl(projectId: string, region: string) -> string =
+  "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
+  projectId ++ "/locations/" ++ region ++
+  "/publishers/google/models/" ++ model() ++ ":generateContent"
+
+func sseUrl(projectId: string, region: string) -> string =
+  "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
+  projectId ++ "/locations/" ++ region ++
+  "/publishers/google/models/" ++ model() ++ ":streamGenerateContent?alt=sse"
+
+-- Build tool declarations as JSON for the Gemini API
+func toolDeclsJson() -> [Json] = map(toolToJson, toolDecls())
+
+func toolDecls() -> [ToolDecl] = [
+  { name: "calculate",
+    description: "Safe calculator. Inputs clamped to [-1000,1000], output guaranteed in [-1000000,1000000]. Operations: add, subtract, multiply, divide, modulo.",
+    parameters: "{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"add\",\"subtract\",\"multiply\",\"divide\",\"modulo\"]},\"a\":{\"type\":\"number\"},\"b\":{\"type\":\"number\"}},\"required\":[\"op\",\"a\",\"b\"]}" },
+  { name: "readFile",
+    description: "Read a file from the allowed directory. Path must not contain '..' and must start with the allowed prefix.",
+    parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\"}},\"required\":[\"filepath\"]}" },
+  { name: "query",
+    description: "Execute a SQL SELECT query. Only SELECT queries are allowed (no INSERT, UPDATE, DELETE, DROP).",
+    parameters: "{\"type\":\"object\",\"properties\":{\"sql\":{\"type\":\"string\"}},\"required\":[\"sql\"]}" },
+  { name: "wordCount",
+    description: "Count the number of words in a text string.",
+    parameters: "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}" }
+]
+
+func toolToJson(t: ToolDecl) -> Json =
+  match decode(t.parameters) {
+    Ok(params) => jo([
+      kv("name", js(t.name)),
+      kv("description", js(t.description)),
+      kv("parameters", params)
+    ]),
+    Err(_) => jo([
+      kv("name", js(t.name)),
+      kv("description", js(t.description))
+    ])
+  }
+
+func systemInstruction() -> string =
+  "You are a safe assistant with contract-verified tools. " ++
+  "All tool operations are validated at runtime with formal contracts. " ++
+  "The calculator clamps inputs to [-1000, 1000] and guarantees results in [-1000000, 1000000]. " ++
+  "File reads are restricted to the allowed directory with no path traversal. " ++
+  "SQL queries must be SELECT-only. " ++
+  "Use the available tools when the user asks for calculations, file operations, or data queries. " ++
+  "After using a tool, explain the result briefly."
+
+-- Main agent flow: REST for tool turn, SSE for streaming response
+func runSafeAgent(token: string, projectId: string, region: string, question: string) -> () ! {IO, FS, Stream, Net} {
+  println("");
+  println("You: " ++ question);
+  println("");
+
+  -- Step 1: REST call with tools to let model decide which tool to use
+  println("[Step 1] Asking model (with tools)...");
+  let body = buildToolRequest(question);
+  let headers = [
+    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Content-Type", value: "application/json" }
+  ];
+
+  match httpRequest("POST", restUrl(projectId, region), headers, body) {
+    Ok(response) => {
+      if response.ok then
+        handleToolResponse(response.body, token, projectId, region, question)
+      else {
+        println("[Error] API returned status " ++ show(response.status));
+        println(response.body)
+      }
+    },
+    Err(e) => println("[Error] Network error: " ++ show(e))
+  }
+}
+
+-- Build the initial request with tools and user message
+func buildToolRequest(question: string) -> string =
+  encode(jo([
+    kv("contents", ja([jo([
+      kv("role", js("user")),
+      kv("parts", ja([jo([kv("text", js(question))])]))
+    ])])),
+    kv("tools", ja([jo([
+      kv("functionDeclarations", ja(toolDeclsJson()))
+    ])])),
+    kv("systemInstruction", jo([
+      kv("parts", ja([jo([kv("text", js(systemInstruction()))])]))
+    ])),
+    kv("generationConfig", jo([
+      kv("maxOutputTokens", jnum(1024.0))
+    ]))
+  ]))
+
+-- Parse the REST response: check for function calls or direct text
+func handleToolResponse(responseBody: string, token: string, projectId: string, region: string, question: string) -> () ! {IO, FS, Stream, Net} {
+  match decode(responseBody) {
+    Ok(json) => {
+      match getArray(json, "candidates") {
+        Some(cands) => {
+          match nth(cands, 0) {
+            Some(cand) => {
+              match getObject(cand, "content") {
+                Some(content) => {
+                  match getArray(content, "parts") {
+                    Some(parts) => {
+                      match nth(parts, 0) {
+                        Some(part) => {
+                          -- Check if model wants to call a function
+                          match getObject(part, "functionCall") {
+                            Some(fc) => handleFunctionCall(fc, token, projectId, region, question),
+                            None => {
+                              -- Direct text response (no tool call)
+                              match getString(part, "text") {
+                                Some(text) => {
+                                  println("[Gemini] " ++ text);
+                                  println("");
+                                  println(safetyReport(emptySafetyStats()))
+                                },
+                                None => println("[Error] No text or functionCall in response")
+                              }
+                            }
+                          }
+                        },
+                        None => println("[Error] No parts in response")
+                      }
+                    },
+                    None => println("[Error] No parts array in response")
+                  }
+                },
+                None => println("[Error] No content in candidate")
+              }
+            },
+            None => println("[Error] No candidates in response")
+          }
+        },
+        None => println("[Error] No candidates array in response")
+      }
+    },
+    Err(e) => println("[Error] Failed to parse response: " ++ e)
+  }
+}
+
+-- Step 2: Execute the tool with contract verification
+func handleFunctionCall(fc: Json, token: string, projectId: string, region: string, question: string) -> () ! {IO, FS, Stream, Net} {
+  let name = getOrElse(getString(fc, "name"), "");
+  let args = match getObject(fc, "args") {
+    Some(a) => encode(a),
+    None => "{}"
+  };
+  println("[Tool Call] " ++ name ++ " (contract-verified)");
+
+  let toolCall: ToolCall = { id: "", name: name, args: args };
+  let stats = emptySafetyStats();
+
+  match dispatchVerifiedTool(toolCall, allowedPath()) {
+    Ok(result) => {
+      println("[Contract] PASSED");
+      println("[Result]   " ++ result);
+      let updatedStats = recordSuccess(stats);
+
+      -- Step 3: Stream the final response with tool result in context
+      println("");
+      println("[Step 3] Streaming response...");
+      println("");
+      streamWithToolResult(token, projectId, region, question, name, args, result, updatedStats)
+    },
+    Err(e) => {
+      println("[Contract] REJECTED");
+      println("[Blocked]  " ++ e);
+      let updatedStats = recordFailure(stats, e);
+
+      -- Stream response with rejection context
+      println("");
+      println("[Step 3] Streaming response (with rejection)...");
+      println("");
+      streamWithToolResult(token, projectId, region, question, name, args, "Contract violation: " ++ e, updatedStats)
+    }
+  }
+}
+
+-- Step 3: SSE streaming of final response with tool result in conversation
+func streamWithToolResult(token: string, projectId: string, region: string,
+                          question: string, toolName: string, toolArgs: string,
+                          toolResult: string, stats: SafetyStats) -> () ! {IO, Stream} {
+  let body = encode(jo([
+    kv("contents", ja([
+      -- User's original question
+      jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(question))])]))
+      ]),
+      -- Model's tool call
+      jo([
+        kv("role", js("model")),
+        kv("parts", ja([jo([
+          kv("functionCall", jo([
+            kv("name", js(toolName)),
+            kv("args", match decode(toolArgs) {
+              Ok(argsJson) => argsJson,
+              Err(_) => jo([])
+            })
+          ]))
+        ])]))
+      ]),
+      -- Tool response
+      jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([
+          kv("functionResponse", jo([
+            kv("name", js(toolName)),
+            kv("response", jo([kv("result", js(toolResult))]))
+          ]))
+        ])]))
+      ])
+    ])),
+    kv("systemInstruction", jo([
+      kv("parts", ja([jo([kv("text", js(systemInstruction()))])]))
+    ])),
+    kv("generationConfig", jo([
+      kv("maxOutputTokens", jnum(1024.0))
+    ]))
+  ]));
+
+  let config = { headers: [
+    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Content-Type", value: "application/json" }
+  ] };
+
+  match ssePost(sseUrl(projectId, region), body, config) {
+    Ok(conn) => {
+      print("Agent: ");
+
+      onEvent(conn, \event. match event {
+        SSEData(eventType, data) => {
+          match decode(data) {
+            Ok(json) => {
+              match extractText(json) {
+                Some(text) => { print(text); true },
+                None => true
+              }
+            },
+            Err(_) => true
+          }
+        },
+        Message(msg) => {
+          match decode(msg) {
+            Ok(json) => {
+              match extractText(json) {
+                Some(text) => { print(text); true },
+                None => true
+              }
+            },
+            Err(_) => true
+          }
+        },
+        Closed(_, _) => false,
+        StreamError(e) => { println("[Error] " ++ show(e)); false },
+        _ => true
+      });
+
+      runEventLoop(conn);
+      disconnect(conn);
+
+      println("");
+      println("");
+      println(safetyReport(stats));
+      println("");
+      println("=== Session Complete ===")
+    },
+    Err(e) => {
+      println("[Error] SSE connection failed: " ++ show(e));
+      println("");
+      println(safetyReport(stats))
+    }
+  }
+}
+
+-- Extract text from Gemini REST/SSE response: candidates[0].content.parts[0].text
+func extractText(json: Json) -> Option[string] =
+  match getArray(json, "candidates") {
+    Some(cands) => match nth(cands, 0) {
+      Some(cand) => match getObject(cand, "content") {
+        Some(content) => match getArray(content, "parts") {
+          Some(parts) => match nth(parts, 0) {
+            Some(part) => getString(part, "text"),
+            None => None
+          },
+          None => None
+        },
+        None => None
+      },
+      None => None
+    },
+    None => None
+  }

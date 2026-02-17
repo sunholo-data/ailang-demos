@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Streaming Demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ================================================================
+     AILANG Streaming Demos — Sunholo Design System
+     Light theme: #f6f8fa bg | #e73c17 coral | Montserrat + JetBrains Mono
+     Matches DocParse / ecommerce demos
+     ================================================================ */
+
+  :root {
+    --primary: #e73c17;
+    --primary-light: #f25d3b;
+    --primary-dark: #c43010;
+    --primary-faded: rgba(231, 60, 23, 0.08);
+
+    --charcoal: #314352;
+    --charcoal-light: #3d5468;
+
+    --indigo: #4f46e5;
+    --indigo-light: #6366f1;
+    --contract-purple: #8b5cf6;
+    --contract-purple-bg: rgba(139, 92, 246, 0.1);
+    --ai-orange: #f59e0b;
+    --ai-orange-bg: rgba(245, 158, 11, 0.1);
+
+    --bg: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-code: #0f172a;
+    --bg-input: #f1f5f9;
+    --border: #e2e8f0;
+    --border-active: #cbd5e1;
+
+    --text-primary: #1a202c;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+
+    --success: #059669;
+    --success-bg: #ecfdf5;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+
+    --teal: #0d9488;
+    --teal-bg: rgba(13, 148, 136, 0.08);
+    --blue: #2563eb;
+    --blue-bg: rgba(37, 99, 235, 0.08);
+    --emerald: #059669;
+    --purple: #7c3aed;
+    --amber: #d97706;
+    --green: #16a34a;
+    --pink: #db2777;
+
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 12px 28px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.04);
+
+    --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(231, 60, 23, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(231, 60, 23, 0.015) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* ── Header bar ── */
+  .header {
+    background: var(--charcoal);
+    color: #fff;
+    padding: 0 32px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header svg {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  .header-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+
+  .header-title .ai { color: var(--primary-light); }
+
+  .header-sep {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.15);
+    margin: 0 4px;
+  }
+
+  .header-subtitle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.3px;
+  }
+
+  .header-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .header-badge code {
+    background: rgba(255,255,255,0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* ── Page layout ── */
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 32px 48px;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+
+  .hero h1 .accent { color: var(--primary); }
+
+  .hero .subtitle {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+  }
+
+  /* Feature tags */
+  .hero-tags {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 14px;
+    border-radius: 100px;
+    border: 1px solid;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .tag--contracts {
+    color: var(--contract-purple);
+    border-color: rgba(139,92,246,0.25);
+    background: var(--contract-purple-bg);
+  }
+
+  .tag--budgets {
+    color: var(--amber);
+    border-color: rgba(217,119,6,0.25);
+    background: var(--ai-orange-bg);
+  }
+
+  .tag--effects {
+    color: var(--teal);
+    border-color: rgba(13,148,136,0.25);
+    background: var(--teal-bg);
+  }
+
+  .hero .note {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .hero .note code {
+    color: var(--primary);
+    background: var(--primary-faded);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  /* ── Card Grid ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    flex: 1;
+  }
+
+  /* ── Cards ── */
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 22px 20px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.25s ease, box-shadow 0.3s ease, border-color 0.25s ease;
+    cursor: pointer;
+
+    /* Entrance animation */
+    opacity: 0;
+    transform: translateY(18px);
+    animation: fadeInUp 0.5s ease forwards;
+  }
+
+  @keyframes fadeInUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card:nth-child(1) { animation-delay: 0.05s; }
+  .card:nth-child(2) { animation-delay: 0.10s; }
+  .card:nth-child(3) { animation-delay: 0.15s; }
+  .card:nth-child(4) { animation-delay: 0.20s; }
+  .card:nth-child(5) { animation-delay: 0.25s; }
+  .card:nth-child(6) { animation-delay: 0.30s; }
+  .card:nth-child(7) { animation-delay: 0.35s; }
+
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-active);
+  }
+
+  /* Top accent stripe — 3px colored bar */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .card--docparse::before { background: var(--blue); }
+  .card--analytics::before { background: linear-gradient(90deg, var(--emerald), var(--purple)); }
+  .card--claude::before { background: var(--amber); }
+  .card--transcription::before { background: var(--teal); }
+  .card--pipeline::before { background: linear-gradient(90deg, var(--blue), var(--purple), var(--pink)); }
+  .card--safe::before { background: var(--success); }
+  .card--live::before { background: linear-gradient(90deg, var(--amber), #e88a30); }
+
+  /* Card icon */
+  .card-icon {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    margin-bottom: 14px;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .card--docparse .card-icon { background: var(--blue-bg); color: var(--blue); }
+  .card--analytics .card-icon { background: rgba(5,150,105,0.08); color: var(--emerald); }
+  .card--claude .card-icon { background: var(--ai-orange-bg); color: var(--amber); }
+  .card--transcription .card-icon { background: var(--teal-bg); color: var(--teal); }
+  .card--pipeline .card-icon { background: var(--contract-purple-bg); color: var(--purple); }
+  .card--safe .card-icon { background: var(--success-bg); color: var(--success); }
+  .card--live .card-icon { background: var(--ai-orange-bg); color: var(--amber); }
+
+  .card-icon svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+    stroke: currentColor;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .card-name {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    letter-spacing: -0.2px;
+  }
+
+  .card-desc {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: auto;
+  }
+
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .badge-ws {
+    background: var(--success-bg);
+    color: var(--success);
+  }
+
+  .badge-sse {
+    background: var(--warning-bg);
+    color: var(--warning);
+  }
+
+  .badge-provider {
+    background: var(--bg-input);
+    color: var(--text-muted);
+  }
+
+  /* Arrow on hover */
+  .card-arrow {
+    position: absolute;
+    top: 24px;
+    right: 22px;
+    color: var(--text-muted);
+    font-size: 16px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.2s, transform 0.2s;
+    font-family: var(--font-mono);
+  }
+
+  .card:hover .card-arrow {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 40px 0 0;
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .footer-brand svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .footer-brand span {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .footer-brand .ai { color: var(--primary); }
+
+  .footer-line {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 2;
+  }
+
+  .footer-line a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-line a:hover {
+    color: var(--primary);
+  }
+
+  .footer-sep {
+    display: inline-block;
+    width: 1px;
+    height: 10px;
+    background: var(--border);
+    margin: 0 10px;
+    vertical-align: middle;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .hero h1 { font-size: 28px; }
+    .page { padding: 32px 20px 40px; }
+    .header { padding: 0 20px; }
+    .header-subtitle { display: none; }
+  }
+
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; gap: 14px; }
+    .hero h1 { font-size: 24px; }
+    .hero .subtitle { font-size: 14px; }
+    .page { padding: 24px 16px 32px; }
+    .card { padding: 20px 18px 18px; }
+    .header-badge { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header bar (matches DocParse charcoal header) -->
+<header class="header">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+    <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
+    <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
+    <circle cx="153" cy="150" r="80" fill="#e73c17"/>
+  </svg>
+  <span class="header-title"><span class="ai">AI</span>LANG</span>
+  <span class="header-sep"></span>
+  <span class="header-subtitle">Streaming Demos</span>
+  <span class="header-badge">
+    <code>std/stream</code> v0.8.1
+  </span>
+</header>
+
+<div class="page">
+  <!-- Hero -->
+  <section class="hero">
+    <h1><span class="accent">Streaming</span> Demos</h1>
+    <p class="subtitle">Bidirectional streaming with provably safe AI agents</p>
+
+    <div class="hero-tags">
+      <span class="tag tag--contracts">contracts</span>
+      <span class="tag tag--budgets">budgets</span>
+      <span class="tag tag--effects">effects</span>
+    </div>
+
+    <p class="note">
+      Browser UIs work now via native WebSocket / SSE &mdash; <code>std/stream</code> module required for CLI
+    </p>
+  </section>
+
+  <!-- Card Grid -->
+  <div class="grid">
+    <!-- 1. Voice DocParse -->
+    <a href="voice_docparse/browser/index.html" class="card card--docparse">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <path d="M12 18v-4"/>
+          <path d="M9.5 15.5a2.5 2.5 0 005 0V14a2.5 2.5 0 00-5 0"/>
+        </svg>
+      </div>
+      <div class="card-name">Voice DocParse</div>
+      <div class="card-desc">Talk to your documents via voice</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Google Gemini Live</span>
+        <span class="badge badge-ws">WebSocket</span>
+      </div>
+    </a>
+
+    <!-- 2. Voice Analytics -->
+    <a href="voice_analytics/browser/index.html" class="card card--analytics">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+          <line x1="3" y1="20" x2="21" y2="20"/>
+        </svg>
+      </div>
+      <div class="card-name">Voice Analytics</div>
+      <div class="card-desc">Query BigQuery by voice</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Google Gemini Live</span>
+        <span class="badge badge-provider">BigQuery</span>
+        <span class="badge badge-ws">WebSocket</span>
+      </div>
+    </a>
+
+    <!-- 3. Claude Chat -->
+    <a href="claude_chat/browser/index.html" class="card card--claude">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          <line x1="9" y1="9" x2="15" y2="9"/>
+          <line x1="9" y1="13" x2="13" y2="13"/>
+        </svg>
+      </div>
+      <div class="card-name">Claude Chat</div>
+      <div class="card-desc">Streaming text with SSE</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Anthropic Claude</span>
+        <span class="badge badge-sse">SSE</span>
+      </div>
+    </a>
+
+    <!-- 4. Transcription -->
+    <a href="transcription/browser/index.html" class="card card--transcription">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M2 12h2l2-6 3 12 3-8 2 4h2"/>
+          <circle cx="20" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="card-name">Transcription</div>
+      <div class="card-desc">Real-time speech to text</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Deepgram nova-2</span>
+        <span class="badge badge-ws">WebSocket</span>
+      </div>
+    </a>
+
+    <!-- 5. Voice Pipeline -->
+    <a href="voice_pipeline/browser/index.html" class="card card--pipeline">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="2.5"/>
+          <circle cx="19" cy="12" r="2.5"/>
+          <line x1="7.5" y1="12" x2="16.5" y2="12"/>
+          <polyline points="14 9 16.5 12 14 15"/>
+          <line x1="12" y1="12" x2="12" y2="6"/>
+          <circle cx="12" cy="4.5" r="1.5"/>
+        </svg>
+      </div>
+      <div class="card-name">Voice Pipeline</div>
+      <div class="card-desc">Audio &rarr; Text &rarr; Audio</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Deepgram</span>
+        <span class="badge badge-provider">ElevenLabs</span>
+        <span class="badge badge-ws">2&times; WebSocket</span>
+      </div>
+    </a>
+
+    <!-- 6. Safe Agent -->
+    <a href="safe_agent/browser/index.html" class="card card--safe">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polyline points="9 12 11 14 15 10"/>
+        </svg>
+      </div>
+      <div class="card-name">Safe Agent</div>
+      <div class="card-desc">Contract-verified AI tools</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Google Gemini Live</span>
+        <span class="badge badge-ws">WebSocket</span>
+      </div>
+    </a>
+    <!-- 7. Gemini Live -->
+    <a href="gemini_live/browser/index.html" class="card card--live">
+      <span class="card-arrow">&rarr;</span>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+          <path d="M19.07 4.93a10 10 0 010 14.14"/>
+          <path d="M15.54 8.46a5 5 0 010 7.07"/>
+        </svg>
+      </div>
+      <div class="card-name">Gemini Live</div>
+      <div class="card-desc">Text to streaming audio via WebSocket</div>
+      <div class="card-meta">
+        <span class="badge badge-provider">Google Gemini Live</span>
+        <span class="badge badge-ws">WebSocket Bidi</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="22" height="22">
+        <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
+        <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
+        <circle cx="153" cy="150" r="80" fill="#e73c17"/>
+      </svg>
+      <span><span class="ai">AI</span>LANG</span>
+    </div>
+    <div class="footer-line">
+      The AI-First Programming Language &mdash; <a href="https://ailang.dev">ailang.dev</a>
+      <span class="footer-sep"></span>
+      <a href="https://github.com/ailang-dev/ailang/issues/136">std/stream design doc</a>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

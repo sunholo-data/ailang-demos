@@ -1,0 +1,16 @@
+-- Test: does map work with records at all?
+module streaming/bug_repros/test_map_record3
+
+import std/list (map)
+
+-- Test 1: plain records (no ADT wrapper)
+func testPlainRecords(xs: [{name: string}]) -> [string] =
+  map(\r. r.name, xs)
+
+-- Test 2: map strings (should work)
+func testStrings(xs: [string]) -> [string] =
+  map(\s. s ++ "!", xs)
+
+-- Test 3: map ints
+func testInts(xs: [int]) -> [int] =
+  map(\n. n + 1, xs)

@@ -1,0 +1,80 @@
+-- Pipeline type definitions for multi-provider voice streaming
+--
+-- Models the STT → Processing → TTS pipeline stages.
+
+module streaming/voice_pipeline/types/pipeline_types
+
+-- Pipeline processing modes
+export type ProcessingMode =
+  | Echo           -- Pass transcript through unchanged
+  | Summarize      -- Summarize each utterance
+  | Translate      -- Translate to another language
+  | ExtractEntities -- Extract named entities
+
+-- Pipeline statistics
+export type PipelineStats = {
+  audioChunksSent: int,
+  transcriptsReceived: int,
+  wordsProcessed: int,
+  ttsChunksSent: int,
+  ttsAudioReceived: int,
+  errors: int
+}
+
+export func emptyPipelineStats() -> PipelineStats = {
+  audioChunksSent: 0,
+  transcriptsReceived: 0,
+  wordsProcessed: 0,
+  ttsChunksSent: 0,
+  ttsAudioReceived: 0,
+  errors: 0
+}
+
+export func recordAudioChunk(stats: PipelineStats) -> PipelineStats
+  ensures { result.audioChunksSent == stats.audioChunksSent + 1 }
+{
+  {
+    audioChunksSent: stats.audioChunksSent + 1,
+    transcriptsReceived: stats.transcriptsReceived,
+    wordsProcessed: stats.wordsProcessed,
+    ttsChunksSent: stats.ttsChunksSent,
+    ttsAudioReceived: stats.ttsAudioReceived,
+    errors: stats.errors
+  }
+}
+
+export func recordTranscript(stats: PipelineStats, wordCount: int) -> PipelineStats
+  ensures { result.transcriptsReceived == stats.transcriptsReceived + 1 }
+{
+  {
+    audioChunksSent: stats.audioChunksSent,
+    transcriptsReceived: stats.transcriptsReceived + 1,
+    wordsProcessed: stats.wordsProcessed + wordCount,
+    ttsChunksSent: stats.ttsChunksSent,
+    ttsAudioReceived: stats.ttsAudioReceived,
+    errors: stats.errors
+  }
+}
+
+export func recordTTSSent(stats: PipelineStats) -> PipelineStats
+  ensures { result.ttsChunksSent == stats.ttsChunksSent + 1 }
+{
+  {
+    audioChunksSent: stats.audioChunksSent,
+    transcriptsReceived: stats.transcriptsReceived,
+    wordsProcessed: stats.wordsProcessed,
+    ttsChunksSent: stats.ttsChunksSent + 1,
+    ttsAudioReceived: stats.ttsAudioReceived,
+    errors: stats.errors
+  }
+}
+
+-- Pipeline summary for display
+export func pipelineSummary(stats: PipelineStats) -> string {
+  "Pipeline: " ++
+  show(stats.audioChunksSent) ++ " audio chunks -> " ++
+  show(stats.transcriptsReceived) ++ " transcripts (" ++
+  show(stats.wordsProcessed) ++ " words) -> " ++
+  show(stats.ttsChunksSent) ++ " TTS requests, " ++
+  show(stats.errors) ++ " errors"
+}

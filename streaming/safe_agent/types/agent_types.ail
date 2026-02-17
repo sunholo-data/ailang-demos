@@ -1,0 +1,59 @@
+-- Type definitions for the Contract-Verified Voice Agent
+--
+-- All types used by verified tools and safety monitoring.
+
+module streaming/safe_agent/types/agent_types
+
+import std/string (length)
+
+-- Gemini Live API types (same protocol)
+export type GeminiSetup = {
+  model: string,
+  systemInstruction: string,
+  tools: [ToolDecl],
+  responseModalities: [string]
+}
+
+export type ToolDecl = {
+  name: string,
+  description: string,
+  parameters: string
+}
+
+export type ToolCall = {
+  id: string,
+  name: string,
+  args: string
+}
+
+export type ServerMessage =
+  | SetupComplete
+  | ToolCallMsg(ToolCall)
+  | TextResponse(string)
+  | AudioResponse(bytes)
+  | TurnComplete
+  | Interrupted
+  | Unknown(string)
+
+-- Safety statistics tracked across the session
+export type SafetyStats = {
+  toolCallsTotal: int,
+  toolCallsSucceeded: int,
+  toolCallsFailed: int,
+  contractsChecked: int,
+  pathRejections: int,
+  queryRejections: int,
+  divisionByZeroBlocked: int,
+  overflowsClamped: int
+}
+
+export func emptySafetyStats() -> SafetyStats = {
+  toolCallsTotal: 0,
+  toolCallsSucceeded: 0,
+  toolCallsFailed: 0,
+  contractsChecked: 0,
+  pathRejections: 0,
+  queryRejections: 0,
+  divisionByZeroBlocked: 0,
+  overflowsClamped: 0
+}

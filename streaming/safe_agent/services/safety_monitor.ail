@@ -1,0 +1,108 @@
+-- Safety monitor for the Contract-Verified Voice Agent
+--
+-- Tracks safety statistics across the session:
+-- tool calls, successes, failures, and specific rejection types.
+-- All functions have contracts for self-verification.
+
+module streaming/safe_agent/services/safety_monitor
+
+import std/string (length, startsWith)
+import streaming/safe_agent/types/agent_types (SafetyStats, emptySafetyStats)
+
+-- Record a successful tool call
+export func recordSuccess(stats: SafetyStats) -> SafetyStats
+  ensures {
+    result.toolCallsTotal == stats.toolCallsTotal + 1 &&
+    result.toolCallsSucceeded == stats.toolCallsSucceeded + 1
+  }
+{
+  {
+    toolCallsTotal: stats.toolCallsTotal + 1,
+    toolCallsSucceeded: stats.toolCallsSucceeded + 1,
+    toolCallsFailed: stats.toolCallsFailed,
+    contractsChecked: stats.contractsChecked + 1,
+    pathRejections: stats.pathRejections,
+    queryRejections: stats.queryRejections,
+    divisionByZeroBlocked: stats.divisionByZeroBlocked,
+    overflowsClamped: stats.overflowsClamped
+  }
+}
+
+-- Record a failed tool call with categorized reason
+export func recordFailure(stats: SafetyStats, reason: string) -> SafetyStats
+  ensures {
+    result.toolCallsTotal == stats.toolCallsTotal + 1 &&
+    result.toolCallsFailed == stats.toolCallsFailed + 1
+  }
+{
+  {
+    toolCallsTotal: stats.toolCallsTotal + 1,
+    toolCallsSucceeded: stats.toolCallsSucceeded,
+    toolCallsFailed: stats.toolCallsFailed + 1,
+    contractsChecked: stats.contractsChecked + 1,
+    pathRejections: if isPathRejection(reason) then stats.pathRejections + 1 else stats.pathRejections,
+    queryRejections: if isQueryRejection(reason) then stats.queryRejections + 1 else stats.queryRejections,
+    divisionByZeroBlocked: if isDivByZero(reason) then stats.divisionByZeroBlocked + 1 else stats.divisionByZeroBlocked,
+    overflowsClamped: stats.overflowsClamped
+  }
+}
+
+-- Record an overflow clamp event (input clamped to [-1000, 1000])
+export func recordClamp(stats: SafetyStats) -> SafetyStats
+  ensures { result.overflowsClamped == stats.overflowsClamped + 1 }
+{
+  {
+    toolCallsTotal: stats.toolCallsTotal,
+    toolCallsSucceeded: stats.toolCallsSucceeded,
+    toolCallsFailed: stats.toolCallsFailed,
+    contractsChecked: stats.contractsChecked,
+    pathRejections: stats.pathRejections,
+    queryRejections: stats.queryRejections,
+    divisionByZeroBlocked: stats.divisionByZeroBlocked,
+    overflowsClamped: stats.overflowsClamped + 1
+  }
+}
+
+-- Categorize rejection reasons
+pure func isPathRejection(reason: string) -> bool =
+  startsWith(reason, "Path rejected")
+
+pure func isQueryRejection(reason: string) -> bool =
+  startsWith(reason, "Rejected: only SELECT")
+
+pure func isDivByZero(reason: string) -> bool =
+  startsWith(reason, "Division by zero")
+
+-- Generate safety report string
+export func safetyReport(stats: SafetyStats) -> string
+  ensures { length(result) > 0 }
+{
+  "=== Safety Report ===" ++
+  "\nTotal tool calls:       " ++ show(stats.toolCallsTotal) ++
+  "\n  Succeeded:            " ++ show(stats.toolCallsSucceeded) ++
+  "\n  Rejected:             " ++ show(stats.toolCallsFailed) ++
+  "\nContracts checked:      " ++ show(stats.contractsChecked) ++
+  "\nPath traversal blocked: " ++ show(stats.pathRejections) ++
+  "\nUnsafe query blocked:   " ++ show(stats.queryRejections) ++
+  "\nDiv-by-zero blocked:    " ++ show(stats.divisionByZeroBlocked) ++
+  "\nOverflows clamped:      " ++ show(stats.overflowsClamped)
+}
+
+-- Compact one-line summary for voice output
+export func safetyOneLiner(stats: SafetyStats) -> string
+  ensures { length(result) > 0 }
+{
+  show(stats.toolCallsTotal) ++ " calls (" ++
+  show(stats.toolCallsSucceeded) ++ " ok, " ++
+  show(stats.toolCallsFailed) ++ " blocked: " ++
+  show(stats.pathRejections) ++ " path, " ++
+  show(stats.queryRejections) ++ " query, " ++
+  show(stats.divisionByZeroBlocked) ++ " div0)"
+}
+
+-- Check if the session is "clean" (no rejected tool calls)
+export pure func isCleanSession(stats: SafetyStats) -> bool
+  ensures { result == (stats.toolCallsFailed == 0) }
+{
+  stats.toolCallsFailed == 0
+}

@@ -1,0 +1,80 @@
+-- Response accumulator and formatting for Claude streaming responses
+--
+-- Tracks state across SSE events and provides display formatting.
+
+module streaming/claude_chat/services/response_parser
+
+import std/string (length)
+import streaming/claude_chat/types/claude_types (
+  ClaudeEvent, TextDelta, MessageStart, ContentBlockStart,
+  ContentBlockStop, MessageStop, MessageDelta, ClaudeError, UnknownEvent,
+  StreamAccumulator, emptyStreamAccumulator
+)
+
+-- Update accumulator with a new event
+-- Returns updated accumulator
+export func updateAccumulator(acc: StreamAccumulator, event: ClaudeEvent) -> StreamAccumulator
+  ensures { result.eventsReceived == acc.eventsReceived + 1 }
+{
+  let base = { messageId: acc.messageId, model: acc.model,
+               textSoFar: acc.textSoFar, blockCount: acc.blockCount,
+               eventsReceived: acc.eventsReceived + 1, isComplete: acc.isComplete };
+  match event {
+    MessageStart(info) => {
+      messageId: info.id,
+      model: info.model,
+      textSoFar: base.textSoFar,
+      blockCount: base.blockCount,
+      eventsReceived: base.eventsReceived,
+      isComplete: false
+    },
+    TextDelta(text) => {
+      messageId: base.messageId,
+      model: base.model,
+      textSoFar: acc.textSoFar ++ text,
+      blockCount: base.blockCount,
+      eventsReceived: base.eventsReceived,
+      isComplete: false
+    },
+    ContentBlockStart(_) => {
+      messageId: base.messageId,
+      model: base.model,
+      textSoFar: base.textSoFar,
+      blockCount: acc.blockCount + 1,
+      eventsReceived: base.eventsReceived,
+      isComplete: false
+    },
+    MessageStop => {
+      messageId: base.messageId,
+      model: base.model,
+      textSoFar: base.textSoFar,
+      blockCount: base.blockCount,
+      eventsReceived: base.eventsReceived,
+      isComplete: true
+    },
+    _ => base
+  }
+}
+
+-- Format the current streaming state for display
+export pure func formatStreamState(acc: StreamAccumulator) -> string
+  ensures { length(result) > 0 }
+{
+  if acc.isComplete then
+    "[Complete] " ++ show(acc.eventsReceived) ++ " events, " ++
+    show(length(acc.textSoFar)) ++ " chars, " ++
+    show(acc.blockCount) ++ " blocks"
+  else
+    "[Streaming] " ++ show(acc.eventsReceived) ++ " events, " ++
+    show(length(acc.textSoFar)) ++ " chars so far"
+}
+
+-- Get the complete response text
+export pure func getResponseText(acc: StreamAccumulator) -> string {
+  acc.textSoFar
+}
+
+-- Check if response is complete
+export pure func isComplete(acc: StreamAccumulator) -> bool {
+  acc.isComplete
+}

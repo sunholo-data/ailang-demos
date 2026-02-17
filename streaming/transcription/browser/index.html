@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Transcription</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ================================================================
+     AILANG Transcription -- Broadcast Studio Monitor
+     Dark theme with teal/cyan accent
+     ================================================================ */
+
+  :root {
+    --bg-deep: #050809;
+    --bg-primary: #0a0e11;
+    --bg-raised: #0f1317;
+    --bg-surface: #141a1f;
+    --bg-hover: #1a2128;
+    --border: #1a2530;
+    --border-active: #243444;
+    --text-primary: #dce4e8;
+    --text-secondary: #a0b0bc;
+    --text-muted: #5a7080;
+    --text-dim: #2e4050;
+    --teal: #00e5c8;
+    --teal-bright: #33ffd8;
+    --teal-glow: rgba(0, 229, 200, 0.2);
+    --teal-dim: #007a6b;
+    --teal-deep: #003d35;
+    --cyan: #00c4e5;
+    --red: #ff3b5c;
+    --red-glow: rgba(255, 59, 92, 0.25);
+    --red-dim: #660018;
+    --green: #3dd68c;
+    --green-dim: #1a3d2a;
+    --amber: #e4a010;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', monospace;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Subtle scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.025) 2px,
+      rgba(0,0,0,0.025) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ── */
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--teal);
+    text-shadow: 0 0 24px var(--teal-glow);
+  }
+
+  .logo span {
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+
+  .badge-model {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .badge-ws {
+    background: var(--teal-deep);
+    border: 1px solid #004d42;
+    color: var(--teal);
+  }
+
+  .badge-ws::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation: wsPulse 2s ease-in-out infinite;
+  }
+
+  .badge-ws.disconnected {
+    background: var(--bg-surface);
+    border-color: var(--border);
+    color: var(--text-dim);
+  }
+
+  .badge-ws.disconnected::before {
+    background: var(--text-dim);
+    box-shadow: none;
+    animation: none;
+  }
+
+  @keyframes wsPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-config {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .btn-config:hover {
+    border-color: var(--teal-dim);
+    color: var(--teal);
+  }
+
+  .btn-clear {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .btn-clear:hover {
+    border-color: var(--red-dim);
+    color: var(--red);
+  }
+
+  /* ── Config Panel ── */
+  .config-panel {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 20px;
+  }
+
+  .config-panel.open {
+    max-height: 180px;
+    padding: 14px 20px;
+  }
+
+  .config-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #0a1412;
+    border: 1px solid #0f2a24;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: var(--teal-dim);
+    line-height: 1.5;
+  }
+
+  .config-warning code {
+    background: var(--bg-surface);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 10px;
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .config-row label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 80px;
+  }
+
+  .config-input {
+    flex: 1;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .config-input:focus {
+    border-color: var(--teal-dim);
+  }
+
+  .config-input::placeholder { color: var(--text-dim); }
+
+  /* ── Main Content: Transcript + Waveform ── */
+  .main-content {
+    display: flex;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 30% 0%, rgba(0, 229, 200, 0.015) 0%, transparent 60%),
+      var(--bg-deep);
+  }
+
+  /* -- Transcript Area (left 70%) -- */
+  .transcript-area {
+    flex: 7;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    scroll-behavior: smooth;
+    border-right: 1px solid var(--border);
+  }
+
+  .transcript-area::-webkit-scrollbar { width: 5px; }
+  .transcript-area::-webkit-scrollbar-track { background: transparent; }
+  .transcript-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .transcript-area::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+  /* Welcome state */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px 20px;
+    gap: 14px;
+  }
+
+  .welcome-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: var(--teal-dim);
+    opacity: 0.7;
+  }
+
+  .welcome h2 {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: -0.2px;
+  }
+
+  .welcome p {
+    font-size: 12px;
+    max-width: 400px;
+    line-height: 1.7;
+    color: var(--text-dim);
+  }
+
+  .welcome kbd {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  /* Transcript entries */
+  .transcript-entry {
+    display: flex;
+    gap: 14px;
+    padding: 6px 0;
+    animation: entryIn 0.25s ease-out;
+  }
+
+  @keyframes entryIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .transcript-ts {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-dim);
+    padding-top: 3px;
+    font-variant-numeric: tabular-nums;
+    min-width: 56px;
+    text-align: right;
+    user-select: none;
+  }
+
+  .transcript-text {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--text-primary);
+    word-break: break-word;
+    flex: 1;
+  }
+
+  .transcript-text.final {
+    color: var(--text-primary);
+  }
+
+  /* Interim result shown at bottom */
+  .interim-line {
+    display: flex;
+    gap: 14px;
+    padding: 6px 0;
+    min-height: 28px;
+  }
+
+  .interim-line .transcript-ts {
+    color: var(--teal-dim);
+  }
+
+  .interim-line .transcript-text {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  /* Blinking cursor for interim text */
+  .interim-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--teal);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: cursorBlink 0.7s step-end infinite;
+    box-shadow: 0 0 6px var(--teal-glow);
+  }
+
+  @keyframes cursorBlink {
+    50% { opacity: 0; }
+  }
+
+  /* -- Waveform Area (right 30%) -- */
+  .waveform-area {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    gap: 16px;
+    background: var(--bg-primary);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .waveform-area::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(0, 229, 200, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .waveform-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    z-index: 1;
+  }
+
+  .waveform-label.active {
+    color: var(--teal-dim);
+  }
+
+  .waveform-canvas-wrap {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  #waveformCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .waveform-level {
+    font-size: 28px;
+    font-family: var(--font-mono);
+    font-weight: 300;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+    z-index: 1;
+    transition: color 0.15s;
+  }
+
+  .waveform-level.active {
+    color: var(--teal);
+    text-shadow: 0 0 20px var(--teal-glow);
+  }
+
+  .waveform-sublabel {
+    font-size: 9px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    z-index: 1;
+  }
+
+  /* ── Controls Bar ── */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    gap: 20px;
+  }
+
+  .mic-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid var(--border-active);
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    outline: none;
+  }
+
+  .mic-btn:hover {
+    border-color: var(--teal-dim);
+    background: var(--bg-hover);
+  }
+
+  .mic-btn:hover .mic-icon { color: var(--teal); }
+
+  /* Recording state */
+  .mic-btn.recording {
+    border-color: var(--red);
+    background: rgba(255, 59, 92, 0.08);
+    box-shadow:
+      0 0 0 0 var(--red-glow),
+      0 0 30px var(--red-glow);
+    animation: micPulse 1.8s ease-in-out infinite;
+  }
+
+  .mic-btn.recording .mic-icon { color: var(--red); }
+
+  @keyframes micPulse {
+    0% { box-shadow: 0 0 0 0 var(--red-glow), 0 0 30px var(--red-glow); }
+    50% { box-shadow: 0 0 0 14px rgba(255,59,92,0), 0 0 40px var(--red-glow); }
+    100% { box-shadow: 0 0 0 0 var(--red-glow), 0 0 30px var(--red-glow); }
+  }
+
+  /* Ring pulse behind the button when recording */
+  .mic-btn.recording::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    opacity: 0;
+    animation: ringPulse 1.8s ease-out infinite;
+  }
+
+  @keyframes ringPulse {
+    0% { transform: scale(0.95); opacity: 0.6; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
+
+  .mic-icon {
+    width: 26px;
+    height: 26px;
+    color: inherit;
+    transition: color 0.2s;
+  }
+
+  .control-status {
+    font-size: 12px;
+    font-family: var(--font-sans);
+    color: var(--text-dim);
+    min-width: 120px;
+    text-align: left;
+    transition: color 0.2s;
+  }
+
+  .control-status.live {
+    color: var(--red);
+  }
+
+  .control-status.connected {
+    color: var(--teal-dim);
+  }
+
+  /* ── Status Bar ── */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 20px;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+    font-family: var(--font-mono);
+    min-height: 26px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .statusbar-left, .statusbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .stat-label { color: var(--text-dim); }
+
+  .stat-value {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-value.active { color: var(--teal); }
+
+  .separator { color: var(--border); }
+
+  .conn-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    display: inline-block;
+    transition: all 0.3s;
+  }
+
+  .conn-dot.connected {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(61, 214, 140, 0.5);
+  }
+
+  .conn-dot.error {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red-glow);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .app { max-width: 100%; border: none; }
+    .topbar { padding: 8px 14px; }
+    .main-content { flex-direction: column; }
+    .transcript-area {
+      flex: 1;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+    .waveform-area {
+      flex: none;
+      height: 140px;
+      flex-direction: row;
+      padding: 12px 16px;
+    }
+    .controls { padding: 14px; }
+    .mic-btn { width: 60px; height: 60px; }
+    .badge-model { display: none; }
+  }
+
+  /* ── Selection color ── */
+  ::selection {
+    background: rgba(0, 229, 200, 0.2);
+    color: var(--text-primary);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">AILANG <span>/</span> Transcription</div>
+      <span class="badge badge-model">Deepgram nova-2</span>
+      <span class="badge badge-ws disconnected" id="wsBadge">WebSocket</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-clear" onclick="clearTranscripts()">clear</button>
+      <button class="btn-config" onclick="toggleConfig()" id="configBtn">config</button>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="config-panel" id="configPanel">
+    <div class="config-warning">
+      <span>i</span>
+      <span>Your Deepgram API key is stored in <code>localStorage</code> only and sent
+      directly to Deepgram via WebSocket. Get a key at
+      <code>console.deepgram.com</code>.</span>
+    </div>
+    <div class="config-row">
+      <label>API Key</label>
+      <input type="password" class="config-input" id="apiKeyInput"
+             placeholder="dg-..." autocomplete="off"
+             onchange="saveApiKey()">
+    </div>
+  </div>
+
+  <!-- Main content: Transcript + Waveform -->
+  <div class="main-content">
+    <!-- Transcript area (left 70%) -->
+    <div class="transcript-area" id="transcriptArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">&#127908;</div>
+        <h2>Real-Time Transcription</h2>
+        <p>Press the microphone button to start streaming audio
+           to Deepgram's nova-2 model. Transcripts appear here in real time.</p>
+        <p><kbd>Space</kbd> to toggle recording</p>
+      </div>
+    </div>
+
+    <!-- Waveform area (right 30%) -->
+    <div class="waveform-area">
+      <div class="waveform-label" id="waveformLabel">audio level</div>
+      <div class="waveform-canvas-wrap">
+        <canvas id="waveformCanvas"></canvas>
+      </div>
+      <div class="waveform-level" id="waveformLevel">--</div>
+      <div class="waveform-sublabel">dBFS</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <span class="control-status" id="controlStatus">Ready to record</span>
+    <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Toggle recording (Space)">
+      <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+    <span class="control-status" style="text-align: right;" id="controlDuration">00:00</span>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="stat">
+        <span class="stat-label">chunks</span>
+        <span class="stat-value" id="statChunks">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label">transcripts</span>
+        <span class="stat-value" id="statTranscripts">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label">words</span>
+        <span class="stat-value" id="statWords">0</span>
+      </div>
+    </div>
+    <div class="statusbar-right">
+      <div class="stat">
+        <span class="stat-label">latency</span>
+        <span class="stat-value" id="statLatency">--</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="conn-dot" id="connDot"></span>
+        <span class="stat-label" id="connState">disconnected</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// AILANG Transcription -- Deepgram Real-Time via WebSocket
+// ================================================================
+
+// -- State --
+let isRecording = false;
+let audioContext = null;
+let captureNode = null;
+let mediaStream = null;
+let ws = null;
+let recordingStartTime = 0;
+let durationInterval = null;
+let animFrameId = null;
+let analyser = null;
+let analyserData = null;
+
+// Waveform history ring buffer
+const WAVEFORM_BARS = 64;
+let waveformHistory = new Float32Array(WAVEFORM_BARS);
+let waveformWriteIdx = 0;
+
+// Stats
+let stats = {
+  chunksSent: 0,
+  transcriptsReceived: 0,
+  wordsDetected: 0,
+  lastResultTime: 0
+};
+
+// Transcript accumulator for session
+let sessionTranscripts = [];
+
+// ================================================================
+// Config
+// ================================================================
+function toggleConfig() {
+  const panel = document.getElementById('configPanel');
+  panel.classList.toggle('open');
+  document.getElementById('configBtn').textContent =
+    panel.classList.contains('open') ? 'close' : 'config';
+}
+
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (key) localStorage.setItem('ailang_deepgram_key', key);
+}
+
+function getApiKey() {
+  return document.getElementById('apiKeyInput').value.trim() ||
+         localStorage.getItem('ailang_deepgram_key') || '';
+}
+
+// ================================================================
+// Initialization
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ailang_deepgram_key');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+
+  initCanvas();
+  drawWaveformIdle();
+});
+
+// Space to toggle recording
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    toggleRecording();
+  }
+});
+
+// ================================================================
+// Recording Toggle
+// ================================================================
+async function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    toggleConfig();
+    document.getElementById('apiKeyInput').focus();
+    setControlStatus('Set your Deepgram API key', '');
+    return;
+  }
+
+  try {
+    setControlStatus('Requesting microphone...', '');
+
+    // Get mic access
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: { ideal: 16000 },
+        echoCancellation: true,
+        noiseSuppression: true
+      }
+    });
+
+    // Create AudioContext
+    audioContext = new AudioContext({ sampleRate: 48000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+
+    // Create analyser for waveform visualization
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.7;
+    analyserData = new Uint8Array(analyser.frequencyBinCount);
+    source.connect(analyser);
+
+    // Load audio worklet
+    await audioContext.audioWorklet.addModule('../shared/audio-worklet.js');
+
+    captureNode = new AudioWorkletNode(audioContext, 'pcm-capture', {
+      processorOptions: {
+        targetRate: 16000,
+        chunkMs: 100
+      }
+    });
+
+    source.connect(captureNode);
+
+    // Connect WebSocket to Deepgram
+    setControlStatus('Connecting to Deepgram...', '');
+    await connectWebSocket(apiKey);
+
+    // Handle PCM chunks from worklet
+    captureNode.port.onmessage = (e) => {
+      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(e.data.pcmData);
+        stats.chunksSent++;
+        updateStats();
+      }
+    };
+
+    // UI state
+    isRecording = true;
+    recordingStartTime = Date.now();
+    document.getElementById('micBtn').classList.add('recording');
+    setControlStatus('Recording...', 'live');
+    document.getElementById('waveformLabel').classList.add('active');
+
+    // Remove welcome
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.remove();
+
+    // Start duration counter
+    updateDuration();
+    durationInterval = setInterval(updateDuration, 1000);
+
+    // Start waveform animation
+    drawWaveform();
+
+  } catch (err) {
+    console.error('Failed to start recording:', err);
+    setControlStatus('Error: ' + err.message, '');
+    cleanup();
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+
+  // Stop capture node
+  if (captureNode) {
+    captureNode.port.postMessage({ command: 'stop' });
+  }
+
+  // Close WebSocket gracefully -- send empty byte to signal end
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(new ArrayBuffer(0));
+    // Give Deepgram a moment to send final results, then close
+    setTimeout(() => {
+      if (ws) {
+        ws.close(1000, 'Recording stopped');
+      }
+    }, 500);
+  }
+
+  // UI state
+  document.getElementById('micBtn').classList.remove('recording');
+  setControlStatus('Stopped', 'connected');
+  document.getElementById('waveformLabel').classList.remove('active');
+  document.getElementById('waveformLevel').classList.remove('active');
+  document.getElementById('waveformLevel').textContent = '--';
+
+  // Stop duration counter
+  if (durationInterval) {
+    clearInterval(durationInterval);
+    durationInterval = null;
+  }
+
+  // Stop animation
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+
+  // Cleanup audio
+  cleanup();
+
+  // Clear interim text
+  const interimEl = document.getElementById('interimText');
+  if (interimEl) interimEl.textContent = '';
+
+  // Draw idle waveform
+  setTimeout(drawWaveformIdle, 100);
+}
+
+function cleanup() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close().catch(() => {});
+    audioContext = null;
+  }
+  captureNode = null;
+  analyser = null;
+}
+
+// ================================================================
+// WebSocket Connection to Deepgram
+// ================================================================
+function connectWebSocket(apiKey) {
+  return new Promise((resolve, reject) => {
+    const url = 'wss://api.deepgram.com/v1/listen'
+      + '?model=nova-2'
+      + '&smart_format=true'
+      + '&encoding=linear16'
+      + '&sample_rate=16000'
+      + '&channels=1'
+      + '&interim_results=true'
+      + '&utterance_end_ms=1000'
+      + '&vad_events=true'
+      + '&punctuate=true';
+
+    ws = new WebSocket(url, ['token', apiKey]);
+
+    const timeout = setTimeout(() => {
+      reject(new Error('WebSocket connection timed out'));
+      ws.close();
+    }, 10000);
+
+    ws.onopen = () => {
+      clearTimeout(timeout);
+      setConnState('connected');
+      document.getElementById('wsBadge').classList.remove('disconnected');
+      resolve();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleDeepgramMessage(data);
+      } catch (e) {
+        console.warn('Failed to parse Deepgram message:', e);
+      }
+    };
+
+    ws.onclose = (event) => {
+      clearTimeout(timeout);
+      setConnState('disconnected');
+      document.getElementById('wsBadge').classList.add('disconnected');
+
+      if (isRecording) {
+        // Unexpected close during recording
+        setControlStatus('Connection lost', '');
+        stopRecording();
+      }
+    };
+
+    ws.onerror = (event) => {
+      clearTimeout(timeout);
+      console.error('WebSocket error:', event);
+      setConnState('error');
+      reject(new Error('WebSocket connection failed'));
+    };
+  });
+}
+
+// ================================================================
+// Deepgram Message Handling
+// ================================================================
+function handleDeepgramMessage(data) {
+  // Speech results
+  if (data.type === 'Results' && data.channel) {
+    const alt = data.channel.alternatives && data.channel.alternatives[0];
+    if (!alt) return;
+
+    const transcript = alt.transcript || '';
+    const isFinal = data.is_final;
+    const speechFinal = data.speech_final;
+
+    if (!transcript.trim()) {
+      // Empty transcript, but if speech_final, commit any pending partial
+      if (speechFinal) {
+        clearInterim();
+      }
+      return;
+    }
+
+    const now = performance.now();
+    if (stats.lastResultTime > 0) {
+      const latency = Math.round(now - stats.lastResultTime);
+      document.getElementById('statLatency').textContent = latency + 'ms';
+      document.getElementById('statLatency').classList.add('active');
+    }
+    stats.lastResultTime = now;
+
+    if (isFinal) {
+      // Final result -- add as permanent paragraph
+      stats.transcriptsReceived++;
+      const words = transcript.trim().split(/\s+/).length;
+      stats.wordsDetected += words;
+      updateStats();
+
+      addFinalTranscript(transcript);
+      clearInterim();
+    } else {
+      // Interim result -- show as gray italic
+      showInterim(transcript);
+    }
+  }
+
+  // Utterance end event
+  if (data.type === 'UtteranceEnd') {
+    clearInterim();
+  }
+
+  // Metadata
+  if (data.type === 'Metadata') {
+    // Could display request_id, model, etc.
+  }
+}
+
+// ================================================================
+// Transcript Display
+// ================================================================
+function addFinalTranscript(text) {
+  const area = document.getElementById('transcriptArea');
+  const entry = document.createElement('div');
+  entry.className = 'transcript-entry';
+
+  const elapsed = formatElapsed(Date.now() - recordingStartTime);
+
+  entry.innerHTML =
+    '<span class="transcript-ts">' + escapeHtml(elapsed) + '</span>' +
+    '<span class="transcript-text final">' + escapeHtml(text) + '</span>';
+
+  // Insert before interim line if it exists
+  const interim = document.getElementById('interimLine');
+  if (interim) {
+    area.insertBefore(entry, interim);
+  } else {
+    area.appendChild(entry);
+  }
+
+  sessionTranscripts.push({ time: elapsed, text: text });
+
+  // Auto-scroll
+  area.scrollTop = area.scrollHeight;
+}
+
+function showInterim(text) {
+  ensureInterimLine();
+  const el = document.getElementById('interimText');
+  el.textContent = text;
+
+  // Auto-scroll
+  const area = document.getElementById('transcriptArea');
+  area.scrollTop = area.scrollHeight;
+}
+
+function clearInterim() {
+  const el = document.getElementById('interimText');
+  if (el) el.textContent = '';
+}
+
+function ensureInterimLine() {
+  if (document.getElementById('interimLine')) return;
+
+  const area = document.getElementById('transcriptArea');
+  const line = document.createElement('div');
+  line.className = 'interim-line';
+  line.id = 'interimLine';
+  line.innerHTML =
+    '<span class="transcript-ts" id="interimTs"></span>' +
+    '<span class="transcript-text" id="interimText"></span>' +
+    '<span class="interim-cursor"></span>';
+  area.appendChild(line);
+}
+
+function clearTranscripts() {
+  const area = document.getElementById('transcriptArea');
+  area.innerHTML = '';
+  sessionTranscripts = [];
+  stats.transcriptsReceived = 0;
+  stats.wordsDetected = 0;
+  stats.chunksSent = 0;
+  updateStats();
+
+  if (!isRecording) {
+    // Restore welcome
+    area.innerHTML =
+      '<div class="welcome" id="welcome">' +
+        '<div class="welcome-icon">&#127908;</div>' +
+        '<h2>Real-Time Transcription</h2>' +
+        '<p>Press the microphone button to start streaming audio ' +
+           'to Deepgram\'s nova-2 model. Transcripts appear here in real time.</p>' +
+        '<p><kbd>Space</kbd> to toggle recording</p>' +
+      '</div>';
+  }
+}
+
+// ================================================================
+// Waveform Visualization
+// ================================================================
+let canvasCtx = null;
+let canvasW = 0;
+let canvasH = 0;
+
+function initCanvas() {
+  const canvas = document.getElementById('waveformCanvas');
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+
+  function resize() {
+    const rect = wrap.getBoundingClientRect();
+    canvasW = rect.width;
+    canvasH = rect.height;
+    canvas.width = canvasW * dpr;
+    canvas.height = canvasH * dpr;
+    canvas.style.width = canvasW + 'px';
+    canvas.style.height = canvasH + 'px';
+    canvasCtx = canvas.getContext('2d');
+    canvasCtx.scale(dpr, dpr);
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+}
+
+function drawWaveform() {
+  if (!isRecording) return;
+
+  if (analyser && analyserData) {
+    analyser.getByteFrequencyData(analyserData);
+
+    // Compute RMS level for dBFS display
+    let sum = 0;
+    for (let i = 0; i < analyserData.length; i++) {
+      const v = analyserData[i] / 255;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / analyserData.length);
+    const dbfs = rms > 0 ? Math.round(20 * Math.log10(rms)) : -60;
+
+    const levelEl = document.getElementById('waveformLevel');
+    levelEl.textContent = dbfs;
+    levelEl.classList.toggle('active', rms > 0.05);
+
+    // Push to history
+    waveformHistory[waveformWriteIdx % WAVEFORM_BARS] = rms;
+    waveformWriteIdx++;
+  }
+
+  drawWaveformBars(true);
+  animFrameId = requestAnimationFrame(drawWaveform);
+}
+
+function drawWaveformBars(live) {
+  if (!canvasCtx) return;
+  const ctx = canvasCtx;
+  const w = canvasW;
+  const h = canvasH;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const barCount = WAVEFORM_BARS;
+  const gap = 2;
+  const barWidth = Math.max(1, (w - gap * (barCount - 1)) / barCount);
+  const maxBarH = h * 0.85;
+  const centerY = h / 2;
+
+  for (let i = 0; i < barCount; i++) {
+    // Read from ring buffer in order
+    const idx = (waveformWriteIdx - barCount + i + WAVEFORM_BARS * 2) % WAVEFORM_BARS;
+    let level = waveformHistory[idx] || 0;
+
+    // Apply some smoothing/scaling
+    level = Math.pow(level, 0.6) * 1.8;
+    level = Math.min(level, 1.0);
+
+    const barH = Math.max(2, level * maxBarH);
+    const x = i * (barWidth + gap);
+
+    // Gradient: teal at peak, darker at base
+    const alpha = live ? (0.3 + level * 0.7) : 0.1;
+    const r = 0;
+    const g = live ? Math.round(180 + level * 49) : 100;
+    const b = live ? Math.round(160 + level * 40) : 80;
+
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+
+    // Draw mirrored bars (up and down from center)
+    const halfBar = barH / 2;
+    ctx.fillRect(x, centerY - halfBar, barWidth, halfBar);
+    ctx.fillRect(x, centerY, barWidth, halfBar);
+
+    // Bright cap line at peaks
+    if (live && level > 0.15) {
+      ctx.fillStyle = 'rgba(0, 229, 200, ' + (level * 0.8) + ')';
+      ctx.fillRect(x, centerY - halfBar, barWidth, 1.5);
+      ctx.fillRect(x, centerY + halfBar - 1.5, barWidth, 1.5);
+    }
+  }
+
+  // Center line
+  ctx.fillStyle = live ? 'rgba(0, 229, 200, 0.15)' : 'rgba(90, 112, 128, 0.08)';
+  ctx.fillRect(0, centerY - 0.5, w, 1);
+}
+
+function drawWaveformIdle() {
+  waveformHistory.fill(0);
+  waveformWriteIdx = 0;
+  drawWaveformBars(false);
+}
+
+// ================================================================
+// UI Helpers
+// ================================================================
+function setControlStatus(text, state) {
+  const el = document.getElementById('controlStatus');
+  el.textContent = text;
+  el.className = 'control-status';
+  if (state) el.classList.add(state);
+}
+
+function setConnState(state) {
+  const dot = document.getElementById('connDot');
+  const label = document.getElementById('connState');
+  dot.className = 'conn-dot';
+  if (state === 'connected') {
+    dot.classList.add('connected');
+    label.textContent = 'connected';
+  } else if (state === 'error') {
+    dot.classList.add('error');
+    label.textContent = 'error';
+  } else {
+    label.textContent = 'disconnected';
+  }
+}
+
+function updateStats() {
+  document.getElementById('statChunks').textContent = stats.chunksSent;
+  document.getElementById('statChunks').classList.toggle('active', isRecording);
+  document.getElementById('statTranscripts').textContent = stats.transcriptsReceived;
+  document.getElementById('statTranscripts').classList.toggle('active', isRecording);
+  document.getElementById('statWords').textContent = stats.wordsDetected;
+  document.getElementById('statWords').classList.toggle('active', isRecording);
+}
+
+function updateDuration() {
+  if (!isRecording) return;
+  const elapsed = Date.now() - recordingStartTime;
+  document.getElementById('controlDuration').textContent = formatDuration(elapsed);
+}
+
+function formatDuration(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function formatElapsed(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+
+<script src="../shared/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+-- Type definitions for Gemini Live API streaming and voice analytics
+--
+-- Shared ADTs for Gemini Live WebSocket protocol messages
+-- and analytics-specific tool types.
+
+module streaming/voice_analytics/types/analytics_types
+
+import std/string (length)
+
+-- Gemini Live API setup configuration
+export type GeminiSetup = {
+  model: string,
+  systemInstruction: string,
+  tools: [ToolDecl],
+  responseModalities: [string]
+}
+
+-- Tool declaration for Gemini function calling
+export type ToolDecl = {
+  name: string,
+  description: string,
+  parameters: string
+}
+
+-- Tool call from Gemini (server → client)
+export type ToolCall = {
+  id: string,
+  name: string,
+  args: string
+}
+
+-- Parsed server message variants
+export type ServerMessage =
+  | SetupComplete
+  | ToolCallMsg(ToolCall)
+  | TextResponse(string)
+  | AudioResponse(string)
+  | TurnComplete
+  | Interrupted
+  | Unknown(string)
+
+-- Voice session state
+export type SessionState = {
+  isReady: bool,
+  toolCallsHandled: int,
+  messagesReceived: int,
+  queriesExecuted: int
+}
+
+-- Initialize empty session state
+export func emptySessionState() -> SessionState = {
+  isReady: false,
+  toolCallsHandled: 0,
+  messagesReceived: 0,
+  queriesExecuted: 0
+}
+
+-- Record a tool call
+export func recordToolCall(state: SessionState) -> SessionState
+  ensures { result.toolCallsHandled == state.toolCallsHandled + 1 }
+{
+  {
+    isReady: state.isReady,
+    toolCallsHandled: state.toolCallsHandled + 1,
+    messagesReceived: state.messagesReceived,
+    queriesExecuted: state.queriesExecuted
+  }
+}
+
+-- Record a query execution
+export func recordQuery(state: SessionState) -> SessionState
+  ensures { result.queriesExecuted == state.queriesExecuted + 1 }
+{
+  {
+    isReady: state.isReady,
+    toolCallsHandled: state.toolCallsHandled,
+    messagesReceived: state.messagesReceived,
+    queriesExecuted: state.queriesExecuted + 1
+  }
+}

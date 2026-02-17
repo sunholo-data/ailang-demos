@@ -1,0 +1,248 @@
+-- Gemini Live API — Text-to-Audio Demo
+--
+-- Connects to the Gemini Live API via WebSocket and sends text input.
+-- The model responds with streaming audio (PCM 24kHz, 16-bit, mono).
+-- Demonstrates the full bidirectional WebSocket path in std/stream.
+--
+-- The native audio model (gemini-live-2.5-flash-native-audio) accepts
+-- text OR audio input but ONLY outputs audio — making this the canonical
+-- bidi streaming demo for AILANG.
+--
+-- Run:
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,Stream,Net,Env \
+--     streaming/gemini_live/main.ail "Tell me a joke about programming"
+--
+-- For full audio playback, use the browser UI:
+--   open streaming/gemini_live/browser/index.html
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=50       - Console output (audio frame logging)
+--   FS @limit=5        - Auth config reads
+--   Stream @limit=100  - WebSocket messages (audio frames)
+--   Net @limit=5       - Auth
+--   Env                - Read environment variables
+
+module streaming/gemini_live/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent,
+                   Message, Binary, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/env (getEnvOr, getArgs)
+import std/fs (readFile, fileExists)
+import std/net (httpRequest)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, intToStr)
+import std/list (length as listLength, map)
+import std/json (encode, decode, getString, getObject, getArray, getBool,
+                 jo, kv, js, ja, jb)
+
+export func main() -> () ! {IO @limit=200, FS @limit=5, Stream @limit=500, Net @limit=5, Env} {
+  println("=== Gemini Live — Text to Audio ===");
+  println("Protocol: WebSocket (bidirectional)");
+  println("Model: gemini-live-2.5-flash-native-audio");
+  println("Input: text | Output: audio (PCM 24kHz)");
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      match getAccessToken() {
+        Ok(token) => {
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+          let args = getArgs();
+          let prompt = if listLength(args) > 0 then join(" ", args)
+            else "Hello! Tell me a short joke.";
+          startLiveSession(token, region, projectId, prompt)
+        },
+        Err(e) => {
+          println("Error: ADC authentication failed: " ++ e);
+          println("Run: gcloud auth application-default login")
+        }
+      }
+    },
+    Err(e) => println("Error: Project detection failed: " ++ e)
+  }
+}
+
+func geminiLiveUrl(region: string) -> string =
+  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+
+func startLiveSession(token: string, region: string, projectId: string, prompt: string) -> () ! {IO, Stream} {
+  let url = geminiLiveUrl(region);
+  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+
+  match connect(url, config) {
+    Ok(conn) => {
+      println("[Connected] " ++ url);
+
+      -- Build and send setup
+      let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
+                    "/publishers/google/models/gemini-live-2.5-flash-native-audio";
+      let setupMsg = encode(jo([
+        kv("setup", jo([
+          kv("model", js(modelId)),
+          kv("generationConfig", jo([
+            kv("responseModalities", ja([js("AUDIO")]))
+          ])),
+          kv("systemInstruction", jo([
+            kv("parts", ja([jo([kv("text", js("You are a friendly assistant. Keep responses short and conversational."))])]))
+          ]))
+        ]))
+      ]));
+
+      -- Register event handler
+      onEvent(conn, \event. handleEvent(event, conn, prompt));
+
+      -- Send setup
+      match transmit(conn, setupMsg) {
+        Ok(_) => println("[Setup] Sent (model: gemini-live-2.5-flash-native-audio, modality: AUDIO)"),
+        Err(e) => println("[Error] Setup failed: " ++ show(e))
+      };
+
+      -- Run event loop
+      println("");
+      runEventLoop(conn);
+      disconnect(conn);
+
+      println("");
+      println("=== Session Complete ===")
+    },
+    Err(e) => println("[Error] Connection failed: " ++ show(e))
+  }
+}
+
+-- Track state: whether setup is complete and whether prompt has been sent
+-- Since AILANG is functional, we use the setupComplete message as the trigger
+-- to send the text prompt.
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string) -> bool ! {IO, Stream} =
+  match event {
+    Message(msg) => {
+      match decode(msg) {
+        Ok(json) => {
+          -- Check for setupComplete
+          match getObject(json, "setupComplete") {
+            Some(_) => {
+              println("[Setup Complete]");
+              println("[Sending] " ++ prompt);
+              println("");
+              -- Send the text prompt
+              let textMsg = encode(jo([
+                kv("clientContent", jo([
+                  kv("turns", ja([jo([
+                    kv("role", js("user")),
+                    kv("parts", ja([jo([kv("text", js(prompt))])]))
+                  ])])),
+                  kv("turnComplete", jb(true))
+                ]))
+              ]));
+              match transmit(conn, textMsg) {
+                Ok(_) => true,
+                Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
+              }
+            },
+            None => {
+              -- Check for serverContent (turnComplete, audio, text)
+              match getObject(json, "serverContent") {
+                Some(sc) => {
+                  match getBool(sc, "turnComplete") {
+                    Some(true) => {
+                      println("");
+                      println("[Turn Complete] Audio response finished.");
+                      false  -- stop event loop
+                    },
+                    _ => {
+                      -- Model turn with audio/text parts
+                      match getObject(sc, "modelTurn") {
+                        Some(turn) => {
+                          match getArray(turn, "parts") {
+                            Some(parts) => {
+                              -- Log each part (audio will be inlineData)
+                              true
+                            },
+                            None => true
+                          }
+                        },
+                        None => true
+                      }
+                    }
+                  }
+                },
+                None => {
+                  -- Unknown message type
+                  println("[MSG] " ++ msg);
+                  true
+                }
+              }
+            }
+          }
+        },
+        Err(_) => true
+      }
+    },
+    Binary(data) => {
+      -- Could be audio PCM or JSON (some APIs send all as binary)
+      let dataLen = length(data);
+      -- Try to parse as JSON first (setupComplete might come as binary)
+      match decode(data) {
+        Ok(json) => {
+          match getObject(json, "setupComplete") {
+            Some(_) => {
+              println("[Setup Complete] (via binary frame)");
+              println("[Sending] " ++ prompt);
+              println("");
+              let textMsg = encode(jo([
+                kv("clientContent", jo([
+                  kv("turns", ja([jo([
+                    kv("role", js("user")),
+                    kv("parts", ja([jo([kv("text", js(prompt))])]))
+                  ])])),
+                  kv("turnComplete", jb(true))
+                ]))
+              ]));
+              match transmit(conn, textMsg) {
+                Ok(_) => true,
+                Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
+              }
+            },
+            None => {
+              match getObject(json, "serverContent") {
+                Some(sc) => {
+                  match getBool(sc, "turnComplete") {
+                    Some(true) => {
+                      println("[Turn Complete] Audio response finished.");
+                      false
+                    },
+                    _ => {
+                      -- Audio data arrives as JSON with inlineData containing base64 PCM
+                      println("[Audio] " ++ intToStr(dataLen) ++ " bytes (PCM 24kHz base64)");
+                      true
+                    }
+                  }
+                },
+                None => { println("[Binary] " ++ intToStr(dataLen) ++ " bytes"); true }
+              }
+            }
+          }
+        },
+        Err(_) => {
+          -- Raw audio data
+          println("[Audio] " ++ intToStr(dataLen) ++ " bytes (PCM 24kHz)");
+          true
+        }
+      }
+    },
+    Opened(_) => true,
+    Closed(code, reason) => {
+      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      false
+    },
+    StreamError(e) => {
+      println("[Error] " ++ show(e));
+      false
+    },
+    Ping(_) => true
+  }

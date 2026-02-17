@@ -1,0 +1,57 @@
+-- Workaround test for Bug 6 (attempt 4): compute Option, then convert to Result
+module streaming/bug_repros/test_workaround6d
+
+import std/option (Some, None)
+import std/result (Ok, Err)
+
+func clamp(x: int) -> int {
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+func opCode(op: string) -> int =
+  match op {
+    "add" => 1,
+    "subtract" => 2,
+    "multiply" => 3,
+    "divide" => 4,
+    "modulo" => 5,
+    _ => 0
+  }
+
+-- Pure arithmetic: Option[int] (no string mixing)
+func doCalc(code: int, ca: int, cb: int) -> Option[int] {
+  if code == 1 then Some(ca + cb)
+  else if code == 2 then Some(ca - cb)
+  else if code == 3 then Some(ca * cb)
+  else if code == 4 then {
+    if cb == 0 then None else Some(ca / cb)
+  }
+  else if code == 5 then {
+    if cb == 0 then None else Some(ca - (ca / cb) * cb)
+  }
+  else None
+}
+
+-- Convert Option to Result (the type mismatch is in its own function)
+func optionToResult(opt: Option[int], errMsg: string) -> Result[int, string] =
+  match opt {
+    Some(n) => Ok(n),
+    None => Err(errMsg)
+  }
+
+-- Main function: compose the two
+export func safeCalculate(op: string, a: int, b: int) -> Result[int, string]
+  ensures {
+    match result {
+      Ok(n) => n >= -1000000 && n <= 1000000,
+      Err(_) => true
+    }
+  }
+{
+  let ca = clamp(a);
+  let cb = clamp(b);
+  let code = opCode(op);
+  optionToResult(doCalc(code, ca, cb), "Unknown operation or error: " ++ op)
+}

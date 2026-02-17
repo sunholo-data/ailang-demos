@@ -1,0 +1,41 @@
+-- Transcript type definitions for real-time speech-to-text streaming
+--
+-- Used by: transcription/services/deepgram.ail
+--          transcription/services/transcript_formatter.ail
+
+module streaming/transcription/types/transcript_types
+
+-- A single transcript result from Deepgram
+-- isFinal distinguishes interim (partial) from final (committed) results
+export type TranscriptResult = {
+  transcript: string,
+  confidence: float,
+  isFinal: bool,
+  words: [WordTiming]
+}
+
+-- Per-word timing information from Deepgram's response
+export type WordTiming = {
+  word: string,
+  start: float,
+  end: float,
+  confidence: float
+}
+
+-- Accumulates transcript state across multiple events
+export type TranscriptAccumulator = {
+  finalText: string,
+  interimText: string,
+  wordCount: int,
+  chunksSent: int,
+  transcriptsReceived: int
+}
+
+-- Initialize a fresh accumulator
+export func emptyAccumulator() -> TranscriptAccumulator = {
+  finalText: "",
+  interimText: "",
+  wordCount: 0,
+  chunksSent: 0,
+  transcriptsReceived: 0
+}

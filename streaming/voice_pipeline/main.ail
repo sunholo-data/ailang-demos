@@ -1,0 +1,217 @@
+-- Multi-Provider Voice Pipeline
+--
+-- Audio in → Deepgram STT → AILANG processing → ElevenLabs TTS → Audio out
+--
+-- Demonstrates:
+--   - Two concurrent WebSocket connections (STT + TTS)
+--   - Binary audio streaming (PCM via Bin(bytes))
+--   - Pipeline pattern: output of one stream feeds input of another
+--   - Budget limits across the entire pipeline
+--   - Pluggable text processing (echo, summarize, translate, extract)
+--
+-- Run:
+--   DEEPGRAM_API_KEY=xxx ELEVENLABS_API_KEY=yyy ailang run --entry main \
+--     --caps IO,FS,Stream,Env \
+--     streaming/voice_pipeline/main.ail data/sample.wav
+--
+-- Run (echo mode, just STT → TTS passthrough):
+--   DEEPGRAM_API_KEY=xxx ELEVENLABS_API_KEY=yyy ailang run --entry main \
+--     --caps IO,FS,Stream,Env \
+--     streaming/voice_pipeline/main.ail data/sample.wav echo
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=300       - Output for all pipeline stages
+--   FS @limit=5         - Read audio file
+--   Stream @limit=2000  - Two WebSocket connections x many chunks
+--   Env                 - Read API keys
+
+module streaming/voice_pipeline/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, StreamErrorKind, defaultConfig,
+                   Message, Binary, Opened, Closed, StreamError, Ping, SSEData)
+import std/io (println)
+import std/env (getEnv, getArgs)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, substring, split, join, toUpper)
+import std/fs (readFileBytes)
+import std/list (length as listLength, nth, map, filter)
+import std/json (decode, encode, getString, getObject, getArray, getNumber, getBool,
+                 jo, kv, js, ja, jb, jnum, Json)
+import streaming/voice_pipeline/services/deepgram_stt (
+  connectSTT, sendAudio, sendClose, extractTranscript
+)
+import streaming/voice_pipeline/services/elevenlabs_tts (
+  connectTTS, sendBOS, sendTextChunk, sendEOS, parseTTSResponse,
+  defaultVoiceId
+)
+import streaming/voice_pipeline/services/text_processor (processText)
+import streaming/voice_pipeline/types/pipeline_types (
+  ProcessingMode, Echo, Summarize, Translate, ExtractEntities,
+  PipelineStats, emptyPipelineStats, pipelineSummary
+)
+
+export func main() -> () ! {IO @limit=300, FS @limit=5, Stream @limit=2000, Env} {
+  println("=== Multi-Provider Voice Pipeline ===");
+  println("Pipeline: Audio -> Deepgram STT -> Processing -> ElevenLabs TTS -> Audio");
+  println("Budget: Stream @limit=2000 (two WebSocket connections)");
+  println("");
+
+  let args = getArgs();
+  let filepath = match args {
+    [] => "",
+    f :: _ => f
+  };
+  let mode = parseMode(args);
+
+  println("Processing mode: " ++ modeToString(mode));
+  println("");
+
+  match getEnv("DEEPGRAM_API_KEY") {
+    Ok(dgKey) => {
+      match getEnv("ELEVENLABS_API_KEY") {
+        Ok(elKey) => runPipeline(dgKey, elKey, filepath, mode),
+        Err(_) => println("Error: ELEVENLABS_API_KEY not set")
+      }
+    },
+    Err(_) => println("Error: DEEPGRAM_API_KEY not set")
+  }
+}
+
+func runPipeline(dgKey: string, elKey: string, filepath: string, mode: ProcessingMode) -> () ! {IO, FS, Stream} {
+  -- Step 1: Connect STT (Deepgram)
+  println("[1/3] Connecting to Deepgram STT...");
+  match connectSTT(dgKey) {
+    Ok(sttConn) => {
+      println("      STT connected");
+
+      -- Step 2: Connect TTS (ElevenLabs)
+      println("[2/3] Connecting to ElevenLabs TTS...");
+      match connectTTS(elKey, defaultVoiceId()) {
+        Ok(ttsConn) => {
+          println("      TTS connected");
+
+          -- Initialize TTS with BOS
+          match sendBOS(ttsConn, elKey) {
+            Ok(_) => {
+              println("[3/3] Pipeline ready");
+              println("");
+
+              -- Stream audio file if provided
+              if length(filepath) > 0 then
+                streamFile(sttConn, filepath)
+              else
+                println("No audio file — waiting for streamed input");
+
+              -- Register STT event handler that forwards to TTS
+              onEvent(sttConn, \event.
+                handleSTTEvent(event, ttsConn, mode)
+              );
+
+              -- Run STT event loop
+              runEventLoop(sttConn);
+
+              -- Cleanup
+              sendEOS(ttsConn);
+              disconnect(ttsConn);
+              disconnect(sttConn);
+
+              println("");
+              println("=== Pipeline Complete ===")
+            },
+            Err(e) => {
+              println("TTS init failed: " ++ show(e));
+              disconnect(ttsConn);
+              disconnect(sttConn)
+            }
+          }
+        },
+        Err(e) => {
+          println("TTS connection failed: " ++ show(e));
+          disconnect(sttConn)
+        }
+      }
+    },
+    Err(e) => println("STT connection failed: " ++ show(e))
+  }
+}
+
+-- Handle STT events: when we get a final transcript, process and forward to TTS
+func handleSTTEvent(event: StreamEvent, ttsConn: StreamConn, mode: ProcessingMode) -> bool ! {IO, Stream} =
+  match event {
+    Message(msg) => handleSTTMessage(msg, ttsConn, mode),
+    Opened(_) => { println("[STT] Stream opened"); true },
+    Closed(code, _) => { println("[STT] Stream closed (" ++ show(code) ++ ")"); false },
+    StreamError(_) => { println("[STT] Error"); false },
+    Binary(_) => true,
+    Ping(_) => true,
+    SSEData(_, _) => true
+  }
+
+func handleSTTMessage(msg: string, ttsConn: StreamConn, mode: ProcessingMode) -> bool ! {IO, Stream} {
+  match extractTranscript(msg) {
+    Ok(tr) => {
+      if tr.isFinal && length(tr.text) > 0 then
+        forwardToTTS(tr.text, ttsConn, mode)
+      else {
+        if length(tr.text) > 0 then
+          println("[STT ...] " ++ tr.text)
+        else ();
+        true
+      }
+    },
+    Err(_) => true
+  }
+}
+
+func forwardToTTS(text: string, ttsConn: StreamConn, mode: ProcessingMode) -> bool ! {IO, Stream} {
+  println("[STT]     " ++ text);
+  let processed = processText(text, mode);
+  println("[Process] " ++ processed);
+  match sendTextChunk(ttsConn, processed) {
+    Ok(_) => { println("[TTS]     Sent for synthesis"); true },
+    Err(e) => { println("[TTS]     Error: " ++ show(e)); true }
+  }
+}
+
+-- Stream audio file to STT
+func streamFile(sttConn: StreamConn, filepath: string) -> () ! {FS, Stream, IO} {
+  match readFileBytes(filepath) {
+    Ok(data) => {
+      println("Streaming " ++ show(length(data)) ++ " bytes from " ++ filepath);
+      streamChunks(sttConn, data, 44, 3200);
+      sendClose(sttConn)
+    },
+    Err(e) => println("Error reading file: " ++ e)
+  }
+}
+
+func streamChunks(conn: StreamConn, data: string, offset: int, chunkSize: int) -> () ! {Stream} {
+  if offset >= length(data) then ()
+  else {
+    let chunk = substring(data, offset, chunkSize);
+    match sendAudio(conn, chunk) {
+      Ok(_) => streamChunks(conn, data, offset + chunkSize, chunkSize),
+      Err(_) => ()
+    }
+  }
+}
+
+-- Parse processing mode from CLI args
+func parseMode(args: [string]) -> ProcessingMode {
+  match args {
+    _ :: "summarize" :: _ => Summarize,
+    _ :: "translate" :: _ => Translate,
+    _ :: "extract" :: _ => ExtractEntities,
+    _ => Echo
+  }
+}
+
+func modeToString(mode: ProcessingMode) -> string =
+  match mode {
+    Echo => "echo (passthrough)",
+    Summarize => "summarize",
+    Translate => "translate",
+    ExtractEntities => "extract entities"
+  }

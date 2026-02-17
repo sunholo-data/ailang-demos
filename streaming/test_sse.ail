@@ -1,0 +1,150 @@
+-- Minimal SSE streaming test
+--
+-- Tests std/stream ssePost against Gemini REST streaming API.
+-- Uses ADC for authentication (no API key needed).
+--
+-- Run:
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,Stream,Net,Env \
+--     streaming/test_sse.ail "What is 2+2?"
+
+module streaming/test_sse
+
+import std/stream (ssePost, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, SSEData,
+                   Message, Opened, Closed, StreamError, Ping)
+import std/io (println, print)
+import std/env (getEnvOr, getArgs)
+import std/json (encode, decode, getString, getObject, getArray, getNumber,
+                 jo, kv, js, ja, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join)
+import std/list (map, nth, length as listLength)
+import std/fs (readFile, fileExists)
+import std/net (httpRequest)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+
+export func main() -> () ! {IO @limit=100, Stream @limit=200, Net @limit=5, Env} {
+  println("=== Gemini SSE Streaming Test ===");
+  println("Protocol: SSE (POST with ?alt=sse)");
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      match getAccessToken() {
+        Ok(token) => {
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          let args = getArgs();
+          let prompt = if listLength(args) > 0 then join(" ", args)
+            else "What is 2+2? Reply in one sentence.";
+          println("Project: " ++ projectId ++ " | Region: " ++ region);
+          println("Prompt: " ++ prompt);
+          println("");
+          streamGemini(token, projectId, region, prompt)
+        },
+        Err(e) => println("Auth failed: " ++ e)
+      }
+    },
+    Err(e) => println("Project detection failed: " ++ e)
+  }
+}
+
+func streamGemini(token: string, projectId: string, region: string, prompt: string) -> () ! {IO, Stream} {
+  let model = "gemini-2.5-flash";
+  let url = "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
+            projectId ++ "/locations/" ++ region ++
+            "/publishers/google/models/" ++ model ++
+            ":streamGenerateContent?alt=sse";
+
+  let body = encode(jo([
+    kv("contents", ja([jo([
+      kv("role", js("user")),
+      kv("parts", ja([jo([kv("text", js(prompt))])]))
+    ])])),
+    kv("generationConfig", jo([
+      kv("maxOutputTokens", jnum(200.0))
+    ]))
+  ]));
+
+  let config = { headers: [
+    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Content-Type", value: "application/json" }
+  ] };
+
+  println("[SSE] Connecting to " ++ model ++ "...");
+
+  match ssePost(url, body, config) {
+    Ok(conn) => {
+      println("[SSE] Connected. Streaming:");
+      println("");
+
+      onEvent(conn, \event. match event {
+        SSEData(eventType, data) => {
+          -- Gemini SSE data is JSON with candidates[0].content.parts[0].text
+          match decode(data) {
+            Ok(json) => {
+              match getArray(json, "candidates") {
+                Some(cands) => {
+                  match nth(cands, 0) {
+                    Some(cand) => {
+                      match getObject(cand, "content") {
+                        Some(content) => {
+                          match getArray(content, "parts") {
+                            Some(parts) => {
+                              match nth(parts, 0) {
+                                Some(part) => {
+                                  match getString(part, "text") {
+                                    Some(text) => { print(text); true },
+                                    None => true
+                                  }
+                                },
+                                None => true
+                              }
+                            },
+                            None => true
+                          }
+                        },
+                        None => true
+                      }
+                    },
+                    None => true
+                  }
+                },
+                None => {
+                  -- Could be usage metadata or other non-candidate data
+                  true
+                }
+              }
+            },
+            Err(_) => { println("[RAW] " ++ data); true }
+          }
+        },
+        Message(msg) => {
+          -- Fallback: might get Message instead of SSEData
+          println("[MSG] " ++ msg);
+          true
+        },
+        Closed(code, _) => {
+          println("");
+          println("[Closed " ++ show(code) ++ "]");
+          false
+        },
+        StreamError(e) => {
+          println("[Error] " ++ show(e));
+          false
+        },
+        Opened(_) => true,
+        Ping(_) => true
+      });
+
+      runEventLoop(conn);
+      disconnect(conn);
+
+      println("");
+      println("");
+      println("=== Stream Complete ===")
+    },
+    Err(e) => println("[Error] Connection failed: " ++ show(e))
+  }
+}

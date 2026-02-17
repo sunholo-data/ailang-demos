@@ -1,0 +1,32 @@
+-- Workaround test for Bug 4: extract inner match to separate function
+module streaming/bug_repros/test_workaround4
+
+import std/json (decode, getString, getNumber, getObject, Json)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+
+type MyRecord = {name: string, count: int}
+
+-- Helper: extract from object (own function scope avoids type leak)
+func extractFromObject(obj: Json) -> Result[MyRecord, string] {
+  let name = getOrElse(getString(obj, "name"), "");
+  let count = match getNumber(obj, "count") {
+    Some(n) => floatToInt(n),
+    None => 0
+  };
+  let record: MyRecord = { name: name, count: count };
+  Ok(record)
+}
+
+-- Main function: match on outer structure, delegate inner to helper
+func extractData(msg: string) -> Result[MyRecord, string] {
+  match decode(msg) {
+    Ok(json) => {
+      match getObject(json, "data") {
+        Some(obj) => extractFromObject(obj),
+        None => Err("No data object")
+      }
+    },
+    Err(e) => Err("Parse error: " ++ e)
+  }
+}

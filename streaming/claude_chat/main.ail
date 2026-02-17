@@ -1,0 +1,166 @@
+-- Claude Streaming Chat Demo (Anthropic SSE)
+--
+-- Streams responses from Claude's Messages API using Server-Sent Events.
+-- Demonstrates the SSE protocol variant of std/stream — text fragments
+-- arrive progressively as the model generates them.
+--
+-- This is the canonical SSE demo: Claude uses SSE (not WebSocket),
+-- making it ideal for showcasing the SSE protocol support.
+--
+-- Run:
+--   ANTHROPIC_API_KEY=sk-ant-... ailang run --entry main \
+--     --caps IO,Stream,Env \
+--     streaming/claude_chat/main.ail "What is AILANG?"
+--
+-- Run (with budget):
+--   ANTHROPIC_API_KEY=sk-ant-... ailang run --entry main \
+--     --caps "IO,Env,Stream.recv @limit=100" \
+--     streaming/claude_chat/main.ail "Explain streaming in 3 sentences"
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=200      - Console output (streaming text fragments)
+--   Stream @limit=500  - SSE events (each text delta = 1 event)
+--   Env                - Read ANTHROPIC_API_KEY
+
+module streaming/claude_chat/main
+
+import std/stream (sseConnect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent,
+                   Message, Opened, Closed, StreamError, Ping, SSEData)
+import std/io (println, print)
+import std/env (getEnv, getArgs)
+import std/json (decode, encode, getString, getNumber, getObject,
+                 jo, kv, js, ja, jb, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, startsWith)
+import std/list (map)
+import streaming/claude_chat/services/claude_sse (
+  connectClaude, parseClaudeEvent, buildRequestBody
+)
+import streaming/claude_chat/services/response_parser (
+  updateAccumulator, formatStreamState, getResponseText
+)
+import streaming/claude_chat/types/claude_types (
+  ClaudeEvent, TextDelta, MessageStart, ContentBlockStart,
+  ContentBlockStop, MessageStop, MessageDelta, ClaudeError, UnknownEvent,
+  ChatMessage, StreamAccumulator, emptyStreamAccumulator
+)
+
+export func main() -> () ! {IO @limit=200, Stream @limit=500, Env} {
+  println("=== Claude Streaming Chat (SSE) ===");
+  println("Protocol: Server-Sent Events");
+  println("Model: claude-sonnet-4-5-20250929");
+  println("Budget: Stream @limit=500 (SSE events)");
+  println("");
+
+  match getEnv("ANTHROPIC_API_KEY") {
+    Ok(apiKey) => {
+      let args = getArgs();
+      let userMessage = match args {
+        [] => "Hello! What can you tell me about AILANG, a language with algebraic effects and contracts?",
+        parts => join(" ", parts)
+      };
+      runChat(apiKey, userMessage)
+    },
+    Err(_) => {
+      println("Error: ANTHROPIC_API_KEY environment variable not set");
+      println("");
+      println("Get an API key at https://console.anthropic.com/");
+      println("Then: ANTHROPIC_API_KEY=sk-ant-... ailang run ...")
+    }
+  }
+}
+
+func runChat(apiKey: string, userMessage: string) -> () ! {IO, Stream} {
+  println("You: " ++ userMessage);
+  println("");
+  println("Claude: ");
+
+  let messages = [{ role: "user", content: userMessage }];
+  let systemPrompt = "You are a helpful assistant. Keep responses concise.";
+
+  match connectClaude(apiKey, "claude-sonnet-4-5-20250929", messages, systemPrompt) {
+    Ok(conn) => {
+      -- Register SSE event handler
+      onEvent(conn, \event. handleSSEEvent(event));
+
+      -- Run until stream completes
+      runEventLoop(conn);
+
+      println("");
+      println("");
+      println("=== Stream Complete ===")
+    },
+    Err(e) => println("Connection failed: " ++ show(e))
+  }
+}
+
+-- Handle SSE events from Claude
+-- Each Message contains the SSE `data` field content
+func handleSSEEvent(event: StreamEvent) -> bool ! {IO} =
+  match event {
+    SSEData(eventType, data) => {
+      -- SSE events arrive as SSEData(eventType, data)
+      -- The data field contains the JSON payload to parse
+      match parseClaudeEvent(data) {
+        Ok(claudeEvent) => handleClaudeEvent(claudeEvent),
+        Err(_) => true  -- ignore unparseable events
+      }
+    },
+    Message(data) => {
+      -- Fallback: some SSE implementations deliver as Message
+      match parseClaudeEvent(data) {
+        Ok(claudeEvent) => handleClaudeEvent(claudeEvent),
+        Err(_) => true
+      }
+    },
+    Opened(_) => {
+      -- SSE connection established
+      true
+    },
+    Closed(code, reason) => {
+      println("");
+      println("[SSE] Stream closed");
+      false
+    },
+    StreamError(err) => {
+      println("");
+      println("[Error] SSE error: " ++ show(err));
+      false
+    },
+    _ => true
+  }
+
+-- Handle parsed Claude events
+-- TextDelta is the main event — print each text fragment immediately
+-- for a progressive "typing" effect
+func handleClaudeEvent(event: ClaudeEvent) -> bool ! {IO} =
+  match event {
+    TextDelta(text) => {
+      -- Print text fragment without newline for progressive display
+      -- In practice, use a write-without-newline function
+      print(text);
+      true
+    },
+    MessageStart(info) => {
+      -- Optionally log model info
+      true
+    },
+    ContentBlockStart(_) => true,
+    ContentBlockStop(_) => true,
+    MessageDelta(delta) => {
+      -- Stop reason received (usually "end_turn")
+      true
+    },
+    MessageStop => {
+      -- Message complete
+      false  -- stop event loop
+    },
+    ClaudeError(err) => {
+      println("");
+      println("[Error] " ++ err.errType ++ ": " ++ err.message);
+      false
+    },
+    UnknownEvent(t) => true
+  }

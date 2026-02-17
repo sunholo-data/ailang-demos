@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Voice Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #070a0e;
+    --bg-primary: #0c1017;
+    --bg-raised: #111620;
+    --bg-surface: #171d28;
+    --border: #1a2236;
+    --border-active: #253350;
+    --text: #c8cdd8;
+    --text-muted: #5e6882;
+    --text-dim: #2e3648;
+    --emerald: #10b981;
+    --emerald-dim: #0a2e1e;
+    --amber: #f59e0b;
+    --amber-dim: #3d2600;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Outfit', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: var(--bg-deep); color: var(--text); font-family: var(--sans); overflow: hidden; }
+
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    height: 100vh;
+    max-width: 960px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--emerald); }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .badge-ws { background: var(--emerald-dim); color: var(--emerald); border: 1px solid #134a30; }
+  .badge-bq { background: #1a1530; color: var(--purple); border: 1px solid #2a2050; }
+  .btn-sm { font-family: var(--mono); font-size: 10px; padding: 4px 10px; background: none; border: 1px solid var(--border); color: var(--text-muted); border-radius: 3px; cursor: pointer; text-transform: uppercase; }
+  .btn-sm:hover { border-color: var(--emerald-dim); color: var(--emerald); }
+
+  .config { background: var(--bg-primary); border-bottom: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s; padding: 0 20px; }
+  .config.open { max-height: 80px; padding: 10px 20px; }
+  .config-row { display: flex; gap: 10px; align-items: center; }
+  .config-row label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-width: 70px; }
+  .config-input { flex: 1; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 3px; font-family: var(--mono); font-size: 12px; outline: none; }
+
+  /* ── Budget Meters ── */
+  .budget-bar {
+    display: flex;
+    align-items: center;
+    padding: 6px 20px;
+    gap: 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+  .budget-item { display: flex; align-items: center; gap: 8px; }
+  .budget-label { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .budget-track { width: 80px; height: 4px; background: var(--bg-surface); border-radius: 2px; overflow: hidden; }
+  .budget-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+  .budget-fill.ok { background: var(--emerald); }
+  .budget-fill.warn { background: var(--amber); }
+  .budget-fill.crit { background: var(--red); }
+  .budget-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+  /* ── Main Content ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .messages::-webkit-scrollbar { width: 5px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .msg { animation: fadeUp 0.2s ease-out; max-width: 88%; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } }
+
+  .msg-user {
+    align-self: flex-end;
+    background: #0e1a2e;
+    border: 1px solid #162040;
+    border-radius: 8px 8px 2px 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .msg-agent {
+    align-self: flex-start;
+    padding: 6px 0 6px 12px;
+    border-left: 2px solid var(--border);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .msg-agent.streaming { border-left-color: var(--emerald-dim); }
+
+  .msg-query {
+    align-self: flex-start;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    width: 90%;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .query-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--purple); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .query-sql { background: var(--bg-deep); padding: 8px 10px; border-radius: 3px; color: var(--text-muted); white-space: pre-wrap; line-height: 1.5; overflow-x: auto; }
+  .query-result { margin-top: 8px; padding: 8px 10px; background: var(--bg-deep); border-radius: 3px; color: var(--emerald); font-size: 11px; line-height: 1.5; max-height: 150px; overflow-y: auto; }
+
+  /* ── Input ── */
+  .input-area {
+    padding: 12px 20px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .mic-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--bg-raised);
+    color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; transition: all 0.2s; flex-shrink: 0;
+  }
+  .mic-btn:hover { border-color: var(--emerald-dim); color: var(--emerald); }
+  .mic-btn.active { border-color: var(--red); background: #1a0808; color: var(--red); animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.2); } }
+
+  .text-input { flex: 1; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 6px; font-family: var(--sans); font-size: 14px; outline: none; }
+  .text-input:focus { border-color: var(--emerald-dim); }
+  .text-input::placeholder { color: var(--text-dim); }
+
+  .send-btn { padding: 10px 18px; background: var(--emerald); color: var(--bg-deep); border: none; border-radius: 6px; font-family: var(--mono); font-size: 11px; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; }
+  .send-btn:hover { background: #12d492; }
+
+  /* ── Footer ── */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 20px;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .footer-stats { display: flex; gap: 14px; }
+  .footer-stats span { color: var(--text-muted); }
+
+  @media (max-width: 600px) { .app { max-width: 100%; border: none; } .budget-bar { flex-wrap: wrap; gap: 10px; } }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">AILANG Voice Analytics</div>
+      <span class="badge badge-ws">● WebSocket</span>
+      <span class="badge badge-bq">BigQuery</span>
+    </div>
+    <button class="btn-sm" onclick="document.getElementById('cfg').classList.toggle('open')">⚙ config</button>
+  </div>
+
+  <div class="config" id="cfg">
+    <div class="config-row">
+      <label>Gemini Key</label>
+      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="localStorage.setItem('gemini_key',this.value)">
+    </div>
+  </div>
+
+  <!-- Budget Meters -->
+  <div class="budget-bar">
+    <div class="budget-item">
+      <span class="budget-label">Stream</span>
+      <div class="budget-track"><div class="budget-fill ok" id="budgetStream" style="width:0%"></div></div>
+      <span class="budget-count"><span id="budgetStreamN">0</span>/50</span>
+    </div>
+    <div class="budget-item">
+      <span class="budget-label">Net</span>
+      <div class="budget-track"><div class="budget-fill ok" id="budgetNet" style="width:0%"></div></div>
+      <span class="budget-count"><span id="budgetNetN">0</span>/15</span>
+    </div>
+    <div class="budget-item">
+      <span class="budget-label">Queries</span>
+      <span class="budget-count" style="color:var(--purple)"><span id="queryCount">0</span></span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="messages" id="messages">
+      <div style="text-align:center;padding:40px;color:var(--text-dim);font-size:13px;">
+        <div style="font-size:28px;margin-bottom:10px;opacity:0.3;">📊</div>
+        Ask questions about your GA4 analytics data.<br>
+        <span style="font-size:11px;">e.g. "What are the top 5 events?" or "Show me revenue by category"</span>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎤</button>
+      <input class="text-input" id="textInput" placeholder="Ask about your analytics..." onkeydown="if(event.key==='Enter')sendText()">
+      <button class="send-btn" onclick="sendText()">Send</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-stats">
+      <div>tools: <span id="fTools">0</span></div>
+      <div>msgs: <span id="fMsgs">0</span></div>
+      <div>status: <span id="fStatus">disconnected</span></div>
+    </div>
+    <div>budget: Net @limit=15 · Stream @limit=50</div>
+  </div>
+</div>
+
+<script>
+let ws = null, isRecording = false, audioCtx = null, captureNode = null;
+let budgets = { stream: 0, net: 0 };
+
+function updateBudget(type, delta) {
+  budgets[type] += delta;
+  const limits = { stream: 50, net: 15 };
+  const pct = (budgets[type] / limits[type]) * 100;
+  const el = document.getElementById(`budget${type.charAt(0).toUpperCase()+type.slice(1)}`);
+  el.style.width = Math.min(pct, 100) + '%';
+  el.className = 'budget-fill ' + (pct > 80 ? 'crit' : pct > 50 ? 'warn' : 'ok');
+  document.getElementById(`budget${type.charAt(0).toUpperCase()+type.slice(1)}N`).textContent = budgets[type];
+}
+
+function connectGemini() {
+  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini_key');
+  if (!key) { document.getElementById('cfg').classList.add('open'); return; }
+  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    document.getElementById('fStatus').textContent = 'connected';
+    updateBudget('stream', 1);
+    sendSetup();
+  };
+  ws.onmessage = (e) => {
+    updateBudget('stream', 1);
+    const inc = parseInt(document.getElementById('fMsgs').textContent) + 1;
+    document.getElementById('fMsgs').textContent = inc;
+    handleMsg(JSON.parse(e.data));
+  };
+  ws.onclose = () => { document.getElementById('fStatus').textContent = 'disconnected'; };
+}
+
+function sendSetup() {
+  const tools = [
+    { name: 'queryTopEvents', description: 'Get top N events by count', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
+    { name: 'queryRevenue', description: 'Revenue by product category', parameters: { type: 'object', properties: {} } },
+    { name: 'queryFunnel', description: 'Purchase funnel metrics', parameters: { type: 'object', properties: {} } },
+    { name: 'querySessionMetrics', description: 'Session summary metrics', parameters: { type: 'object', properties: {} } },
+    { name: 'runCustomQuery', description: 'Run custom SELECT query', parameters: { type: 'object', properties: { sql: { type: 'string' } }, required: ['sql'] } }
+  ];
+  ws.send(JSON.stringify({
+    setup: {
+      model: 'models/gemini-2.0-flash-exp',
+      generationConfig: { responseModalities: ['TEXT'] },
+      systemInstruction: { parts: [{ text: 'You are a GA4 analytics assistant. Use BigQuery tools to answer questions about events, revenue, funnels, and sessions. Summarize results clearly.' }] },
+      tools: [{ functionDeclarations: tools }]
+    }
+  }));
+}
+
+function handleMsg(data) {
+  if (data.setupComplete) { addAgent('Ready! Ask me about your analytics data.'); return; }
+  if (data.toolCall) {
+    (data.toolCall.functionCalls || []).forEach(call => {
+      const tc = parseInt(document.getElementById('fTools').textContent) + 1;
+      document.getElementById('fTools').textContent = tc;
+      document.getElementById('queryCount').textContent = tc;
+      updateBudget('net', 1);
+      const sql = getMockSQL(call.name, call.args);
+      const result = getMockResult(call.name);
+      addQueryCard(call.name, sql, result);
+      setTimeout(() => {
+        ws.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { result } }] } }));
+        updateBudget('stream', 1);
+      }, 300);
+    });
+    return;
+  }
+  if (data.serverContent) {
+    if (data.serverContent.turnComplete) return;
+    (data.serverContent?.modelTurn?.parts || []).forEach(p => { if (p.text) addAgent(p.text); });
+  }
+}
+
+function getMockSQL(name, args) {
+  const sqls = {
+    queryTopEvents: `SELECT event_name, COUNT(*) as cnt\nFROM \`ga4_sample.events_*\`\nGROUP BY event_name\nORDER BY cnt DESC LIMIT ${args?.limit||10}`,
+    queryRevenue: `SELECT item_category, SUM(price*quantity) as revenue\nFROM \`ga4_sample.events_*\`, UNNEST(items)\nWHERE event_name='purchase'\nGROUP BY item_category`,
+    queryFunnel: `SELECT event_name, COUNT(DISTINCT user_pseudo_id)\nFROM \`ga4_sample.events_*\`\nWHERE event_name IN ('page_view','add_to_cart','begin_checkout','purchase')`,
+    querySessionMetrics: `SELECT COUNT(DISTINCT user_pseudo_id) as users,\n  COUNT(*) as events\nFROM \`ga4_sample.events_*\``,
+    runCustomQuery: args?.sql || 'SELECT ...'
+  };
+  return sqls[name] || 'SELECT ...';
+}
+
+function getMockResult(name) {
+  const results = {
+    queryTopEvents: 'Top events: page_view (245K), session_start (180K), user_engagement (165K), scroll (98K), click (67K)',
+    queryRevenue: 'Revenue by category: Apparel $42K, Electronics $38K, Accessories $25K, Home $18K',
+    queryFunnel: 'Funnel: page_view 245K → add_to_cart 12K → begin_checkout 8.5K → purchase 5.2K (2.1% conversion)',
+    querySessionMetrics: 'Summary: 89K users, 1.2M events, 245K sessions, 5.2K purchases',
+    runCustomQuery: 'Query returned 15 rows.'
+  };
+  return results[name] || 'Done.';
+}
+
+function addUser(text) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-user';
+  el.textContent = text;
+  document.getElementById('messages').appendChild(el);
+  scroll();
+}
+
+function addAgent(text) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-agent';
+  el.textContent = text;
+  document.getElementById('messages').appendChild(el);
+  scroll();
+}
+
+function addQueryCard(name, sql, result) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-query';
+  el.innerHTML = `<div class="query-header">⚡ ${name}</div><div class="query-sql">${esc(sql)}</div><div class="query-result">${esc(result)}</div>`;
+  document.getElementById('messages').appendChild(el);
+  scroll();
+}
+
+function scroll() { const m = document.getElementById('messages'); m.scrollTop = m.scrollHeight; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function sendText() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text) return;
+  addUser(text);
+  input.value = '';
+  if (!ws || ws.readyState !== 1) connectGemini();
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }));
+    updateBudget('stream', 1);
+  }
+}
+
+async function toggleMic() {
+  const btn = document.getElementById('micBtn');
+  if (isRecording) {
+    isRecording = false; btn.classList.remove('active');
+    if (captureNode) captureNode.port.postMessage({ command: 'stop' });
+  } else {
+    if (!audioCtx) {
+      audioCtx = new AudioContext({ sampleRate: 48000 });
+      await audioCtx.audioWorklet.addModule('../shared/audio-worklet.js');
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const src = audioCtx.createMediaStreamSource(stream);
+    captureNode = new AudioWorkletNode(audioCtx, 'pcm-capture', { processorOptions: { targetRate: 16000 } });
+    src.connect(captureNode);
+    captureNode.port.onmessage = (e) => {
+      if (e.data.type === 'pcm-chunk' && ws?.readyState === 1) {
+        const bytes = new Uint8Array(e.data.pcmData);
+        let b = ''; for (let i = 0; i < bytes.length; i++) b += String.fromCharCode(bytes[i]);
+        ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: btoa(b) }] } }));
+        updateBudget('stream', 1);
+      }
+    };
+    isRecording = true; btn.classList.add('active');
+    if (!ws || ws.readyState !== 1) connectGemini();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const k = localStorage.getItem('gemini_key');
+  if (k) document.getElementById('apiKey').value = k;
+});
+</script>
+<script src="../shared/nav.js"></script>
+</body>
+</html>

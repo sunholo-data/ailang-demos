@@ -1,0 +1,86 @@
+-- Transcript formatting and accumulation
+--
+-- Handles interim vs final transcripts, word timing display,
+-- and session summary statistics.
+
+module streaming/transcription/services/transcript_formatter
+
+import std/string (length, floatToStr)
+import std/list (length as listLength, foldl)
+import streaming/transcription/types/transcript_types (
+  TranscriptResult, WordTiming, TranscriptAccumulator, emptyAccumulator
+)
+
+-- Format a transcript result for display
+-- Final transcripts are prefixed with [FINAL], interim with [...]
+export pure func formatTranscript(tr: TranscriptResult) -> string
+  ensures { length(result) > 0 }
+{
+  let prefix = if tr.isFinal then "[FINAL] " else "[...]   ";
+  let conf = " (" ++ floatToStr(tr.confidence * 100.0) ++ "%)";
+  if length(tr.transcript) > 0 then
+    prefix ++ tr.transcript ++ conf
+  else
+    prefix ++ "(silence)" ++ conf
+}
+
+-- Format word timings for detailed display
+export pure func formatWordTimings(words: [WordTiming]) -> string {
+  foldl(\acc w.
+    acc ++ w.word ++ "[" ++ floatToStr(w.start) ++ "-" ++ floatToStr(w.end) ++ "] ",
+    "",
+    words
+  )
+}
+
+-- Update accumulator with a new transcript result
+export pure func accumulate(acc: TranscriptAccumulator, tr: TranscriptResult) -> TranscriptAccumulator
+  ensures { result.transcriptsReceived == acc.transcriptsReceived + 1 }
+{
+  let newWordCount = acc.wordCount + listLength(tr.words);
+  if tr.isFinal then {
+    finalText: acc.finalText ++ tr.transcript ++ " ",
+    interimText: "",
+    wordCount: newWordCount,
+    chunksSent: acc.chunksSent,
+    transcriptsReceived: acc.transcriptsReceived + 1
+  }
+  else {
+    finalText: acc.finalText,
+    interimText: tr.transcript,
+    wordCount: newWordCount,
+    chunksSent: acc.chunksSent,
+    transcriptsReceived: acc.transcriptsReceived + 1
+  }
+}
+
+-- Record that an audio chunk was sent
+export pure func recordChunkSent(acc: TranscriptAccumulator) -> TranscriptAccumulator
+  ensures { result.chunksSent == acc.chunksSent + 1 }
+{
+  {
+    finalText: acc.finalText,
+    interimText: acc.interimText,
+    wordCount: acc.wordCount,
+    chunksSent: acc.chunksSent + 1,
+    transcriptsReceived: acc.transcriptsReceived
+  }
+}
+
+-- Generate session summary
+export pure func sessionSummary(acc: TranscriptAccumulator) -> string
+  ensures { length(result) > 0 }
+{
+  "Session: " ++
+  show(acc.chunksSent) ++ " audio chunks sent, " ++
+  show(acc.transcriptsReceived) ++ " transcripts received, " ++
+  show(acc.wordCount) ++ " words detected"
+}
+
+-- Estimate audio duration from chunk count
+-- Each chunk is 100ms of audio at 16kHz
+export pure func estimateDuration(chunksSent: int) -> float
+  ensures { result >= 0.0 }
+{
+  intToFloat(chunksSent) * 0.1
+}

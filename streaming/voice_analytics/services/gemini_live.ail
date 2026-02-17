@@ -1,0 +1,218 @@
+-- Gemini Live API WebSocket client
+--
+-- Connects to the Gemini Live API for bidirectional voice/text streaming.
+-- Handles setup, tool call dispatch, and message parsing.
+--
+-- Protocol: WebSocket (wss://generativelanguage.googleapis.com/ws/...)
+-- Audio: PCM 16-bit, 16kHz in / 24kHz out
+-- Auth: API key as query parameter or OAuth2 Bearer token
+--
+-- Reference: https://ai.google.dev/api/live
+
+module streaming/voice_analytics/services/gemini_live
+
+import std/stream (connect, transmit, disconnect,
+                   StreamConn, StreamErrorKind)
+import std/json (encode, decode, getString, getObject, getArray, getBool,
+                 jo, kv, js, ja, jb, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+import std/list (map, nth)
+import streaming/voice_analytics/types/analytics_types (
+  GeminiSetup, ToolDecl, ToolCall, ServerMessage,
+  SetupComplete, ToolCallMsg, TextResponse, AudioResponse,
+  TurnComplete, Interrupted, Unknown
+)
+
+-- Build Gemini Live API WebSocket URL (Vertex AI with ADC)
+-- Regional: wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent
+-- Global:   wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent
+export pure func geminiLiveUrl(region: string) -> string
+  ensures { length(result) > 50 }
+{
+  if region == "global"
+    then "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+    else "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+}
+
+-- Connect to Gemini Live API using ADC (Bearer token auth)
+export func connectGemini(token: string, region: string) -> Result[StreamConn, string] ! {Stream}
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  let url = geminiLiveUrl(region);
+  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+  match connect(url, config) {
+    Ok(conn) => Ok(conn),
+    Err(e) => Err("Failed to connect to Gemini Live API: " ++ show(e))
+  }
+}
+
+-- Send the initial setup message
+-- This must be the first message sent after connection
+export func sendSetup(conn: StreamConn, setup: GeminiSetup) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = buildSetupMessage(setup);
+  transmit(conn, msg)
+}
+
+-- Build the setup message JSON
+export func buildSetupMessage(setup: GeminiSetup) -> string
+  ensures { length(result) > 20 }
+{
+  let toolDefs = map(\t.
+    match decode(t.parameters) {
+      Ok(params) => jo([
+        kv("name", js(t.name)),
+        kv("description", js(t.description)),
+        kv("parameters", params)
+      ]),
+      Err(_) => jo([
+        kv("name", js(t.name)),
+        kv("description", js(t.description))
+      ])
+    },
+  setup.tools);
+  let modalities = map(\s. js(s), setup.responseModalities);
+
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(setup.model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja(modalities))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(setup.systemInstruction))])]))
+      ])),
+      kv("tools", ja([jo([
+        kv("functionDeclarations", ja(toolDefs))
+      ])]))
+    ]))
+  ]))
+}
+
+-- Build a tool response message to send back to Gemini
+export func buildToolResponse(callId: string, result: string) -> string
+  ensures { length(result) > 10 }
+{
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js("")),
+        kv("response", jo([
+          kv("result", js(result))
+        ]))
+      ])]))
+    ]))
+  ]))
+}
+
+-- Send a text message to the agent (simulates user speech as text)
+export func sendTextMessage(conn: StreamConn, text: string) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(text))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
+  transmit(conn, msg)
+}
+
+-- Send audio data to the agent (real-time audio input)
+-- audioBase64: base64-encoded PCM audio (browser JS handles encoding)
+export func sendAudioInput(conn: StreamConn, audioBase64: string) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([
+    kv("realtimeInput", jo([
+      kv("mediaChunks", ja([jo([
+        kv("mimeType", js("audio/pcm;rate=16000")),
+        kv("data", js(audioBase64))
+      ])]))
+    ]))
+  ]));
+  transmit(conn, msg)
+}
+
+-- Parse a server message from Gemini Live API
+export func parseServerMessage(msg: string) -> ServerMessage {
+  match decode(msg) {
+    Ok(json) => {
+      -- Check for setupComplete
+      match getObject(json, "setupComplete") {
+        Some(_) => SetupComplete,
+        None => parseNonSetupMessage(json)
+      }
+    },
+    Err(_) => Unknown(msg)
+  }
+}
+
+func parseNonSetupMessage(json: Json) -> ServerMessage {
+  -- Check for toolCall
+  match getObject(json, "toolCall") {
+    Some(tc) => {
+      match getArray(tc, "functionCalls") {
+        Some(calls) => {
+          match nth(calls, 0) {
+            Some(call) => {
+              let id = getOrElse(getString(call, "id"), "");
+              let name = getOrElse(getString(call, "name"), "");
+              let args = match getObject(call, "args") {
+                Some(a) => encode(a),
+                None => "{}"
+              };
+              ToolCallMsg({ id: id, name: name, args: args })
+            },
+            None => Unknown(encode(json))
+          }
+        },
+        None => Unknown(encode(json))
+      }
+    },
+    None => parseContentMessage(json)
+  }
+}
+
+func parseContentMessage(json: Json) -> ServerMessage {
+  -- Check for serverContent
+  match getObject(json, "serverContent") {
+    Some(sc) => {
+      -- Check turnComplete
+      match getBool(sc, "turnComplete") {
+        Some(true) => TurnComplete,
+        _ => {
+          -- Check for text or audio parts
+          match getObject(sc, "modelTurn") {
+            Some(turn) => {
+              match getArray(turn, "parts") {
+                Some(parts) => extractContentFromParts(parts),
+                None => Unknown(encode(json))
+              }
+            },
+            None => Unknown(encode(json))
+          }
+        }
+      }
+    },
+    None => Unknown(encode(json))
+  }
+}
+
+func extractContentFromParts(parts: [Json]) -> ServerMessage {
+  match nth(parts, 0) {
+    Some(part) => {
+      match getString(part, "text") {
+        Some(text) => TextResponse(text),
+        None => {
+          match getObject(part, "inlineData") {
+            Some(_) => AudioResponse(""),
+            None => Unknown("")
+          }
+        }
+      }
+    },
+    None => Unknown("")
+  }
+}

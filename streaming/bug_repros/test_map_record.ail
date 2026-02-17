@@ -1,0 +1,19 @@
+-- Test: can map() work over records at all?
+module streaming/bug_repros/test_map_record
+
+import std/list (map)
+import std/json (jo, kv, js, Json)
+
+type Item = Item({name: string})
+
+-- Test 1: map over strings (should work)
+func mapStrings(xs: [string]) -> [string] =
+  map(\s. s ++ "!", xs)
+
+-- Test 2: map over records
+func mapItems(items: [Item]) -> [Json] =
+  map(\i. jo([kv("name", js(i.name))]), items)
+
+-- Test 3: map over plain list of records (not ADT-wrapped)
+func mapRecords(xs: [{name: string}]) -> [string] =
+  map(\r. r.name, xs)

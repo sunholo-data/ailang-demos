@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG × Claude SSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #06080a;
+    --bg-primary: #0c0e12;
+    --bg-raised: #12151a;
+    --bg-surface: #181c22;
+    --bg-hover: #1e2228;
+    --border: #1e2630;
+    --border-active: #2a3442;
+    --text-primary: #d4cfc4;
+    --text-muted: #6b6860;
+    --text-dim: #3d3a34;
+    --amber: #e4a010;
+    --amber-bright: #f5be2e;
+    --amber-glow: #e4a01033;
+    --amber-dim: #8a6510;
+    --green: #3dd68c;
+    --green-dim: #1a3d2a;
+    --red: #e05252;
+    --blue: #5b9ee9;
+    --user-bg: #111418;
+    --user-border: #1c2028;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', monospace;
+    --font-display: 'Space Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ── */
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    height: 100vh;
+    max-width: 900px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--amber);
+    text-shadow: 0 0 20px var(--amber-glow);
+  }
+
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .badge-model {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .badge-sse {
+    background: var(--green-dim);
+    border: 1px solid #1e4a32;
+    color: var(--green);
+  }
+
+  .badge-sse::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-config {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .btn-config:hover {
+    border-color: var(--amber-dim);
+    color: var(--amber);
+  }
+
+  /* ── Config Panel ── */
+  .config-panel {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 16px;
+  }
+
+  .config-panel.open {
+    max-height: 160px;
+    padding: 12px 16px;
+  }
+
+  .config-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #1a1408;
+    border: 1px solid #2a1f0a;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: var(--amber-dim);
+    line-height: 1.5;
+  }
+
+  .config-warning code {
+    background: var(--bg-surface);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .config-row label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 60px;
+  }
+
+  .config-input {
+    flex: 1;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .config-input:focus {
+    border-color: var(--amber-dim);
+  }
+
+  .config-input::placeholder { color: var(--text-dim); }
+
+  /* ── Messages ── */
+  .messages {
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    scroll-behavior: smooth;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(228,160,16,0.02) 0%, transparent 60%),
+      var(--bg-deep);
+  }
+
+  .messages::-webkit-scrollbar { width: 6px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .messages::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+  .msg {
+    max-width: 85%;
+    animation: msgIn 0.2s ease-out;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    border: 1px solid var(--user-border);
+    border-radius: 6px 6px 2px 6px;
+    padding: 8px 12px;
+  }
+
+  .msg-user .msg-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 3px;
+    text-align: right;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .msg-assistant {
+    align-self: flex-start;
+    padding: 8px 0;
+  }
+
+  .msg-assistant .msg-label {
+    font-size: 10px;
+    color: var(--amber-dim);
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg-assistant .msg-label::before {
+    content: '▸';
+    color: var(--amber);
+  }
+
+  .msg-text {
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg-assistant .msg-text {
+    color: var(--text-primary);
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+  }
+
+  .msg-assistant.streaming .msg-text {
+    border-left-color: var(--amber-dim);
+  }
+
+  /* Blinking cursor */
+  .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 15px;
+    background: var(--amber);
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: blink 0.6s step-end infinite;
+    box-shadow: 0 0 8px var(--amber-glow);
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .msg-text code {
+    background: var(--bg-surface);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .msg-text pre {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-size: 12px;
+  }
+
+  .msg-error {
+    align-self: center;
+    background: #1a0808;
+    border: 1px solid #2a1010;
+    border-radius: 4px;
+    padding: 8px 14px;
+    color: var(--red);
+    font-size: 12px;
+  }
+
+  /* Welcome state */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px;
+    gap: 12px;
+  }
+
+  .welcome-glyph {
+    font-size: 32px;
+    color: var(--amber-dim);
+    opacity: 0.5;
+    font-family: var(--font-display);
+  }
+
+  .welcome p {
+    font-size: 12px;
+    max-width: 380px;
+    line-height: 1.7;
+  }
+
+  .welcome kbd {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+
+  /* ── Input Area ── */
+  .input-area {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  .input-field {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    min-height: 42px;
+    max-height: 160px;
+    transition: border-color 0.15s;
+  }
+
+  .input-field:focus {
+    border-color: var(--amber-dim);
+  }
+
+  .input-field::placeholder { color: var(--text-dim); }
+
+  .btn-send {
+    background: var(--amber);
+    color: var(--bg-deep);
+    border: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    height: 42px;
+  }
+
+  .btn-send:hover { background: var(--amber-bright); }
+
+  .btn-send:disabled {
+    background: var(--bg-surface);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  /* ── Status Bar ── */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 16px;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+    font-family: var(--font-mono);
+    min-height: 24px;
+  }
+
+  .statusbar-left, .statusbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .stat-label { color: var(--text-dim); }
+
+  .stat-value {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-value.active { color: var(--amber); }
+
+  .statusbar .separator {
+    color: var(--border);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .app { max-width: 100%; border: none; }
+    .topbar { padding: 8px 12px; }
+    .messages { padding: 12px; }
+    .input-area { padding: 10px 12px; }
+    .badge-model { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">AILANG <span>×</span> Claude SSE</div>
+      <span class="badge badge-model">claude-sonnet-4-5-20250929</span>
+      <span class="badge badge-sse">SSE</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-config" onclick="toggleConfig()" id="configBtn">⚙ config</button>
+    </div>
+  </div>
+
+  <!-- Config Panel (collapsible) -->
+  <div class="config-panel" id="configPanel">
+    <div class="config-warning">
+      <span>⚠</span>
+      <span>API calls go directly from your browser. You may need a CORS proxy
+      (e.g. <code>npx cors-anywhere</code>) or use the AILANG <code>serve-api</code> backend.
+      Your key is stored in localStorage only.</span>
+    </div>
+    <div class="config-row">
+      <label>API Key</label>
+      <input type="password" class="config-input" id="apiKeyInput"
+             placeholder="sk-ant-api03-..." autocomplete="off"
+             onchange="saveApiKey()">
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="welcome-glyph">λ</div>
+      <p>AILANG streaming demo using Claude's SSE protocol.
+         Type a message and watch tokens arrive in real-time.</p>
+      <p><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</p>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-row">
+      <div class="input-wrap">
+        <textarea class="input-field" id="inputField" rows="1"
+                  placeholder="Ask something..."
+                  onkeydown="handleKeydown(event)"
+                  oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="btn-send" id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="stat">
+        <span class="stat-label">events</span>
+        <span class="stat-value" id="statEvents">0</span>
+      </div>
+      <span class="separator">│</span>
+      <div class="stat">
+        <span class="stat-label">chars</span>
+        <span class="stat-value" id="statChars">0</span>
+      </div>
+      <span class="separator">│</span>
+      <div class="stat">
+        <span class="stat-label">tokens/s</span>
+        <span class="stat-value" id="statTps">—</span>
+      </div>
+    </div>
+    <div class="statusbar-right">
+      <div class="stat">
+        <span class="stat-label">latency</span>
+        <span class="stat-value" id="statLatency">—</span>
+      </div>
+      <span class="separator">│</span>
+      <div class="stat">
+        <span class="stat-label" id="statusText">ready</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let isStreaming = false;
+let abortController = null;
+let stats = { events: 0, chars: 0, startTime: 0, firstTokenTime: 0, tokens: 0 };
+
+// ── Config ──
+function toggleConfig() {
+  const panel = document.getElementById('configPanel');
+  panel.classList.toggle('open');
+  document.getElementById('configBtn').textContent =
+    panel.classList.contains('open') ? '⚙ close' : '⚙ config';
+}
+
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (key) localStorage.setItem('ailang_claude_key', key);
+}
+
+function getApiKey() {
+  return document.getElementById('apiKeyInput').value.trim() ||
+         localStorage.getItem('ailang_claude_key') || '';
+}
+
+// Load saved key
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ailang_claude_key');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+  document.getElementById('inputField').focus();
+});
+
+// ── Input handling ──
+function handleKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+// ── Messages ──
+function addUserMessage(text) {
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
+
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-user';
+  div.innerHTML = `<div class="msg-label">you</div><div class="msg-text">${escapeHtml(text)}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function createAssistantMessage() {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-assistant streaming';
+  div.innerHTML = `<div class="msg-label">claude</div><div class="msg-text"><span class="cursor"></span></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function appendToAssistant(msgEl, text) {
+  const textEl = msgEl.querySelector('.msg-text');
+  const cursor = textEl.querySelector('.cursor');
+  // Insert text before cursor
+  if (cursor) {
+    cursor.insertAdjacentText('beforebegin', text);
+  } else {
+    textEl.textContent += text;
+  }
+  const container = document.getElementById('messages');
+  container.scrollTop = container.scrollHeight;
+}
+
+function finishAssistant(msgEl) {
+  msgEl.classList.remove('streaming');
+  const cursor = msgEl.querySelector('.cursor');
+  if (cursor) cursor.remove();
+}
+
+function addErrorMessage(text) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-error';
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Stats ──
+function resetStats() {
+  stats = { events: 0, chars: 0, startTime: performance.now(), firstTokenTime: 0, tokens: 0 };
+  updateStatsDisplay();
+}
+
+function updateStatsDisplay() {
+  document.getElementById('statEvents').textContent = stats.events;
+  document.getElementById('statEvents').classList.toggle('active', isStreaming);
+  document.getElementById('statChars').textContent = stats.chars;
+  document.getElementById('statChars').classList.toggle('active', isStreaming);
+
+  if (stats.firstTokenTime > 0) {
+    const ttft = Math.round(stats.firstTokenTime - stats.startTime);
+    document.getElementById('statLatency').textContent = ttft + 'ms';
+    document.getElementById('statLatency').classList.add('active');
+  }
+
+  if (stats.tokens > 2 && stats.firstTokenTime > 0) {
+    const elapsed = (performance.now() - stats.firstTokenTime) / 1000;
+    const tps = elapsed > 0 ? (stats.tokens / elapsed).toFixed(1) : '—';
+    document.getElementById('statTps').textContent = tps;
+    document.getElementById('statTps').classList.toggle('active', isStreaming);
+  }
+}
+
+function setStatus(text) {
+  document.getElementById('statusText').textContent = text;
+}
+
+// ── Stream ──
+async function sendMessage() {
+  const input = document.getElementById('inputField');
+  const text = input.value.trim();
+  if (!text || isStreaming) return;
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    toggleConfig();
+    document.getElementById('apiKeyInput').focus();
+    addErrorMessage('Please set your API key first.');
+    return;
+  }
+
+  // UI state
+  addUserMessage(text);
+  input.value = '';
+  input.style.height = 'auto';
+  isStreaming = true;
+  document.getElementById('sendBtn').disabled = true;
+  setStatus('connecting...');
+  resetStats();
+
+  const msgEl = createAssistantMessage();
+  abortController = new AbortController();
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        stream: true,
+        messages: [{ role: 'user', content: text }]
+      }),
+      signal: abortController.signal
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errBody.slice(0, 200)}`);
+    }
+
+    setStatus('streaming');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const event = JSON.parse(data);
+            stats.events++;
+            processSSEEvent(event, msgEl);
+            updateStatsDisplay();
+          } catch (e) {
+            // Skip malformed JSON
+          }
+        }
+      }
+    }
+
+    finishAssistant(msgEl);
+    setStatus('done');
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      finishAssistant(msgEl);
+      setStatus('cancelled');
+    } else {
+      finishAssistant(msgEl);
+      addErrorMessage(err.message);
+      setStatus('error');
+    }
+  } finally {
+    isStreaming = false;
+    document.getElementById('sendBtn').disabled = false;
+    abortController = null;
+    document.getElementById('inputField').focus();
+  }
+}
+
+function processSSEEvent(event, msgEl) {
+  switch (event.type) {
+    case 'message_start':
+      // First event — update model badge if different
+      if (event.message?.model) {
+        document.querySelector('.badge-model').textContent = event.message.model;
+      }
+      break;
+
+    case 'content_block_delta':
+      if (event.delta?.type === 'text_delta' && event.delta.text) {
+        const text = event.delta.text;
+        appendToAssistant(msgEl, text);
+        stats.chars += text.length;
+        stats.tokens++;
+        if (!stats.firstTokenTime) {
+          stats.firstTokenTime = performance.now();
+        }
+      }
+      break;
+
+    case 'message_delta':
+      // stop_reason received
+      break;
+
+    case 'message_stop':
+      finishAssistant(msgEl);
+      break;
+
+    case 'error':
+      addErrorMessage(event.error?.message || 'Unknown streaming error');
+      break;
+  }
+}
+
+// ── Keyboard shortcut to cancel ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isStreaming && abortController) {
+    abortController.abort();
+  }
+});
+</script>
+
+<script src="../shared/nav.js"></script>
+</body>
+</html>

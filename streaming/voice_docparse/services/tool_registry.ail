@@ -1,0 +1,175 @@
+-- DocParse tool registry for Gemini Live voice agent
+--
+-- Declares document analysis tools and dispatches tool calls
+-- to existing DocParse services. This bridges the voice agent
+-- to AILANG's document parsing capabilities.
+
+module streaming/voice_docparse/services/tool_registry
+
+import std/json (decode, encode, getString, jo, kv, js)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, intToStr, find)
+import std/list (length as listLength, filter)
+import std/fs (fileExists, readFile)
+import docparse/types/document (
+  Block, TextBlock, TableBlock, ImageBlock, HeadingBlock,
+  ParsedDocument, emptyMetadata,
+  isHeading, isTable, isImage, blockText
+)
+import docparse/services/format_router (detectFormat)
+import docparse/services/docx_parser (parseDocx)
+import docparse/services/output_formatter (renderMarkdown)
+import streaming/voice_docparse/types/live_types (ToolDecl, ToolCall)
+
+-- Tool declarations for document analysis
+export func getDocToolDeclarations() -> [ToolDecl] {
+  [
+    { name: "parseDocument",
+      description: "Parse a document file (DOCX, PPTX, XLSX) and return its content as markdown. Supports Word documents, PowerPoint presentations, and Excel spreadsheets.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Path to the document file\"}},\"required\":[\"filepath\"]}" },
+
+    { name: "extractTables",
+      description: "Extract all tables from a document and return them in a readable format.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Path to the document file\"}},\"required\":[\"filepath\"]}" },
+
+    { name: "extractHeadings",
+      description: "Extract the document outline (all headings with their levels).",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Path to the document file\"}},\"required\":[\"filepath\"]}" },
+
+    { name: "countContent",
+      description: "Count the number of paragraphs, tables, images, and headings in a document.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Path to the document file\"}},\"required\":[\"filepath\"]}" },
+
+    { name: "searchDocument",
+      description: "Search for a keyword or phrase in the document and return matching paragraphs.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Path to the document file\"},\"query\":{\"type\":\"string\",\"description\":\"Text to search for\"}},\"required\":[\"filepath\",\"query\"]}" }
+  ]
+}
+
+-- Dispatch a tool call to the appropriate handler
+export func dispatchToolCall(call: ToolCall) -> Result[string, string] ! {FS @limit=10, IO @limit=5}
+  ensures { match result { Ok(s) => length(s) > 0, Err(e) => length(e) > 0 } }
+{
+  let filepath = extractFilepath(call.args);
+  if length(filepath) == 0 then Err("No filepath provided")
+  else if not fileExists(filepath) then Err("File not found: " ++ filepath)
+  else {
+    match call.name {
+      "parseDocument" => handleParseDocument(filepath),
+      "extractTables" => handleExtractTables(filepath),
+      "extractHeadings" => handleExtractHeadings(filepath),
+      "countContent" => handleCountContent(filepath),
+      "searchDocument" => {
+        let query = extractQuery(call.args);
+        handleSearchDocument(filepath, query)
+      },
+      _ => Err("Unknown tool: " ++ call.name)
+    }
+  }
+}
+
+-- Wrap blocks into a minimal ParsedDocument for renderMarkdown
+func wrapBlocks(blocks: [Block]) -> ParsedDocument {
+  let meta = emptyMetadata();
+  let doc = { format: "docx", filename: "", metadata: meta, blocks: blocks };
+  doc
+}
+
+-- Parse full document and return as markdown
+func parseDocBlocks(filepath: string) -> [Block] ! {FS} =
+  parseDocx(filepath)
+
+func renderBlocks(blocks: [Block]) -> string {
+  let doc = wrapBlocks(blocks);
+  renderMarkdown(doc)
+}
+
+func parseDocOk(s: string) -> Result[string, string] =
+  Ok(s)
+
+func handleParseDocument(filepath: string) -> Result[string, string] ! {FS} {
+  let blocks = parseDocBlocks(filepath);
+  if listLength(blocks) == 0 then Err("No content extracted from " ++ filepath)
+  else parseDocOk(renderBlocks(blocks))
+}
+
+-- Extract only tables
+func tablesOk(md: string, count: int) -> Result[string, string] =
+  Ok("Found " ++ intToStr(count) ++ " tables:\n\n" ++ md)
+
+func handleExtractTables(filepath: string) -> Result[string, string] ! {FS} {
+  let blocks = parseDocx(filepath);
+  let tables = filter(isTable, blocks);
+  let count = listLength(tables);
+  if count == 0 then Ok("No tables found in the document.")
+  else tablesOk(renderBlocks(tables), count)
+}
+
+-- Extract document outline (headings only)
+func headingsOk(outline: string, count: int) -> Result[string, string] =
+  Ok("Document outline (" ++ intToStr(count) ++ " headings):\n\n" ++ outline)
+
+func handleExtractHeadings(filepath: string) -> Result[string, string] ! {FS} {
+  let blocks = parseDocx(filepath);
+  let headings = filter(isHeading, blocks);
+  let count = listLength(headings);
+  if count == 0 then Ok("No headings found.")
+  else headingsOk(renderBlocks(headings), count)
+}
+
+-- Count content types
+func countContentOk(blocks: [Block]) -> Result[string, string] {
+  let total = listLength(blocks);
+  let tables = listLength(filter(isTable, blocks));
+  let images = listLength(filter(isImage, blocks));
+  let headings = listLength(filter(isHeading, blocks));
+  let paragraphs = total - tables - images - headings;
+  Ok("Document contains: " ++
+     intToStr(paragraphs) ++ " paragraphs, " ++
+     intToStr(tables) ++ " tables, " ++
+     intToStr(images) ++ " images, " ++
+     intToStr(headings) ++ " headings (" ++
+     intToStr(total) ++ " blocks total)")
+}
+
+func handleCountContent(filepath: string) -> Result[string, string] ! {FS} {
+  let blocks = parseDocx(filepath);
+  countContentOk(blocks)
+}
+
+-- Search for text in document
+func searchOk(md: string, count: int, query: string) -> Result[string, string] =
+  Ok("Found " ++ intToStr(count) ++ " matches for '" ++ query ++ "':\n\n" ++ md)
+
+func handleSearchDocument(filepath: string, query: string) -> Result[string, string] ! {FS} {
+  if length(query) == 0 then Err("No search query provided")
+  else {
+    let blocks = parseDocx(filepath);
+    let matches = filter(\b. containsText(blockText(b), query), blocks);
+    let count = listLength(matches);
+    if count == 0 then Ok("No matches found for '" ++ query ++ "'")
+    else searchOk(renderBlocks(matches), count, query)
+  }
+}
+
+-- Extract filepath from tool call args
+func extractFilepath(argsJson: string) -> string {
+  match decode(argsJson) {
+    Ok(json) => getOrElse(getString(json, "filepath"), ""),
+    Err(_) => ""
+  }
+}
+
+-- Extract search query from tool call args
+func extractQuery(argsJson: string) -> string {
+  match decode(argsJson) {
+    Ok(json) => getOrElse(getString(json, "query"), ""),
+    Err(_) => ""
+  }
+}
+
+-- Simple case-insensitive text search
+pure func containsText(text: string, query: string) -> bool {
+  find(text, query) >= 0
+}

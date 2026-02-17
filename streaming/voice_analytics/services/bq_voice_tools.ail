@@ -1,0 +1,130 @@
+-- BigQuery voice tools for Gemini Live function calling
+--
+-- Defines tool declarations and dispatch for BigQuery queries
+-- that can be invoked by the voice agent during a live session.
+--
+-- Reuses existing BigQuery and GA4 query infrastructure from
+-- the ecommerce demo.
+
+module streaming/voice_analytics/services/bq_voice_tools
+
+import std/json (decode, encode, getString, getNumber,
+                 jo, kv, js, ja, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, startsWith)
+import std/list (map, take, length as listLength)
+import ecommerce/services/bigquery (query, QueryResult)
+import streaming/voice_analytics/types/analytics_types (ToolDecl, ToolCall)
+
+-- Tool declarations for Gemini function calling
+-- These are registered in the setup message so Gemini knows what tools are available
+export func getBqToolDeclarations() -> [ToolDecl] {
+  [
+    { name: "queryTopEvents",
+      description: "Get top N events by count from GA4 analytics data. Returns event names and counts.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"limit\":{\"type\":\"integer\",\"description\":\"Number of top events to return (default 10)\"}},\"required\":[]}" },
+
+    { name: "queryRevenue",
+      description: "Get revenue breakdown by product category from GA4 ecommerce data.",
+      parameters: "{\"type\":\"object\",\"properties\":{},\"required\":[]}" },
+
+    { name: "queryFunnel",
+      description: "Get purchase funnel metrics: page views, add-to-carts, checkouts, and purchases.",
+      parameters: "{\"type\":\"object\",\"properties\":{},\"required\":[]}" },
+
+    { name: "querySessionMetrics",
+      description: "Get session summary metrics: total users, events, sessions, and purchases.",
+      parameters: "{\"type\":\"object\",\"properties\":{},\"required\":[]}" },
+
+    { name: "runCustomQuery",
+      description: "Run a custom SQL query against the GA4 BigQuery dataset. Only SELECT queries are allowed.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"sql\":{\"type\":\"string\",\"description\":\"SQL SELECT query to execute\"}},\"required\":[\"sql\"]}" }
+  ]
+}
+
+-- Dispatch a tool call to the appropriate BigQuery function
+-- Each dispatch costs exactly 1 Net operation
+export func dispatchBqTool(call: ToolCall, projectId: string, token: string) -> Result[string, string] ! {Net @limit=1}
+  ensures { match result { Ok(s) => length(s) > 0, Err(e) => length(e) > 0 } }
+{
+  match call.name {
+    "queryTopEvents" => {
+      let limit = extractLimit(call.args, 10);
+      let sql = "SELECT event_name, COUNT(*) as event_count FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` GROUP BY event_name ORDER BY event_count DESC LIMIT " ++ show(limit);
+      executeAndFormat(projectId, token, sql)
+    },
+    "queryRevenue" => {
+      let sql = "SELECT items.item_category as category, SUM(items.price * items.quantity) as revenue FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`, UNNEST(items) as items WHERE event_name = 'purchase' GROUP BY category ORDER BY revenue DESC LIMIT 10";
+      executeAndFormat(projectId, token, sql)
+    },
+    "queryFunnel" => {
+      let sql = "SELECT event_name, COUNT(DISTINCT user_pseudo_id) as users FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*` WHERE event_name IN ('page_view', 'add_to_cart', 'begin_checkout', 'purchase') GROUP BY event_name ORDER BY users DESC";
+      executeAndFormat(projectId, token, sql)
+    },
+    "querySessionMetrics" => {
+      let sql = "SELECT COUNT(DISTINCT user_pseudo_id) as users, COUNT(*) as events, COUNT(DISTINCT CONCAT(user_pseudo_id, CAST((SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS STRING))) as sessions FROM `bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*`";
+      executeAndFormat(projectId, token, sql)
+    },
+    "runCustomQuery" => {
+      let sql = extractSql(call.args);
+      if isSafeQuery(sql) then
+        executeAndFormat(projectId, token, sql)
+      else
+        Err("Rejected: only SELECT queries are allowed for safety")
+    },
+    _ => Err("Unknown BigQuery tool: " ++ call.name)
+  }
+}
+
+-- Execute a BigQuery query and format result for voice output
+func executeAndFormat(projectId: string, token: string, sql: string) -> Result[string, string] ! {Net}
+  ensures { match result { Ok(s) => length(s) > 0, Err(_) => true } }
+{
+  match query(projectId, sql, token) {
+    Ok(qr) => Ok(formatQueryResultForVoice(qr)),
+    Err(e) => Err("Query failed: " ++ e)
+  }
+}
+
+-- Format query results as natural language for voice output
+-- Returns a human-readable summary that Gemini can speak
+func formatQueryResultForVoice(qr: QueryResult) -> string
+  ensures { length(result) > 0 }
+{
+  let rowCount = listLength(qr.rows);
+  let header = "Query returned " ++ show(rowCount) ++ " rows. ";
+  let schema = "Columns: " ++ join(", ", qr.schema) ++ ". ";
+  let limited = take(10, qr.rows);
+  let rowStrs = map(\row. show(row), limited);
+  let data = join(". ", rowStrs);
+  header ++ schema ++ data
+}
+
+-- Extract limit from tool call args JSON
+func extractLimit(argsJson: string, defaultVal: int) -> int {
+  match decode(argsJson) {
+    Ok(json) => {
+      match getNumber(json, "limit") {
+        Some(n) => floatToInt(n),
+        None => defaultVal
+      }
+    },
+    Err(_) => defaultVal
+  }
+}
+
+-- Extract SQL from tool call args JSON
+func extractSql(argsJson: string) -> string {
+  match decode(argsJson) {
+    Ok(json) => getOrElse(getString(json, "sql"), ""),
+    Err(_) => ""
+  }
+}
+
+-- Safety check: only allow SELECT queries
+pure func isSafeQuery(sql: string) -> bool
+  ensures { result == startsWith(sql, "SELECT") }
+{
+  startsWith(sql, "SELECT")
+}

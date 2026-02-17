@@ -1,0 +1,162 @@
+-- Real-time Transcription Demo (Deepgram)
+--
+-- Streams audio to Deepgram's speech-to-text WebSocket API and
+-- displays transcription in real-time. Demonstrates binary streaming
+-- via binary data and the Stream effect with capability budgets.
+--
+-- Run (file mode):
+--   DEEPGRAM_API_KEY=xxx ailang run --entry main \
+--     --caps IO,FS,Stream,Env \
+--     streaming/transcription/main.ail data/sample.wav
+--
+-- Run (with budget limits):
+--   DEEPGRAM_API_KEY=xxx ailang run --entry main \
+--     --caps "IO,FS,Env,Stream.transmit @limit=100,Stream.recv @limit=200" \
+--     streaming/transcription/main.ail data/sample.wav
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=500       - Console output (real-time transcript lines)
+--   FS @limit=5         - Read audio file
+--   Stream @limit=1000  - Audio chunks + transcript responses
+--                         (16kHz PCM at 100ms chunks = 10 chunks/sec)
+--   Env                 - Read DEEPGRAM_API_KEY
+
+module streaming/transcription/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent,
+                   Message, Binary, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/env (getEnv, getArgs)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/json (decode, encode, getString, getNumber, getArray, getObject, getBool, jo, kv, js, ja)
+import std/list (map, nth, length as listLength, foldl)
+import std/string (length, substring, floatToStr)
+import std/fs (readFileBytes)
+import streaming/transcription/services/deepgram (
+  connectDeepgram, sendAudioChunk, sendEndOfStream, parseTranscript
+)
+import streaming/transcription/services/transcript_formatter (
+  formatTranscript, sessionSummary, estimateDuration,
+  accumulate, recordChunkSent
+)
+import streaming/transcription/types/transcript_types (
+  TranscriptResult, WordTiming, TranscriptAccumulator, emptyAccumulator
+)
+
+export func main() -> () ! {IO @limit=500, FS @limit=5, Stream @limit=1000, Env} {
+  println("=== Real-time Transcription (Deepgram) ===");
+  println("Protocol: WebSocket (binary PCM audio streaming)");
+  println("Model: nova-2 | Format: PCM 16-bit, 16kHz, mono");
+  println("Budget: Stream @limit=1000");
+  println("");
+
+  match getEnv("DEEPGRAM_API_KEY") {
+    Ok(apiKey) => {
+      let args = getArgs();
+      let filepath = match args {
+        [] => {
+          println("Usage: ... streaming/transcription/main.ail <audio-file.wav>");
+          println("No file provided, will listen for streamed audio.");
+          ""
+        },
+        f :: _ => f
+      };
+      runTranscription(apiKey, filepath)
+    },
+    Err(_) => {
+      println("Error: DEEPGRAM_API_KEY environment variable not set");
+      println("");
+      println("Get a free API key at https://console.deepgram.com/");
+      println("Then: DEEPGRAM_API_KEY=xxx ailang run ...")
+    }
+  }
+}
+
+func runTranscription(apiKey: string, filepath: string) -> () ! {IO, FS, Stream} {
+  match connectDeepgram(apiKey) {
+    Ok(conn) => {
+      println("Connected to Deepgram (nova-2, 16kHz PCM)");
+      println("Streaming audio...");
+      println("");
+
+      -- If a file was provided, stream it
+      if length(filepath) > 0 then
+        streamAudioFile(conn, filepath)
+      else
+        ();
+
+      -- Register event handler for transcript responses
+      onEvent(conn, \event. handleTranscriptEvent(event));
+
+      -- Run event loop until connection closes or budget exhausted
+      runEventLoop(conn);
+
+      println("");
+      println("=== Transcription Complete ===")
+    },
+    Err(e) => println("Connection failed: " ++ show(e))
+  }
+}
+
+-- Stream audio from a WAV file in 100ms chunks
+-- PCM 16-bit, 16kHz, mono = 3,200 bytes per 100ms chunk
+func streamAudioFile(conn: StreamConn, filepath: string) -> () ! {FS, Stream, IO} {
+  match readFileBytes(filepath) {
+    Ok(audioData) => {
+      println("Loaded " ++ show(length(audioData)) ++ " bytes from " ++ filepath);
+      -- Skip WAV header (44 bytes) and send PCM data in chunks
+      sendChunks(conn, audioData, 44, 3200);
+      -- Signal end of audio
+      match sendEndOfStream(conn) {
+        Ok(_) => println("End-of-stream sent"),
+        Err(e) => println("Warning: " ++ show(e))
+      }
+    },
+    Err(e) => println("Error reading audio file: " ++ e)
+  }
+}
+
+-- Send audio data in fixed-size chunks
+func sendChunks(conn: StreamConn, data: string, offset: int, chunkSize: int) -> () ! {Stream, IO} {
+  if offset >= length(data) then ()
+  else {
+    let chunk = substring(data, offset, chunkSize);
+    match sendAudioChunk(conn, chunk) {
+      Ok(_) => sendChunks(conn, data, offset + chunkSize, chunkSize),
+      Err(e) => println("Send error at offset " ++ show(offset) ++ ": " ++ show(e))
+    }
+  }
+}
+
+-- Handle incoming stream events (transcript responses)
+func handleTranscriptEvent(event: StreamEvent) -> bool ! {IO} =
+  match event {
+    Message(msg) => {
+      match parseTranscript(msg) {
+        Ok(tr) => {
+          println(formatTranscript(tr));
+          true  -- continue listening
+        },
+        Err(_) => true  -- ignore non-transcript messages (metadata, etc.)
+      }
+    },
+    Binary(_) => {
+      -- Deepgram doesn't send binary responses, but handle gracefully
+      true
+    },
+    Opened(_) => {
+      println("[Stream] Connection opened");
+      true
+    },
+    Closed(code, reason) => {
+      println("[Stream] Closed (code " ++ show(code) ++ "): " ++ reason);
+      false  -- stop event loop
+    },
+    StreamError(err) => {
+      println("[Error] Stream error occurred");
+      false  -- stop event loop
+    },
+    Ping(_) => true
+  }

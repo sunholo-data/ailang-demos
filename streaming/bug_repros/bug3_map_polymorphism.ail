@@ -1,0 +1,30 @@
+-- Bug 3: Polymorphic `map` type variable reuse
+-- Two `map` calls in the same function share type variables,
+-- causing type conflict when mapping different element types.
+--
+-- Expected: Each `map` call gets fresh type variables
+-- Actual: Second `map` fails with "cannot unify string with TRecordOpen"
+
+module streaming/bug_repros/bug3_map_polymorphism
+
+import std/list (map)
+import std/json (jo, kv, js, ja, encode)
+
+type Item = Item({name: string, desc: string})
+
+-- This function fails because the two `map` calls share type variables
+func buildJson(items: [Item], tags: [string]) -> string {
+  -- First map: [Item] -> [Json]  (sets type var a = Item, which is a record)
+  let itemDefs = map(\i. jo([
+    kv("name", js(i.name)),
+    kv("desc", js(i.desc))
+  ]), items);
+
+  -- Second map: [string] -> [Json]  (expects a = string, but a is already Item)
+  let tagDefs = map(\s. js(s), tags);
+
+  encode(jo([
+    kv("items", ja(itemDefs)),
+    kv("tags", ja(tagDefs))
+  ]))
+}

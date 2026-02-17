@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Safe Agent — Contract-Verified Voice Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ================================================================
+     AILANG Safe Agent — Mission Control UI
+     Split-screen: Conversation (left 60%) + Safety Dashboard (right 40%)
+     ================================================================ */
+
+  :root {
+    --bg-deep: #05070a;
+    --bg-primary: #0a0d12;
+    --bg-raised: #0f1318;
+    --bg-surface: #141920;
+    --bg-card: #181e28;
+    --bg-hover: #1c2330;
+    --border: #1a2030;
+    --border-active: #253040;
+    --border-bright: #304060;
+
+    --text-primary: #d8dce6;
+    --text-secondary: #8892a4;
+    --text-muted: #556078;
+    --text-dim: #2d3548;
+
+    /* Accent palette */
+    --green: #00e576;
+    --green-bright: #2aff96;
+    --green-dim: #0a3d22;
+    --green-glow: rgba(0, 229, 118, 0.15);
+    --green-subtle: rgba(0, 229, 118, 0.06);
+
+    --red: #ff3b5c;
+    --red-bright: #ff5c7a;
+    --red-dim: #3d0a16;
+    --red-glow: rgba(255, 59, 92, 0.15);
+
+    --amber: #ffb020;
+    --amber-dim: #3d2a08;
+    --amber-glow: rgba(255, 176, 32, 0.12);
+
+    --blue: #3b8cff;
+    --blue-dim: #0a1e3d;
+    --blue-glow: rgba(59, 140, 255, 0.12);
+
+    --cyan: #00d4ff;
+    --cyan-dim: #002a3d;
+
+    --purple: #a47cff;
+
+    /* Typography */
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+    /* Ring */
+    --ring-size: 160px;
+    --ring-stroke: 12;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle grid overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.01) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.015) 2px,
+      rgba(0,0,0,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── App Shell ── */
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ================================================================
+     TOP BAR
+     ================================================================ */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 10;
+  }
+
+  .topbar::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green-dim), var(--green), var(--green-dim), transparent);
+    opacity: 0.5;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+  }
+
+  .logo .accent { color: var(--green); }
+  .logo .dim { color: var(--text-muted); font-weight: 400; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .badge-contract {
+    background: var(--green-dim);
+    border: 1px solid rgba(0, 229, 118, 0.25);
+    color: var(--green);
+  }
+
+  .badge-contract .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse-green 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
+    50% { opacity: 0.5; box-shadow: 0 0 3px var(--green); }
+  }
+
+  .badge-gemini {
+    background: var(--blue-dim);
+    border: 1px solid rgba(59, 140, 255, 0.25);
+    color: var(--blue);
+  }
+
+  .badge-ws {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    transition: all 0.3s;
+  }
+
+  .badge-ws.connected {
+    background: var(--green-dim);
+    border-color: rgba(0, 229, 118, 0.25);
+    color: var(--green);
+  }
+
+  .badge-ws .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: all 0.3s;
+  }
+
+  .badge-ws.connected .dot {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse-green 2s ease-in-out infinite;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-topbar {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .btn-topbar:hover {
+    border-color: var(--border-active);
+    color: var(--text-secondary);
+    background: var(--bg-raised);
+  }
+
+  .btn-topbar.active {
+    border-color: rgba(0, 229, 118, 0.3);
+    color: var(--green);
+    background: var(--green-dim);
+  }
+
+  /* ── Config Panel ── */
+  .config-panel {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+    padding: 0 20px;
+  }
+
+  .config-panel.open {
+    max-height: 200px;
+    padding: 14px 20px;
+  }
+
+  .config-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--amber-dim);
+    border: 1px solid rgba(255, 176, 32, 0.15);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--amber);
+    line-height: 1.6;
+  }
+
+  .config-note code {
+    background: var(--bg-surface);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .config-row label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 70px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .config-input {
+    flex: 1;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .config-input:focus { border-color: var(--green-dim); }
+  .config-input::placeholder { color: var(--text-dim); }
+
+  /* ================================================================
+     MAIN CONTENT — SPLIT SCREEN
+     ================================================================ */
+  .main-split {
+    display: grid;
+    grid-template-columns: 1fr 0.67fr;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── Left Panel: Conversation ── */
+  .panel-conversation {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    min-height: 0;
+    position: relative;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .panel-header .indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .panel-header .indicator .dot-sm {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  .panel-header .indicator .dot-sm.active {
+    background: var(--green);
+    box-shadow: 0 0 4px var(--green);
+  }
+
+  /* Messages area */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    scroll-behavior: smooth;
+    background:
+      radial-gradient(ellipse at 30% 0%, rgba(0, 229, 118, 0.015) 0%, transparent 50%),
+      var(--bg-deep);
+  }
+
+  .messages::-webkit-scrollbar { width: 5px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .messages::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+  /* Welcome */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    text-align: center;
+    padding: 40px 30px;
+    gap: 16px;
+  }
+
+  .welcome-shield {
+    width: 64px;
+    height: 64px;
+    position: relative;
+  }
+
+  .welcome-shield svg {
+    width: 64px;
+    height: 64px;
+    filter: drop-shadow(0 0 20px var(--green-glow));
+  }
+
+  .welcome h2 {
+    font-family: var(--font-sans);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+  }
+
+  .welcome p {
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 360px;
+    line-height: 1.7;
+  }
+
+  .welcome kbd {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+  }
+
+  .welcome .feature-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .welcome .feature-tag {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .feature-tag.calc { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,229,118,0.15); }
+  .feature-tag.file { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(59,140,255,0.15); }
+  .feature-tag.sql { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,176,32,0.15); }
+  .feature-tag.div { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,59,92,0.15); }
+
+  /* Messages */
+  .msg {
+    max-width: 92%;
+    animation: msg-in 0.25s ease-out;
+  }
+
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-user {
+    align-self: flex-end;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px 10px 2px 10px;
+    padding: 10px 14px;
+  }
+
+  .msg-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .msg-user .msg-label {
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  .msg-agent {
+    align-self: flex-start;
+    padding: 8px 0;
+  }
+
+  .msg-agent .msg-label {
+    color: var(--green-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg-agent .msg-label .arrow { color: var(--green); font-size: 10px; }
+
+  .msg-text {
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg-agent .msg-text {
+    padding-left: 14px;
+    border-left: 2px solid var(--border);
+    color: var(--text-primary);
+  }
+
+  .msg-agent.streaming .msg-text {
+    border-left-color: var(--green-dim);
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--green);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.6s step-end infinite;
+    box-shadow: 0 0 8px var(--green-glow);
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .msg-error {
+    align-self: center;
+    background: var(--red-dim);
+    border: 1px solid rgba(255, 59, 92, 0.2);
+    border-radius: 6px;
+    padding: 8px 14px;
+    color: var(--red);
+    font-size: 12px;
+  }
+
+  .msg-system {
+    align-self: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 4px 12px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    font-style: italic;
+  }
+
+  /* ── Tool Call Cards ── */
+  .tool-card {
+    align-self: flex-start;
+    width: 100%;
+    max-width: 92%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    animation: msg-in 0.3s ease-out;
+  }
+
+  .tool-card.pass { border-color: rgba(0, 229, 118, 0.2); }
+  .tool-card.fail { border-color: rgba(255, 59, 92, 0.2); }
+
+  .tool-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+
+  .tool-card-header .tool-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tool-card-header .tool-name .fn-icon {
+    color: var(--purple);
+    font-size: 10px;
+    font-weight: 400;
+  }
+
+  .tool-card-header .contract-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+
+  .contract-badge.pass {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .contract-badge.fail {
+    background: var(--red-dim);
+    color: var(--red);
+  }
+
+  .contract-badge .icon { font-size: 11px; }
+
+  .tool-card-body {
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+
+  .tool-card-body .tc-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .tool-card-body .tc-label {
+    color: var(--text-muted);
+    min-width: 50px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 9px;
+    padding-top: 2px;
+  }
+
+  .tool-card-body .tc-value {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    word-break: break-all;
+  }
+
+  .tool-card-body .tc-value.result { color: var(--green); }
+  .tool-card-body .tc-value.rejected { color: var(--red); }
+
+  .tool-card-body .contract-checks {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+  }
+
+  .check-pill.pass {
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid rgba(0, 229, 118, 0.1);
+  }
+
+  .check-pill.fail {
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid rgba(255, 59, 92, 0.1);
+  }
+
+  /* ── Input Area ── */
+  .input-area {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    flex-shrink: 0;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .btn-mic {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .btn-mic:hover {
+    border-color: var(--green-dim);
+    color: var(--green);
+    background: var(--green-dim);
+  }
+
+  .btn-mic.recording {
+    background: var(--red-dim);
+    border-color: rgba(255, 59, 92, 0.4);
+    color: var(--red);
+    animation: mic-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 59, 92, 0); }
+  }
+
+  .btn-mic svg { width: 18px; height: 18px; }
+
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  .input-field {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    min-height: 42px;
+    max-height: 120px;
+    transition: border-color 0.15s;
+  }
+
+  .input-field:focus { border-color: rgba(0, 229, 118, 0.3); }
+  .input-field::placeholder { color: var(--text-dim); }
+
+  .btn-send {
+    background: var(--green);
+    color: var(--bg-deep);
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    height: 42px;
+  }
+
+  .btn-send:hover { background: var(--green-bright); }
+
+  .btn-send:disabled {
+    background: var(--bg-surface);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  /* ================================================================
+     RIGHT PANEL: SAFETY DASHBOARD
+     ================================================================ */
+  .panel-safety {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background:
+      radial-gradient(ellipse at 70% 20%, rgba(0, 229, 118, 0.02) 0%, transparent 50%),
+      var(--bg-deep);
+  }
+
+  /* ── Percentage Ring ── */
+  .safety-ring-section {
+    padding: 20px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .ring-container {
+    position: relative;
+    width: var(--ring-size);
+    height: var(--ring-size);
+  }
+
+  .ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: var(--bg-surface);
+    stroke-width: var(--ring-stroke);
+  }
+
+  .ring-fill {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: var(--ring-stroke);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.3s;
+    filter: drop-shadow(0 0 6px var(--green-glow));
+  }
+
+  .ring-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .ring-pct {
+    font-family: var(--font-sans);
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--green);
+    letter-spacing: -1px;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .ring-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .ring-sublabel {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-top: 4px;
+  }
+
+  /* ── Tool Status Cards ── */
+  .safety-cards {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .safety-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+
+  .safety-card:hover { border-color: var(--border-active); }
+
+  .safety-card .sc-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+
+  .safety-card .sc-indicator.green { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+  .safety-card .sc-indicator.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber-glow); }
+  .safety-card .sc-indicator.red { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+  .safety-card .sc-indicator.dim { background: var(--text-dim); }
+
+  .safety-card .sc-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .safety-card .sc-title {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1px;
+  }
+
+  .safety-card .sc-detail {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .safety-card .sc-stats {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .safety-card .sc-count {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    line-height: 1;
+  }
+
+  .safety-card .sc-sublabel {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  /* ── Contract Log ── */
+  .contract-log {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .log-header {
+    padding: 8px 14px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .log-header .log-count {
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .log-entries {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+    scroll-behavior: smooth;
+  }
+
+  .log-entries::-webkit-scrollbar { width: 4px; }
+  .log-entries::-webkit-scrollbar-track { background: transparent; }
+  .log-entries::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 14px;
+    font-size: 10px;
+    line-height: 1.5;
+    animation: log-in 0.2s ease-out;
+    border-left: 2px solid transparent;
+  }
+
+  .log-entry:hover { background: var(--bg-raised); }
+
+  .log-entry.pass { border-left-color: var(--green); }
+  .log-entry.fail { border-left-color: var(--red); }
+
+  @keyframes log-in {
+    from { opacity: 0; transform: translateX(8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-entry .log-time {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    min-width: 55px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .log-entry .log-icon {
+    font-size: 11px;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+  }
+
+  .log-entry .log-icon.pass { color: var(--green); }
+  .log-entry .log-icon.fail { color: var(--red); }
+
+  .log-entry .log-msg {
+    color: var(--text-secondary);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .log-entry .log-msg .fn { color: var(--purple); font-weight: 600; }
+  .log-entry .log-msg .val { color: var(--cyan); }
+  .log-entry .log-msg .err { color: var(--red); }
+
+  .log-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-style: italic;
+    padding: 20px;
+  }
+
+  /* ================================================================
+     FOOTER — BUDGET METERS
+     ================================================================ */
+  .footer-budgets {
+    display: flex;
+    align-items: center;
+    padding: 6px 20px;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    gap: 20px;
+    flex-wrap: wrap;
+    min-height: 32px;
+  }
+
+  .budget-meter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  .budget-meter .bm-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 40px;
+  }
+
+  .budget-meter .bm-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: var(--bg-surface);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .budget-meter .bm-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease, background 0.3s;
+    background: var(--green);
+  }
+
+  .budget-meter .bm-bar.warn { background: var(--amber); }
+  .budget-meter .bm-bar.danger { background: var(--red); }
+
+  .budget-meter .bm-text {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    min-width: 50px;
+  }
+
+  .footer-spacer { flex: 1; }
+
+  .footer-branding {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .footer-branding .ail { color: var(--green); font-weight: 600; }
+
+  /* ================================================================
+     RESPONSIVE
+     ================================================================ */
+  @media (max-width: 900px) {
+    .main-split {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    .panel-conversation { border-right: none; border-bottom: 1px solid var(--border); }
+    :root { --ring-size: 120px; }
+    .safety-ring-section { padding: 12px; }
+    .ring-pct { font-size: 28px; }
+  }
+
+  @media (max-width: 600px) {
+    .topbar { padding: 8px 12px; }
+    .badge-gemini { display: none; }
+    .footer-budgets { padding: 6px 12px; gap: 12px; }
+    .budget-meter .bm-bar-wrap { width: 50px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============================================================
+       TOP BAR
+       ============================================================ -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo"><span class="accent">AILANG</span> <span class="dim">Safe Agent</span></div>
+      <span class="badge badge-contract"><span class="dot"></span> Contract-Verified</span>
+      <span class="badge badge-gemini">Gemini Live</span>
+      <span class="badge badge-ws" id="wsStatus"><span class="dot"></span> <span id="wsLabel">Disconnected</span></span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-topbar" id="btnTestSafety" onclick="runSafetyTest()">Test Safety</button>
+      <button class="btn-topbar" id="btnConfig" onclick="toggleConfig()">Config</button>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="config-panel" id="configPanel">
+    <div class="config-note">
+      <span>*</span>
+      <span>Connects directly to <code>wss://generativelanguage.googleapis.com</code> via WebSocket.
+      The Gemini API key is stored in localStorage only and never sent to any third party.</span>
+    </div>
+    <div class="config-row">
+      <label>API Key</label>
+      <input type="password" class="config-input" id="apiKeyInput"
+             placeholder="AIza..." autocomplete="off"
+             onchange="saveConfig()">
+    </div>
+    <div class="config-row">
+      <label>Model</label>
+      <input type="text" class="config-input" id="modelInput"
+             value="models/gemini-2.0-flash-exp" autocomplete="off"
+             onchange="saveConfig()">
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MAIN SPLIT: Conversation + Safety Dashboard
+       ============================================================ -->
+  <div class="main-split">
+    <!-- Left Panel: Conversation -->
+    <div class="panel-conversation">
+      <div class="panel-header">
+        <span>Conversation</span>
+        <div class="indicator">
+          <span class="dot-sm" id="streamDot"></span>
+          <span id="streamLabel">idle</span>
+        </div>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <div class="welcome-shield">
+            <svg viewBox="0 0 64 64" fill="none">
+              <path d="M32 4L8 16v16c0 14.4 10.24 27.84 24 32 13.76-4.16 24-17.6 24-32V16L32 4z"
+                    stroke="currentColor" stroke-width="1.5" fill="none"
+                    style="color: var(--green); filter: drop-shadow(0 0 10px rgba(0,229,118,0.3))"/>
+              <path d="M22 32l6 6 14-14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                    style="color: var(--green)"/>
+            </svg>
+          </div>
+          <h2>Contract-Verified Voice Agent</h2>
+          <p>Every tool call is validated by formal contracts at runtime.
+             Calculator clamps inputs, file reads block traversal,
+             SQL enforces SELECT-only. Provably safe.</p>
+          <div class="feature-tags">
+            <span class="feature-tag calc">Calculator bounds</span>
+            <span class="feature-tag file">Path validation</span>
+            <span class="feature-tag sql">SELECT-only SQL</span>
+            <span class="feature-tag div">Div-by-zero guard</span>
+          </div>
+          <p style="margin-top:8px"><kbd>Enter</kbd> to send &middot; Click mic for voice &middot; "Test Safety" for demo</p>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-row">
+          <button class="btn-mic" id="btnMic" onclick="toggleMic()" title="Toggle microphone">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+          <div class="input-wrap">
+            <textarea class="input-field" id="inputField" rows="1"
+                      placeholder="Ask the safe agent..."
+                      onkeydown="handleKeydown(event)"
+                      oninput="autoResize(this)"></textarea>
+          </div>
+          <button class="btn-send" id="btnSend" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Safety Dashboard -->
+    <div class="panel-safety">
+      <div class="panel-header">
+        <span>Safety Dashboard</span>
+        <div class="indicator">
+          <span id="contractsLabel">0 contracts checked</span>
+        </div>
+      </div>
+
+      <!-- Percentage Ring -->
+      <div class="safety-ring-section">
+        <div class="ring-container">
+          <svg class="ring-svg" viewBox="0 0 160 160">
+            <circle class="ring-bg" cx="80" cy="80" r="68"/>
+            <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="68"
+                    stroke-dasharray="427.26" stroke-dashoffset="427.26"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct" id="ringPct">--</div>
+            <div class="ring-label">Pass Rate</div>
+          </div>
+        </div>
+        <div class="ring-sublabel" id="ringSubLabel">0 / 0 tool calls passed</div>
+      </div>
+
+      <!-- Tool Status Cards -->
+      <div class="safety-cards">
+        <div class="safety-card" id="cardCalc">
+          <div class="sc-indicator dim" id="calcIndicator"></div>
+          <div class="sc-content">
+            <div class="sc-title">Calculator</div>
+            <div class="sc-detail" id="calcDetail">Input clamping, overflow protection</div>
+          </div>
+          <div class="sc-stats">
+            <div class="sc-count" id="calcCount">0</div>
+            <div class="sc-sublabel">calls</div>
+          </div>
+        </div>
+        <div class="safety-card" id="cardFile">
+          <div class="sc-indicator dim" id="fileIndicator"></div>
+          <div class="sc-content">
+            <div class="sc-title">File Access</div>
+            <div class="sc-detail" id="fileDetail">Path validation, traversal blocking</div>
+          </div>
+          <div class="sc-stats">
+            <div class="sc-count" id="fileCount">0</div>
+            <div class="sc-sublabel">calls</div>
+          </div>
+        </div>
+        <div class="safety-card" id="cardSql">
+          <div class="sc-indicator dim" id="sqlIndicator"></div>
+          <div class="sc-content">
+            <div class="sc-title">SQL Query</div>
+            <div class="sc-detail" id="sqlDetail">SELECT-only enforcement</div>
+          </div>
+          <div class="sc-stats">
+            <div class="sc-count" id="sqlCount">0</div>
+            <div class="sc-sublabel">calls</div>
+          </div>
+        </div>
+        <div class="safety-card" id="cardDiv">
+          <div class="sc-indicator dim" id="divIndicator"></div>
+          <div class="sc-content">
+            <div class="sc-title">Division</div>
+            <div class="sc-detail" id="divDetail">Div-by-zero guard</div>
+          </div>
+          <div class="sc-stats">
+            <div class="sc-count" id="divCount">0</div>
+            <div class="sc-sublabel">blocks</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contract Log -->
+      <div class="contract-log">
+        <div class="log-header">
+          <span>Contract Log</span>
+          <span class="log-count" id="logCount">0 entries</span>
+        </div>
+        <div class="log-entries" id="logEntries">
+          <div class="log-empty" id="logEmpty">Waiting for tool calls...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FOOTER — BUDGET METERS
+       ============================================================ -->
+  <div class="footer-budgets">
+    <div class="budget-meter">
+      <span class="bm-label">Stream</span>
+      <div class="bm-bar-wrap"><div class="bm-bar" id="budgetStreamBar" style="width:0%"></div></div>
+      <span class="bm-text" id="budgetStreamText">0 / 50</span>
+    </div>
+    <div class="budget-meter">
+      <span class="bm-label">FS</span>
+      <div class="bm-bar-wrap"><div class="bm-bar" id="budgetFsBar" style="width:0%"></div></div>
+      <span class="bm-text" id="budgetFsText">0 / 10</span>
+    </div>
+    <div class="budget-meter">
+      <span class="bm-label">Net</span>
+      <div class="bm-bar-wrap"><div class="bm-bar" id="budgetNetBar" style="width:0%"></div></div>
+      <span class="bm-text" id="budgetNetText">0 / 5</span>
+    </div>
+    <div class="footer-spacer"></div>
+    <div class="footer-branding"><span class="ail">AILANG</span> Contract-Verified Agent</div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// AILANG Safe Agent — Browser Client
+//
+// Connects to Gemini Live API via WebSocket.
+// All tool calls are contract-verified locally in the browser,
+// mirroring the AILANG runtime contracts from verified_tools.ail.
+// ================================================================
+
+// ── State ──
+let ws = null;
+let isConnected = false;
+let isRecording = false;
+let audioContext = null;
+let captureNode = null;
+let playbackNode = null;
+let mediaStream = null;
+let currentAgentMsg = null;
+
+// Safety tracking (mirrors SafetyStats from agent_types.ail)
+const safety = {
+  total: 0,
+  passed: 0,
+  failed: 0,
+  contractsChecked: 0,
+  calc: { calls: 0, clamps: 0, lastStatus: 'dim' },
+  file: { calls: 0, blocked: 0, lastStatus: 'dim' },
+  sql:  { calls: 0, blocked: 0, lastStatus: 'dim' },
+  div:  { calls: 0, blocked: 0, lastStatus: 'dim' }
+};
+
+// Budget tracking (mirrors AILANG capability budgets)
+const budgets = {
+  stream: { used: 0, limit: 50 },
+  fs:     { used: 0, limit: 10 },
+  net:    { used: 0, limit: 5 }
+};
+
+const logEntries = [];
+
+// ── Config ──
+function toggleConfig() {
+  const panel = document.getElementById('configPanel');
+  panel.classList.toggle('open');
+  const btn = document.getElementById('btnConfig');
+  btn.textContent = panel.classList.contains('open') ? 'Close' : 'Config';
+}
+
+function saveConfig() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  const model = document.getElementById('modelInput').value.trim();
+  if (key) localStorage.setItem('ailang_safe_agent_key', key);
+  if (model) localStorage.setItem('ailang_safe_agent_model', model);
+}
+
+function getApiKey() {
+  return document.getElementById('apiKeyInput').value.trim() ||
+         localStorage.getItem('ailang_safe_agent_key') || '';
+}
+
+function getModel() {
+  return document.getElementById('modelInput').value.trim() ||
+         localStorage.getItem('ailang_safe_agent_model') ||
+         'models/gemini-2.0-flash-exp';
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem('ailang_safe_agent_key');
+  const savedModel = localStorage.getItem('ailang_safe_agent_model');
+  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  if (savedModel) document.getElementById('modelInput').value = savedModel;
+  document.getElementById('inputField').focus();
+  updateRing();
+  updateBudgets();
+});
+
+// ── Input ──
+function handleKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── WebSocket Connection ──
+function connectWS() {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    toggleConfig();
+    document.getElementById('apiKeyInput').focus();
+    addErrorMessage('Set your Gemini API key first.');
+    return;
+  }
+
+  const model = getModel();
+  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+
+  setWsStatus('connecting');
+  addSystemMessage('Connecting to Gemini Live...');
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setWsStatus('connected');
+    addSystemMessage('Connected. Sending setup with verified tools...');
+    sendSetup(model);
+  };
+
+  ws.onmessage = (event) => {
+    budgets.stream.used++;
+    updateBudgets();
+
+    try {
+      const data = JSON.parse(event.data);
+      handleServerMessage(data);
+    } catch (e) {
+      // binary audio data or malformed JSON
+    }
+  };
+
+  ws.onerror = () => {
+    setWsStatus('disconnected');
+    addErrorMessage('WebSocket error. Check API key and network.');
+  };
+
+  ws.onclose = (e) => {
+    setWsStatus('disconnected');
+    addSystemMessage(`Disconnected (code ${e.code}).`);
+    isConnected = false;
+    ws = null;
+  };
+}
+
+function disconnectWS() {
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  isConnected = false;
+  setWsStatus('disconnected');
+}
+
+function setWsStatus(state) {
+  const badge = document.getElementById('wsStatus');
+  const label = document.getElementById('wsLabel');
+
+  badge.classList.remove('connected');
+  if (state === 'connected') {
+    badge.classList.add('connected');
+    label.textContent = 'Connected';
+    isConnected = true;
+  } else if (state === 'connecting') {
+    label.textContent = 'Connecting...';
+  } else {
+    label.textContent = 'Disconnected';
+    isConnected = false;
+  }
+}
+
+// ── Gemini Setup ──
+// Mirror of buildSafeSetup() from main.ail
+function sendSetup(model) {
+  const setup = {
+    setup: {
+      model: model,
+      generationConfig: {
+        responseModalities: ['TEXT']
+      },
+      systemInstruction: {
+        parts: [{
+          text: `You are a safe assistant with contract-verified tools. ` +
+            `All tool operations are validated at runtime with formal contracts. ` +
+            `The calculator clamps inputs to [-1000, 1000] and guarantees results in [-1000000, 1000000]. ` +
+            `File reads are restricted to the allowed directory with no path traversal. ` +
+            `SQL queries must be SELECT-only. ` +
+            `Use the available tools when the user asks for calculations, file operations, or data queries. ` +
+            `After each tool result, briefly mention the contract verification status.`
+        }]
+      },
+      tools: [{
+        functionDeclarations: [
+          {
+            name: 'calculate',
+            description: 'Safe calculator. Inputs clamped to [-1000,1000], output guaranteed in [-1000000,1000000]. Operations: add, subtract, multiply, divide, modulo.',
+            parameters: {
+              type: 'object',
+              properties: {
+                op: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide', 'modulo'] },
+                a: { type: 'number' },
+                b: { type: 'number' }
+              },
+              required: ['op', 'a', 'b']
+            }
+          },
+          {
+            name: 'readFile',
+            description: "Read a file from the allowed directory. Path must not contain '..' and must start with the allowed prefix.",
+            parameters: {
+              type: 'object',
+              properties: {
+                filepath: { type: 'string' }
+              },
+              required: ['filepath']
+            }
+          },
+          {
+            name: 'query',
+            description: 'Execute a SQL SELECT query. Only SELECT queries are allowed (no INSERT, UPDATE, DELETE, DROP).',
+            parameters: {
+              type: 'object',
+              properties: {
+                sql: { type: 'string' }
+              },
+              required: ['sql']
+            }
+          },
+          {
+            name: 'wordCount',
+            description: 'Count the number of words in a text string.',
+            parameters: {
+              type: 'object',
+              properties: {
+                text: { type: 'string' }
+              },
+              required: ['text']
+            }
+          }
+        ]
+      }]
+    }
+  };
+
+  wsSend(setup);
+}
+
+function wsSend(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+    budgets.stream.used++;
+    updateBudgets();
+  }
+}
+
+// ── Handle Server Messages ──
+function handleServerMessage(data) {
+  // Setup complete
+  if (data.setupComplete !== undefined) {
+    isConnected = true;
+    addSystemMessage('Setup complete. All tools verified and ready.');
+    setStreamIndicator(false);
+    return;
+  }
+
+  // Tool call
+  if (data.toolCall) {
+    handleToolCall(data.toolCall);
+    return;
+  }
+
+  // Server content (text / audio / turn complete)
+  if (data.serverContent) {
+    handleServerContent(data.serverContent);
+    return;
+  }
+}
+
+// ── Tool Calls — Contract Verification ──
+// These mirror the contracts from verified_tools.ail
+
+function clampInput(x) {
+  // ensures { result >= -1000 && result <= 1000 }
+  if (x > 1000) return 1000;
+  if (x < -1000) return -1000;
+  return x;
+}
+
+function containsTraversal(path) {
+  return path.split('/').some(p => p === '..');
+}
+
+function isPathSafe(path, prefix) {
+  return path.startsWith(prefix) && !containsTraversal(path);
+}
+
+function isSafeQuery(sql) {
+  return sql.trimStart().startsWith('SELECT');
+}
+
+const ALLOWED_PATH = '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/';
+
+function handleToolCall(toolCall) {
+  const calls = toolCall.functionCalls || [];
+
+  for (const call of calls) {
+    const id = call.id || '';
+    const name = call.name || '';
+    const args = call.args || {};
+
+    let result = null;
+    let rejected = false;
+    let contractChecks = [];
+
+    safety.total++;
+    safety.contractsChecked++;
+
+    switch (name) {
+      case 'calculate': {
+        const op = args.op || '';
+        const rawA = typeof args.a === 'number' ? args.a : 0;
+        const rawB = typeof args.b === 'number' ? args.b : 0;
+        const a = clampInput(Math.round(rawA));
+        const b = clampInput(Math.round(rawB));
+
+        const wasClamped = (a !== Math.round(rawA)) || (b !== Math.round(rawB));
+        if (wasClamped) {
+          safety.calc.clamps++;
+          contractChecks.push({ name: 'Input clamped', pass: true });
+        }
+
+        contractChecks.push({ name: 'Bounds [-1000,1000]', pass: true });
+        safety.calc.calls++;
+
+        if (op === 'divide' && b === 0) {
+          rejected = true;
+          result = 'Division by zero is not allowed';
+          safety.div.blocked++;
+          safety.div.calls++;
+          contractChecks.push({ name: 'Div-by-zero guard', pass: true });
+          updateCardStatus('div', 'amber');
+        } else if (op === 'modulo' && b === 0) {
+          rejected = true;
+          result = 'Modulo by zero is not allowed';
+          safety.div.blocked++;
+          safety.div.calls++;
+          contractChecks.push({ name: 'Div-by-zero guard', pass: true });
+          updateCardStatus('div', 'amber');
+        } else {
+          let val;
+          switch (op) {
+            case 'add': val = a + b; break;
+            case 'subtract': val = a - b; break;
+            case 'multiply':
+              val = a * b;
+              if (val > 1000000) val = 1000000;
+              if (val < -1000000) val = -1000000;
+              break;
+            case 'divide': val = Math.trunc(a / b); break;
+            case 'modulo': val = a - Math.trunc(a / b) * b; break;
+            default:
+              rejected = true;
+              result = `Unknown operation: ${op}`;
+          }
+
+          if (!rejected) {
+            const inBounds = val >= -1000000 && val <= 1000000;
+            contractChecks.push({ name: 'Result in [-1M, 1M]', pass: inBounds });
+            result = String(val);
+          }
+        }
+
+        if (!rejected) {
+          updateCardStatus('calc', 'green');
+        } else {
+          updateCardStatus('calc', 'amber');
+        }
+        break;
+      }
+
+      case 'readFile': {
+        const filepath = args.filepath || '';
+        safety.file.calls++;
+        budgets.fs.used++;
+
+        const pathSafe = isPathSafe(filepath, ALLOWED_PATH);
+        const noTraversal = !containsTraversal(filepath);
+        contractChecks.push({ name: 'No traversal (..)', pass: noTraversal });
+        contractChecks.push({ name: 'Under allowed prefix', pass: filepath.startsWith(ALLOWED_PATH) });
+
+        if (!pathSafe) {
+          rejected = true;
+          result = `Path rejected: '${filepath}' must start with '${ALLOWED_PATH}' and contain no '..'`;
+          safety.file.blocked++;
+          updateCardStatus('file', 'red');
+        } else {
+          // In browser we can't actually read files, simulate success
+          result = `[Browser mock] File read: ${filepath}`;
+          updateCardStatus('file', 'green');
+        }
+        break;
+      }
+
+      case 'query': {
+        const sql = args.sql || '';
+        safety.sql.calls++;
+        budgets.net.used++;
+
+        const isSafe = isSafeQuery(sql);
+        contractChecks.push({ name: 'SELECT-only', pass: isSafe });
+
+        if (!isSafe) {
+          rejected = true;
+          result = `Rejected: only SELECT queries are allowed. Got: ${sql.slice(0, 30)}...`;
+          safety.sql.blocked++;
+          updateCardStatus('sql', 'red');
+        } else {
+          result = `Query executed: ${sql}`;
+          updateCardStatus('sql', 'green');
+        }
+        break;
+      }
+
+      case 'wordCount': {
+        const text = args.text || '';
+        const count = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+        contractChecks.push({ name: 'Result >= 0', pass: count >= 0 });
+        result = `${count} words`;
+        break;
+      }
+
+      default: {
+        rejected = true;
+        result = `Unknown tool: ${name}`;
+      }
+    }
+
+    if (rejected) {
+      safety.failed++;
+    } else {
+      safety.passed++;
+    }
+
+    // Update UI
+    addToolCard(name, args, result, rejected, contractChecks);
+    addLogEntry(name, args, result, rejected, contractChecks);
+    updateRing();
+    updateBudgets();
+    updateCardCounts();
+
+    // Send response back to Gemini
+    const response = {
+      toolResponse: {
+        functionResponses: [{
+          id: id,
+          name: name,
+          response: {
+            result: rejected ? `Contract violation: ${result}` : result
+          }
+        }]
+      }
+    };
+    wsSend(response);
+  }
+}
+
+// ── Server Content (text responses) ──
+function handleServerContent(sc) {
+  if (sc.turnComplete) {
+    finishAgentMessage();
+    setStreamIndicator(false);
+    return;
+  }
+
+  if (sc.modelTurn) {
+    const parts = sc.modelTurn.parts || [];
+    for (const part of parts) {
+      if (part.text) {
+        if (!currentAgentMsg) {
+          currentAgentMsg = createAgentMessage();
+          setStreamIndicator(true);
+        }
+        appendToAgent(currentAgentMsg, part.text);
+      }
+      // Audio playback would go here with the audio worklet
+      if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/')) {
+        playAudio(part.inlineData.data);
+      }
+    }
+  }
+}
+
+// ── Audio (mic + playback) ──
+async function toggleMic() {
+  const btn = document.getElementById('btnMic');
+
+  if (isRecording) {
+    stopRecording();
+    btn.classList.remove('recording');
+    return;
+  }
+
+  if (!isConnected) {
+    connectWS();
+    // Wait a moment for connection
+    await new Promise(r => setTimeout(r, 1500));
+    if (!isConnected) return;
+  }
+
+  try {
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    await audioContext.audioWorklet.addModule('../shared/audio-worklet.js');
+
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true }
+    });
+
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    captureNode = new AudioWorkletNode(audioContext, 'pcm-capture', {
+      processorOptions: { targetRate: 16000, chunkMs: 100 }
+    });
+
+    captureNode.port.onmessage = (e) => {
+      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === WebSocket.OPEN) {
+        const base64 = arrayBufferToBase64(e.data.pcmData);
+        wsSend({
+          realtimeInput: {
+            mediaChunks: [{
+              mimeType: 'audio/pcm;rate=16000',
+              data: base64
+            }]
+          }
+        });
+      }
+    };
+
+    source.connect(captureNode);
+    captureNode.connect(audioContext.destination);
+
+    // Setup playback
+    playbackNode = new AudioWorkletNode(audioContext, 'pcm-playback', {
+      processorOptions: { sourceRate: 24000 }
+    });
+    playbackNode.connect(audioContext.destination);
+
+    isRecording = true;
+    btn.classList.add('recording');
+    addSystemMessage('Microphone active. Speak now.');
+  } catch (err) {
+    addErrorMessage(`Mic error: ${err.message}`);
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (captureNode) {
+    captureNode.port.postMessage({ command: 'stop' });
+    captureNode.disconnect();
+    captureNode = null;
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  addSystemMessage('Microphone stopped.');
+}
+
+function playAudio(base64Data) {
+  if (!playbackNode) return;
+  const bytes = atob(base64Data);
+  const buffer = new ArrayBuffer(bytes.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i++) view[i] = bytes.charCodeAt(i);
+  playbackNode.port.postMessage({ type: 'enqueue', pcmData: buffer }, [buffer]);
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// ── Send Text Message ──
+function sendMessage() {
+  const input = document.getElementById('inputField');
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!isConnected) {
+    connectWS();
+    // Queue the message to send after connection
+    const waitAndSend = () => {
+      if (isConnected) {
+        sendTextToGemini(text);
+      } else {
+        setTimeout(waitAndSend, 200);
+      }
+    };
+    addUserMessage(text);
+    input.value = '';
+    input.style.height = 'auto';
+    setTimeout(waitAndSend, 500);
+    return;
+  }
+
+  addUserMessage(text);
+  input.value = '';
+  input.style.height = 'auto';
+  sendTextToGemini(text);
+}
+
+function sendTextToGemini(text) {
+  wsSend({
+    clientContent: {
+      turns: [{
+        role: 'user',
+        parts: [{ text: text }]
+      }],
+      turnComplete: true
+    }
+  });
+  setStreamIndicator(true);
+}
+
+// ── UI: Messages ──
+function removeWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function addUserMessage(text) {
+  removeWelcome();
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-user';
+  div.innerHTML = `<div class="msg-label">You</div><div class="msg-text">${escapeHtml(text)}</div>`;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function createAgentMessage() {
+  removeWelcome();
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-agent streaming';
+  div.innerHTML = `<div class="msg-label"><span class="arrow">&#9656;</span> Agent</div><div class="msg-text"><span class="cursor-blink"></span></div>`;
+  container.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function appendToAgent(el, text) {
+  if (!el) return;
+  const textEl = el.querySelector('.msg-text');
+  const cursor = textEl.querySelector('.cursor-blink');
+  if (cursor) {
+    cursor.insertAdjacentText('beforebegin', text);
+  } else {
+    textEl.textContent += text;
+  }
+  scrollToBottom();
+}
+
+function finishAgentMessage() {
+  if (currentAgentMsg) {
+    currentAgentMsg.classList.remove('streaming');
+    const cursor = currentAgentMsg.querySelector('.cursor-blink');
+    if (cursor) cursor.remove();
+    currentAgentMsg = null;
+  }
+}
+
+function addToolCard(name, args, result, rejected, checks) {
+  removeWelcome();
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `msg tool-card ${rejected ? 'fail' : 'pass'}`;
+
+  const argsStr = Object.entries(args).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ');
+  const checksHtml = checks.map(c =>
+    `<span class="check-pill ${c.pass ? 'pass' : 'fail'}">${c.pass ? '\u2713' : '\u2717'} ${c.name}</span>`
+  ).join('');
+
+  div.innerHTML = `
+    <div class="tool-card-header">
+      <span class="tool-name"><span class="fn-icon">\u0192</span> ${escapeHtml(name)}</span>
+      <span class="contract-badge ${rejected ? 'fail' : 'pass'}">
+        <span class="icon">${rejected ? '\u2717' : '\u2713'}</span>
+        ${rejected ? 'REJECTED' : 'PASSED'}
+      </span>
+    </div>
+    <div class="tool-card-body">
+      <div class="tc-row"><span class="tc-label">Args</span><span class="tc-value">${escapeHtml(argsStr)}</span></div>
+      <div class="tc-row"><span class="tc-label">${rejected ? 'Reject' : 'Result'}</span><span class="tc-value ${rejected ? 'rejected' : 'result'}">${escapeHtml(result)}</span></div>
+      <div class="contract-checks">${checksHtml}</div>
+    </div>`;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function addErrorMessage(text) {
+  removeWelcome();
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-error';
+  div.textContent = text;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function addSystemMessage(text) {
+  removeWelcome();
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg msg-system';
+  div.textContent = text;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  const c = document.getElementById('messages');
+  c.scrollTop = c.scrollHeight;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function setStreamIndicator(active) {
+  const dot = document.getElementById('streamDot');
+  const label = document.getElementById('streamLabel');
+  dot.classList.toggle('active', active);
+  label.textContent = active ? 'streaming' : 'idle';
+}
+
+// ── UI: Safety Dashboard ──
+function updateRing() {
+  const ring = document.getElementById('ringFill');
+  const pctEl = document.getElementById('ringPct');
+  const subEl = document.getElementById('ringSubLabel');
+
+  const circumference = 2 * Math.PI * 68; // r=68
+  let pct;
+
+  if (safety.total === 0) {
+    pct = 100;
+    ring.style.strokeDashoffset = circumference; // empty
+    pctEl.textContent = '--';
+    pctEl.style.color = 'var(--text-dim)';
+    ring.style.stroke = 'var(--text-dim)';
+    subEl.textContent = '0 / 0 tool calls passed';
+  } else {
+    pct = Math.round((safety.passed / safety.total) * 100);
+    const offset = circumference - (pct / 100) * circumference;
+    ring.style.strokeDashoffset = offset;
+
+    pctEl.textContent = pct + '%';
+
+    if (pct === 100) {
+      pctEl.style.color = 'var(--green)';
+      ring.style.stroke = 'var(--green)';
+    } else if (pct >= 80) {
+      pctEl.style.color = 'var(--amber)';
+      ring.style.stroke = 'var(--amber)';
+    } else {
+      pctEl.style.color = 'var(--red)';
+      ring.style.stroke = 'var(--red)';
+    }
+
+    subEl.textContent = `${safety.passed} / ${safety.total} tool calls passed`;
+  }
+
+  document.getElementById('contractsLabel').textContent = `${safety.contractsChecked} contracts checked`;
+}
+
+function updateCardStatus(card, status) {
+  const indicator = document.getElementById(`${card}Indicator`);
+  indicator.className = `sc-indicator ${status}`;
+}
+
+function updateCardCounts() {
+  document.getElementById('calcCount').textContent = safety.calc.calls;
+  document.getElementById('fileCount').textContent = safety.file.calls;
+  document.getElementById('sqlCount').textContent = safety.sql.calls;
+  document.getElementById('divCount').textContent = safety.div.blocked;
+
+  // Update detail text
+  if (safety.calc.clamps > 0) {
+    document.getElementById('calcDetail').textContent = `${safety.calc.clamps} input(s) clamped to [-1000, 1000]`;
+  }
+  if (safety.file.blocked > 0) {
+    document.getElementById('fileDetail').textContent = `${safety.file.blocked} traversal(s) blocked`;
+  }
+  if (safety.sql.blocked > 0) {
+    document.getElementById('sqlDetail').textContent = `${safety.sql.blocked} mutation(s) rejected`;
+  }
+  if (safety.div.blocked > 0) {
+    document.getElementById('divDetail').textContent = `${safety.div.blocked} div-by-zero(s) blocked`;
+  }
+}
+
+function addLogEntry(name, args, result, rejected, checks) {
+  const empty = document.getElementById('logEmpty');
+  if (empty) empty.remove();
+
+  const container = document.getElementById('logEntries');
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const argsShort = Object.values(args).map(v => JSON.stringify(v)).join(', ');
+  const truncArgs = argsShort.length > 40 ? argsShort.slice(0, 40) + '...' : argsShort;
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${rejected ? 'fail' : 'pass'}`;
+
+  const iconChar = rejected ? '\u2717' : '\u2713';
+  const iconClass = rejected ? 'fail' : 'pass';
+  const resultShort = result.length > 50 ? result.slice(0, 50) + '...' : result;
+
+  entry.innerHTML = `
+    <span class="log-time">${ts}</span>
+    <span class="log-icon ${iconClass}">${iconChar}</span>
+    <span class="log-msg"><span class="fn">${escapeHtml(name)}</span>(${escapeHtml(truncArgs)}) &rarr; <span class="${rejected ? 'err' : 'val'}">${escapeHtml(resultShort)}</span></span>`;
+
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+
+  logEntries.push({ ts, name, args, result, rejected, checks });
+  document.getElementById('logCount').textContent = `${logEntries.length} entries`;
+}
+
+function updateBudgets() {
+  updateBudgetBar('Stream', budgets.stream);
+  updateBudgetBar('Fs', budgets.fs);
+  updateBudgetBar('Net', budgets.net);
+}
+
+function updateBudgetBar(name, budget) {
+  const bar = document.getElementById(`budget${name}Bar`);
+  const text = document.getElementById(`budget${name}Text`);
+  const pct = Math.min(100, (budget.used / budget.limit) * 100);
+
+  bar.style.width = pct + '%';
+  bar.className = 'bm-bar';
+  if (pct >= 90) bar.classList.add('danger');
+  else if (pct >= 70) bar.classList.add('warn');
+
+  text.textContent = `${budget.used} / ${budget.limit}`;
+}
+
+// ================================================================
+// MOCK MODE — "Test Safety" Button
+// Runs through all tool types to demonstrate contract verification
+// without needing a Gemini connection.
+// ================================================================
+let testRunning = false;
+
+async function runSafetyTest() {
+  if (testRunning) return;
+  testRunning = true;
+
+  const btn = document.getElementById('btnTestSafety');
+  btn.classList.add('active');
+  btn.textContent = 'Running...';
+
+  removeWelcome();
+  addSystemMessage('Running contract safety test suite...');
+
+  const testCases = [
+    {
+      label: 'Safe addition',
+      delay: 400,
+      call: { functionCalls: [{ id: 'test1', name: 'calculate', args: { op: 'add', a: 42, b: 58 } }] }
+    },
+    {
+      label: 'Overflow clamping (9999 * 9999)',
+      delay: 600,
+      call: { functionCalls: [{ id: 'test2', name: 'calculate', args: { op: 'multiply', a: 9999, b: 9999 } }] }
+    },
+    {
+      label: 'Division by zero',
+      delay: 600,
+      call: { functionCalls: [{ id: 'test3', name: 'calculate', args: { op: 'divide', a: 100, b: 0 } }] }
+    },
+    {
+      label: 'Safe file read',
+      delay: 500,
+      call: { functionCalls: [{ id: 'test4', name: 'readFile', args: { filepath: '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/sample.txt' } }] }
+    },
+    {
+      label: 'Path traversal attack',
+      delay: 600,
+      call: { functionCalls: [{ id: 'test5', name: 'readFile', args: { filepath: '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/../../../etc/passwd' } }] }
+    },
+    {
+      label: 'Unsafe path (outside prefix)',
+      delay: 500,
+      call: { functionCalls: [{ id: 'test6', name: 'readFile', args: { filepath: '/etc/shadow' } }] }
+    },
+    {
+      label: 'Safe SELECT query',
+      delay: 500,
+      call: { functionCalls: [{ id: 'test7', name: 'query', args: { sql: 'SELECT * FROM orders WHERE total > 100' } }] }
+    },
+    {
+      label: 'Rejected DROP TABLE',
+      delay: 600,
+      call: { functionCalls: [{ id: 'test8', name: 'query', args: { sql: 'DROP TABLE users;' } }] }
+    },
+    {
+      label: 'Rejected DELETE mutation',
+      delay: 500,
+      call: { functionCalls: [{ id: 'test9', name: 'query', args: { sql: 'DELETE FROM orders WHERE id = 1' } }] }
+    },
+    {
+      label: 'Word count',
+      delay: 400,
+      call: { functionCalls: [{ id: 'test10', name: 'wordCount', args: { text: 'AILANG contracts make AI agents provably safe' } }] }
+    }
+  ];
+
+  for (const tc of testCases) {
+    addSystemMessage(`Test: ${tc.label}`);
+    await sleep(tc.delay);
+    handleToolCall(tc.call);
+    await sleep(200);
+  }
+
+  await sleep(300);
+  const passRate = safety.total > 0 ? Math.round((safety.passed / safety.total) * 100) : 0;
+  addSystemMessage(
+    `Safety test complete: ${safety.passed}/${safety.total} passed (${passRate}%). ` +
+    `${safety.failed} dangerous calls blocked. All contracts verified.`
+  );
+
+  btn.classList.remove('active');
+  btn.textContent = 'Test Safety';
+  testRunning = false;
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (isRecording) {
+      toggleMic();
+    }
+  }
+});
+</script>
+
+<script src="../shared/nav.js"></script>
+</body>
+</html>

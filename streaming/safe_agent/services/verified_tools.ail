@@ -1,0 +1,252 @@
+-- Contract-Verified Tools for Voice Agent
+--
+-- Every tool function has requires/ensures contracts that can be:
+--   1. Checked at runtime with --verify-contracts
+--   2. Proven statically with ailang verify (Z3 backend)
+--
+-- This is the core of the "provably safe AI agent" demo.
+-- The contracts guarantee:
+--   - Calculator results always in bounds [-1000000, 1000000]
+--   - File paths never contain directory traversal (..)
+--   - SQL queries are SELECT-only (no mutations)
+--   - Input clamping prevents overflow
+--   - Tool dispatch always returns a Result (never crashes)
+
+module streaming/safe_agent/services/verified_tools
+
+import std/string (length, startsWith, split, find, substring, intToStr)
+import std/math (floatToInt)
+import std/list (length as listLength, any)
+import std/result (Ok, Err)
+import std/json (decode, getString, getNumber)
+import std/option (Some, None, getOrElse)
+import std/fs (readFile, fileExists)
+import streaming/safe_agent/types/agent_types (ToolCall)
+
+-- ============================================================
+-- Tool: Safe Calculator
+-- Z3 proves: result always in [-1000000, 1000000]
+-- ============================================================
+
+-- Clamp input to prevent overflow in multiplication
+export pure func clampInput(x: int) -> int
+  ensures { result >= -1000 && result <= 1000 }
+{
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+-- Map operation name to integer code (isolates string matching from arithmetic)
+pure func opCode(op: string) -> int {
+  match op {
+    "add" => 1,
+    "subtract" => 2,
+    "multiply" => 3,
+    "divide" => 4,
+    "modulo" => 5,
+    _ => 0
+  }
+}
+
+-- Perform arithmetic based on integer operation code
+-- No string types involved, so Num constraint resolves correctly
+pure func doCalc(code: int, ca: int, cb: int) -> Option[int] {
+  match code {
+    1 => Some(ca + cb),
+    2 => Some(ca - cb),
+    3 => {
+      let product = ca * cb;
+      if product > 1000000 then Some(1000000)
+      else if product < -1000000 then Some(-1000000)
+      else Some(product)
+    },
+    4 => {
+      if cb == 0 then None
+      else Some(ca / cb)
+    },
+    5 => {
+      if cb == 0 then None
+      else Some(ca - (ca / cb) * cb)
+    },
+    _ => None
+  }
+}
+
+-- Convert Option to Result with an error message
+pure func optionToResult(opt: Option[int], errMsg: string) -> Result[int, string] {
+  match opt {
+    Some(n) => Ok(n),
+    None => Err(errMsg)
+  }
+}
+
+-- Safe calculator with bounded output
+-- Z3 can prove: for all op, a, b: result is Ok(n) where -1000000 <= n <= 1000000, or Err
+export func safeCalculate(op: string, a: int, b: int) -> Result[int, string]
+  ensures {
+    match result {
+      Ok(n) => n >= -1000000 && n <= 1000000,
+      Err(_) => true
+    }
+  }
+{
+  let ca: int = clampInput(a);
+  let cb: int = clampInput(b);
+  optionToResult(doCalc(opCode(op), ca, cb), "Unknown operation or error: " ++ op)
+}
+
+-- ============================================================
+-- Tool: Safe File Reader
+-- Contracts: no directory traversal, must be under allowed prefix
+-- ============================================================
+
+-- Check if path contains ".." traversal
+export pure func containsTraversal(path: string) -> bool {
+  let parts = split(path, "/");
+  any(\p. p == "..", parts)
+}
+
+-- Validate path safety: under prefix and no traversal
+export pure func isPathSafe(path: string, prefix: string) -> bool
+  ensures { result == (startsWith(path, prefix) && containsTraversal(path) == false) }
+{
+  startsWith(path, prefix) && containsTraversal(path) == false
+}
+
+-- Read a file with path safety validation
+export func safeReadFile(filepath: string, allowedPrefix: string) -> Result[string, string] ! {FS @limit=2}
+  requires { length(allowedPrefix) > 0 }
+  ensures { match result { Ok(s) => length(s) >= 0, Err(e) => length(e) > 0 } }
+{
+  if isPathSafe(filepath, allowedPrefix) == false then
+    Err("Path rejected: '" ++ filepath ++ "' must start with '" ++ allowedPrefix ++ "' and contain no '..'")
+  else if fileExists(filepath) == false then
+    Err("File not found: " ++ filepath)
+  else {
+    match readFile(filepath) {
+      content => Ok(content)
+    }
+  }
+}
+
+-- ============================================================
+-- Tool: Safe SQL Query
+-- Contract: only SELECT queries allowed (no INSERT/UPDATE/DELETE/DROP)
+-- ============================================================
+
+-- Check if SQL is a safe SELECT query
+export pure func isSafeQuery(sql: string) -> bool
+  ensures { result == startsWith(sql, "SELECT") }
+{
+  startsWith(sql, "SELECT")
+}
+
+-- Validate and execute a SQL query
+export func safeQuery(sql: string, projectId: string, token: string) -> Result[string, string] ! {Net @limit=1}
+  requires { length(sql) > 0 }
+  ensures { match result { Ok(s) => length(s) > 0, Err(e) => length(e) > 0 } }
+{
+  if isSafeQuery(sql) == false then
+    Err("Rejected: only SELECT queries are allowed. Got: " ++ substring(sql, 0, 20) ++ "...")
+  else {
+    -- Would call BigQuery here via ecommerce/services/bigquery.query()
+    -- For the demo, return a placeholder
+    Ok("Query executed: " ++ sql)
+  }
+}
+
+-- ============================================================
+-- Tool: String Operations (pure, verifiable)
+-- ============================================================
+
+-- Safe substring with bounds checking
+export pure func safeSubstring(s: string, start: int, len: int) -> Result[string, string]
+  requires { start >= 0 && len >= 0 }
+  ensures {
+    match result {
+      Ok(sub) => length(sub) <= len && length(sub) <= length(s),
+      Err(_) => true
+    }
+  }
+{
+  if start >= length(s) then Ok("")
+  else {
+    let actualLen = if start + len > length(s) then length(s) - start else len;
+    Ok(substring(s, start, actualLen))
+  }
+}
+
+-- Word count (for budget estimation)
+export pure func wordCount(text: string) -> int
+  ensures { result >= 0 }
+{
+  if length(text) == 0 then 0
+  else {
+    let words = split(text, " ");
+    listLength(words)
+  }
+}
+
+-- ============================================================
+-- Dispatch: Routes tool calls to verified functions
+-- ============================================================
+
+-- Dispatch a tool call to the appropriate verified function
+-- Contract: always returns a Result (never crashes)
+export func dispatchVerifiedTool(call: ToolCall, allowedPath: string) -> Result[string, string] ! {FS @limit=2, Net @limit=1}
+  ensures { match result { Ok(s) => length(s) > 0, Err(e) => length(e) > 0 } }
+{
+  match call.name {
+    "calculate" => handleCalculate(call.args),
+    "readFile" => handleReadFile(call.args, allowedPath),
+    "query" => handleQuery(call.args),
+    "wordCount" => handleWordCount(call.args),
+    _ => Err("Unknown tool: " ++ call.name)
+  }
+}
+
+func handleCalculate(argsJson: string) -> Result[string, string] {
+  match decode(argsJson) {
+    Ok(json) => {
+      let op = getOrElse(getString(json, "op"), "");
+      let a = match getNumber(json, "a") { Some(n) => floatToInt(n), None => 0 };
+      let b = match getNumber(json, "b") { Some(n) => floatToInt(n), None => 0 };
+      match safeCalculate(op, a, b) {
+        Ok(n) => Ok(intToStr(n)),
+        Err(e) => Err(e)
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+func handleReadFile(argsJson: string, allowedPath: string) -> Result[string, string] ! {FS} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let filepath = getOrElse(getString(json, "filepath"), "");
+      safeReadFile(filepath, allowedPath)
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+func handleQuery(argsJson: string) -> Result[string, string] ! {Net} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let sql = getOrElse(getString(json, "sql"), "");
+      safeQuery(sql, "", "")
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+func handleWordCount(argsJson: string) -> Result[string, string] {
+  match decode(argsJson) {
+    Ok(json) => {
+      let text = getOrElse(getString(json, "text"), "");
+      Ok(intToStr(wordCount(text)) ++ " words")
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}

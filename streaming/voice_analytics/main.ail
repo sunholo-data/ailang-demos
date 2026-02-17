@@ -1,0 +1,204 @@
+-- Voice Analytics Dashboard
+--
+-- Natural language voice queries to BigQuery GA4 data via Gemini Live API.
+-- Ask questions like "What are the top events?" or "Show me revenue by category"
+-- and the agent translates to SQL, executes, and speaks the results.
+--
+-- Demonstrates:
+--   - Gemini Live API WebSocket bidirectional streaming
+--   - Tool calling: Gemini invokes BigQuery tools mid-conversation
+--   - Capability budgets: Net @limit=15 guarantees max 14 BQ queries
+--   - Composition with existing ecommerce auth and BigQuery services
+--
+-- Run (text mode):
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,Stream,Net,Env \
+--     streaming/voice_analytics/main.ail "What are the top 5 events?"
+--
+-- Run (voice mode, requires Stream):
+--   GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,Stream,Net,Env \
+--     streaming/voice_analytics/main.ail
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=100      - Console output
+--   FS @limit=30       - Auth config reads
+--   Stream @limit=50   - WebSocket messages (caps voice session)
+--   Net @limit=15      - 1 OAuth + up to 14 BigQuery queries (hard cost ceiling)
+--   Env                - Read environment variables
+
+module streaming/voice_analytics/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, StreamErrorKind, defaultConfig,
+                   Message, Binary, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/env (getEnv, getEnvOr, getArgs)
+import std/json (encode, decode, getString, getObject, getArray, getBool, getNumber,
+                 jo, kv, js, ja, jb, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, startsWith)
+import std/list (map, nth, take, length as listLength)
+import std/fs (fileExists, readFile)
+import std/net (httpRequest)
+import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import streaming/voice_analytics/services/gemini_live (
+  connectGemini, sendSetup, sendTextMessage, sendAudioInput,
+  parseServerMessage, buildToolResponse
+)
+import streaming/voice_analytics/services/bq_voice_tools (
+  getBqToolDeclarations, dispatchBqTool
+)
+import streaming/voice_analytics/types/analytics_types (
+  GeminiSetup, ToolDecl, ToolCall, ServerMessage,
+  SetupComplete, ToolCallMsg, TextResponse, AudioResponse,
+  TurnComplete, Interrupted, Unknown,
+  SessionState, emptySessionState, recordToolCall, recordQuery
+)
+
+export func main() -> () ! {IO @limit=100, FS @limit=30, Stream @limit=50, Net @limit=15, Env} {
+  println("=== Voice Analytics Dashboard ===");
+  println("Budget: Stream @limit=50 (voice session), Net @limit=15 (1 auth + 14 queries)");
+  println("This session guarantees at most 14 BigQuery queries.");
+  println("");
+
+  -- Get GCP project and auth token via ADC
+  match getDefaultProject() {
+    Ok(projectId) => {
+      println("Project: " ++ projectId);
+      match getAccessToken() {
+        Ok(token) => {
+          println("Auth: OK (ADC)");
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          println("Region: " ++ region);
+          let args = getArgs();
+          startSession(token, region, projectId, args)
+        },
+        Err(e) => println("Auth failed: " ++ e)
+      }
+    },
+    Err(e) => println("Project detection failed: " ++ e)
+  }
+}
+
+-- Workaround for AILANG record-type-leak bug: construct GeminiSetup in two stages
+func makeSetupBase(model: string, instruction: string, tools: [ToolDecl]) -> GeminiSetup = {
+  model: model,
+  systemInstruction: instruction,
+  tools: tools,
+  responseModalities: []
+}
+
+func withModalities(s: GeminiSetup, modalities: [string]) -> GeminiSetup =
+  {s | responseModalities: modalities}
+
+func startSession(token: string, region: string, projectId: string, args: [string]) -> () ! {IO, FS, Stream, Net} {
+  match connectGemini(token, region) {
+    Ok(conn) => {
+      println("Connected to Gemini Live API");
+
+      -- Configure the session with BigQuery tools
+      let instruction = "You are a data analytics assistant. You have access to Google Analytics 4 " ++
+          "ecommerce data via BigQuery. When users ask about metrics, events, revenue, or user behavior, " ++
+          "use the available tools to query the data. Summarize results in natural language. " ++
+          "If a user asks a complex question, break it into multiple tool calls.";
+      let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++ "/publishers/google/models/gemini-live-2.5-flash-native-audio";
+      let base = makeSetupBase(modelId, instruction, getBqToolDeclarations());
+      let setup = withModalities(base, ["AUDIO"]);
+
+      match sendSetup(conn, setup) {
+        Ok(_) => {
+          println("Setup sent. Waiting for confirmation...");
+          println("");
+
+          -- Register event handler
+          onEvent(conn, \event. handleEvent(event, conn, projectId, token));
+
+          -- If text args provided, send them as initial query after setup
+          if listLength(args) > 0 then {
+            let query = join(" ", args);
+            match sendTextMessage(conn, query) {
+              Ok(_) => println("Query: " ++ query),
+              Err(e) => println("Failed to send query: " ++ show(e))
+            }
+          }
+          else ();
+
+          -- Run the event loop
+          runEventLoop(conn);
+
+          println("");
+          println("=== Session Complete ===")
+        },
+        Err(e) => println("Setup failed: " ++ show(e))
+      }
+    },
+    Err(e) => println("Connection failed: " ++ show(e))
+  }
+}
+
+-- Handle incoming Gemini Live API events
+func handleEvent(event: StreamEvent, conn: StreamConn, projectId: string, token: string) -> bool ! {IO, Stream, Net} =
+  match event {
+    Message(msg) => {
+      let serverMsg = parseServerMessage(msg);
+      match serverMsg {
+        SetupComplete => {
+          println("[Ready] Session initialized. Ask me about your analytics data.");
+          true
+        },
+        ToolCallMsg(call) => {
+          println("[Tool] " ++ call.name ++ " called");
+          -- Dispatch to BigQuery
+          match dispatchBqTool(call, projectId, token) {
+            Ok(result) => {
+              println("[Result] Query returned data");
+              -- Send tool response back to Gemini
+              let response = buildToolResponse(call.id, result);
+              match transmit(conn, response) {
+                Ok(_) => true,
+                Err(_) => { println("[Error] Failed to send tool response"); true }
+              }
+            },
+            Err(e) => {
+              println("[Error] Tool failed: " ++ e);
+              -- Send error response to Gemini
+              let response = buildToolResponse(call.id, "Error: " ++ e);
+              transmit(conn, response);
+              true
+            }
+          }
+        },
+        TextResponse(text) => {
+          println("[Gemini] " ++ text);
+          true
+        },
+        AudioResponse(_) => {
+          println("[Audio] Response received");
+          true
+        },
+        TurnComplete => {
+          println("[Turn] Agent finished responding");
+          println("");
+          true
+        },
+        Interrupted => {
+          println("[Interrupted] User interrupted");
+          true
+        },
+        Unknown(_) => true
+      }
+    },
+    Opened(_) => { println("[WebSocket] Connected"); true },
+    Closed(code, reason) => {
+      println("[WebSocket] Closed (" ++ show(code) ++ ")");
+      false
+    },
+    StreamError(_) => {
+      println("[Error] Stream error");
+      false
+    },
+    Binary(_) => true,
+    Ping(_) => true
+  }

@@ -1,0 +1,18 @@
+-- Narrowing down: is it record field access in map lambda that fails?
+module streaming/bug_repros/test_map_record2
+
+import std/list (map)
+
+type Item = Item({name: string, desc: string})
+
+-- Test A: map with ADT unwrap + field access
+func testA(items: [Item]) -> [string] =
+  map(\i. i.name, items)
+
+-- Test B: map with plain records (no ADT wrapper)
+func testB(xs: [{name: string}]) -> [string] =
+  map(\r. r.name, xs)
+
+-- Test C: map with no field access (identity)
+func testC(items: [Item]) -> [Item] =
+  map(\i. i, items)

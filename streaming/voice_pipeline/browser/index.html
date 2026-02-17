@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Voice Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #05060a;
+    --bg-primary: #0a0c12;
+    --bg-raised: #10131a;
+    --bg-surface: #161a24;
+    --bg-hover: #1c2030;
+    --border: #1a2038;
+    --border-active: #283050;
+    --text-primary: #d0d4e0;
+    --text-muted: #6a7090;
+    --text-dim: #363c54;
+    --blue: #4a8aef;
+    --blue-bright: #6aa4ff;
+    --blue-glow: rgba(74, 138, 239, 0.2);
+    --blue-dim: #2a4878;
+    --purple: #9a6aef;
+    --purple-bright: #b488ff;
+    --purple-glow: rgba(154, 106, 239, 0.2);
+    --purple-dim: #4a2e78;
+    --pink: #ef6aaa;
+    --pink-bright: #ff88c4;
+    --pink-glow: rgba(239, 106, 170, 0.2);
+    --green: #3dd68c;
+    --green-dim: #1a3d2a;
+    --red: #ef5252;
+    --red-dim: #3d1a1a;
+    --amber: #e4a010;
+    --gradient-flow: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+    --gradient-flow-subtle: linear-gradient(135deg, rgba(74,138,239,0.1), rgba(154,106,239,0.1), rgba(239,106,170,0.1));
+    --font-mono: 'Source Code Pro', 'SF Mono', 'Cascadia Code', monospace;
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  /* -- Subtle grid overlay -- */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      linear-gradient(rgba(74,138,239,0.01) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(74,138,239,0.01) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* -- Layout -- */
+  .app {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr auto auto;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* -- Top Bar -- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    background: var(--gradient-flow);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo span {
+    -webkit-text-fill-color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+
+  .badge-stt {
+    background: rgba(74, 138, 239, 0.1);
+    border: 1px solid rgba(74, 138, 239, 0.25);
+    color: var(--blue);
+  }
+
+  .badge-tts {
+    background: rgba(154, 106, 239, 0.1);
+    border: 1px solid rgba(154, 106, 239, 0.25);
+    color: var(--purple);
+  }
+
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .badge-stt .badge-dot {
+    background: var(--blue);
+    box-shadow: 0 0 6px var(--blue);
+  }
+
+  .badge-tts .badge-dot {
+    background: var(--purple);
+    box-shadow: 0 0 6px var(--purple);
+  }
+
+  .badge-dot.off {
+    background: var(--text-dim);
+    box-shadow: none;
+    animation: none;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-config {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .btn-config:hover {
+    border-color: var(--blue-dim);
+    color: var(--blue);
+  }
+
+  /* -- Config Panel -- */
+  .config-panel {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 20px;
+  }
+
+  .config-panel.open {
+    max-height: 280px;
+    padding: 14px 20px;
+  }
+
+  .config-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(74, 138, 239, 0.04);
+    border: 1px solid rgba(74, 138, 239, 0.12);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .config-warning code {
+    background: var(--bg-surface);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 10px;
+    color: var(--blue);
+  }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .config-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .config-group label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .config-input {
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+
+  .config-input:focus { border-color: var(--blue-dim); }
+  .config-input::placeholder { color: var(--text-dim); }
+
+  .config-input.stt-input:focus { border-color: var(--blue-dim); }
+  .config-input.tts-input:focus { border-color: var(--purple-dim); }
+
+  /* -- Pipeline Visualization -- */
+  .pipeline-section {
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pipeline-section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(154, 106, 239, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .pipeline-stage {
+    flex: 1;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .pipeline-stage.active {
+    border-color: var(--border-active);
+  }
+
+  .pipeline-stage.stt-active {
+    border-color: rgba(74, 138, 239, 0.4);
+    box-shadow: 0 0 20px rgba(74, 138, 239, 0.08);
+  }
+
+  .pipeline-stage.process-active {
+    border-color: rgba(154, 106, 239, 0.4);
+    box-shadow: 0 0 20px rgba(154, 106, 239, 0.08);
+  }
+
+  .pipeline-stage.tts-active {
+    border-color: rgba(239, 106, 170, 0.4);
+    box-shadow: 0 0 20px rgba(239, 106, 170, 0.08);
+  }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stage-stt .stage-header { color: var(--blue); }
+  .stage-process .stage-header { color: var(--purple); }
+  .stage-tts .stage-header { color: var(--pink); }
+
+  .stage-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .stage-stt .stage-icon {
+    background: rgba(74, 138, 239, 0.1);
+    border: 1px solid rgba(74, 138, 239, 0.2);
+  }
+
+  .stage-process .stage-icon {
+    background: rgba(154, 106, 239, 0.1);
+    border: 1px solid rgba(154, 106, 239, 0.2);
+  }
+
+  .stage-tts .stage-icon {
+    background: rgba(239, 106, 170, 0.1);
+    border: 1px solid rgba(239, 106, 170, 0.2);
+  }
+
+  .stage-visual {
+    width: 100%;
+    height: 48px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Waveform visualization */
+  .waveform {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 40px;
+  }
+
+  .waveform-bar {
+    width: 3px;
+    background: var(--blue);
+    border-radius: 2px;
+    transition: height 0.1s ease;
+    opacity: 0.3;
+  }
+
+  .waveform-bar.active {
+    opacity: 1;
+    animation: waveformPulse 0.5s ease-in-out infinite alternate;
+  }
+
+  @keyframes waveformPulse {
+    0% { transform: scaleY(0.3); }
+    100% { transform: scaleY(1); }
+  }
+
+  /* Speaker visualization */
+  .speaker-viz {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 40px;
+  }
+
+  .speaker-bar {
+    width: 3px;
+    background: var(--pink);
+    border-radius: 2px;
+    opacity: 0.3;
+    transition: height 0.1s ease;
+  }
+
+  .speaker-bar.active {
+    opacity: 1;
+    animation: speakerPulse 0.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes speakerPulse {
+    0% { transform: scaleY(0.2); }
+    100% { transform: scaleY(1); }
+  }
+
+  /* Processing mode display */
+  .process-mode-display {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--purple);
+    text-align: center;
+    min-height: 20px;
+  }
+
+  .stage-status {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    font-family: var(--font-mono);
+    letter-spacing: 0.3px;
+    min-height: 18px;
+  }
+
+  .stage-status.listening { color: var(--blue); }
+  .stage-status.processing { color: var(--purple); }
+  .stage-status.speaking { color: var(--pink); }
+
+  .stage-text-preview {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    max-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+    min-height: 18px;
+    width: 100%;
+  }
+
+  /* Pipeline connectors */
+  .pipeline-connector {
+    width: 60px;
+    min-width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .connector-line {
+    width: 100%;
+    height: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .connector-line::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+  }
+
+  .connector-line.active::before {
+    background: linear-gradient(90deg, var(--blue), var(--purple));
+  }
+
+  .connector-line.active-2::before {
+    background: linear-gradient(90deg, var(--purple), var(--pink));
+  }
+
+  /* Flowing dots animation */
+  .flow-dots {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transform: translateY(-50%);
+    overflow: hidden;
+  }
+
+  .flow-dot {
+    position: absolute;
+    width: 8px;
+    height: 2px;
+    border-radius: 1px;
+    top: 0;
+    animation: flowRight 1.2s linear infinite;
+    opacity: 0;
+  }
+
+  .connector-1 .flow-dot {
+    background: var(--blue);
+    box-shadow: 0 0 6px var(--blue-glow);
+  }
+
+  .connector-2 .flow-dot {
+    background: var(--purple);
+    box-shadow: 0 0 6px var(--purple-glow);
+  }
+
+  .flow-dot:nth-child(1) { animation-delay: 0s; }
+  .flow-dot:nth-child(2) { animation-delay: 0.4s; }
+  .flow-dot:nth-child(3) { animation-delay: 0.8s; }
+
+  .flow-dots:not(.flowing) .flow-dot {
+    animation-play-state: paused;
+    opacity: 0;
+  }
+
+  @keyframes flowRight {
+    0% { left: -10px; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { left: calc(100% + 2px); opacity: 0; }
+  }
+
+  /* Arrow heads */
+  .connector-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--border);
+  }
+
+  .connector-line.active .connector-arrow {
+    border-left-color: var(--purple);
+  }
+
+  .connector-line.active-2 .connector-arrow {
+    border-left-color: var(--pink);
+  }
+
+  /* -- Transcript Log -- */
+  .transcript-section {
+    overflow-y: auto;
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    scroll-behavior: smooth;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(154, 106, 239, 0.015) 0%, transparent 60%),
+      var(--bg-deep);
+  }
+
+  .transcript-section::-webkit-scrollbar { width: 6px; }
+  .transcript-section::-webkit-scrollbar-track { background: transparent; }
+  .transcript-section::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .transcript-section::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+  .transcript-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 30px;
+    gap: 10px;
+    min-height: 120px;
+  }
+
+  .transcript-empty-glyph {
+    font-size: 28px;
+    opacity: 0.4;
+    font-family: var(--font-display);
+    background: var(--gradient-flow);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .transcript-empty p {
+    font-size: 12px;
+    max-width: 400px;
+    line-height: 1.7;
+    color: var(--text-dim);
+  }
+
+  .log-entry {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+    animation: logIn 0.2s ease-out;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  @keyframes logIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .log-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    min-width: 64px;
+    text-align: center;
+    flex-shrink: 0;
+    line-height: 1.6;
+  }
+
+  .log-tag-stt {
+    background: rgba(74, 138, 239, 0.1);
+    color: var(--blue);
+    border: 1px solid rgba(74, 138, 239, 0.2);
+  }
+
+  .log-tag-process {
+    background: rgba(154, 106, 239, 0.1);
+    color: var(--purple);
+    border: 1px solid rgba(154, 106, 239, 0.2);
+  }
+
+  .log-tag-tts {
+    background: rgba(239, 106, 170, 0.1);
+    color: var(--pink);
+    border: 1px solid rgba(239, 106, 170, 0.2);
+  }
+
+  .log-tag-error {
+    background: rgba(239, 82, 82, 0.1);
+    color: var(--red);
+    border: 1px solid rgba(239, 82, 82, 0.2);
+  }
+
+  .log-tag-info {
+    background: rgba(106, 112, 144, 0.1);
+    color: var(--text-muted);
+    border: 1px solid rgba(106, 112, 144, 0.15);
+  }
+
+  .log-text {
+    color: var(--text-muted);
+    word-break: break-word;
+  }
+
+  .log-text.interim {
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .log-arrow {
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  /* -- Controls -- */
+  .controls-section {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* Mic toggle */
+  .mic-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    font-size: 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .mic-btn:hover {
+    border-color: var(--blue-dim);
+    color: var(--blue);
+  }
+
+  .mic-btn.recording {
+    border-color: var(--red);
+    background: var(--red-dim);
+    color: var(--red);
+    box-shadow: 0 0 20px rgba(239, 82, 82, 0.2);
+    animation: micPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(239, 82, 82, 0.2); }
+    50% { box-shadow: 0 0 30px rgba(239, 82, 82, 0.4); }
+  }
+
+  .mic-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+  }
+
+  /* Mode selector */
+  .mode-selector {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px;
+  }
+
+  .mode-btn {
+    padding: 7px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    letter-spacing: 0.2px;
+  }
+
+  .mode-btn:hover {
+    color: var(--text-muted);
+    background: var(--bg-surface);
+  }
+
+  .mode-btn.active {
+    background: var(--bg-surface);
+    color: var(--purple);
+    border: 1px solid rgba(154, 106, 239, 0.25);
+  }
+
+  /* Connection status */
+  .conn-status {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  .conn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .conn-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.3s;
+  }
+
+  .conn-dot.connected {
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(61, 214, 140, 0.4);
+  }
+
+  .conn-dot.error {
+    background: var(--red);
+    box-shadow: 0 0 8px rgba(239, 82, 82, 0.4);
+  }
+
+  .conn-indicator .conn-label { color: var(--text-dim); }
+  .conn-indicator.connected .conn-label { color: var(--text-muted); }
+
+  /* -- Status Bar / Footer -- */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 20px;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+    font-family: var(--font-mono);
+    min-height: 28px;
+  }
+
+  .statusbar-left, .statusbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .stat-label { color: var(--text-dim); }
+
+  .stat-value {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-value.active { color: var(--blue); }
+
+  .separator { color: var(--border); }
+
+  /* -- Responsive -- */
+  @media (max-width: 800px) {
+    .app { max-width: 100%; border: none; }
+    .pipeline { flex-direction: column; gap: 0; }
+    .pipeline-connector {
+      width: 100%;
+      height: 30px;
+      min-width: auto;
+    }
+    .connector-line {
+      width: 2px;
+      height: 100%;
+    }
+    .flow-dot {
+      width: 2px;
+      height: 8px;
+    }
+    @keyframes flowRight {
+      0% { top: -10px; left: 0; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: calc(100% + 2px); left: 0; opacity: 0; }
+    }
+    .connector-arrow {
+      right: auto;
+      bottom: -1px;
+      top: auto;
+      transform: translateX(-50%);
+      left: 50%;
+      border-top: 6px solid var(--border);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: none;
+    }
+    .config-grid { grid-template-columns: 1fr; }
+    .controls-section { justify-content: center; }
+    .conn-status { margin-left: 0; width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">AILANG <span>|</span> Voice Pipeline</div>
+      <span class="badge badge-stt"><span class="badge-dot off" id="sttBadgeDot"></span> Deepgram STT</span>
+      <span class="badge badge-tts"><span class="badge-dot off" id="ttsBadgeDot"></span> ElevenLabs TTS</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-config" onclick="toggleConfig()" id="configBtn">config</button>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="config-panel" id="configPanel">
+    <div class="config-warning">
+      <span>!</span>
+      <span>API keys are sent directly from your browser to Deepgram and ElevenLabs.
+      Keys are stored in <code>localStorage</code> only. Never share this page publicly with keys set.</span>
+    </div>
+    <div class="config-grid">
+      <div class="config-group">
+        <label>Deepgram API Key</label>
+        <input type="password" class="config-input stt-input" id="dgKeyInput"
+               placeholder="dg-..." autocomplete="off"
+               onchange="saveConfig()">
+      </div>
+      <div class="config-group">
+        <label>ElevenLabs API Key</label>
+        <input type="password" class="config-input tts-input" id="elKeyInput"
+               placeholder="xi-..." autocomplete="off"
+               onchange="saveConfig()">
+      </div>
+      <div class="config-group">
+        <label>ElevenLabs Voice ID</label>
+        <input type="text" class="config-input tts-input" id="voiceIdInput"
+               placeholder="21m00Tcm4TlvDq8ikWAM (Rachel)" autocomplete="off"
+               onchange="saveConfig()">
+      </div>
+      <div class="config-group">
+        <label>Deepgram Model</label>
+        <input type="text" class="config-input stt-input" id="dgModelInput"
+               placeholder="nova-2 (default)" autocomplete="off"
+               onchange="saveConfig()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline Visualization -->
+  <div class="pipeline-section">
+    <div class="pipeline">
+      <!-- STT Stage -->
+      <div class="pipeline-stage stage-stt" id="stageStt">
+        <div class="stage-header">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          STT
+        </div>
+        <div class="stage-visual">
+          <div class="waveform" id="sttWaveform">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+        <div class="stage-status" id="sttStatus">Idle</div>
+        <div class="stage-text-preview" id="sttPreview"></div>
+      </div>
+
+      <!-- Connector 1: STT -> Process -->
+      <div class="pipeline-connector connector-1">
+        <div class="connector-line" id="connectorLine1">
+          <div class="connector-arrow"></div>
+          <div class="flow-dots" id="flowDots1">
+            <div class="flow-dot"></div>
+            <div class="flow-dot"></div>
+            <div class="flow-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing Stage -->
+      <div class="pipeline-stage stage-process" id="stageProcess">
+        <div class="stage-header">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </div>
+          Process
+        </div>
+        <div class="stage-visual">
+          <div class="process-mode-display" id="processModeDisplay">Echo</div>
+        </div>
+        <div class="stage-status" id="processStatus">Ready</div>
+        <div class="stage-text-preview" id="processPreview"></div>
+      </div>
+
+      <!-- Connector 2: Process -> TTS -->
+      <div class="pipeline-connector connector-2">
+        <div class="connector-line" id="connectorLine2">
+          <div class="connector-arrow"></div>
+          <div class="flow-dots" id="flowDots2">
+            <div class="flow-dot"></div>
+            <div class="flow-dot"></div>
+            <div class="flow-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TTS Stage -->
+      <div class="pipeline-stage stage-tts" id="stageTts">
+        <div class="stage-header">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+          </div>
+          TTS
+        </div>
+        <div class="stage-visual">
+          <div class="speaker-viz" id="ttsVisual">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+        <div class="stage-status" id="ttsStatus">Idle</div>
+        <div class="stage-text-preview" id="ttsPreview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transcript Log -->
+  <div class="transcript-section" id="transcriptLog">
+    <div class="transcript-empty" id="transcriptEmpty">
+      <div class="transcript-empty-glyph">~/</div>
+      <p>Pipeline log will appear here. Press the microphone to begin
+         capturing audio through Deepgram STT, processing, and ElevenLabs TTS.</p>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-section">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+      </svg>
+    </button>
+
+    <div class="mode-selector">
+      <button class="mode-btn active" data-mode="echo" onclick="setMode('echo', this)">Echo</button>
+      <button class="mode-btn" data-mode="summarize" onclick="setMode('summarize', this)">Summarize</button>
+      <button class="mode-btn" data-mode="translate" onclick="setMode('translate', this)">Translate</button>
+      <button class="mode-btn" data-mode="extract" onclick="setMode('extract', this)">Extract</button>
+    </div>
+
+    <div class="conn-status">
+      <div class="conn-indicator" id="sttConn">
+        <span class="conn-dot" id="sttConnDot"></span>
+        <span class="conn-label">STT</span>
+      </div>
+      <div class="conn-indicator" id="ttsConn">
+        <span class="conn-dot" id="ttsConnDot"></span>
+        <span class="conn-label">TTS</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="stat">
+        <span class="stat-label">audio chunks</span>
+        <span class="stat-value" id="statAudioChunks">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label">transcripts</span>
+        <span class="stat-value" id="statTranscripts">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label">words</span>
+        <span class="stat-value" id="statWords">0</span>
+      </div>
+    </div>
+    <div class="statusbar-right">
+      <div class="stat">
+        <span class="stat-label">tts chunks</span>
+        <span class="stat-value" id="statTtsChunks">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label">errors</span>
+        <span class="stat-value" id="statErrors">0</span>
+      </div>
+      <span class="separator">|</span>
+      <div class="stat">
+        <span class="stat-label" id="pipelineStatusText">idle</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// State
+// ================================================================
+let isRecording = false;
+let currentMode = 'echo';
+let audioContext = null;
+let mediaStream = null;
+let captureNode = null;
+let playbackNode = null;
+let sttSocket = null;
+let ttsSocket = null;
+
+const stats = {
+  audioChunks: 0,
+  transcripts: 0,
+  words: 0,
+  ttsChunks: 0,
+  errors: 0
+};
+
+// ================================================================
+// Config
+// ================================================================
+function toggleConfig() {
+  const panel = document.getElementById('configPanel');
+  panel.classList.toggle('open');
+  document.getElementById('configBtn').textContent =
+    panel.classList.contains('open') ? 'close' : 'config';
+}
+
+function saveConfig() {
+  const dgKey = document.getElementById('dgKeyInput').value.trim();
+  const elKey = document.getElementById('elKeyInput').value.trim();
+  const voiceId = document.getElementById('voiceIdInput').value.trim();
+  const dgModel = document.getElementById('dgModelInput').value.trim();
+  if (dgKey) localStorage.setItem('vp_dg_key', dgKey);
+  if (elKey) localStorage.setItem('vp_el_key', elKey);
+  if (voiceId) localStorage.setItem('vp_voice_id', voiceId);
+  if (dgModel) localStorage.setItem('vp_dg_model', dgModel);
+}
+
+function getDgKey() {
+  return document.getElementById('dgKeyInput').value.trim() ||
+         localStorage.getItem('vp_dg_key') || '';
+}
+
+function getElKey() {
+  return document.getElementById('elKeyInput').value.trim() ||
+         localStorage.getItem('vp_el_key') || '';
+}
+
+function getVoiceId() {
+  return document.getElementById('voiceIdInput').value.trim() ||
+         localStorage.getItem('vp_voice_id') || '21m00Tcm4TlvDq8ikWAM';
+}
+
+function getDgModel() {
+  return document.getElementById('dgModelInput').value.trim() ||
+         localStorage.getItem('vp_dg_model') || 'nova-2';
+}
+
+// Load saved config
+document.addEventListener('DOMContentLoaded', () => {
+  const dgKey = localStorage.getItem('vp_dg_key');
+  const elKey = localStorage.getItem('vp_el_key');
+  const voiceId = localStorage.getItem('vp_voice_id');
+  const dgModel = localStorage.getItem('vp_dg_model');
+  if (dgKey) document.getElementById('dgKeyInput').value = dgKey;
+  if (elKey) document.getElementById('elKeyInput').value = elKey;
+  if (voiceId) document.getElementById('voiceIdInput').value = voiceId;
+  if (dgModel) document.getElementById('dgModelInput').value = dgModel;
+  initVisualizations();
+});
+
+// ================================================================
+// Visualizations
+// ================================================================
+function initVisualizations() {
+  // STT waveform bars
+  const waveform = document.getElementById('sttWaveform');
+  waveform.innerHTML = '';
+  for (let i = 0; i < 20; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'waveform-bar';
+    const h = 6 + Math.random() * 12;
+    bar.style.height = h + 'px';
+    bar.style.animationDelay = (Math.random() * 0.5) + 's';
+    bar.style.animationDuration = (0.3 + Math.random() * 0.4) + 's';
+    waveform.appendChild(bar);
+  }
+
+  // TTS speaker bars
+  const speaker = document.getElementById('ttsVisual');
+  speaker.innerHTML = '';
+  for (let i = 0; i < 20; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'speaker-bar';
+    const h = 6 + Math.random() * 12;
+    bar.style.height = h + 'px';
+    bar.style.animationDelay = (Math.random() * 0.5) + 's';
+    bar.style.animationDuration = (0.25 + Math.random() * 0.35) + 's';
+    speaker.appendChild(bar);
+  }
+}
+
+function setWaveformActive(active) {
+  document.querySelectorAll('.waveform-bar').forEach(bar => {
+    bar.classList.toggle('active', active);
+  });
+}
+
+function setSpeakerActive(active) {
+  document.querySelectorAll('.speaker-bar').forEach(bar => {
+    bar.classList.toggle('active', active);
+  });
+}
+
+function setFlowActive(connector, active) {
+  const dots = document.getElementById('flowDots' + connector);
+  const line = document.getElementById('connectorLine' + connector);
+  if (dots) dots.classList.toggle('flowing', active);
+  if (connector === 1) {
+    line.classList.toggle('active', active);
+  } else {
+    line.classList.toggle('active-2', active);
+  }
+}
+
+function setPipelineStageActive(stage, active) {
+  const el = document.getElementById('stage' + stage);
+  if (!el) return;
+  const classMap = { Stt: 'stt-active', Process: 'process-active', Tts: 'tts-active' };
+  el.classList.toggle(classMap[stage] || 'active', active);
+}
+
+// ================================================================
+// Mode Selector
+// ================================================================
+function setMode(mode, btn) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const display = { echo: 'Echo', summarize: 'Summarize', translate: 'Translate', extract: 'Extract' };
+  document.getElementById('processModeDisplay').textContent = display[mode] || mode;
+  addLog('info', 'Mode changed to: ' + (display[mode] || mode));
+}
+
+// ================================================================
+// Connection Status
+// ================================================================
+function setSttConnected(connected, error) {
+  const dot = document.getElementById('sttConnDot');
+  const indicator = document.getElementById('sttConn');
+  const badgeDot = document.getElementById('sttBadgeDot');
+  dot.className = 'conn-dot' + (connected ? ' connected' : error ? ' error' : '');
+  indicator.className = 'conn-indicator' + (connected ? ' connected' : '');
+  badgeDot.className = 'badge-dot' + (connected ? '' : ' off');
+}
+
+function setTtsConnected(connected, error) {
+  const dot = document.getElementById('ttsConnDot');
+  const indicator = document.getElementById('ttsConn');
+  const badgeDot = document.getElementById('ttsBadgeDot');
+  dot.className = 'conn-dot' + (connected ? ' connected' : error ? ' error' : '');
+  indicator.className = 'conn-indicator' + (connected ? ' connected' : '');
+  badgeDot.className = 'badge-dot' + (connected ? '' : ' off');
+}
+
+// ================================================================
+// Transcript Log
+// ================================================================
+function addLog(type, text, isInterim) {
+  const log = document.getElementById('transcriptLog');
+  const empty = document.getElementById('transcriptEmpty');
+  if (empty) empty.remove();
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+
+  const tagClass = {
+    stt: 'log-tag-stt', process: 'log-tag-process',
+    tts: 'log-tag-tts', error: 'log-tag-error', info: 'log-tag-info'
+  };
+
+  const tagLabel = {
+    stt: 'STT', process: 'Process', tts: 'TTS', error: 'Error', info: 'Info'
+  };
+
+  entry.innerHTML =
+    `<span class="log-tag ${tagClass[type] || 'log-tag-info'}">${tagLabel[type] || type}</span>` +
+    `<span class="log-text${isInterim ? ' interim' : ''}">${escapeHtml(text)}</span>`;
+
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+
+  // Limit log entries
+  const entries = log.querySelectorAll('.log-entry');
+  if (entries.length > 200) {
+    entries[0].remove();
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ================================================================
+// Stats
+// ================================================================
+function updateStats() {
+  document.getElementById('statAudioChunks').textContent = stats.audioChunks;
+  document.getElementById('statTranscripts').textContent = stats.transcripts;
+  document.getElementById('statWords').textContent = stats.words;
+  document.getElementById('statTtsChunks').textContent = stats.ttsChunks;
+  document.getElementById('statErrors').textContent = stats.errors;
+
+  const errEl = document.getElementById('statErrors');
+  errEl.style.color = stats.errors > 0 ? 'var(--red)' : '';
+}
+
+function setPipelineStatus(text) {
+  document.getElementById('pipelineStatusText').textContent = text;
+}
+
+// ================================================================
+// Microphone Toggle
+// ================================================================
+async function toggleMic() {
+  if (isRecording) {
+    stopPipeline();
+  } else {
+    await startPipeline();
+  }
+}
+
+// ================================================================
+// Pipeline Start
+// ================================================================
+async function startPipeline() {
+  const dgKey = getDgKey();
+  const elKey = getElKey();
+
+  if (!dgKey || !elKey) {
+    toggleConfig();
+    addLog('error', 'Please configure both API keys before starting.');
+    return;
+  }
+
+  try {
+    setPipelineStatus('starting...');
+    addLog('info', 'Starting voice pipeline...');
+
+    // 1. Get microphone
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+    });
+    addLog('info', 'Microphone access granted');
+
+    // 2. Set up AudioContext and worklet
+    audioContext = new AudioContext({ sampleRate: 48000 });
+    await audioContext.audioWorklet.addModule('../shared/audio-worklet.js');
+
+    // Capture node: mic -> PCM 16-bit at 16kHz
+    captureNode = new AudioWorkletNode(audioContext, 'pcm-capture', {
+      processorOptions: { targetRate: 16000, chunkMs: 100 }
+    });
+
+    // Playback node: PCM 16-bit at 16kHz -> speaker
+    playbackNode = new AudioWorkletNode(audioContext, 'pcm-playback', {
+      processorOptions: { sourceRate: 16000 }
+    });
+
+    // Connect mic -> captureNode
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    source.connect(captureNode);
+
+    // Connect playback -> speakers
+    playbackNode.connect(audioContext.destination);
+
+    // 3. Connect Deepgram STT WebSocket
+    const dgModel = getDgModel();
+    const sttUrl = `wss://api.deepgram.com/v1/listen?model=${dgModel}&smart_format=true&encoding=linear16&sample_rate=16000&channels=1&interim_results=true&utterance_end_ms=1000`;
+
+    sttSocket = new WebSocket(sttUrl, ['token', dgKey]);
+
+    await new Promise((resolve, reject) => {
+      sttSocket.onopen = () => {
+        setSttConnected(true, false);
+        addLog('info', 'Deepgram STT connected');
+        resolve();
+      };
+      sttSocket.onerror = (e) => {
+        setSttConnected(false, true);
+        reject(new Error('Deepgram STT connection failed'));
+      };
+      setTimeout(() => reject(new Error('STT connection timeout')), 8000);
+    });
+
+    // 4. Connect ElevenLabs TTS WebSocket
+    const voiceId = getVoiceId();
+    const ttsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=eleven_turbo_v2_5&output_format=pcm_16000`;
+
+    ttsSocket = new WebSocket(ttsUrl);
+
+    await new Promise((resolve, reject) => {
+      ttsSocket.onopen = () => {
+        setTtsConnected(true, false);
+        addLog('info', 'ElevenLabs TTS connected');
+
+        // Send BOS (Beginning of Stream) message
+        const bos = JSON.stringify({
+          text: ' ',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          xi_api_key: elKey
+        });
+        ttsSocket.send(bos);
+        addLog('info', 'TTS BOS sent');
+        resolve();
+      };
+      ttsSocket.onerror = (e) => {
+        setTtsConnected(false, true);
+        reject(new Error('ElevenLabs TTS connection failed'));
+      };
+      setTimeout(() => reject(new Error('TTS connection timeout')), 8000);
+    });
+
+    // 5. Wire up the pipeline
+
+    // Mic audio -> Deepgram STT
+    captureNode.port.onmessage = (e) => {
+      if (e.data.type === 'pcm-chunk' && sttSocket && sttSocket.readyState === WebSocket.OPEN) {
+        sttSocket.send(new Uint8Array(e.data.pcmData));
+        stats.audioChunks++;
+        updateStats();
+      }
+    };
+
+    // Deepgram STT responses -> process -> ElevenLabs TTS
+    sttSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'Results') {
+          const alt = data.channel?.alternatives?.[0];
+          if (!alt) return;
+
+          const transcript = alt.transcript || '';
+          const isFinal = data.is_final;
+          const wordCount = alt.words?.length || 0;
+
+          if (transcript.length === 0) return;
+
+          if (isFinal) {
+            // Update STT stage
+            setPipelineStageActive('Stt', true);
+            document.getElementById('sttStatus').textContent = 'Transcribed';
+            document.getElementById('sttStatus').className = 'stage-status listening';
+            document.getElementById('sttPreview').textContent = transcript;
+            addLog('stt', transcript);
+
+            stats.transcripts++;
+            stats.words += wordCount;
+            updateStats();
+
+            // Activate flow connector 1
+            setFlowActive(1, true);
+
+            // Process text
+            const processed = processText(transcript, currentMode);
+            setPipelineStageActive('Process', true);
+            document.getElementById('processStatus').textContent = 'Processed';
+            document.getElementById('processStatus').className = 'stage-status processing';
+            document.getElementById('processPreview').textContent = processed;
+            addLog('process', processed);
+
+            // Activate flow connector 2
+            setFlowActive(2, true);
+
+            // Send to TTS
+            if (ttsSocket && ttsSocket.readyState === WebSocket.OPEN) {
+              const ttsMsg = JSON.stringify({
+                text: processed + ' ',
+                try_trigger_generation: true
+              });
+              ttsSocket.send(ttsMsg);
+              addLog('tts', 'Sent: ' + processed);
+              stats.ttsChunks++;
+              updateStats();
+
+              // Send EOS to flush this utterance
+              ttsSocket.send(JSON.stringify({ text: '' }));
+            }
+
+            // Brief visual pulse then reset
+            setTimeout(() => {
+              setPipelineStageActive('Stt', false);
+              setPipelineStageActive('Process', false);
+              setFlowActive(1, false);
+              setFlowActive(2, false);
+              document.getElementById('sttStatus').textContent = 'Listening...';
+              document.getElementById('processStatus').textContent = 'Ready';
+            }, 1500);
+          } else {
+            // Interim result
+            document.getElementById('sttPreview').textContent = transcript;
+            document.getElementById('sttStatus').textContent = 'Listening...';
+            document.getElementById('sttStatus').className = 'stage-status listening';
+          }
+        }
+      } catch (err) {
+        // Ignore non-JSON messages
+      }
+    };
+
+    sttSocket.onclose = (e) => {
+      setSttConnected(false, false);
+      addLog('info', 'STT disconnected (code: ' + e.code + ')');
+      if (isRecording) stopPipeline();
+    };
+
+    sttSocket.onerror = () => {
+      setSttConnected(false, true);
+      stats.errors++;
+      updateStats();
+      addLog('error', 'STT WebSocket error');
+    };
+
+    // ElevenLabs TTS audio responses -> speaker
+    ttsSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.audio && data.audio.length > 0) {
+          // Decode base64 PCM audio and queue for playback
+          const binaryStr = atob(data.audio);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+
+          // Send to playback worklet
+          playbackNode.port.postMessage({
+            type: 'enqueue',
+            pcmData: bytes.buffer
+          }, [bytes.buffer]);
+
+          // Visual feedback
+          setPipelineStageActive('Tts', true);
+          setSpeakerActive(true);
+          document.getElementById('ttsStatus').textContent = 'Speaking...';
+          document.getElementById('ttsStatus').className = 'stage-status speaking';
+
+          stats.ttsChunks++;
+          updateStats();
+        }
+
+        if (data.isFinal) {
+          setTimeout(() => {
+            setPipelineStageActive('Tts', false);
+            setSpeakerActive(false);
+            document.getElementById('ttsStatus').textContent = 'Idle';
+            document.getElementById('ttsStatus').className = 'stage-status';
+          }, 800);
+        }
+      } catch (err) {
+        // Ignore non-JSON
+      }
+    };
+
+    // Playback node queue empty notification
+    playbackNode.port.onmessage = (e) => {
+      if (e.data.type === 'queue-empty') {
+        setSpeakerActive(false);
+        document.getElementById('ttsStatus').textContent = 'Idle';
+        document.getElementById('ttsStatus').className = 'stage-status';
+        setPipelineStageActive('Tts', false);
+      }
+    };
+
+    ttsSocket.onclose = (e) => {
+      setTtsConnected(false, false);
+      addLog('info', 'TTS disconnected (code: ' + e.code + ')');
+    };
+
+    ttsSocket.onerror = () => {
+      setTtsConnected(false, true);
+      stats.errors++;
+      updateStats();
+      addLog('error', 'TTS WebSocket error');
+    };
+
+    // Pipeline is now live
+    isRecording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    setWaveformActive(true);
+    document.getElementById('sttStatus').textContent = 'Listening...';
+    document.getElementById('sttStatus').className = 'stage-status listening';
+    setPipelineStatus('recording');
+    addLog('info', 'Pipeline active - speak into your microphone');
+
+  } catch (err) {
+    stats.errors++;
+    updateStats();
+    addLog('error', err.message);
+    setPipelineStatus('error');
+    stopPipeline();
+  }
+}
+
+// ================================================================
+// Pipeline Stop
+// ================================================================
+function stopPipeline() {
+  isRecording = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  setWaveformActive(false);
+  setSpeakerActive(false);
+  setFlowActive(1, false);
+  setFlowActive(2, false);
+  setPipelineStageActive('Stt', false);
+  setPipelineStageActive('Process', false);
+  setPipelineStageActive('Tts', false);
+
+  // Stop capture
+  if (captureNode) {
+    captureNode.port.postMessage({ command: 'stop' });
+    captureNode.disconnect();
+    captureNode = null;
+  }
+
+  // Stop playback
+  if (playbackNode) {
+    playbackNode.port.postMessage({ command: 'clear' });
+    playbackNode.disconnect();
+    playbackNode = null;
+  }
+
+  // Close STT socket
+  if (sttSocket) {
+    try {
+      if (sttSocket.readyState === WebSocket.OPEN) {
+        sttSocket.send(JSON.stringify({ type: 'CloseStream' }));
+      }
+      sttSocket.close();
+    } catch (e) { /* ignore */ }
+    sttSocket = null;
+    setSttConnected(false, false);
+  }
+
+  // Close TTS socket
+  if (ttsSocket) {
+    try {
+      if (ttsSocket.readyState === WebSocket.OPEN) {
+        ttsSocket.send(JSON.stringify({ text: '' }));
+      }
+      ttsSocket.close();
+    } catch (e) { /* ignore */ }
+    ttsSocket = null;
+    setTtsConnected(false, false);
+  }
+
+  // Release mic
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+
+  // Close audio context
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close().catch(() => {});
+    audioContext = null;
+  }
+
+  document.getElementById('sttStatus').textContent = 'Idle';
+  document.getElementById('sttStatus').className = 'stage-status';
+  document.getElementById('ttsStatus').textContent = 'Idle';
+  document.getElementById('ttsStatus').className = 'stage-status';
+  document.getElementById('processStatus').textContent = 'Ready';
+  document.getElementById('processStatus').className = 'stage-status';
+  setPipelineStatus('idle');
+  addLog('info', 'Pipeline stopped');
+}
+
+// ================================================================
+// Text Processing (mirrors text_processor.ail)
+// ================================================================
+function processText(text, mode) {
+  if (!text || text.length === 0) return '';
+
+  switch (mode) {
+    case 'echo':
+      return text;
+
+    case 'summarize': {
+      // Simple: take first sentence
+      const sentences = text.split('. ');
+      const first = sentences[0];
+      return first.length > 100 ? first.substring(0, 100) + '...' : first;
+    }
+
+    case 'translate':
+      return 'Translation: ' + text;
+
+    case 'extract': {
+      // Extract capitalized words (potential names) and numbers
+      const words = text.split(' ').filter(w => w.length > 0);
+      const capitalized = words.filter(w => w[0] && w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase());
+      const numbers = words.filter(w => /^\d+$/.test(w));
+
+      let result = capitalized.length > 0
+        ? 'Names: ' + capitalized.join(', ')
+        : 'No named entities found';
+      if (numbers.length > 0) {
+        result += '. Numbers: ' + numbers.join(', ');
+      }
+      return result;
+    }
+
+    default:
+      return text;
+  }
+}
+
+// ================================================================
+// Keyboard shortcuts
+// ================================================================
+document.addEventListener('keydown', (e) => {
+  // Space to toggle mic (when not focused on input)
+  if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    toggleMic();
+  }
+  // Escape to stop
+  if (e.key === 'Escape' && isRecording) {
+    stopPipeline();
+  }
+  // 1-4 to switch modes
+  if (!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+    const modes = { '1': 'echo', '2': 'summarize', '3': 'translate', '4': 'extract' };
+    if (modes[e.key]) {
+      const btn = document.querySelector(`.mode-btn[data-mode="${modes[e.key]}"]`);
+      if (btn) setMode(modes[e.key], btn);
+    }
+  }
+});
+</script>
+
+<script src="../shared/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+-- Gemini Live API type definitions for Voice Document Analyst
+--
+-- Reuses the same Gemini Live protocol types as voice_analytics
+-- with additional document-specific tool types.
+
+module streaming/voice_docparse/types/live_types
+
+import std/string (length)
+
+-- Gemini Live API setup configuration
+export type GeminiSetup = {
+  model: string,
+  systemInstruction: string,
+  tools: [ToolDecl],
+  responseModalities: [string]
+}
+
+-- Tool declaration for Gemini function calling
+export type ToolDecl = {
+  name: string,
+  description: string,
+  parameters: string
+}
+
+-- Tool call from Gemini
+export type ToolCall = {
+  id: string,
+  name: string,
+  args: string
+}
+
+-- Parsed server message variants
+export type ServerMessage =
+  | SetupComplete
+  | ToolCallMsg(ToolCall)
+  | TextResponse(string)
+  | AudioResponse(string)
+  | TurnComplete
+  | Interrupted
+  | Unknown(string)
+
+-- Document session context (tracks what's been parsed)
+export type DocSession = {
+  loadedFile: string,
+  blockCount: int,
+  tableCount: int,
+  imageCount: int,
+  headingCount: int,
+  toolCallsHandled: int
+}
+
+export func emptyDocSession() -> DocSession = {
+  loadedFile: "",
+  blockCount: 0,
+  tableCount: 0,
+  imageCount: 0,
+  headingCount: 0,
+  toolCallsHandled: 0
+}

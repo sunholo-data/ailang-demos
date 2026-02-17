@@ -1,0 +1,95 @@
+-- ElevenLabs text-to-speech WebSocket client for the voice pipeline
+--
+-- Handles the TTS leg of the pipeline: processed text in → audio out.
+--
+-- Protocol: WebSocket
+-- URL: wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input
+-- Auth: xi_api_key field in initial BOS (Beginning of Stream) message
+--
+-- Wire format:
+--   Client sends: {"text": "chunk", "try_trigger_generation": true}
+--   Client sends EOS: {"text": ""}
+--   Server returns: {"audio": "<base64-mp3>", "isFinal": false}
+--
+-- Reference: https://elevenlabs.io/docs/api-reference/text-to-speech
+
+module streaming/voice_pipeline/services/elevenlabs_tts
+
+import std/stream (connect, transmit, disconnect, StreamConn, StreamErrorKind, defaultConfig)
+import std/json (encode, decode, getString, getBool,
+                 jo, kv, js, jb, jnum, Json)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+
+-- Default voice: Rachel (warm, conversational)
+export pure func defaultVoiceId() -> string = "21m00Tcm4TlvDq8ikWAM"
+
+-- Build TTS WebSocket URL
+export pure func ttsUrl(voiceId: string) -> string
+  ensures { length(result) > 30 }
+{
+  "wss://api.elevenlabs.io/v1/text-to-speech/" ++ voiceId ++ "/stream-input?model_id=eleven_turbo_v2_5&output_format=pcm_16000"
+}
+
+-- Connect to ElevenLabs TTS
+export func connectTTS(apiKey: string, voiceId: string) -> Result[StreamConn, string] ! {Stream}
+  ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
+{
+  let url = ttsUrl(voiceId);
+  let config = defaultConfig(());
+  match connect(url, config) {
+    Ok(conn) => Ok(conn),
+    Err(_) => Err("Failed to connect to ElevenLabs TTS")
+  }
+}
+
+-- Send Beginning of Stream (BOS) message with auth
+-- Must be the first message sent
+export func sendBOS(conn: StreamConn, apiKey: string) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([
+    kv("text", js(" ")),
+    kv("voice_settings", jo([
+      kv("stability", jnum(0.5)),
+      kv("similarity_boost", jnum(0.75))
+    ])),
+    kv("xi_api_key", js(apiKey))
+  ]));
+  transmit(conn, msg)
+}
+
+-- Send a text chunk for speech synthesis
+-- Text should end with a space or punctuation for best results
+export func sendTextChunk(conn: StreamConn, text: string) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([
+    kv("text", js(text ++ " ")),
+    kv("try_trigger_generation", jb(true))
+  ]));
+  transmit(conn, msg)
+}
+
+-- Send End of Stream (EOS) to flush remaining audio
+export func sendEOS(conn: StreamConn) -> Result[unit, StreamErrorKind] ! {Stream} {
+  let msg = encode(jo([kv("text", js(""))]));
+  transmit(conn, msg)
+}
+
+-- Helper: build Ok(record) in isolation (workaround for Result[record,string] type leak)
+pure func mkAudioResult(audio: string, isFinal: bool) -> Result[{audio: string, isFinal: bool}, string] =
+  Ok({ audio: audio, isFinal: isFinal })
+
+-- Parse a TTS audio response
+-- Returns base64-encoded audio data and whether it's the final chunk
+export func parseTTSResponse(msg: string) -> Result[{audio: string, isFinal: bool}, string] {
+  match decode(msg) {
+    Ok(json) => {
+      let audio = getOrElse(getString(json, "audio"), "");
+      let isFinal = getOrElse(getBool(json, "isFinal"), false);
+      if length(audio) > 0 then
+        mkAudioResult(audio, isFinal)
+      else
+        Err("No audio in response")
+    },
+    Err(e) => Err("Parse error: " ++ e)
+  }
+}

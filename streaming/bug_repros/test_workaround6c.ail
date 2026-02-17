@@ -1,0 +1,31 @@
+-- Workaround test for Bug 6 (attempt 3): avoid Result entirely
+module streaming/bug_repros/test_workaround6c
+
+import std/option (Some, None)
+
+func clamp(x: int) -> int {
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+-- Map op string to int code
+func opCode(op: string) -> int =
+  match op {
+    "add" => 1,
+    "subtract" => 2,
+    _ => 0
+  }
+
+-- Return Option[int] instead of Result[int, string]
+func calculateByCode(code: int, ca: int, cb: int) -> Option[int] {
+  if code == 1 then Some(ca + cb)
+  else if code == 2 then Some(ca - cb)
+  else None
+}
+
+func calculate(op: string, a: int, b: int) -> Option[int] {
+  let ca = clamp(a);
+  let cb = clamp(b);
+  calculateByCode(opCode(op), ca, cb)
+}

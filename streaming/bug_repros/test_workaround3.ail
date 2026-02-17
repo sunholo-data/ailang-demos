@@ -1,0 +1,25 @@
+-- Workaround test for Bug 3: split map calls into separate helper functions
+module streaming/bug_repros/test_workaround3
+
+import std/list (map)
+import std/json (jo, kv, js, ja, encode, Json)
+
+type Item = Item({name: string, desc: string})
+
+-- Helper 1: map items in its own scope
+func mapItems(items: [Item]) -> [Json] =
+  map(\i. jo([kv("name", js(i.name)), kv("desc", js(i.desc))]), items)
+
+-- Helper 2: map strings in its own scope
+func mapTags(tags: [string]) -> [Json] =
+  map(\s. js(s), tags)
+
+-- Main function uses helpers instead of direct map calls
+func buildJson(items: [Item], tags: [string]) -> string {
+  let itemDefs = mapItems(items);
+  let tagDefs = mapTags(tags);
+  encode(jo([
+    kv("items", ja(itemDefs)),
+    kv("tags", ja(tagDefs))
+  ]))
+}

@@ -1,0 +1,27 @@
+-- Bug 5: Result match type leak — Ok type leaks into Err parameter
+-- When matching Result and returning Ok(ADT) in one arm and Err(string) in another,
+-- the type checker unifies the Ok type with the Err type.
+--
+-- Expected: Result[StreamConn, string] works fine
+-- Actual: "cannot unify type constructors: StreamConn vs string"
+--
+-- This is the same family as the Result[unit, X] bug (Bug 1),
+-- but with an ADT type instead of unit.
+
+module streaming/bug_repros/bug5_result_adt_leak
+
+import std/stream (sseConnect, transmit, StreamConn, StreamErrorKind)
+import std/result (Ok, Err)
+
+-- Matching sseConnect's Result[StreamConn, StreamErrorKind]
+-- and returning Result[StreamConn, string] fails
+func connectService(url: string) -> Result[StreamConn, string] ! {Stream} {
+  let config = "{}";
+  match sseConnect(url, config) {
+    Ok(conn) => {
+      let _ = transmit(conn, "hello");
+      Ok(conn)
+    },
+    Err(_) => Err("Connection failed")
+  }
+}
