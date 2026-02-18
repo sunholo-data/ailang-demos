@@ -56,6 +56,9 @@ GOOGLE_API_KEY="" ailang run --entry main \
 speak "Tell me a joke"
 speak --voice Charon "What is AILANG?"
 speak -v Orus "Explain algebraic effects"
+speak --tools "What's the git status?"    # with tool calling
+speak -t "Any open PRs?"                  # git, gh, ailang tools
+speak --list                              # show active sessions
 
 # Safe Agent with contract verification (uses ADC)
 GOOGLE_API_KEY="" ailang run --entry main \
@@ -133,6 +136,43 @@ Browser demos should load AILANG modules via `ailangLoadModule()` and use `ailan
 Install: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`
 
 Both resolve symlinks to find the repo root, handle ADC auth, and set correct caps automatically.
+
+## Voice Agent (speak) Capabilities
+
+The `speak` CLI is a voice agent powered by Gemini Live with tool calling:
+
+| Tool | Capability | Safety |
+|------|-----------|--------|
+| `currentTime` | Current date/time/timezone | Read-only |
+| `calculate` | Arithmetic (add/sub/mul/div) | Contract-verified, inputs clamped |
+| `readFile` | Read text files | Path-safe (prefix + no `..`) |
+| `listFiles` | Directory listing | Path-safe |
+| `runCommand` | Shell commands (allowlisted) | Command + subcommand filtering |
+
+**runCommand subcommand safety:**
+- **git**: status, log, diff, branch, show, blame, add, commit — blocks push, reset, force, checkout, rebase, clean
+- **gh**: pr/issue list/view/status only — blocks merge, close, create, delete
+- **ailang**: messages, check, docs, prompt, version only
+- **General**: ls, date, echo, wc, head, tail, grep, pwd, whoami, uname
+
+**Sessions:** Scoped per git repo (auto-detected). Session resumption via Gemini handles (valid 2 hours). Transcript saved to `~/.ailang/speak/sessions/<project>/transcript.jsonl`.
+
+## Claude Code Stop Hook
+
+A global Stop hook (`~/.claude/hooks/session_end_speak.sh`) runs `speak` when Claude Code finishes:
+- Extracts Claude's last response from the session transcript
+- Calls `speak --tools` for a voice debrief with git status
+- Shows macOS notification with transcript text
+- Serializes overlapping sessions with a lockfile
+
+**Install:**
+1. Clone this repo (speak needs the AILANG modules in `streaming/gemini_live/`)
+2. Symlink speak: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`
+3. Copy the hook: `cp scripts/hooks/session_end_speak.sh ~/.claude/hooks/`
+4. Add the Stop hook to your `~/.claude/settings.json` — see `scripts/hooks/example-claude-settings.json` for the config to merge
+5. Ensure GCP ADC is configured: `gcloud auth application-default login`
+
+No-ops silently if `speak` is not in PATH.
 
 ## When Working on This Repo
 

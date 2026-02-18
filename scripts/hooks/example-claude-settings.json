@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Example Claude Code settings to enable the speak voice debrief hook. Copy the Stop hook entry into your ~/.claude/settings.json to activate.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/session_end_speak.sh",
+            "timeout": 120000
+          }
+        ]
+      }
+    ]
+  }
+}
