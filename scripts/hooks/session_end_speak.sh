@@ -25,8 +25,15 @@ if [[ "$TRANSCRIPT_PATH" == *"/agent-"* ]]; then
   exit 0
 fi
 
-# Clear any pending interaction alert (session is ending, not waiting)
-rm -f "$HOME/.ailang/speak/pending_interaction"
+# Clear any pending interaction alert for this session
+SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('session_id', 'default'))" 2>/dev/null || echo "default")
+rm -f "$HOME/.ailang/speak/pending_${SESSION_ID}"
+ALERT_PID_FILE="$HOME/.ailang/speak/alert_pid_${SESSION_ID}"
+if [ -f "$ALERT_PID_FILE" ]; then
+  pid=$(cat "$ALERT_PID_FILE" 2>/dev/null || echo "")
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+  rm -f "$ALERT_PID_FILE"
+fi
 
 # --- Folder exclusion ---
 CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('cwd', ''))" 2>/dev/null || echo "$(pwd)")
@@ -172,15 +179,24 @@ if [ -f "$TURN_TEXT" ] && [ -s "$TURN_TEXT" ]; then
     fi
   } > "$DEBRIEF_FILE"
 
+  ICON="$HOME/.claude/hooks/assets/sunholo-logo.png"
+
   if command -v terminal-notifier &>/dev/null; then
-    # terminal-notifier: custom icon, click opens debrief file
-    ICON="$HOME/.claude/hooks/assets/sunholo-logo.png"
-    terminal-notifier -title "AILANG: ${PROJECT}" -subtitle "${CWD}" \
-      -message "$DEBRIEF" -sound Glass -appIcon "$ICON" \
-      -open "file://${DEBRIEF_FILE}" 2>/dev/null || true
+    # terminal-notifier: rich notification
+    #   -group: replaces previous notification for same project (no stacking)
+    #   -appIcon: sunholo logo
+    #   -execute: Quick Look the debrief on click (non-modal, dismisses with Esc)
+    terminal-notifier \
+      -title "AILANG: ${PROJECT}" \
+      -subtitle "$(date '+%H:%M') — ${CWD}" \
+      -message "$DEBRIEF" \
+      -sound Glass \
+      -appIcon "$ICON" \
+      -group "ailang-debrief-${PROJECT}" \
+      -execute "qlmanage -p '${DEBRIEF_FILE}' &>/dev/null &" \
+      2>/dev/null || true
   else
-    # osascript: notification only (no TextEdit — avoid stealing focus)
-    # Full debrief is saved to $DEBRIEF_FILE for manual inspection
+    # osascript fallback (no click action — Apple limitation)
     SHORT_DEBRIEF="${DEBRIEF:0:200}"
     osascript -e "display notification \"$SHORT_DEBRIEF\" with title \"AILANG: ${PROJECT}\" subtitle \"${CWD}\" sound name \"Glass\"" 2>/dev/null || true
   fi

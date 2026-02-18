@@ -14,6 +14,9 @@ set -euo pipefail
 # Read hook input from stdin
 HOOK_INPUT=$(cat)
 
+# --- Extract session ID (scope state per session to avoid cross-talk) ---
+SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('session_id', 'default'))" 2>/dev/null || echo "default")
+
 # --- Folder exclusion ---
 CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('cwd', ''))" 2>/dev/null || echo "")
 
@@ -60,17 +63,17 @@ else
   PROJECT="$(basename "$(pwd)")"
 fi
 
-# --- Set pending state and schedule alert ---
+# --- Set pending state (scoped per session) ---
 STATE_DIR="$HOME/.ailang/speak"
-PENDING="$STATE_DIR/pending_interaction"
-ALERT_PID_FILE="$STATE_DIR/alert_pid"
+PENDING="$STATE_DIR/pending_${SESSION_ID}"
+ALERT_PID_FILE="$STATE_DIR/alert_pid_${SESSION_ID}"
 
 mkdir -p "$STATE_DIR"
 
 # Write project info to pending file (watcher reads this, not captured vars)
 printf '%s\n%s\n' "$PROJECT" "$CWD" > "$PENDING"
 
-# Don't spawn a new watcher if one is already running
+# Don't spawn a new watcher if one is already running for this session
 if [ -f "$ALERT_PID_FILE" ]; then
   existing_pid=$(cat "$ALERT_PID_FILE" 2>/dev/null || echo "")
   if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
@@ -82,15 +85,28 @@ fi
 (
   sleep 60
   if [ -f "$PENDING" ]; then
-    # Read current project info from pending file (not stale captured vars)
+    # Read current project info from pending file
     ALERT_PROJECT=$(head -1 "$PENDING" 2>/dev/null || echo "unknown")
     ALERT_CWD=$(tail -1 "$PENDING" 2>/dev/null || echo "")
+    ICON="$HOME/.claude/hooks/assets/sunholo-logo.png"
 
-    # Vocal alert via macOS TTS (instant, no API call)
-    say -v Samantha "Claude Code is waiting for your attention in the ${ALERT_PROJECT} project" 2>/dev/null || true
-
-    # Also show notification
-    osascript -e "display notification \"Claude Code needs your input\" with title \"AILANG: ${ALERT_PROJECT}\" subtitle \"${ALERT_CWD}\" sound name \"Funk\"" 2>/dev/null || true
+    if command -v terminal-notifier &>/dev/null; then
+      # terminal-notifier: rich notification with sound
+      #   -group: replaces previous alert for same session (no stacking)
+      #   -ignoreDnD: important — user might have DnD on while coding
+      terminal-notifier \
+        -title "Waiting: ${ALERT_PROJECT}" \
+        -subtitle "${ALERT_CWD}" \
+        -message "Claude Code needs your input — approval or answer required" \
+        -sound Funk \
+        -appIcon "$ICON" \
+        -group "ailang-alert-${ALERT_PROJECT}" \
+        -ignoreDnD \
+        2>/dev/null || true
+    else
+      # osascript fallback
+      osascript -e "display notification \"Claude Code needs your input\" with title \"Waiting: ${ALERT_PROJECT}\" subtitle \"${ALERT_CWD}\" sound name \"Funk\"" 2>/dev/null || true
+    fi
   fi
   rm -f "$ALERT_PID_FILE"
 ) &
