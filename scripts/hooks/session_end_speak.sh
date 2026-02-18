@@ -19,14 +19,50 @@ if [ "$STOP_HOOK_ACTIVE" = "True" ]; then
   exit 0
 fi
 
+# Skip sub-agents — only debrief top-level sessions
+TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('transcript_path', ''))" 2>/dev/null || echo "")
+if [[ "$TRANSCRIPT_PATH" == *"/agent-"* ]]; then
+  exit 0
+fi
+
+# Clear any pending interaction alert (session is ending, not waiting)
+rm -f "$HOME/.ailang/speak/pending_interaction"
+
+# --- Folder exclusion ---
+CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('cwd', ''))" 2>/dev/null || echo "$(pwd)")
+
+# Default excludes: /tmp, /private/var (sandbox evals), eval directories
+EXCLUDES="/tmp:/private/tmp:/private/var:/ailang_eval"
+
+# Merge with env var if set
+if [ -n "${CLAUDE_ALERT_EXCLUDE:-}" ]; then
+  EXCLUDES="$EXCLUDES:$CLAUDE_ALERT_EXCLUDE"
+fi
+
+# Merge with global AILANG config file
+CONF="$HOME/.ailang/config/hook_excludes.conf"
+if [ -f "$CONF" ]; then
+  while IFS= read -r pattern; do
+    pattern=$(echo "$pattern" | sed 's/#.*//' | xargs)  # strip comments + trim
+    [ -n "$pattern" ] && EXCLUDES="$EXCLUDES:$pattern"
+  done < "$CONF"
+fi
+
+# Check if CWD matches any exclude pattern
+if [ -n "$CWD" ]; then
+  IFS=':' read -ra PATTERNS <<< "$EXCLUDES"
+  for pat in "${PATTERNS[@]}"; do
+    [ -z "$pat" ] && continue
+    if [[ "$CWD" == *"$pat"* ]]; then
+      exit 0
+    fi
+  done
+fi
+
 # Check speak is available
 if ! command -v speak &>/dev/null; then
   exit 0
 fi
-
-# --- Extract last Claude response from transcript ---
-TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('transcript_path', ''))" 2>/dev/null || echo "")
-CWD=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('cwd', ''))" 2>/dev/null || echo "$(pwd)")
 
 LAST_CLAUDE_MSG=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
@@ -77,8 +113,10 @@ fi
 trap release_lock EXIT
 
 # --- Resolve speak session ---
-if git rev-parse --show-toplevel &>/dev/null; then
-  PROJECT="$(basename "$(git rev-parse --show-toplevel)")"
+if [ -n "$CWD" ] && git -C "$CWD" rev-parse --show-toplevel &>/dev/null 2>&1; then
+  PROJECT="$(basename "$(git -C "$CWD" rev-parse --show-toplevel)")"
+elif [ -n "$CWD" ]; then
+  PROJECT="$(basename "$CWD")"
 else
   PROJECT="$(basename "$(pwd)")"
 fi
@@ -86,24 +124,64 @@ fi
 SESSIONS_ROOT="$HOME/.ailang/speak/sessions"
 SESSION_DIR="$SESSIONS_ROOT/$PROJECT"
 TURN_TEXT="$SESSION_DIR/turn_text.txt"
+DEBRIEF_FILE="$SESSION_DIR/last_debrief.txt"
+
+# --- Pre-fetch git status so speak doesn't need to tool-call for it ---
+GIT_STATUS=""
+if git rev-parse --is-inside-work-tree &>/dev/null; then
+  GIT_STATUS=$(git -C "$CWD" status --short 2>/dev/null | head -20)
+fi
 
 # --- Build prompt ---
-DIR_NAME=$(basename "$CWD")
+# Include git status inline so speak can just read it out (no tool call needed).
+# Only mention git if there are changes to report.
+GIT_SECTION=""
+if [ -n "$GIT_STATUS" ]; then
+  GIT_SECTION=" Git status: ${GIT_STATUS}. Briefly mention what files changed."
+else
+  GIT_SECTION=" Git is clean — no uncommitted changes."
+fi
 
 if [ -n "$LAST_CLAUDE_MSG" ]; then
-  PROMPT="Claude Code session just ended in the ${DIR_NAME} directory. Here is what Claude last said: '${LAST_CLAUDE_MSG}'. Give a concise 2-3 sentence spoken summary of what Claude did, then check git status and mention any uncommitted changes. Keep it under 20 seconds."
+  PROMPT="You are debriefing the ${PROJECT} project (${CWD}). Claude Code just finished. Claude's last response: '${LAST_CLAUDE_MSG}'. Summarise in 2 sentences what Claude did.${GIT_SECTION} Keep it under 20 seconds. Do NOT use tools — all info is provided."
 else
-  PROMPT="Claude Code session just ended in the ${DIR_NAME} directory. Check git status and give a brief spoken summary of the current state. Keep it under 15 seconds."
+  PROMPT="You are debriefing the ${PROJECT} project (${CWD}). Claude Code just finished.${GIT_SECTION} Give a brief summary. Keep it under 15 seconds. Do NOT use tools — all info is provided."
 fi
 
 # --- Run speak + print transcript ---
 # speak uses `exec` internally so we run it in a subshell to regain control
 > "$TURN_TEXT" 2>/dev/null || true
 
-(speak --tools "$PROMPT")
+(speak "$PROMPT")
 
-# Show transcript as macOS notification (hook stdout isn't displayed by Claude Code)
+# --- Save debrief and show notification ---
 if [ -f "$TURN_TEXT" ] && [ -s "$TURN_TEXT" ]; then
   DEBRIEF=$(cat "$TURN_TEXT")
-  osascript -e "display notification \"$DEBRIEF\" with title \"speak debrief\"" 2>/dev/null || true
+
+  # Save full debrief to a file (clickable from notification via terminal-notifier)
+  {
+    echo "=== AILANG Debrief: ${PROJECT} ==="
+    echo "Directory: ${CWD}"
+    echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo "$DEBRIEF"
+    echo ""
+    if [ -n "$GIT_STATUS" ]; then
+      echo "--- git status ---"
+      echo "$GIT_STATUS"
+    fi
+  } > "$DEBRIEF_FILE"
+
+  if command -v terminal-notifier &>/dev/null; then
+    # terminal-notifier: custom icon, click opens debrief file
+    ICON="$HOME/.claude/hooks/assets/sunholo-logo.png"
+    terminal-notifier -title "AILANG: ${PROJECT}" -subtitle "${CWD}" \
+      -message "$DEBRIEF" -sound Glass -appIcon "$ICON" \
+      -open "file://${DEBRIEF_FILE}" 2>/dev/null || true
+  else
+    # osascript: notification only (no TextEdit — avoid stealing focus)
+    # Full debrief is saved to $DEBRIEF_FILE for manual inspection
+    SHORT_DEBRIEF="${DEBRIEF:0:200}"
+    osascript -e "display notification \"$SHORT_DEBRIEF\" with title \"AILANG: ${PROJECT}\" subtitle \"${CWD}\" sound name \"Glass\"" 2>/dev/null || true
+  fi
 fi

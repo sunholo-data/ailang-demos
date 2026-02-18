@@ -1,7 +1,31 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Example Claude Code settings to enable the speak voice debrief hook. Copy the Stop hook entry into your ~/.claude/settings.json to activate.",
+  "_comment": "Example Claude Code hooks for voice features. Merge these entries into your ~/.claude/settings.json. Copy hook scripts to ~/.claude/hooks/ first.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/waiting_alert_pre.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/waiting_alert_post.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

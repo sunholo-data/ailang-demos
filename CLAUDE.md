@@ -157,22 +157,41 @@ The `speak` CLI is a voice agent powered by Gemini Live with tool calling:
 
 **Sessions:** Scoped per git repo (auto-detected). Session resumption via Gemini handles (valid 2 hours). Transcript saved to `~/.ailang/speak/sessions/<project>/transcript.jsonl`.
 
-## Claude Code Stop Hook
+## Claude Code Hooks
 
-A global Stop hook (`~/.claude/hooks/session_end_speak.sh`) runs `speak` when Claude Code finishes:
+### Voice Debrief (Stop Hook)
+
+`~/.claude/hooks/session_end_speak.sh` runs `speak` when Claude Code finishes:
 - Extracts Claude's last response from the session transcript
-- Calls `speak --tools` for a voice debrief with git status
-- Shows macOS notification with transcript text
+- Pre-fetches git status and includes it inline (no tool calls)
+- Shows macOS notification with transcript text (no TextEdit focus grab)
 - Serializes overlapping sessions with a lockfile
+- Skips sub-agents (only debriefs top-level sessions)
 
-**Install:**
+### Waiting Alert (PreToolUse / PostToolUse)
+
+`~/.claude/hooks/waiting_alert_pre.sh` and `waiting_alert_post.sh` give a vocal alert when Claude Code has been waiting for user input for more than 60 seconds:
+- PreToolUse: records pending state, spawns a 60-second background watcher
+- PostToolUse: clears pending state (auto-approved tools clear instantly)
+- Uses macOS `say` for instant TTS (no API call) + notification with "Funk" sound
+- Excludes directories matching patterns in `CLAUDE_ALERT_EXCLUDE` env var or `~/.claude/hooks/alert_exclude.conf`
+- Default excludes: `/tmp`, `/private/tmp`, `/ailang_eval`
+
+### Install
+
 1. Clone this repo (speak needs the AILANG modules in `streaming/gemini_live/`)
 2. Symlink speak: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`
-3. Copy the hook: `cp scripts/hooks/session_end_speak.sh ~/.claude/hooks/`
-4. Add the Stop hook to your `~/.claude/settings.json` — see `scripts/hooks/example-claude-settings.json` for the config to merge
+3. Copy hooks:
+   ```bash
+   cp scripts/hooks/session_end_speak.sh ~/.claude/hooks/
+   cp scripts/hooks/waiting_alert_pre.sh ~/.claude/hooks/
+   cp scripts/hooks/waiting_alert_post.sh ~/.claude/hooks/
+   chmod +x ~/.claude/hooks/waiting_alert_*.sh ~/.claude/hooks/session_end_speak.sh
+   ```
+4. Merge hook config into `~/.claude/settings.json` — see `scripts/hooks/example-claude-settings.json`
 5. Ensure GCP ADC is configured: `gcloud auth application-default login`
 
-No-ops silently if `speak` is not in PATH.
+No-ops silently if `speak` is not in PATH. Waiting alert works independently (no speak needed).
 
 ## When Working on This Repo
 
