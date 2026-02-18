@@ -18,7 +18,7 @@
 --   speak --new "Fresh start"
 --
 -- Or manually:
---   GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Stream,Net,Env,Process \
+--   ailang run --entry main --caps IO,FS,Stream,Net,Env,Process \
 --     streaming/gemini_live/main.ail "Tell me a joke"
 --
 -- Available voices (30): Zephyr, Puck, Charon, Kore, Fenrir, Leda, Orus, Aoede,
@@ -32,7 +32,7 @@
 --   Stream @limit=500  - WebSocket messages (audio frames, ~20+ per response)
 --   Net @limit=5       - Auth
 --   Env                - Read environment variables
---   Process @limit=2   - Audio playback (afplay)
+--   Process @limit=15  - Audio playback (afplay) + tool execution (when --tools)
 
 module streaming/gemini_live/main
 
@@ -47,19 +47,22 @@ import std/net (httpRequest)
 import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
-import std/string (length, join, intToStr)
-import std/list (length as listLength, map, forEachE)
+import std/string (length, join, intToStr, substring)
+import std/list (length as listLength, map, forEachE, concat, nth)
 import std/json (encode, decode, getString, getObject, getArray, getBool, getInt,
                  jo, kv, js, ja, jb)
 import std/bytes (fromBase64, length as bytesLen, concat as bytesConcat, fromInts)
 import std/process (exec, NotFound)
+import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool)
 
-export func main() -> () ! {IO @limit=200, FS @limit=300, Stream @limit=500, Net @limit=5, Env, Process @limit=2} {
+export func main() -> () ! {IO @limit=200, FS @limit=320, Stream @limit=600, Net @limit=5, Env, Process @limit=15} {
   let voice = getEnvOr("GEMINI_VOICE", "Sulafat");
+  let toolsEnabled = getEnvOr("GEMINI_TOOLS", "") == "1";
   println("=== Gemini Live — Text to Audio ===");
   println("Protocol: WebSocket (bidirectional)");
   println("Model: gemini-live-2.5-flash-native-audio");
-  println("Voice: " ++ voice ++ " | Input: text | Output: audio (PCM 24kHz)");
+  let toolsLabel = if toolsEnabled then " | Tools: ON" else "";
+  println("Voice: " ++ voice ++ " | Input: text | Output: audio (PCM 24kHz)" ++ toolsLabel);
   println("");
 
   match getDefaultProject() {
@@ -87,7 +90,7 @@ export func main() -> () ! {IO @limit=200, FS @limit=300, Stream @limit=500, Net
           let args = getArgs();
           let prompt = if listLength(args) > 0 then join(" ", args)
             else "Hello! Tell me a short joke.";
-          startLiveSession(token, region, projectId, prompt, voice, handle, sessionDir)
+          startLiveSession(token, region, projectId, prompt, voice, handle, sessionDir, toolsEnabled)
         },
         Err(e) => {
           println("Error: ADC authentication failed: " ++ e);
@@ -102,7 +105,7 @@ export func main() -> () ! {IO @limit=200, FS @limit=300, Stream @limit=500, Net
 func geminiLiveUrl(region: string) -> string =
   "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
 
-func startLiveSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string) -> () ! {IO, FS, Stream, Process} {
+func startLiveSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool) -> () ! {IO, FS, Stream, Process, Env} {
   let url = geminiLiveUrl(region);
   let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
   -- Derive all session paths from sessionDir
@@ -124,41 +127,58 @@ func startLiveSession(token: string, region: string, projectId: string, prompt: 
       let sessionConfig = if length(handle) > 0 then
         jo([kv("handle", js(handle))])
       else jo([]);
-      let setupMsg = encode(jo([
-        kv("setup", jo([
-          kv("model", js(modelId)),
-          kv("generationConfig", jo([
-            kv("responseModalities", ja([js("AUDIO")])),
-            kv("speechConfig", jo([
-              kv("voiceConfig", jo([
-                kv("prebuiltVoiceConfig", jo([
-                  kv("voiceName", js(voice))
-                ]))
+      -- System instruction (enhanced with tool guidance when tools enabled)
+      let baseInstruction = "You are a friendly assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.";
+      let sysInstruction = if toolsEnabled then
+        baseInstruction ++ " You have tools available: currentTime, calculate, readFile, listFiles, runCommand. Use them when the user asks about the time, needs calculations, wants to read files, list directories, or run basic commands. Call tools proactively when relevant."
+      else baseInstruction;
+      -- Build setup fields
+      let baseSetupKvs = [
+        kv("model", js(modelId)),
+        kv("generationConfig", jo([
+          kv("responseModalities", ja([js("AUDIO")])),
+          kv("speechConfig", jo([
+            kv("voiceConfig", jo([
+              kv("prebuiltVoiceConfig", jo([
+                kv("voiceName", js(voice))
               ]))
             ]))
-          ])),
-          kv("sessionResumption", sessionConfig),
-          kv("contextWindowCompression", jo([
-            kv("slidingWindow", jo([]))
-          ])),
-          kv("outputAudioTranscription", jo([])),
-          kv("inputAudioTranscription", jo([])),
-          kv("systemInstruction", jo([
-            kv("parts", ja([jo([kv("text", js("You are a friendly assistant called AILANG. Speak with a British English accent. Keep responses short and conversational."))])]))
           ]))
+        ])),
+        kv("sessionResumption", sessionConfig),
+        kv("contextWindowCompression", jo([
+          kv("slidingWindow", jo([]))
+        ])),
+        kv("outputAudioTranscription", jo([])),
+        kv("inputAudioTranscription", jo([])),
+        kv("systemInstruction", jo([
+          kv("parts", ja([jo([kv("text", js(sysInstruction))])]))
         ]))
-      ]));
+      ];
+      -- Add tool declarations when enabled
+      let toolsKvs = if toolsEnabled then {
+        let decls = getSpeakToolDeclarations();
+        let funcDecls = map(\t. {
+          let params = match decode(t.parameters) { Ok(p) => p, Err(_) => jo([]) };
+          jo([kv("name", js(t.name)), kv("description", js(t.description)), kv("parameters", params)])
+        }, decls);
+        [kv("tools", ja([jo([kv("functionDeclarations", ja(funcDecls))])]))]
+      } else [];
+      let setupMsg = encode(jo([kv("setup", jo(concat(baseSetupKvs, toolsKvs)))]));
 
       -- Initialize per-turn temp files (reset each invocation)
+      let turnDonePath = sessionDir ++ "/turn_done.flag";
       writeFile(pcmPath, "");
       writeFile(turnTextPath, "");
       writeFile(turnUsagePath, "");
+      writeFile(turnDonePath, "");
 
       -- Save user prompt to transcript
       appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(prompt))])) ++ "\n");
 
       -- Register event handler
-      onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir));
+      let allowedPath = getEnvOr("HOME", "/tmp");
+      onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath));
 
       -- Send setup
       match transmit(conn, setupMsg) {
@@ -274,8 +294,52 @@ func reportSummary(prompt: string, turnTextPath: string, turnUsagePath: string, 
   else ()
 }
 
+-- Build the JSON toolResponse message to send back to Gemini
+func buildToolResponseMsg(fnName: string, result: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("name", js(fnName)),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- Handle a tool call from Gemini: dispatch, respond, log
+func handleToolCall(tc: Json, conn: StreamConn, transcriptPath: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process} {
+  match getArray(tc, "functionCalls") {
+    Some(calls) => {
+      match nth(calls, 0) {
+        Some(call) => {
+          let fnName = getOrElse(getString(call, "name"), "");
+          let argsJson = match getObject(call, "args") {
+            Some(a) => encode(a),
+            None => "{}"
+          };
+          println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+          let result = match dispatchTool(fnName, argsJson, allowedPath) {
+            Ok(r) => r,
+            Err(e) => "Error: " ++ e
+          };
+          let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
+          println("[Tool Result] " ++ truncResult);
+          let responseMsg = buildToolResponseMsg(fnName, truncResult);
+          match transmit(conn, responseMsg) {
+            Ok(_) => (),
+            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+          };
+          appendFile(transcriptPath, encode(jo([kv("type", js("tool_call")), kv("name", js(fnName)), kv("args", js(argsJson)), kv("result", js(truncResult))])) ++ "\n");
+          true
+        },
+        None => true
+      }
+    },
+    None => true
+  }
+}
+
 -- Event handler: derive all paths from sessionDir
-func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string) -> bool ! {IO, FS, Stream} =
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string) -> bool ! {IO, FS, Stream, Process} =
   let handlePath = sessionDir ++ "/session.handle" in
   let transcriptPath = sessionDir ++ "/transcript.jsonl" in
   let turnTextPath = sessionDir ++ "/turn_text.txt" in
@@ -317,8 +381,9 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                         Some(true) => println("[Session] Handle saved (resumable)"),
                         _ => println("[Session] Handle saved")
                       };
-                      -- Disconnect now — we have the handle and audio is done
-                      false
+                      -- Only disconnect if turn is complete (tool calls send mid-turn handles)
+                      let turnDone = if fileExists(turnDonePath) then readFile(turnDonePath) else "";
+                      if turnDone == "1" then false else true
                     },
                     None => true
                   }
@@ -336,6 +401,10 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                       true
                     },
                     None => {
+                  -- Check for tool call
+                  match getObject(json, "toolCall") {
+                    Some(tc) => handleToolCall(tc, conn, transcriptPath, allowedPath),
+                    None => {
                   -- Check for serverContent (turnComplete, audio, transcription)
                   match getObject(json, "serverContent") {
                     Some(sc) => {
@@ -343,6 +412,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                         Some(true) => {
                           println("");
                           println("[Turn Complete]");
+                          writeFile(turnDonePath, "1");
                           -- Keep listening for sessionResumptionUpdate
                           true
                         },
@@ -375,6 +445,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                                       match getArray(turn, "parts") {
                                         Some(parts) => {
                                           accumulateAudioParts(parts, pcmPath);
+                                          writeFile(turnDonePath, "1");
                                           true
                                         },
                                         None => true
@@ -393,6 +464,8 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                       -- Unknown message type
                       println("[MSG] " ++ msg);
                       true
+                    }
+                  }
                     }
                   }
                     }
@@ -441,8 +514,9 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                         Some(true) => println("[Session] Handle saved (resumable)"),
                         _ => println("[Session] Handle saved")
                       };
-                      -- Disconnect now — we have the handle and audio is done
-                      false
+                      -- Only disconnect if turn is complete (tool calls send mid-turn handles)
+                      let turnDone = if fileExists(turnDonePath) then readFile(turnDonePath) else "";
+                      if turnDone == "1" then false else true
                     },
                     None => true
                   }
@@ -460,6 +534,10 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                       true
                     },
                     None => {
+                  -- Check for tool call
+                  match getObject(json, "toolCall") {
+                    Some(tc) => handleToolCall(tc, conn, transcriptPath, allowedPath),
+                    None => {
                   -- Check for serverContent (turnComplete, audio, transcription)
                   match getObject(json, "serverContent") {
                     Some(sc) => {
@@ -467,6 +545,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                         Some(true) => {
                           println("");
                           println("[Turn Complete]");
+                          writeFile(turnDonePath, "1");
                           -- Keep listening for sessionResumptionUpdate
                           true
                         },
@@ -499,6 +578,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                                       match getArray(turn, "parts") {
                                         Some(parts) => {
                                           accumulateAudioParts(parts, pcmPath);
+                                          writeFile(turnDonePath, "1");
                                           true
                                         },
                                         None => { println("[Audio] " ++ intToStr(dataLen) ++ " bytes (no parts)"); true }
@@ -514,6 +594,8 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
                       }
                     },
                     None => true
+                  }
+                    }
                   }
                     }
                   }

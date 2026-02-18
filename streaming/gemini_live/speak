@@ -9,6 +9,8 @@
 #   speak --new "Start fresh"              # ignores previous session
 #   speak --session work "Project update"  # named session
 #   speak --session global "Hello"         # global session
+#   speak --tools "What time is it?"       # with tool calling (calc, files, commands)
+#   speak -t "Calculate 500 times 300"     # shorthand for --tools
 #   speak --list                           # list active sessions
 #   speak                                  # uses default prompt
 #
@@ -32,6 +34,7 @@ VOICE="${GEMINI_VOICE:-Sulafat}"
 NEW_SESSION=false
 SESSION_NAME=""
 LIST_SESSIONS=false
+ENABLE_TOOLS=false
 PROMPT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -50,6 +53,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       LIST_SESSIONS=true
+      shift
+      ;;
+    --tools|-t)
+      ENABLE_TOOLS=true
       shift
       ;;
     *)
@@ -142,6 +149,11 @@ export GEMINI_SESSION_DIR="$SESSION_DIR"
 if $NEW_SESSION; then
   rm -f "$SESSION_DIR/session.handle"
   export GEMINI_NEW_SESSION=1
+fi
+
+# Tool calling: --tools enables function calling
+if $ENABLE_TOOLS; then
+  export GEMINI_TOOLS=1
 fi
 
 # Run from repo root (AILANG needs relative module paths)

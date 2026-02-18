@@ -1,0 +1,232 @@
+-- Tool declarations and dispatch for the speak CLI voice agent.
+--
+-- Contract-verified tools following the safe_agent pattern.
+-- Each tool returns Result[string, string] — Ok for success, Err for rejection.
+--
+-- Tools:
+--   currentTime  — current date/time via exec("date")
+--   calculate    — bounded calculator (inputs clamped, output in [-1M, 1M])
+--   readFile     — path-safe file reader (prefix + no ".." traversal)
+--   listFiles    — directory listing (path-safe)
+--   runCommand   — shell command execution (allowlist only)
+
+module streaming/gemini_live/services/speak_tools
+
+import std/string (length, startsWith, split, intToStr, substring)
+import std/math (floatToInt)
+import std/list (length as listLength, any)
+import std/result (Ok, Err)
+import std/json (decode, encode, getString, getNumber, getArray,
+                 jo, kv, js, ja, filterStrings)
+import std/option (Some, None, getOrElse)
+import std/fs (readFile, fileExists)
+import std/process (exec, NotFound, Timeout, NotAllowed)
+import std/bytes (toString)
+
+-- ============================================================
+-- Tool Declarations
+-- ============================================================
+
+export func getSpeakToolDeclarations() -> [{name: string, description: string, parameters: string}] {
+  [
+    { name: "currentTime",
+      description: "Get the current date, time, and timezone.",
+      parameters: "{\"type\":\"object\",\"properties\":{},\"required\":[]}" },
+
+    { name: "calculate",
+      description: "Safe calculator. Operations: add, subtract, multiply, divide. Inputs clamped to [-1000,1000], output guaranteed in [-1000000,1000000].",
+      parameters: "{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"add\",\"subtract\",\"multiply\",\"divide\"]},\"a\":{\"type\":\"number\",\"description\":\"First operand\"},\"b\":{\"type\":\"number\",\"description\":\"Second operand\"}},\"required\":[\"op\",\"a\",\"b\"]}" },
+
+    { name: "readFile",
+      description: "Read the contents of a text file. The file path must be absolute.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Absolute path to the file\"}},\"required\":[\"filepath\"]}" },
+
+    { name: "listFiles",
+      description: "List files and directories at a given path.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"directory\":{\"type\":\"string\",\"description\":\"Directory path to list\"}},\"required\":[\"directory\"]}" },
+
+    { name: "runCommand",
+      description: "Execute a safe shell command. Allowed: ls, date, echo, wc, head, tail, grep, pwd, whoami, uname.",
+      parameters: "{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\",\"description\":\"Command name (must be in allowlist)\"},\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Command arguments\"}},\"required\":[\"command\"]}" }
+  ]
+}
+
+-- ============================================================
+-- Dispatch
+-- ============================================================
+
+export func dispatchTool(name: string, argsJson: string, allowedPath: string) -> Result[string, string] ! {FS, Process} {
+  match name {
+    "currentTime" => handleCurrentTime(),
+    "calculate" => handleCalculate(argsJson),
+    "readFile" => handleReadFile(argsJson, allowedPath),
+    "listFiles" => handleListFiles(argsJson, allowedPath),
+    "runCommand" => handleRunCommand(argsJson),
+    _ => Err("Unknown tool: " ++ name)
+  }
+}
+
+-- ============================================================
+-- Tool: Current Time
+-- ============================================================
+
+func handleCurrentTime() -> Result[string, string] ! {Process} {
+  match exec("date", ["+%Y-%m-%d %H:%M:%S %Z"]) {
+    Ok(out) => Ok(toString(out.stdout)),
+    Err(NotFound(_)) => Err("date command not found"),
+    Err(_) => Err("Failed to get current time")
+  }
+}
+
+-- ============================================================
+-- Tool: Safe Calculator
+-- ============================================================
+
+export pure func clampInput(x: int) -> int
+  ensures { result >= -1000 && result <= 1000 }
+{
+  if x > 1000 then 1000
+  else if x < -1000 then -1000
+  else x
+}
+
+pure func opCode(op: string) -> int {
+  match op {
+    "add" => 1, "subtract" => 2, "multiply" => 3, "divide" => 4,
+    _ => 0
+  }
+}
+
+pure func doCalc(code: int, ca: int, cb: int) -> Option[int] {
+  match code {
+    1 => Some(ca + cb),
+    2 => Some(ca - cb),
+    3 => {
+      let product = ca * cb;
+      if product > 1000000 then Some(1000000)
+      else if product < -1000000 then Some(-1000000)
+      else Some(product)
+    },
+    4 => if cb == 0 then None else Some(ca / cb),
+    _ => None
+  }
+}
+
+export func safeCalculate(op: string, a: int, b: int) -> Result[int, string]
+  ensures {
+    match result {
+      Ok(n) => n >= -1000000 && n <= 1000000,
+      Err(_) => true
+    }
+  }
+{
+  let ca = clampInput(a);
+  let cb = clampInput(b);
+  match doCalc(opCode(op), ca, cb) {
+    Some(n) => Ok(n),
+    None => Err("Unknown operation or division by zero: " ++ op)
+  }
+}
+
+func handleCalculate(argsJson: string) -> Result[string, string] {
+  match decode(argsJson) {
+    Ok(json) => {
+      let op = getOrElse(getString(json, "op"), "");
+      let a = match getNumber(json, "a") { Some(n) => floatToInt(n), None => 0 };
+      let b = match getNumber(json, "b") { Some(n) => floatToInt(n), None => 0 };
+      match safeCalculate(op, a, b) {
+        Ok(n) => Ok(intToStr(n)),
+        Err(e) => Err(e)
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Safe File Reader
+-- ============================================================
+
+export pure func containsTraversal(path: string) -> bool {
+  let parts = split(path, "/");
+  any(\p. p == "..", parts)
+}
+
+export pure func isPathSafe(path: string, prefix: string) -> bool
+  ensures { result == (startsWith(path, prefix) && containsTraversal(path) == false) }
+{
+  startsWith(path, prefix) && containsTraversal(path) == false
+}
+
+func handleReadFile(argsJson: string, allowedPath: string) -> Result[string, string] ! {FS} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let filepath = getOrElse(getString(json, "filepath"), "");
+      if isPathSafe(filepath, allowedPath) == false then
+        Err("Path rejected: must start with '" ++ allowedPath ++ "' and contain no '..'")
+      else if fileExists(filepath) == false then
+        Err("File not found: " ++ filepath)
+      else Ok(readFile(filepath))
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: List Files
+-- ============================================================
+
+func handleListFiles(argsJson: string, allowedPath: string) -> Result[string, string] ! {Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let dir = getOrElse(getString(json, "directory"), ".");
+      if isPathSafe(dir, allowedPath) == false then
+        Err("Path rejected: must start with '" ++ allowedPath ++ "' and contain no '..'")
+      else {
+        match exec("ls", ["-la", dir]) {
+          Ok(out) => Ok(toString(out.stdout)),
+          Err(NotFound(_)) => Err("ls command not found"),
+          Err(_) => Err("Failed to list directory: " ++ dir)
+        }
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Safe Command Execution
+-- ============================================================
+
+pure func isAllowedCommand(cmd: string) -> bool {
+  match cmd {
+    "ls" => true, "date" => true, "echo" => true, "wc" => true,
+    "head" => true, "tail" => true, "grep" => true,
+    "pwd" => true, "whoami" => true, "uname" => true,
+    _ => false
+  }
+}
+
+func handleRunCommand(argsJson: string) -> Result[string, string] ! {Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let cmd = getOrElse(getString(json, "command"), "");
+      let args = match getArray(json, "args") {
+        Some(arr) => filterStrings(arr),
+        None => []
+      };
+      if isAllowedCommand(cmd) == false then
+        Err("Command rejected: '" ++ cmd ++ "' is not in the allowlist (ls, date, echo, wc, head, tail, grep, pwd, whoami, uname)")
+      else {
+        match exec(cmd, args) {
+          Ok(out) => Ok(toString(out.stdout)),
+          Err(NotFound(c)) => Err("Command not found: " ++ c),
+          Err(Timeout(ms)) => Err("Command timed out"),
+          Err(NotAllowed(c)) => Err("Command not allowed by AILANG: " ++ c),
+          Err(_) => Err("Command execution failed")
+        }
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
