@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# speak — AILANG talks back
+#
+# Usage:
+#   speak "Tell me a joke"
+#   speak "What did I just ask you?"       # resumes session (remembers context)
+#   speak --voice Charon "What is AILANG?"
+#   speak -v Orus "Explain algebraic effects"
+#   speak --new "Start fresh"              # ignores previous session
+#   speak --session work "Project update"  # named session
+#   speak --session global "Hello"         # global session
+#   speak --list                           # list active sessions
+#   speak                                  # uses default prompt
+#
+# Sessions: scoped like ailang message inboxes
+#   Default:  project-based (git repo name or cwd basename)
+#   --session NAME:  named session
+#   --session global:  global session
+#   Storage: ~/.ailang/speak/sessions/<scope>/
+#
+# Install: ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak
+#
+# Voices: Sulafat (default, Warm), Charon (Informative), Orus (Firm),
+#   Puck (Upbeat), Kore (Firm), Fenrir (Excitable), Leda (Youthful),
+#   Aoede (Breezy), Gacrux (Mature), Achird (Friendly), Achernar (Soft)
+#   ... and 19 more. See main.ail header for full list.
+
+set -euo pipefail
+
+# Parse flags
+VOICE="${GEMINI_VOICE:-Sulafat}"
+NEW_SESSION=false
+SESSION_NAME=""
+LIST_SESSIONS=false
+PROMPT_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --voice|-v)
+      VOICE="$2"
+      shift 2
+      ;;
+    --new)
+      NEW_SESSION=true
+      shift
+      ;;
+    --session|-s)
+      SESSION_NAME="$2"
+      shift 2
+      ;;
+    --list)
+      LIST_SESSIONS=true
+      shift
+      ;;
+    *)
+      PROMPT_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Resolve symlinks to find the real script location (like docparse)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# --- Session scope resolution ---
+# Same scoping model as ailang message inboxes:
+#   default = project (git repo name or cwd basename)
+#   --session NAME = named session
+#   --session global = global session
+
+SESSIONS_ROOT="$HOME/.ailang/speak/sessions"
+
+if [ -n "$SESSION_NAME" ]; then
+  SESSION_SCOPE="$SESSION_NAME"
+else
+  # Auto-detect project name from git repo or cwd
+  if git rev-parse --show-toplevel &>/dev/null; then
+    SESSION_SCOPE="$(basename "$(git rev-parse --show-toplevel)")"
+  else
+    SESSION_SCOPE="$(basename "$(pwd)")"
+  fi
+fi
+
+SESSION_DIR="$SESSIONS_ROOT/$SESSION_SCOPE"
+
+# --- List sessions ---
+if $LIST_SESSIONS; then
+  echo "Sessions (~/.ailang/speak/sessions/):"
+  echo ""
+  if [ -d "$SESSIONS_ROOT" ]; then
+    for dir in "$SESSIONS_ROOT"/*/; do
+      [ -d "$dir" ] || continue
+      name="$(basename "$dir")"
+      handle_age=""
+      if [ -f "$dir/session.handle" ]; then
+        # Show age of handle
+        if stat -f %m "$dir/session.handle" &>/dev/null; then
+          age_secs=$(( $(date +%s) - $(stat -f %m "$dir/session.handle") ))
+          if [ "$age_secs" -lt 60 ]; then
+            handle_age="${age_secs}s ago"
+          elif [ "$age_secs" -lt 3600 ]; then
+            handle_age="$(( age_secs / 60 ))m ago"
+          else
+            handle_age="$(( age_secs / 3600 ))h ago"
+          fi
+        fi
+      fi
+      transcript_lines=0
+      if [ -f "$dir/transcript.jsonl" ]; then
+        transcript_lines=$(wc -l < "$dir/transcript.jsonl" | tr -d ' ')
+      fi
+      marker="  "
+      [ "$name" = "$SESSION_SCOPE" ] && marker="▸ "
+      echo "${marker}${name}"
+      [ -n "$handle_age" ] && echo "    handle: $handle_age"
+      [ "$transcript_lines" -gt 0 ] && echo "    turns: $transcript_lines"
+    done
+  else
+    echo "  (no sessions yet)"
+  fi
+  echo ""
+  echo "Active: $SESSION_SCOPE"
+  exit 0
+fi
+
+# Create session directory
+mkdir -p "$SESSION_DIR"
+
+# Force ADC (unset API key so AILANG doesn't use it instead of ADC)
+export GOOGLE_API_KEY=""
+export GEMINI_VOICE="$VOICE"
+export GEMINI_SESSION_DIR="$SESSION_DIR"
+
+# Session resumption: --new starts a fresh session
+if $NEW_SESSION; then
+  rm -f "$SESSION_DIR/session.handle"
+  export GEMINI_NEW_SESSION=1
+fi
+
+# Run from repo root (AILANG needs relative module paths)
+# Audio playback is handled natively by AILANG via std/process (exec afplay)
+cd "$REPO_ROOT"
+exec ailang run --entry main --caps IO,FS,Stream,Net,Env,Process \
+  streaming/gemini_live/main.ail "${PROMPT_ARGS[@]}"
