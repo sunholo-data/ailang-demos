@@ -9,8 +9,11 @@
 #   speak --new "Start fresh"              # ignores previous session
 #   speak --session work "Project update"  # named session
 #   speak --session global "Hello"         # global session
-#   speak --tools "What time is it?"       # with tool calling (calc, files, commands)
+#   speak --tools "What time is it?"       # with tool calling
 #   speak -t "Calculate 500 times 300"     # shorthand for --tools
+#   speak -t "What's the git status?"      # git read-only ops
+#   speak -t "Any open PRs?"              # gh read-only ops
+#   speak -t "Check my ailang messages"   # ailang messaging
 #   speak --list                           # list active sessions
 #   speak                                  # uses default prompt
 #

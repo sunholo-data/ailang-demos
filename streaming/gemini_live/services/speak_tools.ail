@@ -8,11 +8,11 @@
 --   calculate    — bounded calculator (inputs clamped, output in [-1M, 1M])
 --   readFile     — path-safe file reader (prefix + no ".." traversal)
 --   listFiles    — directory listing (path-safe)
---   runCommand   — shell command execution (allowlist only)
+--   runCommand   — shell command execution (allowlist: git, gh, ailang, ls, etc.)
 
 module streaming/gemini_live/services/speak_tools
 
-import std/string (length, startsWith, split, intToStr, substring)
+import std/string (length, startsWith, split, substring)
 import std/math (floatToInt)
 import std/list (length as listLength, any)
 import std/result (Ok, Err)
@@ -27,27 +27,54 @@ import std/bytes (toString)
 -- Tool Declarations
 -- ============================================================
 
-export func getSpeakToolDeclarations() -> [{name: string, description: string, parameters: string}] {
+export func getSpeakToolDeclarations() -> [{name: string, description: string, parameters: Json}] {
   [
     { name: "currentTime",
       description: "Get the current date, time, and timezone.",
-      parameters: "{\"type\":\"object\",\"properties\":{},\"required\":[]}" },
+      parameters: jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))]) },
 
     { name: "calculate",
       description: "Safe calculator. Operations: add, subtract, multiply, divide. Inputs clamped to [-1000,1000], output guaranteed in [-1000000,1000000].",
-      parameters: "{\"type\":\"object\",\"properties\":{\"op\":{\"type\":\"string\",\"enum\":[\"add\",\"subtract\",\"multiply\",\"divide\"]},\"a\":{\"type\":\"number\",\"description\":\"First operand\"},\"b\":{\"type\":\"number\",\"description\":\"Second operand\"}},\"required\":[\"op\",\"a\",\"b\"]}" },
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("op", jo([kv("type", js("string")), kv("enum", ja([js("add"), js("subtract"), js("multiply"), js("divide")]))])),
+          kv("a", jo([kv("type", js("number")), kv("description", js("First operand"))])),
+          kv("b", jo([kv("type", js("number")), kv("description", js("Second operand"))]))
+        ])),
+        kv("required", ja([js("op"), js("a"), js("b")]))
+      ]) },
 
     { name: "readFile",
       description: "Read the contents of a text file. The file path must be absolute.",
-      parameters: "{\"type\":\"object\",\"properties\":{\"filepath\":{\"type\":\"string\",\"description\":\"Absolute path to the file\"}},\"required\":[\"filepath\"]}" },
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("filepath", jo([kv("type", js("string")), kv("description", js("Absolute path to the file"))]))
+        ])),
+        kv("required", ja([js("filepath")]))
+      ]) },
 
     { name: "listFiles",
       description: "List files and directories at a given path.",
-      parameters: "{\"type\":\"object\",\"properties\":{\"directory\":{\"type\":\"string\",\"description\":\"Directory path to list\"}},\"required\":[\"directory\"]}" },
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("directory", jo([kv("type", js("string")), kv("description", js("Directory path to list"))]))
+        ])),
+        kv("required", ja([js("directory")]))
+      ]) },
 
     { name: "runCommand",
-      description: "Execute a safe shell command. Allowed: ls, date, echo, wc, head, tail, grep, pwd, whoami, uname.",
-      parameters: "{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\",\"description\":\"Command name (must be in allowlist)\"},\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Command arguments\"}},\"required\":[\"command\"]}" }
+      description: "Execute a safe shell command with subcommand filtering. Allowed commands: ls, date, echo, wc, head, tail, grep, pwd, whoami, uname, git (status/log/diff/branch/show/blame/add/commit only — no push/reset/force), gh (pr/issue list/view/status only — no merge/close/create), ailang (messages/check/docs/prompt/version only). Destructive operations are blocked.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("command", jo([kv("type", js("string")), kv("description", js("Command name (must be in allowlist)"))])),
+          kv("args", jo([kv("type", js("array")), kv("items", jo([kv("type", js("string"))])), kv("description", js("Command arguments"))]))
+        ])),
+        kv("required", ja([js("command")]))
+      ]) }
   ]
 }
 
@@ -135,7 +162,7 @@ func handleCalculate(argsJson: string) -> Result[string, string] {
       let a = match getNumber(json, "a") { Some(n) => floatToInt(n), None => 0 };
       let b = match getNumber(json, "b") { Some(n) => floatToInt(n), None => 0 };
       match safeCalculate(op, a, b) {
-        Ok(n) => Ok(intToStr(n)),
+        Ok(n) => Ok(show(n)),
         Err(e) => Err(e)
       }
     },
@@ -162,9 +189,9 @@ func handleReadFile(argsJson: string, allowedPath: string) -> Result[string, str
   match decode(argsJson) {
     Ok(json) => {
       let filepath = getOrElse(getString(json, "filepath"), "");
-      if isPathSafe(filepath, allowedPath) == false then
+      if not isPathSafe(filepath, allowedPath) then
         Err("Path rejected: must start with '" ++ allowedPath ++ "' and contain no '..'")
-      else if fileExists(filepath) == false then
+      else if not fileExists(filepath) then
         Err("File not found: " ++ filepath)
       else Ok(readFile(filepath))
     },
@@ -180,7 +207,7 @@ func handleListFiles(argsJson: string, allowedPath: string) -> Result[string, st
   match decode(argsJson) {
     Ok(json) => {
       let dir = getOrElse(getString(json, "directory"), ".");
-      if isPathSafe(dir, allowedPath) == false then
+      if not isPathSafe(dir, allowedPath) then
         Err("Path rejected: must start with '" ++ allowedPath ++ "' and contain no '..'")
       else {
         match exec("ls", ["-la", dir]) {
@@ -203,7 +230,94 @@ pure func isAllowedCommand(cmd: string) -> bool {
     "ls" => true, "date" => true, "echo" => true, "wc" => true,
     "head" => true, "tail" => true, "grep" => true,
     "pwd" => true, "whoami" => true, "uname" => true,
+    "git" => true, "gh" => true, "ailang" => true,
     _ => false
+  }
+}
+
+-- Git subcommand safety: allow read-only and safe operations,
+-- block destructive ones (push, reset, clean, checkout, rebase, etc.)
+pure func isGitSubcmdSafe(subcmd: string) -> bool {
+  match subcmd {
+    "status" => true, "log" => true, "diff" => true, "branch" => true,
+    "show" => true, "remote" => true, "tag" => true, "stash" => true,
+    "blame" => true, "shortlog" => true, "describe" => true,
+    "rev-parse" => true, "ls-files" => true, "ls-tree" => true,
+    "cat-file" => true, "reflog" => true, "config" => true,
+    "add" => true, "commit" => true,
+    _ => false
+  }
+}
+
+-- gh subcommand safety: allow read/query, block mutations that
+-- affect shared state (pr merge, issue close, repo delete, etc.)
+pure func isGhSubcmdSafe(subcmd: string) -> bool {
+  match subcmd {
+    "pr" => true, "issue" => true, "repo" => true, "status" => true,
+    "run" => true, "api" => true, "auth" => true,
+    _ => false
+  }
+}
+
+-- gh sub-subcommand safety: for pr/issue/repo, only allow read operations
+pure func isGhActionSafe(subcmd: string, action: string) -> bool {
+  match subcmd {
+    "pr" => match action {
+      "list" => true, "view" => true, "status" => true,
+      "checks" => true, "diff" => true,
+      _ => false
+    },
+    "issue" => match action {
+      "list" => true, "view" => true, "status" => true,
+      _ => false
+    },
+    "repo" => match action {
+      "view" => true, "list" => true,
+      _ => false
+    },
+    "run" => match action {
+      "list" => true, "view" => true,
+      _ => false
+    },
+    _ => true
+  }
+}
+
+-- ailang subcommand safety: allow messages, check, docs, prompt
+pure func isAilangSubcmdSafe(subcmd: string) -> bool {
+  match subcmd {
+    "messages" => true, "msg" => true,
+    "check" => true, "docs" => true, "prompt" => true,
+    "version" => true,
+    _ => false
+  }
+}
+
+-- Validate subcommands for git, gh, ailang
+-- Returns Ok(()) if safe, Err(reason) if blocked
+pure func validateSubcommands(cmd: string, args: [string]) -> Result[(), string] {
+  match cmd {
+    "git" => match args {
+      [] => Err("git requires a subcommand"),
+      sub :: _ => if isGitSubcmdSafe(sub) then Ok(())
+        else Err("git subcommand '" ++ sub ++ "' is not allowed. Safe: status, log, diff, branch, show, remote, tag, stash, blame, add, commit")
+    },
+    "gh" => match args {
+      [] => Err("gh requires a subcommand"),
+      sub :: rest => if not isGhSubcmdSafe(sub) then
+          Err("gh subcommand '" ++ sub ++ "' is not allowed. Safe: pr, issue, repo, status, run, api, auth")
+        else match rest {
+          [] => Ok(()),
+          action :: _ => if isGhActionSafe(sub, action) then Ok(())
+            else Err("gh " ++ sub ++ " " ++ action ++ " is not allowed. Use list/view/status only")
+        }
+    },
+    "ailang" => match args {
+      [] => Err("ailang requires a subcommand"),
+      sub :: _ => if isAilangSubcmdSafe(sub) then Ok(())
+        else Err("ailang subcommand '" ++ sub ++ "' is not allowed. Safe: messages, check, docs, prompt, version")
+    },
+    _ => Ok(())
   }
 }
 
@@ -215,10 +329,11 @@ func handleRunCommand(argsJson: string) -> Result[string, string] ! {Process} {
         Some(arr) => filterStrings(arr),
         None => []
       };
-      if isAllowedCommand(cmd) == false then
-        Err("Command rejected: '" ++ cmd ++ "' is not in the allowlist (ls, date, echo, wc, head, tail, grep, pwd, whoami, uname)")
-      else {
-        match exec(cmd, args) {
+      if not isAllowedCommand(cmd) then
+        Err("Command rejected: '" ++ cmd ++ "' is not in the allowlist (ls, date, echo, wc, head, tail, grep, pwd, whoami, uname, git, gh, ailang)")
+      else match validateSubcommands(cmd, args) {
+        Err(reason) => Err(reason),
+        Ok(_) => match exec(cmd, args) {
           Ok(out) => Ok(toString(out.stdout)),
           Err(NotFound(c)) => Err("Command not found: " ++ c),
           Err(Timeout(ms)) => Err("Command timed out"),
