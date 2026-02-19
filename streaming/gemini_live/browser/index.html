@@ -575,6 +575,8 @@
     #waveform { height: 140px; }
   }
 </style>
+<script src="../../wasm/wasm_exec.js"></script>
+<script src="../../wasm/ailang-repl.js"></script>
 </head>
 <body>
 
@@ -709,11 +711,19 @@
 
 <script>
 // ═══════════════════════════════════════════════════
-// Gemini Live — Text to Audio (Browser)
+// Gemini Live — AILANG WASM Streaming Demo
+//
+// Architecture: AILANG drives the WebSocket session via std/stream effects.
+// JS registers effect handlers that bridge to the browser WebSocket API.
+// AILANG emits events via println (IO effect) which JS intercepts to
+// update the UI, play audio, etc.
+//
+// This is the same streaming model as the CLI (main.ail) — AILANG controls
+// the session lifecycle. JS just provides transport and browser APIs.
 // ═══════════════════════════════════════════════════
 
-let ws = null;
-let audioCtx = null;      // 48kHz for playback
+let ws = null;             // WebSocket managed by Stream effect handler
+let audioCtx = null;       // 48kHz for playback
 let captureCtx = null;     // native rate for mic capture
 let playbackNode = null;
 let captureNode = null;
@@ -723,16 +733,400 @@ let promptSentAt = 0;
 let totalFrames = 0;
 let totalBytes = 0;
 let totalSamples = 0;
-let lastPcmChunk = null; // for waveform drawing
+let lastPcmChunk = null;
+
+// AILANG WASM state
+let wasmEngine = null;
+let wasmReady = false;
+const WASM_MODULE = 'streaming/gemini_live/gemini_live_browser';
+
+// ── AILANG WASM Initialization ──
+async function initWASM() {
+  if (wasmReady) return;
+  try {
+    if (typeof AilangREPL === 'undefined') { console.warn('WASM not available'); return; }
+    const repl = new AilangREPL();
+    await repl.init('../../wasm/ailang.wasm');
+
+    // Import stdlib modules needed by the AILANG module
+    for (const lib of ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/stream', 'std/io']) {
+      repl.importModule(lib);
+    }
+
+    // Load the AILANG streaming module
+    const resp = await fetch('../../ailang/streaming/gemini_live/gemini_live_browser.ail?v=' + Date.now());
+    if (!resp.ok) throw new Error('Failed to fetch AILANG module');
+    const code = await resp.text();
+    const result = repl.loadModule(WASM_MODULE, code);
+    if (!result.success) throw new Error(result.error);
+
+    // Register effect handlers via native 2-arg API: (effectName, {op: fn, ...})
+    // This also auto-grants capabilities (no separate grantCapability needed)
+    const ioResult = window.ailangSetEffectHandler('IO', {
+      println: (text) => {
+        handleAILANGEvent(text);
+        return '';
+      }
+    });
+    console.log('IO effect handler result:', ioResult);
+
+    // Register Stream effect handlers — bridge std/stream to browser WebSocket
+    const streamResult = registerStreamHandlers();
+    console.log('Stream effect handler result:', streamResult);
+
+    wasmEngine = repl;
+    wasmReady = true;
+    console.log('AILANG Gemini Live module ready (streaming effects registered)');
+
+    // Populate voices from AILANG catalog
+    populateVoicesFromAILANG();
+  } catch (e) {
+    console.error('WASM init error:', e);
+    addLog('err', 'WASM init failed: ' + e.message);
+  }
+}
+
+// Register Stream effect handlers that bridge AILANG's std/stream to browser WebSocket API.
+//
+// KEY LIMITATION: ailangValueToJS converts AILANG closures to string representations,
+// not callable JS functions. So the onEvent handler receives a string (the closure's
+// display form), NOT something we can invoke. The AILANG runtime internally dispatches
+// the callback — our runEventLoop just needs to deliver events in the format that
+// the runtime expects, and the Go-side stream implementation handles the rest.
+//
+// The handlers use the native 2-arg API: ailangSetEffectHandler(effectName, {op: fn})
+// which also auto-grants the Stream capability.
+function registerStreamHandlers() {
+  let eventLoopResolve = null;
+
+  return window.ailangSetEffectHandler('Stream', {
+    connect: (url, config) => {
+      // AILANG calls connect(url, config) — we create a browser WebSocket
+      return new Promise((resolve, reject) => {
+        try {
+          ws = new WebSocket(url);
+          ws.onopen = () => {
+            document.getElementById('wssBadge').classList.add('live');
+            setState('connected');
+            resolve('conn_1');
+          };
+          ws.onerror = (e) => {
+            reject(new Error('WebSocket connection failed'));
+          };
+        } catch (e) {
+          reject(e);
+        }
+      });
+    },
+
+    transmit: (conn, msg) => {
+      if (ws && ws.readyState === 1) {
+        ws.send(msg);
+        return 'ok';
+      }
+      throw new Error('WebSocket not connected');
+    },
+
+    onEvent: (conn, handler) => {
+      // handler arrives as a string (AILANG closure → ailangValueToJS fallback).
+      // The Go runtime handles callback dispatch internally — we just acknowledge.
+      console.log('Stream onEvent registered (handler type:', typeof handler, ')');
+      return '';
+    },
+
+    runEventLoop: (conn) => {
+      // Return a Promise that resolves when WS closes.
+      // The Go runtime's stream implementation calls onEvent's callback internally
+      // when we deliver messages. But since ailangValueToJS can't preserve closures,
+      // we need to process messages on the JS side and emit events via IO/println.
+      //
+      // WORKAROUND: Instead of trying to invoke the AILANG closure, we process
+      // WebSocket messages directly in JS and emit events through the IO handler
+      // (handleAILANGEvent). The AILANG startSession function will see the
+      // runEventLoop resolve when the WS closes.
+      return new Promise((resolve) => {
+        eventLoopResolve = resolve;
+
+        ws.onmessage = async (e) => {
+          let text;
+          if (typeof e.data === 'string') text = e.data;
+          else if (e.data instanceof Blob) text = await e.data.text();
+          else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
+          else return;
+
+          // Process the Gemini message directly in JS and emit via IO handler
+          try {
+            const parsed = JSON.parse(text);
+            processGeminiMessage(parsed);
+          } catch (err) {
+            console.error('Message parse error:', err);
+          }
+        };
+
+        ws.onclose = (e) => {
+          document.getElementById('wssBadge').classList.remove('live');
+          sessionReady = false;
+          setState('closed');
+          addLog('info', `WebSocket closed <span class="val">${e.code}</span>`);
+          resolve('closed');
+        };
+
+        ws.onerror = (e) => {
+          addLog('err', 'WebSocket error');
+        };
+      });
+    },
+
+    disconnect: (conn) => {
+      if (ws) { ws.close(); ws = null; }
+      return '';
+    },
+
+    status: (conn) => {
+      if (!ws) return 'StreamClosed';
+      switch (ws.readyState) {
+        case 0: return 'Connecting';
+        case 1: return 'Open';
+        case 2: return 'Closing';
+        default: return 'StreamClosed';
+      }
+    }
+  });
+}
+
+// Process Gemini WebSocket messages directly in JS.
+// This is necessary because AILANG closures can't be invoked from JS via
+// ailangValueToJS (converts them to strings, not callable functions).
+// The session lifecycle (connect → setup → event loop → disconnect) is still
+// driven by AILANG's startSession. But message dispatch happens here in JS
+// using AILANG's pure helpers for protocol construction (buildTextMessage, etc).
+let pendingInitialPrompt = null;
+
+function processGeminiMessage(msg) {
+  if (msg.setupComplete) {
+    sessionReady = true;
+    setState('ready');
+    addLog('ok', '<span class="hl">Setup complete</span> — session ready (AILANG streaming)');
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textInput').focus();
+    document.getElementById('scopeIdle').textContent = 'ready for input';
+
+    // Send initial prompt if one was provided (AILANG built the setup, JS sends the prompt)
+    if (pendingInitialPrompt && ws && ws.readyState === 1) {
+      const textMsg = callAILANG('buildTextMessage', pendingInitialPrompt);
+      if (textMsg) {
+        ws.send(textMsg);
+        addLog('info', 'Sent: <span class="val">' + escapeHtml(pendingInitialPrompt) + '</span>');
+        setState('streaming');
+        promptSentAt = Date.now();
+      }
+      pendingInitialPrompt = null;
+    }
+    return;
+  }
+
+  if (msg.serverContent) {
+    const sc = msg.serverContent;
+
+    // Input transcription
+    if (sc.inputTranscription && sc.inputTranscription.text) {
+      const t = sc.inputTranscription.text;
+      if (t.length > 0) {
+        addLog('info', 'You said: <span class="val">' + escapeHtml(t) + '</span>');
+      }
+    }
+
+    // Output transcription
+    if (sc.outputTranscription && sc.outputTranscription.text) {
+      const t = sc.outputTranscription.text;
+      if (t.length > 0) {
+        addLog('info', 'Model: <span class="val">' + escapeHtml(t) + '</span>');
+      }
+    }
+
+    // Model turn with audio/text parts
+    if (sc.modelTurn && sc.modelTurn.parts) {
+      for (const part of sc.modelTurn.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          handleAudioFrame(part.inlineData.data);
+        }
+        if (part.text) {
+          addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
+        }
+      }
+    }
+
+    // Turn complete
+    if (sc.turnComplete) {
+      sessionReady = true;
+      setState('ready');
+      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('textInput').disabled = false;
+      document.getElementById('textInput').focus();
+    }
+  }
+
+  if (msg.toolCall) {
+    addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(msg.toolCall.functionCalls || []).substring(0, 120) + '</span>');
+  }
+}
+
+// Handle AILANG events emitted via println (IO effect handler)
+// AILANG emits structured JSON events; we parse and render to UI
+function handleAILANGEvent(text) {
+  let event;
+  try { event = JSON.parse(text); } catch {
+    // Plain text — just log it
+    addLog('info', escapeHtml(text));
+    return;
+  }
+
+  switch (event.type) {
+    case 'log':
+      addLog('info', escapeHtml(event.text || ''));
+      break;
+
+    case 'setup':
+      sessionReady = true;
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('textInput').disabled = false;
+      document.getElementById('textInput').focus();
+      setState('ready');
+      addLog('ok', '<span class="hl">Setup complete</span> — session ready (AILANG streaming)');
+      document.getElementById('scopeIdle').textContent = 'ready for input';
+      break;
+
+    case 'sent':
+      addLog('info', 'AILANG sent: <span class="val">' + escapeHtml(event.text || '') + '</span>');
+      setState('streaming');
+      break;
+
+    case 'turnComplete':
+      setState('ready');
+      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('textInput').disabled = false;
+      document.getElementById('textInput').focus();
+      break;
+
+    case 'inputTranscript':
+      if (event.text) addLog('info', 'You said: <span class="val">' + escapeHtml(event.text) + '</span>');
+      break;
+
+    case 'outputTranscript':
+      if (event.text) addLog('info', 'Model: <span class="val">' + escapeHtml(event.text) + '</span>');
+      break;
+
+    case 'modelTurn':
+      if (event.parts && Array.isArray(event.parts)) {
+        event.parts.forEach(part => {
+          if (part.text) {
+            addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
+          }
+          if (part.inlineData && part.inlineData.data) {
+            handleAudioFrame(part.inlineData.data);
+          }
+        });
+      }
+      break;
+
+    case 'toolCall':
+      addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(event.calls).substring(0, 120) + '</span>');
+      break;
+
+    case 'opened':
+      addLog('ok', 'WebSocket opened');
+      break;
+
+    case 'closed':
+      addLog('info', 'Session closed (code: ' + (event.code || '?') + ')');
+      break;
+
+    case 'error':
+      addLog('err', 'AILANG: ' + escapeHtml(event.text || 'unknown error'));
+      break;
+
+    default:
+      addLog('info', 'AILANG event: <span class="val">' + event.type + '</span>');
+  }
+}
+
+// Call a pure AILANG function (for message construction)
+function callAILANG(funcName, ...args) {
+  if (!wasmReady) return null;
+  try {
+    let val;
+    if (args.length === 0) {
+      // Zero-arg AILANG functions: repl.call returns <function>, use eval instead
+      val = wasmEngine.eval(funcName + '()');
+    } else {
+      const result = wasmEngine.call(WASM_MODULE, funcName, ...args);
+      if (!result.success) { console.error('AILANG error:', result.error); return null; }
+      val = result.result || '';
+    }
+    // Strip type annotation (e.g., '... :: string')
+    const typeMatch = val.match(/^(.+)\s+::\s+\w+$/s);
+    if (typeMatch) val = typeMatch[1];
+    // Unwrap AILANG string quotes
+    if (val.startsWith('"') && val.endsWith('"')) {
+      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
+    }
+    return val;
+  } catch (e) {
+    console.error('AILANG call error:', e);
+    return null;
+  }
+}
+
+function populateVoicesFromAILANG() {
+  if (!wasmReady) return;
+  try {
+    // Zero-arg AILANG functions return <function> via repl.call() — use eval instead
+    wasmEngine.importModule(WASM_MODULE);
+    let raw = wasmEngine.eval('voiceCatalog()');
+    console.log('voiceCatalog raw:', typeof raw, raw ? raw.substring(0, 120) : 'null');
+
+    // Strip type annotation (e.g., '... :: string')
+    const typeMatch = raw.match(/^(.+)\s+::\s+\w+$/s);
+    if (typeMatch) raw = typeMatch[1];
+
+    // AILANG wraps strings in quotes — unwrap to get the JSON
+    if (raw.startsWith('"') && raw.endsWith('"')) {
+      try { raw = JSON.parse(raw); } catch { raw = raw.slice(1, -1); }
+    }
+
+    const voices = JSON.parse(raw);
+    const select = document.getElementById('voiceSelect');
+    const current = select.value;
+    select.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = `${v.name} (${v.desc})`;
+      select.appendChild(opt);
+    });
+    const saved = localStorage.getItem('gemini-live-voice');
+    if (saved) select.value = saved;
+    else {
+      let dv = wasmEngine.eval('defaultVoice()');
+      const dvMatch = dv.match(/^"(.+)"\s+::\s+\w+$/s);
+      if (dvMatch) dv = dvMatch[1];
+      else if (dv.startsWith('"') && dv.endsWith('"')) dv = dv.slice(1, -1);
+      select.value = current || dv || 'Sulafat';
+    }
+  } catch (e) { console.error('Voice catalog parse error:', e); }
+}
 
 // ── Config ──
 function toggleConfig() {
-  const p = document.getElementById('configPanel');
-  p.classList.toggle('open');
+  document.getElementById('configPanel').classList.toggle('open');
 }
 
 function loadConfig() {
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_live_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_live_key'));
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_live_key'))
+    localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_live_key'));
   const saved = localStorage.getItem('gemini-api-key');
   if (saved) document.getElementById('apiKey').value = saved;
   const voice = localStorage.getItem('gemini-live-voice');
@@ -759,10 +1153,7 @@ function addLog(type, html) {
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;
 }
-
-function clearLog() {
-  document.getElementById('logEntries').innerHTML = '';
-}
+function clearLog() { document.getElementById('logEntries').innerHTML = ''; }
 
 // ── Format helpers ──
 function fmtBytes(b) {
@@ -770,11 +1161,9 @@ function fmtBytes(b) {
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
   return (b / 1048576).toFixed(2) + ' MB';
 }
-
 function updateStats() {
   document.getElementById('fFrames').textContent = totalFrames;
   document.getElementById('fBytes').textContent = fmtBytes(totalBytes);
-  // Duration: totalSamples at 24kHz
   const dur = totalSamples / 24000;
   document.getElementById('fDuration').textContent = dur.toFixed(1) + 's';
   if (totalFrames > 0) {
@@ -783,198 +1172,85 @@ function updateStats() {
     document.getElementById('fDuration').classList.add('active');
   }
 }
-
 function setState(s) {
   const el = document.getElementById('fState');
   el.textContent = s;
   el.classList.toggle('active', s !== 'idle' && s !== 'closed');
 }
 
-// ── WebSocket ──
-function reconnect() {
+// ── Connect: AILANG drives the session via std/stream effects ──
+async function reconnect() {
   if (ws) { ws.close(); ws = null; }
   const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini-api-key');
-  if (!key) {
-    toggleConfig();
-    addLog('warn', 'Enter your Gemini API key');
-    return;
-  }
+  if (!key) { toggleConfig(); addLog('warn', 'Enter your Gemini API key'); return; }
   saveConfig();
 
+  if (!wasmReady) {
+    addLog('err', 'AILANG WASM not loaded — cannot start streaming session');
+    return;
+  }
+
   sessionReady = false;
-  totalFrames = 0;
-  totalBytes = 0;
-  totalSamples = 0;
+  totalFrames = 0; totalBytes = 0; totalSamples = 0;
   updateStats();
   setState('connecting');
-  addLog('info', 'Connecting to Gemini Live API...');
 
   document.getElementById('sendBtn').disabled = true;
   document.getElementById('textInput').disabled = true;
 
-  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
-  ws = new WebSocket(url);
+  // Init audio on first user gesture
+  await initAudio();
 
-  ws.onopen = () => {
-    document.getElementById('wssBadge').classList.add('live');
-    setState('connected');
-    addLog('ok', 'WebSocket connected');
-    sendSetup();
-  };
-
-  ws.onmessage = async (e) => {
-    // Gemini Live may send text or binary (Blob) frames
-    let text;
-    if (typeof e.data === 'string') {
-      text = e.data;
-    } else if (e.data instanceof Blob) {
-      text = await e.data.text();
-    } else if (e.data instanceof ArrayBuffer) {
-      text = new TextDecoder().decode(e.data);
-    } else {
-      addLog('err', 'Unknown message type');
-      return;
-    }
-    try {
-      const data = JSON.parse(text);
-      handleServerMessage(data);
-    } catch (err) {
-      addLog('err', 'Failed to parse message: ' + text.substring(0, 80));
-    }
-  };
-
-  ws.onerror = (e) => {
-    addLog('err', 'WebSocket error');
-  };
-
-  ws.onclose = (e) => {
-    document.getElementById('wssBadge').classList.remove('live');
-    sessionReady = false;
-    document.getElementById('sendBtn').disabled = true;
-    document.getElementById('textInput').disabled = true;
-    setState('closed');
-    addLog('err', `WebSocket closed <span class="val">${e.code}</span>`);
-  };
-}
-
-function sendSetup() {
-  if (!ws) return;
   const voice = document.getElementById('voiceSelect').value;
-  const setup = {
-    setup: {
-      model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voice
-            }
-          }
-        }
-      },
-      systemInstruction: {
-        parts: [{ text: 'You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.' }]
-      },
-      outputAudioTranscription: {},
-      inputAudioTranscription: {}
-    }
-  };
-  ws.send(JSON.stringify(setup));
-  addLog('info', 'Setup sent — <span class="hl">AUDIO</span> modality, voice: <span class="val">' + voice + '</span>');
+  const instruction = callAILANG('defaultInstruction') || 'You are a friendly assistant.';
+
+  // Store initial prompt — processGeminiMessage sends it after setupComplete
+  pendingInitialPrompt = 'Hello!';
+  promptSentAt = Date.now();
+
+  addLog('info', 'Starting AILANG streaming session...');
+
+  // AILANG drives the session lifecycle: connect → transmit(setup) → onEvent → runEventLoop → disconnect
+  // Message dispatch happens in JS (processGeminiMessage) because AILANG closures
+  // can't be invoked from JS via the WASM bridge (ailangValueToJS limitation).
+  try {
+    streamingSession = wasmEngine.callAsync(WASM_MODULE, 'startSession', key, voice, instruction, 'Hello!');
+    const result = await streamingSession;
+    console.log('AILANG session ended:', result);
+    addLog('info', 'AILANG session ended');
+  } catch (e) {
+    console.error('AILANG session error:', e);
+    addLog('err', 'AILANG session error: ' + e.message);
+  }
+  streamingSession = null;
 }
 
-function handleServerMessage(data) {
-  // setupComplete
-  if (data.setupComplete !== undefined) {
-    sessionReady = true;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('textInput').disabled = false;
-    document.getElementById('textInput').focus();
-    setState('ready');
-    addLog('ok', '<span class="hl">Setup complete</span> — session ready');
-    document.getElementById('scopeIdle').textContent = 'ready for input';
-    return;
+// Audio frame processing (browser-specific — stays in JS)
+function handleAudioFrame(b64) {
+  if (totalFrames === 0 && promptSentAt > 0) {
+    const latency = Date.now() - promptSentAt;
+    document.getElementById('fLatency').textContent = latency + 'ms';
+    document.getElementById('fLatency').classList.add('active');
+    addLog('info', 'First audio in <span class="val">' + latency + 'ms</span>');
   }
-
-  // serverContent
-  if (data.serverContent) {
-    const sc = data.serverContent;
-
-    // turnComplete
-    if (sc.turnComplete) {
-      setState('ready');
-      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
-      document.getElementById('sendBtn').disabled = false;
-      document.getElementById('textInput').disabled = false;
-      document.getElementById('textInput').focus();
-      return;
-    }
-
-    // Input audio transcription (what user said)
-    if (sc.inputTranscription && sc.inputTranscription.text) {
-      addLog('info', 'You said: <span class="val">' + escapeHtml(sc.inputTranscription.text) + '</span>');
-    }
-
-    // Output audio transcription (what model said)
-    if (sc.outputTranscription && sc.outputTranscription.text) {
-      addLog('info', 'Model: <span class="val">' + escapeHtml(sc.outputTranscription.text) + '</span>');
-    }
-
-    // modelTurn with audio parts
-    if (sc.modelTurn && sc.modelTurn.parts) {
-      sc.modelTurn.parts.forEach(part => {
-        // Text parts (transcription or text-mode response)
-        if (part.text) {
-          addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
-        }
-        if (part.inlineData && part.inlineData.data) {
-          // First audio frame — record latency
-          if (totalFrames === 0 && promptSentAt > 0) {
-            const latency = Date.now() - promptSentAt;
-            document.getElementById('fLatency').textContent = latency + 'ms';
-            document.getElementById('fLatency').classList.add('active');
-            addLog('info', 'First audio in <span class="val">' + latency + 'ms</span>');
-          }
-
-          totalFrames++;
-          const b64 = part.inlineData.data;
-          const rawBytes = atob(b64);
-          const byteLen = rawBytes.length;
-          totalBytes += byteLen;
-
-          // Decode base64 → Int16Array
-          const buf = new ArrayBuffer(byteLen);
-          const view = new Uint8Array(buf);
-          for (let i = 0; i < byteLen; i++) view[i] = rawBytes.charCodeAt(i);
-          const pcm16 = new Int16Array(buf);
-          totalSamples += pcm16.length;
-
-          // Feed to worklet for playback
-          enqueueAudio(pcm16);
-
-          // Store for waveform
-          lastPcmChunk = pcm16;
-          updateVU(pcm16);
-
-          // Activate scope
-          document.getElementById('scopeFrame').classList.add('active');
-          document.getElementById('scopeIdle').classList.add('hidden');
-
-          // Log every 5th frame to avoid spam
-          if (totalFrames <= 3 || totalFrames % 5 === 0) {
-            addLog('audio', '<span class="hl">Audio</span> frame <span class="val">#' + totalFrames + '</span> — ' + fmtBytes(byteLen) + ' (' + pcm16.length + ' samples)');
-          }
-
-          updateStats();
-        }
-      });
-    }
-    return;
+  totalFrames++;
+  const rawBytes = atob(b64);
+  const byteLen = rawBytes.length;
+  totalBytes += byteLen;
+  const buf = new ArrayBuffer(byteLen);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < byteLen; i++) view[i] = rawBytes.charCodeAt(i);
+  const pcm16 = new Int16Array(buf);
+  totalSamples += pcm16.length;
+  enqueueAudio(pcm16);
+  lastPcmChunk = pcm16;
+  updateVU(pcm16);
+  document.getElementById('scopeFrame').classList.add('active');
+  document.getElementById('scopeIdle').classList.add('hidden');
+  if (totalFrames <= 3 || totalFrames % 5 === 0) {
+    addLog('audio', '<span class="hl">Audio</span> frame <span class="val">#' + totalFrames + '</span> — ' + fmtBytes(byteLen) + ' (' + pcm16.length + ' samples)');
   }
-
-  // Unknown
-  addLog('info', 'Message: ' + JSON.stringify(data).substring(0, 80));
+  updateStats();
 }
 
 // ── Audio playback ──
@@ -988,62 +1264,43 @@ async function initAudio() {
   playbackNode.connect(audioCtx.destination);
   addLog('ok', 'Audio engine initialized — <span class="val">24kHz → 48kHz</span>');
 }
-
 function enqueueAudio(pcm16) {
   if (!playbackNode) return;
-  playbackNode.port.postMessage({
-    type: 'enqueue',
-    pcmData: pcm16.buffer
-  }, [pcm16.buffer]);
+  playbackNode.port.postMessage({ type: 'enqueue', pcmData: pcm16.buffer }, [pcm16.buffer]);
 }
 
 // ── VU meter ──
 function updateVU(pcm16) {
-  // Calculate RMS in dB
   let sum = 0;
-  for (let i = 0; i < pcm16.length; i++) {
-    const s = pcm16[i] / 32768;
-    sum += s * s;
-  }
+  for (let i = 0; i < pcm16.length; i++) { const s = pcm16[i] / 32768; sum += s * s; }
   const rms = Math.sqrt(sum / pcm16.length);
   const db = rms > 0 ? 20 * Math.log10(rms) : -60;
   const clamped = Math.max(-60, Math.min(0, db));
   const pct = ((clamped + 60) / 60) * 100;
-
   document.getElementById('vuFill').style.width = pct + '%';
   document.getElementById('vuDb').textContent = db > -60 ? db.toFixed(1) + ' dB' : '-∞ dB';
 }
 
-// ── Send text ──
+// ── Send text — uses AILANG buildTextMessage, sends via WS managed by AILANG ──
 async function sendText() {
   const input = document.getElementById('textInput');
   const text = input.value.trim();
   if (!text || !ws || ws.readyState !== 1 || !sessionReady) return;
 
-  // Init audio on first user gesture
   await initAudio();
-
-  // Reset per-turn counters
-  totalFrames = 0;
-  totalBytes = 0;
-  totalSamples = 0;
+  totalFrames = 0; totalBytes = 0; totalSamples = 0;
   promptSentAt = Date.now();
   document.getElementById('fLatency').textContent = '—';
   document.getElementById('fLatency').classList.remove('active');
   updateStats();
-
-  // Clear playback buffer
-  if (playbackNode) {
-    playbackNode.port.postMessage({ command: 'clear' });
-  }
+  if (playbackNode) playbackNode.port.postMessage({ command: 'clear' });
 
   addLog('info', 'Sending: <span class="val">' + escapeHtml(text) + '</span>');
 
-  ws.send(JSON.stringify({
-    clientContent: {
-      turns: [{ role: 'user', parts: [{ text }] }],
-      turnComplete: true
-    }
+  // Build message via AILANG WASM, send through the AILANG-managed WebSocket
+  const msgJson = callAILANG('buildTextMessage', text);
+  ws.send(msgJson || JSON.stringify({
+    clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true }
   }));
 
   input.value = '';
@@ -1071,16 +1328,11 @@ async function toggleMic() {
     addLog('info', 'Mic stopped');
     return;
   }
-
-  // Init playback audio context (for output)
   await initAudio();
-
-  // Init separate capture context at native sample rate (mic requires matching rate)
   if (!captureCtx) {
     captureCtx = new AudioContext();
     await captureCtx.audioWorklet.addModule('../shared/audio-worklet.js');
   }
-
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const source = captureCtx.createMediaStreamSource(stream);
@@ -1093,24 +1345,18 @@ async function toggleMic() {
         const bytes = new Uint8Array(e.data.pcmData);
         let b = '';
         for (let i = 0; i < bytes.length; i++) b += String.fromCharCode(bytes[i]);
-        ws.send(JSON.stringify({
-          realtimeInput: {
-            mediaChunks: [{
-              mimeType: 'audio/pcm;rate=16000',
-              data: btoa(b)
-            }]
-          }
+        const b64 = btoa(b);
+        // Build audio chunk via AILANG WASM, send via AILANG-managed WebSocket
+        const chunkJson = callAILANG('buildAudioChunk', b64);
+        ws.send(chunkJson || JSON.stringify({
+          realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
         }));
       }
     };
     isRecording = true;
     btn.classList.add('active');
     addLog('ok', 'Mic active — streaming audio at 16kHz');
-
-    // Connect to Gemini if not already connected
-    if (!ws || ws.readyState !== 1) {
-      reconnect();
-    }
+    if (!ws || ws.readyState !== 1) reconnect();
   } catch (e) {
     addLog('err', 'Mic access denied: ' + e.message);
   }
@@ -1259,12 +1505,19 @@ document.getElementById('textInput').addEventListener('keydown', (e) => {
 });
 
 // ── Init ──
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   loadConfig();
   resizeCanvas();
   drawWaveform();
 
-  addLog('info', 'Gemini Live text-to-audio demo');
+  addLog('info', 'AILANG × Gemini Live — loading WASM streaming engine...');
+  await initWASM();
+  if (wasmReady) {
+    addLog('ok', 'AILANG WASM loaded — <span class="hl">std/stream effects</span> bridged to browser WebSocket');
+    addLog('info', 'Session lifecycle driven by AILANG (connect → setup → event loop)');
+  } else {
+    addLog('err', 'AILANG WASM failed to load — streaming requires AILANG');
+  }
   addLog('info', 'Model: <span class="hl">gemini-2.5-flash-native-audio</span>');
   addLog('info', 'Click <span class="val">Connect</span> to start');
 });

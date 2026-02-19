@@ -36,6 +36,11 @@ for demo in claude_chat gemini_live safe_agent transcription voice_analytics voi
   ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/index.html"
 done
 
+# Streaming AILANG modules (for WASM demos)
+mkdir -p "$SITE/ailang/streaming/gemini_live"
+ln -sf "$REPO_ROOT/streaming/gemini_live/gemini_live_browser.ail" \
+  "$SITE/ailang/streaming/gemini_live/gemini_live_browser.ail"
+
 echo ""
 echo "Site assembled. Serving at http://localhost:$PORT/"
 echo "  Hub:       http://localhost:$PORT/"

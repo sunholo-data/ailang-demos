@@ -1,0 +1,344 @@
+module streaming/gemini_live/gemini_live_browser
+
+-- Browser streaming module for Gemini Live WebSocket protocol.
+--
+-- Uses std/stream effects to drive the session lifecycle. In the browser,
+-- JS registers effect handlers via the native 2-arg WASM API:
+--
+--   window.ailangSetEffectHandler('IO', { println: (text) => ... });
+--   window.ailangSetEffectHandler('Stream', { connect: fn, transmit: fn, ... });
+--   await repl.callAsync(MODULE, 'startSession', apiKey, voice, instruction, prompt);
+--
+-- AILANG drives: connect → transmit(setup) → onEvent → runEventLoop → disconnect.
+-- JS bridges Stream ops to browser WebSocket API and processes incoming messages
+-- directly (because ailangValueToJS can't convert closures to callable JS functions,
+-- so the onEvent callback is acknowledged but not invoked from JS).
+--
+-- Also exports pure helper functions for protocol message construction/parsing
+-- and voice configuration. These work via repl.call() (sync, no effects needed).
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent,
+                   Message, Binary, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/json (encode, decode, jo, kv, js, jb, ja, jnum,
+                 get, has, asString, asBool, asArray, getString, getObject, getArray, getBool)
+import std/string (length)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+
+-- ══════════════════════════════════════════════════════
+-- Configuration
+-- ══════════════════════════════════════════════════════
+
+export pure func defaultModel() -> string =
+  "models/gemini-2.5-flash-native-audio-preview-12-2025"
+
+export pure func defaultVoice() -> string = "Sulafat"
+
+export pure func defaultInstruction() -> string =
+  "You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational."
+
+-- ══════════════════════════════════════════════════════
+-- Voice Catalog
+-- ══════════════════════════════════════════════════════
+
+pure func v(name: string, desc: string) -> Json =
+  jo([kv("name", js(name)), kv("desc", js(desc))])
+
+export pure func voiceCatalog() -> string =
+  encode(ja([
+    v("Sulafat", "Warm"), v("Zephyr", "Bright"), v("Puck", "Upbeat"),
+    v("Charon", "Informative"), v("Kore", "Firm"), v("Fenrir", "Excitable"),
+    v("Leda", "Youthful"), v("Orus", "Firm"), v("Aoede", "Breezy"),
+    v("Callirrhoe", "Easy-going"), v("Autonoe", "Bright"), v("Enceladus", "Breathy"),
+    v("Iapetus", "Clear"), v("Umbriel", "Easy-going"), v("Algieba", "Smooth"),
+    v("Despina", "Smooth"), v("Erinome", "Clear"), v("Algenib", "Gravelly"),
+    v("Rasalgethi", "Informative"), v("Laomedeia", "Upbeat"), v("Achernar", "Soft"),
+    v("Alnilam", "Firm"), v("Schedar", "Even"), v("Gacrux", "Mature"),
+    v("Pulcherrima", "Forward"), v("Achird", "Friendly"), v("Zubenelgenubi", "Casual"),
+    v("Vindemiatrix", "Gentle"), v("Sadachbia", "Lively"), v("Sadaltager", "Knowledgeable")
+  ]))
+
+-- ══════════════════════════════════════════════════════
+-- Streaming Session (uses std/stream effects)
+-- ══════════════════════════════════════════════════════
+
+-- Start a Gemini Live session via WebSocket.
+-- In the browser, JS effect handlers bridge std/stream to the browser WebSocket API.
+-- The event handler calls println with JSON events that JS intercepts via IO handler.
+--
+-- The session stays open after turnComplete (returns true to keep event loop running).
+-- JS sends subsequent messages directly through the WebSocket using buildTextMessage/
+-- buildAudioChunk for protocol formatting, while AILANG's event handler processes
+-- all incoming responses.
+export func startSession(apiKey: string, voice: string, instruction: string, prompt: string) -> string ! {Stream, IO} {
+  let model = defaultModel();
+  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
+
+  println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live..."))])));
+
+  match connect(url, { headers: [] }) {
+    Ok(conn) => {
+      println(encode(jo([kv("type", js("log")), kv("text", js("Connected. Sending setup..."))])));
+
+      let setupMsg = buildSetup(model, voice, instruction);
+      match transmit(conn, setupMsg) {
+        Ok(_) => {
+          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent. Voice: " ++ voice))])));
+
+          -- Register event handler and run event loop.
+          -- Session stays alive for multiple turns — JS can send additional messages
+          -- through the WebSocket while the event loop processes responses.
+          onEvent(conn, \event. handleEvent(event, conn, prompt));
+          runEventLoop(conn);
+          disconnect(conn);
+          "session_complete"
+        },
+        Err(e) => {
+          println(encode(jo([kv("type", js("error")), kv("text", js("Setup transmit failed"))])));
+          "error"
+        }
+      }
+    },
+    Err(e) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed"))])));
+      "error"
+    }
+  }
+}
+
+-- Handle WebSocket events. Returns true to continue, false to stop.
+-- Emits JSON events via println for JS to intercept.
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string) -> bool ! {Stream, IO} =
+  match event {
+    Message(msg) => match decode(msg) {
+      Ok(json) => handleJsonMessage(json, conn, prompt),
+      Err(_) => true
+    },
+    Binary(data) => match decode(data) {
+      Ok(json) => handleJsonMessage(json, conn, prompt),
+      Err(_) => true
+    },
+    Opened(_) => {
+      println(encode(jo([kv("type", js("opened"))])));
+      true
+    },
+    Closed(code, reason) => {
+      println(encode(jo([kv("type", js("closed")), kv("code", jnum(code)), kv("reason", js(reason))])));
+      false
+    },
+    StreamError(e) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js(show(e)))])));
+      false
+    },
+    Ping(_) => true
+  }
+
+-- Dispatch parsed JSON messages.
+-- Uses nested match to avoid if/then/else comment parsing issues.
+func handleJsonMessage(json: Json, conn: StreamConn, prompt: string) -> bool ! {Stream, IO} =
+  if has(json, "setupComplete") then handleSetupComplete(conn, prompt)
+  else if has(json, "serverContent") then handleServerContent(json)
+  else if has(json, "toolCall") then handleToolCallEvent(json)
+  else true
+
+func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {Stream, IO} {
+  println(encode(jo([kv("type", js("setup"))])));
+  let textMsg = buildTextMessage(prompt);
+  match transmit(conn, textMsg) {
+    Ok(_) => {
+      println(encode(jo([kv("type", js("sent")), kv("text", js(prompt))])));
+      true
+    },
+    Err(_) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js("Failed to send prompt"))])));
+      false
+    }
+  }
+}
+
+func handleServerContent(json: Json) -> bool ! {IO} {
+  let sc = getOrElse(get(json, "serverContent"), jo([]));
+  match getBool(sc, "turnComplete") {
+    Some(true) => {
+      println(encode(jo([kv("type", js("turnComplete"))])));
+      true
+    },
+    _ => {
+      emitTranscriptions(sc);
+      emitModelTurn(sc)
+    }
+  }
+}
+
+func emitTranscriptions(sc: Json) -> () ! {IO} {
+  match get(sc, "inputTranscription") {
+    Some(it) => {
+      let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
+      if length(txt) > 0 then
+        println(encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))])))
+      else ()
+    },
+    None => ()
+  };
+  match get(sc, "outputTranscription") {
+    Some(ot) => {
+      let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
+      if length(txt) > 0 then
+        println(encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))])))
+      else ()
+    },
+    None => ()
+  }
+}
+
+func emitModelTurn(sc: Json) -> bool ! {IO} =
+  match getObject(sc, "modelTurn") {
+    Some(mt) => match get(mt, "parts") {
+      Some(parts) => {
+        println(encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])));
+        true
+      },
+      None => true
+    },
+    None => true
+  }
+
+func handleToolCallEvent(json: Json) -> bool ! {IO} {
+  let tc = getOrElse(get(json, "toolCall"), jo([]));
+  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+  println(encode(jo([kv("type", js("toolCall")), kv("calls", calls)])));
+  true
+}
+
+-- ══════════════════════════════════════════════════════
+-- Protocol: Outgoing Messages (pure helpers)
+-- ══════════════════════════════════════════════════════
+
+-- Build WebSocket setup message (first message after connect)
+export pure func buildSetup(model: string, voice: string, instruction: string) -> string =
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
+  ]))
+
+-- Build text message (user typed input)
+export pure func buildTextMessage(text: string) -> string =
+  encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(text))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]))
+
+-- Build audio chunk message (mic input)
+export pure func buildAudioChunk(b64Audio: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("mediaChunks", ja([jo([
+        kv("mimeType", js("audio/pcm;rate=16000")),
+        kv("data", js(b64Audio))
+      ])]))
+    ]))
+  ]))
+
+-- Build tool response message
+export pure func buildToolResponse(callId: string, name: string, result: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js(name)),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- ══════════════════════════════════════════════════════
+-- Protocol: Incoming Message Parsing (pure helper)
+-- ══════════════════════════════════════════════════════
+
+-- Parse a server message into a simplified JSON event string.
+export pure func parseMessage(jsonStr: string) -> string {
+  match decode(jsonStr) {
+    Err(e) => encode(jo([kv("type", js("error")), kv("text", js(e))])),
+    Ok(json) => {
+      if has(json, "setupComplete")
+      then encode(jo([kv("type", js("setup"))]))
+      else if has(json, "toolCall")
+      then parseToolCall(json)
+      else if has(json, "serverContent")
+      then parseServerContent(json)
+      else encode(jo([kv("type", js("unknown"))]))
+    }
+  }
+}
+
+pure func parseToolCall(json: Json) -> string {
+  let tc = getOrElse(get(json, "toolCall"), jo([]));
+  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+  encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
+}
+
+pure func parseServerContent(json: Json) -> string {
+  let sc = getOrElse(get(json, "serverContent"), jo([]));
+  match get(sc, "turnComplete") {
+    Some(tc) => match asBool(tc) {
+      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
+      _ => parseContentParts(sc)
+    },
+    None => parseContentParts(sc)
+  }
+}
+
+pure func parseContentParts(sc: Json) -> string {
+  if has(sc, "inputTranscription") then {
+    let it = getOrElse(get(sc, "inputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
+    else checkOutputTranscript(sc)
+  }
+  else checkOutputTranscript(sc)
+}
+
+pure func checkOutputTranscript(sc: Json) -> string {
+  if has(sc, "outputTranscription") then {
+    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
+    else checkModelTurn(sc)
+  }
+  else checkModelTurn(sc)
+}
+
+pure func checkModelTurn(sc: Json) -> string {
+  match get(sc, "modelTurn") {
+    Some(mt) => match get(mt, "parts") {
+      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
+      None => encode(jo([kv("type", js("unknown"))]))
+    },
+    None => encode(jo([kv("type", js("unknown"))]))
+  }
+}

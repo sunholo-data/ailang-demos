@@ -99,9 +99,10 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     this.buffered = 0;       // samples available to read
 
     // Pre-buffer: accumulate this many source samples before starting playback
-    // ~150ms at 24kHz = 3600 samples — absorbs network jitter
-    this.preBufferSamples = Math.floor(this.sourceRate * 0.15);
+    // ~200ms at 24kHz = 4800 samples — absorbs network jitter
+    this.preBufferSamples = Math.floor(this.sourceRate * 0.2);
     this.isPreBuffering = true;
+    this.hasStarted = false;    // true after first playback begins (never re-primes)
 
     this.port.onmessage = (e) => {
       if (e.data.type === 'enqueue') {
@@ -115,6 +116,11 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
         // Start playback once pre-buffer is filled
         if (this.isPreBuffering && this.buffered >= this.preBufferSamples) {
           this.isPreBuffering = false;
+          this.hasStarted = true;
+        }
+        // After first start, resume immediately on new data (no re-priming)
+        if (this.hasStarted && this.isPreBuffering && this.buffered > 0) {
+          this.isPreBuffering = false;
         }
       } else if (e.data.command === 'clear') {
         this.writePos = 0;
@@ -122,6 +128,7 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
         this.buffered = 0;
         this.ring.fill(0);
         this.isPreBuffering = true;
+        this.hasStarted = false;
       }
     };
   }
@@ -157,10 +164,11 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
       this.buffered -= ratio;
     }
 
-    // Notify when buffer runs dry
+    // Notify when buffer runs dry (but don't re-prime — resume immediately on next data)
     if (this.buffered <= 0) {
       this.buffered = 0;
-      this.isPreBuffering = true;
+      this.isPreBuffering = true;  // outputs silence until data arrives
+      // Don't reset hasStarted — next enqueue resumes instantly without waiting for pre-buffer
       this.port.postMessage({ type: 'queue-empty' });
     }
 

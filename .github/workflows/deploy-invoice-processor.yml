@@ -202,6 +202,11 @@ jobs:
             cp "streaming/${demo}/browser/index.html" "_site/streaming/${demo}/"
           done
 
+          # Streaming AILANG modules (for WASM-powered demos)
+          mkdir -p _site/ailang/streaming/gemini_live
+          cp streaming/gemini_live/gemini_live_browser.ail \
+            _site/ailang/streaming/gemini_live/
+
           echo "::group::Site contents"
           find _site -type f | head -60
           echo "::endgroup::"
