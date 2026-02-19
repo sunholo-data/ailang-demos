@@ -713,16 +713,16 @@
 // ═══════════════════════════════════════════════════
 // Gemini Live — AILANG WASM Streaming Demo
 //
-// Architecture: AILANG drives the WebSocket session via std/stream effects.
-// JS registers effect handlers that bridge to the browser WebSocket API.
-// AILANG emits events via println (IO effect) which JS intercepts to
-// update the UI, play audio, etc.
+// Architecture: AILANG provides ALL protocol logic via pure functions
+// (message construction, parsing, voice catalog, config defaults).
+// JS handles browser transport (WebSocket open/send/receive, audio, mic).
+// Same pattern as DocParse browser — AILANG = domain logic, JS = I/O.
 //
-// This is the same streaming model as the CLI (main.ail) — AILANG controls
-// the session lifecycle. JS just provides transport and browser APIs.
+// NOTE: Full std/stream effects don't work in WASM yet (issues #137, #138).
+// Pure function approach works great as an interim solution.
 // ═══════════════════════════════════════════════════
 
-let ws = null;             // WebSocket managed by Stream effect handler
+let ws = null;             // WebSocket (JS transport, AILANG protocol)
 let audioCtx = null;       // 48kHz for playback
 let captureCtx = null;     // native rate for mic capture
 let playbackNode = null;
@@ -741,6 +741,13 @@ let wasmReady = false;
 const WASM_MODULE = 'streaming/gemini_live/gemini_live_browser';
 
 // ── AILANG WASM Initialization ──
+// Loads the AILANG module for Gemini Live protocol handling.
+// AILANG provides ALL protocol logic (message construction, parsing, voice config).
+// JS handles browser transport (WebSocket, audio, mic) — same pattern as DocParse browser.
+//
+// NOTE: std/stream effects do NOT work in WASM because stream builtins require a
+// native Go StreamContext (gorilla/websocket) that can't run in the browser.
+// Filed as AILANG issues #137, #138. Pure function approach works great.
 async function initWASM() {
   if (wasmReady) return;
   try {
@@ -748,35 +755,25 @@ async function initWASM() {
     const repl = new AilangREPL();
     await repl.init('../../wasm/ailang.wasm');
 
-    // Import stdlib modules needed by the AILANG module
-    for (const lib of ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/stream', 'std/io']) {
+    // Import stdlib modules needed by the AILANG module (no std/stream — pure functions only)
+    for (const lib of ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io']) {
       repl.importModule(lib);
     }
 
-    // Load the AILANG streaming module
+    // Load the AILANG Gemini Live module
     const resp = await fetch('../../ailang/streaming/gemini_live/gemini_live_browser.ail?v=' + Date.now());
     if (!resp.ok) throw new Error('Failed to fetch AILANG module');
     const code = await resp.text();
     const result = repl.loadModule(WASM_MODULE, code);
     if (!result.success) throw new Error(result.error);
 
-    // Register effect handlers via native 2-arg API: (effectName, {op: fn, ...})
-    // This also auto-grants capabilities (no separate grantCapability needed)
-    const ioResult = window.ailangSetEffectHandler('IO', {
-      println: (text) => {
-        handleAILANGEvent(text);
-        return '';
-      }
-    });
-    console.log('IO effect handler result:', ioResult);
-
-    // Register Stream effect handlers — bridge std/stream to browser WebSocket
-    const streamResult = registerStreamHandlers();
-    console.log('Stream effect handler result:', streamResult);
+    // Import module so zero-arg functions work via eval()
+    repl.importModule(WASM_MODULE);
 
     wasmEngine = repl;
     wasmReady = true;
-    console.log('AILANG Gemini Live module ready (streaming effects registered)');
+    console.log('AILANG Gemini Live module ready (pure functions for protocol handling)');
+    addLog('ok', 'AILANG WASM loaded — protocol from <span class="val">gemini_live_browser.ail</span>');
 
     // Populate voices from AILANG catalog
     populateVoicesFromAILANG();
@@ -786,224 +783,68 @@ async function initWASM() {
   }
 }
 
-// Register Stream effect handlers that bridge AILANG's std/stream to browser WebSocket API.
-//
-// KEY LIMITATION: ailangValueToJS converts AILANG closures to string representations,
-// not callable JS functions. So the onEvent handler receives a string (the closure's
-// display form), NOT something we can invoke. The AILANG runtime internally dispatches
-// the callback — our runEventLoop just needs to deliver events in the format that
-// the runtime expects, and the Go-side stream implementation handles the rest.
-//
-// The handlers use the native 2-arg API: ailangSetEffectHandler(effectName, {op: fn})
-// which also auto-grants the Stream capability.
-function registerStreamHandlers() {
-  let eventLoopResolve = null;
-
-  return window.ailangSetEffectHandler('Stream', {
-    connect: (url, config) => {
-      // AILANG calls connect(url, config) — we create a browser WebSocket
-      return new Promise((resolve, reject) => {
-        try {
-          ws = new WebSocket(url);
-          ws.onopen = () => {
-            document.getElementById('wssBadge').classList.add('live');
-            setState('connected');
-            resolve('conn_1');
-          };
-          ws.onerror = (e) => {
-            reject(new Error('WebSocket connection failed'));
-          };
-        } catch (e) {
-          reject(e);
-        }
-      });
-    },
-
-    transmit: (conn, msg) => {
-      if (ws && ws.readyState === 1) {
-        ws.send(msg);
-        return 'ok';
-      }
-      throw new Error('WebSocket not connected');
-    },
-
-    onEvent: (conn, handler) => {
-      // handler arrives as a string (AILANG closure → ailangValueToJS fallback).
-      // The Go runtime handles callback dispatch internally — we just acknowledge.
-      console.log('Stream onEvent registered (handler type:', typeof handler, ')');
-      return '';
-    },
-
-    runEventLoop: (conn) => {
-      // Return a Promise that resolves when WS closes.
-      // The Go runtime's stream implementation calls onEvent's callback internally
-      // when we deliver messages. But since ailangValueToJS can't preserve closures,
-      // we need to process messages on the JS side and emit events via IO/println.
-      //
-      // WORKAROUND: Instead of trying to invoke the AILANG closure, we process
-      // WebSocket messages directly in JS and emit events through the IO handler
-      // (handleAILANGEvent). The AILANG startSession function will see the
-      // runEventLoop resolve when the WS closes.
-      return new Promise((resolve) => {
-        eventLoopResolve = resolve;
-
-        ws.onmessage = async (e) => {
-          let text;
-          if (typeof e.data === 'string') text = e.data;
-          else if (e.data instanceof Blob) text = await e.data.text();
-          else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
-          else return;
-
-          // Process the Gemini message directly in JS and emit via IO handler
-          try {
-            const parsed = JSON.parse(text);
-            processGeminiMessage(parsed);
-          } catch (err) {
-            console.error('Message parse error:', err);
-          }
-        };
-
-        ws.onclose = (e) => {
-          document.getElementById('wssBadge').classList.remove('live');
-          sessionReady = false;
-          setState('closed');
-          addLog('info', `WebSocket closed <span class="val">${e.code}</span>`);
-          resolve('closed');
-        };
-
-        ws.onerror = (e) => {
-          addLog('err', 'WebSocket error');
-        };
-      });
-    },
-
-    disconnect: (conn) => {
-      if (ws) { ws.close(); ws = null; }
-      return '';
-    },
-
-    status: (conn) => {
-      if (!ws) return 'StreamClosed';
-      switch (ws.readyState) {
-        case 0: return 'Connecting';
-        case 1: return 'Open';
-        case 2: return 'Closing';
-        default: return 'StreamClosed';
-      }
+// Call a pure AILANG function (protocol construction/parsing/config).
+// AILANG handles ALL Gemini Live protocol knowledge; JS is just transport.
+function callAILANG(funcName, ...args) {
+  if (!wasmReady) return null;
+  try {
+    let val;
+    // Always try call() first — works for all arities with new WASM binary.
+    // Fall back to eval() for zero-arg if call() returns a function object.
+    const result = wasmEngine.call(WASM_MODULE, funcName, ...args);
+    if (!result.success) { console.error('AILANG error:', result.error); return null; }
+    val = result.result || '';
+    if (val === '<function>' && args.length === 0) {
+      // Zero-arg function returned function object — invoke via eval
+      val = wasmEngine.eval(funcName + '()');
     }
-  });
+    val = val.trim();
+    console.log(`callAILANG(${funcName}) raw:`, JSON.stringify(val).substring(0, 200));
+    // Strip type annotation: "value :: Type" or "value :: Type (desugared)"
+    // Use lastIndexOf to handle values that might contain " :: " (unlikely but safe)
+    const typeIdx = val.lastIndexOf(' :: ');
+    if (typeIdx > 0) val = val.substring(0, typeIdx).trim();
+    // Unwrap AILANG string quotes (REPL wraps strings in "...")
+    if (val.startsWith('"') && val.endsWith('"')) {
+      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
+    }
+    console.log(`callAILANG(${funcName}) processed:`, JSON.stringify(val).substring(0, 200));
+    return val;
+  } catch (e) {
+    console.error('AILANG call error:', e);
+    return null;
+  }
 }
 
-// Process Gemini WebSocket messages directly in JS.
-// This is necessary because AILANG closures can't be invoked from JS via
-// ailangValueToJS (converts them to strings, not callable functions).
-// The session lifecycle (connect → setup → event loop → disconnect) is still
-// driven by AILANG's startSession. But message dispatch happens here in JS
-// using AILANG's pure helpers for protocol construction (buildTextMessage, etc).
-let pendingInitialPrompt = null;
+// Handle incoming WebSocket messages using AILANG parseMessage()
+function handleServerMessage(rawJson) {
+  const eventJson = callAILANG('parseMessage', rawJson);
+  if (!eventJson) return;
 
-function processGeminiMessage(msg) {
-  if (msg.setupComplete) {
-    sessionReady = true;
-    setState('ready');
-    addLog('ok', '<span class="hl">Setup complete</span> — session ready (AILANG streaming)');
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('textInput').disabled = false;
-    document.getElementById('textInput').focus();
-    document.getElementById('scopeIdle').textContent = 'ready for input';
+  let event;
+  try { event = JSON.parse(eventJson); } catch { return; }
 
-    // Send initial prompt if one was provided (AILANG built the setup, JS sends the prompt)
-    if (pendingInitialPrompt && ws && ws.readyState === 1) {
-      const textMsg = callAILANG('buildTextMessage', pendingInitialPrompt);
-      if (textMsg) {
+  switch (event.type) {
+    case 'setup':
+      sessionReady = true;
+      setState('ready');
+      addLog('ok', '<span class="hl">Setup complete</span> — session ready (AILANG protocol)');
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('textInput').disabled = false;
+      document.getElementById('textInput').focus();
+      document.getElementById('scopeIdle').textContent = 'ready for input';
+      // Send initial greeting via AILANG buildTextMessage
+      const textMsg = callAILANG('buildTextMessage', 'Hello!');
+      if (textMsg && ws && ws.readyState === 1) {
         ws.send(textMsg);
-        addLog('info', 'Sent: <span class="val">' + escapeHtml(pendingInitialPrompt) + '</span>');
+        addLog('info', 'Sent: <span class="val">Hello!</span>');
         setState('streaming');
         promptSentAt = Date.now();
       }
-      pendingInitialPrompt = null;
-    }
-    return;
-  }
-
-  if (msg.serverContent) {
-    const sc = msg.serverContent;
-
-    // Input transcription
-    if (sc.inputTranscription && sc.inputTranscription.text) {
-      const t = sc.inputTranscription.text;
-      if (t.length > 0) {
-        addLog('info', 'You said: <span class="val">' + escapeHtml(t) + '</span>');
-      }
-    }
-
-    // Output transcription
-    if (sc.outputTranscription && sc.outputTranscription.text) {
-      const t = sc.outputTranscription.text;
-      if (t.length > 0) {
-        addLog('info', 'Model: <span class="val">' + escapeHtml(t) + '</span>');
-      }
-    }
-
-    // Model turn with audio/text parts
-    if (sc.modelTurn && sc.modelTurn.parts) {
-      for (const part of sc.modelTurn.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          handleAudioFrame(part.inlineData.data);
-        }
-        if (part.text) {
-          addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
-        }
-      }
-    }
-
-    // Turn complete
-    if (sc.turnComplete) {
-      sessionReady = true;
-      setState('ready');
-      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
-      document.getElementById('sendBtn').disabled = false;
-      document.getElementById('textInput').disabled = false;
-      document.getElementById('textInput').focus();
-    }
-  }
-
-  if (msg.toolCall) {
-    addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(msg.toolCall.functionCalls || []).substring(0, 120) + '</span>');
-  }
-}
-
-// Handle AILANG events emitted via println (IO effect handler)
-// AILANG emits structured JSON events; we parse and render to UI
-function handleAILANGEvent(text) {
-  let event;
-  try { event = JSON.parse(text); } catch {
-    // Plain text — just log it
-    addLog('info', escapeHtml(text));
-    return;
-  }
-
-  switch (event.type) {
-    case 'log':
-      addLog('info', escapeHtml(event.text || ''));
-      break;
-
-    case 'setup':
-      sessionReady = true;
-      document.getElementById('sendBtn').disabled = false;
-      document.getElementById('textInput').disabled = false;
-      document.getElementById('textInput').focus();
-      setState('ready');
-      addLog('ok', '<span class="hl">Setup complete</span> — session ready (AILANG streaming)');
-      document.getElementById('scopeIdle').textContent = 'ready for input';
-      break;
-
-    case 'sent':
-      addLog('info', 'AILANG sent: <span class="val">' + escapeHtml(event.text || '') + '</span>');
-      setState('streaming');
       break;
 
     case 'turnComplete':
+      sessionReady = true;
       setState('ready');
       addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
       document.getElementById('sendBtn').disabled = false;
@@ -1022,81 +863,27 @@ function handleAILANGEvent(text) {
     case 'modelTurn':
       if (event.parts && Array.isArray(event.parts)) {
         event.parts.forEach(part => {
-          if (part.text) {
-            addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
-          }
-          if (part.inlineData && part.inlineData.data) {
-            handleAudioFrame(part.inlineData.data);
-          }
+          if (part.text) addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
+          if (part.inlineData && part.inlineData.data) handleAudioFrame(part.inlineData.data);
         });
       }
       break;
 
     case 'toolCall':
-      addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(event.calls).substring(0, 120) + '</span>');
-      break;
-
-    case 'opened':
-      addLog('ok', 'WebSocket opened');
-      break;
-
-    case 'closed':
-      addLog('info', 'Session closed (code: ' + (event.code || '?') + ')');
+      addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(event.calls || []).substring(0, 120) + '</span>');
       break;
 
     case 'error':
-      addLog('err', 'AILANG: ' + escapeHtml(event.text || 'unknown error'));
+      addLog('err', 'AILANG parse: ' + escapeHtml(event.text || ''));
       break;
-
-    default:
-      addLog('info', 'AILANG event: <span class="val">' + event.type + '</span>');
-  }
-}
-
-// Call a pure AILANG function (for message construction)
-function callAILANG(funcName, ...args) {
-  if (!wasmReady) return null;
-  try {
-    let val;
-    if (args.length === 0) {
-      // Zero-arg AILANG functions: repl.call returns <function>, use eval instead
-      val = wasmEngine.eval(funcName + '()');
-    } else {
-      const result = wasmEngine.call(WASM_MODULE, funcName, ...args);
-      if (!result.success) { console.error('AILANG error:', result.error); return null; }
-      val = result.result || '';
-    }
-    // Strip type annotation (e.g., '... :: string')
-    const typeMatch = val.match(/^(.+)\s+::\s+\w+$/s);
-    if (typeMatch) val = typeMatch[1];
-    // Unwrap AILANG string quotes
-    if (val.startsWith('"') && val.endsWith('"')) {
-      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
-    }
-    return val;
-  } catch (e) {
-    console.error('AILANG call error:', e);
-    return null;
   }
 }
 
 function populateVoicesFromAILANG() {
   if (!wasmReady) return;
   try {
-    // Zero-arg AILANG functions return <function> via repl.call() — use eval instead
-    wasmEngine.importModule(WASM_MODULE);
-    let raw = wasmEngine.eval('voiceCatalog()');
-    console.log('voiceCatalog raw:', typeof raw, raw ? raw.substring(0, 120) : 'null');
-
-    // Strip type annotation (e.g., '... :: string')
-    const typeMatch = raw.match(/^(.+)\s+::\s+\w+$/s);
-    if (typeMatch) raw = typeMatch[1];
-
-    // AILANG wraps strings in quotes — unwrap to get the JSON
-    if (raw.startsWith('"') && raw.endsWith('"')) {
-      try { raw = JSON.parse(raw); } catch { raw = raw.slice(1, -1); }
-    }
-
+    const raw = callAILANG('voiceCatalog');
+    if (!raw) return;
     const voices = JSON.parse(raw);
     const select = document.getElementById('voiceSelect');
     const current = select.value;
@@ -1109,13 +896,7 @@ function populateVoicesFromAILANG() {
     });
     const saved = localStorage.getItem('gemini-live-voice');
     if (saved) select.value = saved;
-    else {
-      let dv = wasmEngine.eval('defaultVoice()');
-      const dvMatch = dv.match(/^"(.+)"\s+::\s+\w+$/s);
-      if (dvMatch) dv = dvMatch[1];
-      else if (dv.startsWith('"') && dv.endsWith('"')) dv = dv.slice(1, -1);
-      select.value = current || dv || 'Sulafat';
-    }
+    else select.value = current || callAILANG('defaultVoice') || 'Sulafat';
   } catch (e) { console.error('Voice catalog parse error:', e); }
 }
 
@@ -1178,7 +959,9 @@ function setState(s) {
   el.classList.toggle('active', s !== 'idle' && s !== 'closed');
 }
 
-// ── Connect: AILANG drives the session via std/stream effects ──
+// ── Connect: JS WebSocket transport, AILANG protocol logic ──
+// AILANG builds ALL protocol messages (setup, text, audio) and parses ALL responses.
+// JS just opens the WebSocket and pipes data through.
 async function reconnect() {
   if (ws) { ws.close(); ws = null; }
   const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini-api-key');
@@ -1198,31 +981,55 @@ async function reconnect() {
   document.getElementById('sendBtn').disabled = true;
   document.getElementById('textInput').disabled = true;
 
-  // Init audio on first user gesture
   await initAudio();
 
+  // Get config from AILANG
+  const model = callAILANG('defaultModel') || 'models/gemini-2.5-flash-native-audio-preview-12-2025';
   const voice = document.getElementById('voiceSelect').value;
   const instruction = callAILANG('defaultInstruction') || 'You are a friendly assistant.';
 
-  // Store initial prompt — processGeminiMessage sends it after setupComplete
-  pendingInitialPrompt = 'Hello!';
-  promptSentAt = Date.now();
+  // Build WebSocket URL
+  const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + key;
 
-  addLog('info', 'Starting AILANG streaming session...');
+  addLog('info', 'Connecting via AILANG protocol...');
 
-  // AILANG drives the session lifecycle: connect → transmit(setup) → onEvent → runEventLoop → disconnect
-  // Message dispatch happens in JS (processGeminiMessage) because AILANG closures
-  // can't be invoked from JS via the WASM bridge (ailangValueToJS limitation).
-  try {
-    streamingSession = wasmEngine.callAsync(WASM_MODULE, 'startSession', key, voice, instruction, 'Hello!');
-    const result = await streamingSession;
-    console.log('AILANG session ended:', result);
-    addLog('info', 'AILANG session ended');
-  } catch (e) {
-    console.error('AILANG session error:', e);
-    addLog('err', 'AILANG session error: ' + e.message);
-  }
-  streamingSession = null;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    document.getElementById('wssBadge').classList.add('live');
+    setState('connected');
+    addLog('ok', 'WebSocket connected');
+
+    // Build and send setup message via AILANG
+    const setupMsg = callAILANG('buildSetup', model, voice, instruction);
+    if (setupMsg) {
+      ws.send(setupMsg);
+      addLog('info', 'Setup sent (AILANG buildSetup) — voice: <span class="val">' + escapeHtml(voice) + '</span>');
+    }
+  };
+
+  ws.onmessage = async (e) => {
+    // Convert message to text
+    let text;
+    if (typeof e.data === 'string') text = e.data;
+    else if (e.data instanceof Blob) text = await e.data.text();
+    else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
+    else return;
+
+    // Pass raw JSON to AILANG parseMessage for protocol parsing
+    handleServerMessage(text);
+  };
+
+  ws.onclose = (e) => {
+    document.getElementById('wssBadge').classList.remove('live');
+    sessionReady = false;
+    setState('closed');
+    addLog('info', 'WebSocket closed <span class="val">' + e.code + '</span>');
+  };
+
+  ws.onerror = () => {
+    addLog('err', 'WebSocket error');
+  };
 }
 
 // Audio frame processing (browser-specific — stays in JS)
@@ -1513,8 +1320,8 @@ window.addEventListener('load', async () => {
   addLog('info', 'AILANG × Gemini Live — loading WASM streaming engine...');
   await initWASM();
   if (wasmReady) {
-    addLog('ok', 'AILANG WASM loaded — <span class="hl">std/stream effects</span> bridged to browser WebSocket');
-    addLog('info', 'Session lifecycle driven by AILANG (connect → setup → event loop)');
+    addLog('ok', 'AILANG protocol engine ready — <span class="hl">pure functions</span> drive all messages');
+    addLog('info', 'AILANG builds setup/text/audio msgs, parses server responses');
   } else {
     addLog('err', 'AILANG WASM failed to load — streaming requires AILANG');
   }
