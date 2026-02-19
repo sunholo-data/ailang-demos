@@ -137,6 +137,30 @@
     0%, 100% { box-shadow: 0 0 4px rgba(74,222,128,0.3); }
     50% { box-shadow: 0 0 10px rgba(74,222,128,0.6); }
   }
+  .fallback-banner {
+    display: none;
+    background: var(--red-dim);
+    border-bottom: 1px solid #4a1515;
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 16px;
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+  .fallback-banner.active { display: block; }
+  .badge-fallback {
+    display: none;
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid #4a1515;
+    animation: pulse-warn 1.5s ease-in-out infinite;
+  }
+  .badge-fallback.active { display: inline-block; }
+  @keyframes pulse-warn {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
 
   .header-right {
     display: flex;
@@ -587,12 +611,14 @@
       <div class="logo">AILANG<span>×</span>Gemini Live</div>
       <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
       <span class="badge badge-wss" id="wssBadge"><span class="dot"></span>WSS</span>
+      <span class="badge badge-fallback" id="fallbackBadge">FALLBACK</span>
     </div>
     <div class="header-right">
       <button class="btn-sm" onclick="toggleConfig()" id="cfgBtn">Config</button>
       <button class="btn-sm" onclick="reconnect()" id="reconnBtn">Connect</button>
     </div>
   </div>
+  <div class="fallback-banner" id="fallbackBanner">AILANG closure failed — running in JS fallback mode (ApplyClosure bug). Events processed via AILANG pure functions, not std/stream closure.</div>
 
   <!-- ── Config ── -->
   <div class="config" id="configPanel">
@@ -648,7 +674,7 @@
     <div class="scope-container">
       <div class="scope-frame" id="scopeFrame">
         <span class="scope-label">Audio Scope</span>
-        <span class="scope-label-right" id="scopeRate">24kHz · 16-bit · mono</span>
+        <span class="scope-label-right" id="scopeRate"><span style="color:var(--amber)">output</span> · <span style="color:#38bdf8">mic</span> · <span style="color:var(--green)">arrival</span></span>
         <span class="scope-idle-text" id="scopeIdle">awaiting signal</span>
         <canvas id="waveform"></canvas>
         <div class="vu-strip">
@@ -720,10 +746,30 @@
 //
 // This is the same streaming model as the CLI (main.ail) — AILANG controls
 // the session. JS just provides browser APIs via effect handlers.
+//
+// Template: use this as a starting point for new AILANG streaming audio demos.
 // ═══════════════════════════════════════════════════
 
-let audioCtx = null;       // 48kHz for playback
-let captureCtx = null;     // native rate for mic capture
+// ── Configuration ──
+const CONFIG = {
+  wasmModule: 'streaming/gemini_live/gemini_live_browser',
+  playbackRate: 48000,     // AudioContext output rate (browser standard)
+  sourceRate: 24000,       // Gemini audio output rate
+  micRate: 16000,          // Mic capture rate (Gemini input)
+  fftSize: 2048,           // AnalyserNode FFT size for waveform
+  canvasHeight: 180,       // Scope canvas height in CSS pixels
+  systemInstruction: 'You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.',
+  initialPrompt: 'Hello!',
+  localStorageKeys: {
+    apiKey: 'gemini-api-key',
+    legacyApiKey: 'gemini_live_key',  // migration from old key name
+    voice: 'gemini-live-voice',
+  },
+};
+
+// ── State ──
+let audioCtx = null;
+let captureCtx = null;
 let playbackNode = null;
 let captureNode = null;
 let isRecording = false;
@@ -732,13 +778,12 @@ let promptSentAt = 0;
 let totalFrames = 0;
 let totalBytes = 0;
 let totalSamples = 0;
-let lastPcmChunk = null;
+let lastPcmChunk = null;   // copy of latest PCM for VU meter (analyser reads resampled 48kHz)
 
 // AILANG WASM state
 let wasmEngine = null;
 let wasmReady = false;
 let sessionPrompt = '';    // stored for fallback event processing
-const WASM_MODULE = 'streaming/gemini_live/gemini_live_browser';
 
 // ── AILANG WASM Initialization ──
 // Loads the AILANG module and registers effect handlers so AILANG can drive
@@ -746,7 +791,7 @@ const WASM_MODULE = 'streaming/gemini_live/gemini_live_browser';
 async function initWASM() {
   if (wasmReady) return;
   try {
-    if (typeof AilangREPL === 'undefined') { console.warn('WASM not available'); return; }
+    if (typeof AilangREPL === 'undefined') { addLog('warn', 'WASM not available'); return; }
     const repl = new AilangREPL();
     await repl.init('../../wasm/ailang.wasm');
 
@@ -765,22 +810,21 @@ async function initWASM() {
     const resp = await fetch('../../ailang/streaming/gemini_live/gemini_live_browser.ail?v=' + Date.now());
     if (!resp.ok) throw new Error('Failed to fetch AILANG module');
     const code = await resp.text();
-    const result = repl.loadModule(WASM_MODULE, code);
+    const result = repl.loadModule(CONFIG.wasmModule, code);
     if (!result.success) throw new Error(result.error);
 
     // Import module so zero-arg functions work via eval()
-    repl.importModule(WASM_MODULE);
+    repl.importModule(CONFIG.wasmModule);
 
     wasmEngine = repl;
     wasmReady = true;
-    console.log('AILANG Gemini Live module ready (std/stream effects → browser WebSocket)');
+    // Log is shown via addLog below — no console.log needed
     addLog('ok', 'AILANG WASM loaded — <span class="hl">std/stream effects</span> bridged to browser');
 
     // Populate voices from AILANG catalog
     populateVoicesFromAILANG();
   } catch (e) {
-    console.error('WASM init error:', e);
-    addLog('err', 'WASM init failed: ' + e.message);
+    logError('WASM init failed', e);
   }
 }
 
@@ -820,7 +864,7 @@ function registerStreamHandlers(repl) {
             connections[connId].resolveRecv(connections[connId].eventQueue.shift());
             connections[connId].resolveRecv = null;
           }
-          document.getElementById('wssBadge').classList.add('live');
+          $.wssBadge.classList.add('live');
           if (!settled) {
             settled = true;
             resolve(AilangREPL.streamOk(AilangREPL.streamConn(connId)));
@@ -848,7 +892,7 @@ function registerStreamHandlers(repl) {
             conn.resolveRecv(conn.eventQueue.shift());
             conn.resolveRecv = null;
           }
-          document.getElementById('wssBadge').classList.remove('live');
+          $.wssBadge.classList.remove('live');
           if (!settled) {
             settled = true;
             resolve(AilangREPL.streamErr('ConnectionFailed', 'closed: ' + (e.reason || e.code)));
@@ -939,15 +983,17 @@ function registerStreamHandlers(repl) {
               try {
                 const result = conn.eventHandler(streamEvent);
                 if (result === undefined || result === null) {
-                  addLog('warn', 'AILANG closure unavailable — using AILANG pure functions for events');
+                  // ApplyClosure bug — closure can't resolve cross-module imports
                   conn.eventHandler = null;
+                  activateFallbackMode('Closure returned nil — cross-module imports not resolved');
                   keepGoing = processEventFallback(event, conn);
                 } else {
                   keepGoing = result;
                 }
               } catch (e) {
-                console.error('Event handler error:', e);
+                // Event handler threw — fall back to pure functions
                 conn.eventHandler = null;
+                activateFallbackMode('Closure error: ' + e.message);
                 keepGoing = processEventFallback(event, conn);
               }
             } else {
@@ -1007,7 +1053,24 @@ function registerIOHandler(repl) {
   });
 }
 
-// Fallback event processing when AILANG closure is unavailable.
+// ── Fallback mode signal ──
+// Shows a prominent red banner + pulsing badge when AILANG closures fail.
+function activateFallbackMode(reason) {
+  $.fallbackBanner.classList.add('active');
+  $.fallbackBadge.classList.add('active');
+  addLog('err', 'FALLBACK MODE: ' + reason);
+  addLog('warn', 'Events processed via JS + AILANG pure functions (not std/stream closure)');
+}
+function deactivateFallbackMode() {
+  $.fallbackBanner.classList.remove('active');
+  $.fallbackBadge.classList.remove('active');
+}
+
+// ── FALLBACK: event processing when AILANG closure is unavailable ──
+// DEPRECATED: This fallback exists for the ApplyClosure bug (M-WASM-CLOSURE-ENV).
+// Now that the bug is fixed, this code should never activate. The red FALLBACK
+// banner + badge appear if it does. Remove once confirmed stable across AILANG versions.
+//
 // Uses AILANG pure functions (parseMessage, buildTextMessage) for protocol logic.
 // Audio frames are fast-tracked in JS to avoid WASM FFI overhead per frame.
 // AILANG still drives the session lifecycle — this only replaces the event handler closure.
@@ -1101,9 +1164,9 @@ function handleAILANGEvent(event) {
       sessionReady = true;
       setState('ready');
       addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + totalFrames + '</span> frames, <span class="val">' + fmtBytes(totalBytes) + '</span>');
-      document.getElementById('sendBtn').disabled = false;
-      document.getElementById('textInput').disabled = false;
-      document.getElementById('textInput').focus();
+      $.sendBtn.disabled = false;
+      $.textInput.disabled = false;
+      $.textInput.focus();
       break;
     case 'inputTranscript':
       if (event.text) addLog('info', 'You said: <span class="val">' + escapeHtml(event.text) + '</span>');
@@ -1130,7 +1193,7 @@ function handleAILANGEvent(event) {
       sessionReady = false;
       setState('closed');
       addLog('info', 'WebSocket closed <span class="val">' + (event.code || '') + '</span>');
-      document.getElementById('wssBadge').classList.remove('live');
+      $.wssBadge.classList.remove('live');
       break;
     case 'error':
       addLog('err', 'AILANG: ' + escapeHtml(event.text || ''));
@@ -1146,8 +1209,8 @@ function callAILANG(funcName, ...args) {
     let val;
     // Always try call() first — works for all arities with new WASM binary.
     // Fall back to eval() for zero-arg if call() returns a function object.
-    const result = wasmEngine.call(WASM_MODULE, funcName, ...args);
-    if (!result.success) { console.error('AILANG error:', result.error); return null; }
+    const result = wasmEngine.call(CONFIG.wasmModule, funcName, ...args);
+    if (!result.success) { logError('AILANG: ' + result.error); return null; }
     val = result.result || '';
     if (val === '<function>' && args.length === 0) {
       // Zero-arg function returned function object — invoke via eval
@@ -1163,13 +1226,12 @@ function callAILANG(funcName, ...args) {
     }
     return val;
   } catch (e) {
-    console.error('AILANG call error:', e);
+    logError('AILANG call error', e);
     return null;
   }
 }
 
-// handleServerMessage is no longer needed — AILANG's event handler
-// dispatches all server messages via println (intercepted by IO effect handler).
+
 
 function populateVoicesFromAILANG() {
   if (!wasmReady) return;
@@ -1177,7 +1239,7 @@ function populateVoicesFromAILANG() {
     const raw = callAILANG('voiceCatalog');
     if (!raw) return;
     const voices = JSON.parse(raw);
-    const select = document.getElementById('voiceSelect');
+    const select = $.voiceSelect;
     const current = select.value;
     select.innerHTML = '';
     voices.forEach(v => {
@@ -1189,27 +1251,43 @@ function populateVoicesFromAILANG() {
     const saved = localStorage.getItem('gemini-live-voice');
     if (saved) select.value = saved;
     else select.value = current || callAILANG('defaultVoice') || 'Sulafat';
-  } catch (e) { console.error('Voice catalog parse error:', e); }
+  } catch (e) { logError('Voice catalog parse error', e); }
+}
+
+// ── Cached DOM refs (populated on load) ──
+const $  = {};
+function cacheDom() {
+  for (const id of [
+    'wssBadge', 'fallbackBanner', 'fallbackBadge', 'configPanel',
+    'apiKey', 'voiceSelect', 'logEntries', 'sendBtn', 'textInput',
+    'micBtn', 'scopeFrame', 'scopeIdle',
+    'fState', 'fFrames', 'fBytes', 'fDuration', 'fLatency',
+    'vuFill', 'vuDb',
+  ]) {
+    $[id] = document.getElementById(id);
+  }
 }
 
 // ── Config ──
 function toggleConfig() {
-  document.getElementById('configPanel').classList.toggle('open');
+  $.configPanel.classList.toggle('open');
 }
 
 function loadConfig() {
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_live_key'))
-    localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_live_key'));
-  const saved = localStorage.getItem('gemini-api-key');
-  if (saved) document.getElementById('apiKey').value = saved;
-  const voice = localStorage.getItem('gemini-live-voice');
-  if (voice) document.getElementById('voiceSelect').value = voice;
+  const keys = CONFIG.localStorageKeys;
+  // Migrate legacy key name
+  if (!localStorage.getItem(keys.apiKey) && localStorage.getItem(keys.legacyApiKey))
+    localStorage.setItem(keys.apiKey, localStorage.getItem(keys.legacyApiKey));
+  const saved = localStorage.getItem(keys.apiKey);
+  if (saved) $.apiKey.value = saved;
+  const voice = localStorage.getItem(keys.voice);
+  if (voice) $.voiceSelect.value = voice;
 }
 
 function saveConfig() {
-  const key = document.getElementById('apiKey').value.trim();
-  if (key) localStorage.setItem('gemini-api-key', key);
-  localStorage.setItem('gemini-live-voice', document.getElementById('voiceSelect').value);
+  const key = $.apiKey.value.trim();
+  if (key) localStorage.setItem(CONFIG.localStorageKeys.apiKey, key);
+  localStorage.setItem(CONFIG.localStorageKeys.voice, $.voiceSelect.value);
 }
 
 // ── Logging ──
@@ -1222,11 +1300,13 @@ function addLog(type, html) {
              String(now.getSeconds()).padStart(2,'0') + '.' +
              String(now.getMilliseconds()).padStart(3,'0').slice(0,2);
   el.innerHTML = `<span class="log-time">${ts}</span><span class="log-dot ${type}"></span><span class="log-text">${html}</span>`;
-  const container = document.getElementById('logEntries');
-  container.appendChild(el);
-  container.scrollTop = container.scrollHeight;
+  $.logEntries.appendChild(el);
+  $.logEntries.scrollTop = $.logEntries.scrollHeight;
 }
-function clearLog() { document.getElementById('logEntries').innerHTML = ''; }
+function logError(msg, err) {
+  addLog('err', escapeHtml(msg + (err ? ': ' + err.message : '')));
+}
+function clearLog() { $.logEntries.innerHTML = ''; }
 
 // ── Format helpers ──
 function fmtBytes(b) {
@@ -1235,18 +1315,18 @@ function fmtBytes(b) {
   return (b / 1048576).toFixed(2) + ' MB';
 }
 function updateStats() {
-  document.getElementById('fFrames').textContent = totalFrames;
-  document.getElementById('fBytes').textContent = fmtBytes(totalBytes);
-  const dur = totalSamples / 24000;
-  document.getElementById('fDuration').textContent = dur.toFixed(1) + 's';
+  $.fFrames.textContent = totalFrames;
+  $.fBytes.textContent = fmtBytes(totalBytes);
+  const dur = totalSamples / CONFIG.sourceRate;
+  $.fDuration.textContent = dur.toFixed(1) + 's';
   if (totalFrames > 0) {
-    document.getElementById('fFrames').classList.add('active');
-    document.getElementById('fBytes').classList.add('active');
-    document.getElementById('fDuration').classList.add('active');
+    $.fFrames.classList.add('active');
+    $.fBytes.classList.add('active');
+    $.fDuration.classList.add('active');
   }
 }
 function setState(s) {
-  const el = document.getElementById('fState');
+  const el = $.fState;
   el.textContent = s;
   el.classList.toggle('active', s !== 'idle' && s !== 'closed');
 }
@@ -1255,7 +1335,7 @@ function setState(s) {
 // AILANG's startSession() calls connect → transmit(setup) → onEvent → runEventLoop → disconnect.
 // JS effect handlers bridge these to the browser WebSocket API.
 async function reconnect() {
-  const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini-api-key');
+  const key = $.apiKey.value.trim() || localStorage.getItem(CONFIG.localStorageKeys.apiKey);
   if (!key) { toggleConfig(); addLog('warn', 'Enter your Gemini API key'); return; }
   saveConfig();
 
@@ -1269,27 +1349,28 @@ async function reconnect() {
   updateStats();
   setState('connecting');
 
-  document.getElementById('sendBtn').disabled = true;
-  document.getElementById('textInput').disabled = true;
+  $.sendBtn.disabled = true;
+  $.textInput.disabled = true;
 
   await initAudio();
 
-  const voice = document.getElementById('voiceSelect').value;
-  const instruction = 'You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.';
+  const voice = $.voiceSelect.value;
+  const instruction = CONFIG.systemInstruction;
 
-  sessionPrompt = 'Hello!';
+  sessionPrompt = CONFIG.initialPrompt;
+  deactivateFallbackMode();
   addLog('info', 'Starting AILANG streaming session (std/stream effects)...');
 
   try {
     // AILANG drives the entire session: connect → setup → event loop → disconnect
-    const result = await wasmEngine.callAsync(WASM_MODULE, 'startSession', key, voice, instruction, sessionPrompt);
+    const result = await wasmEngine.callAsync(CONFIG.wasmModule, 'startSession', key, voice, instruction, sessionPrompt);
     if (!result.success) {
-      addLog('err', 'AILANG session error: ' + (result.error || 'unknown'));
+      logError('AILANG session: ' + (result.error || 'unknown'));
     } else {
       addLog('info', 'AILANG session ended: <span class="val">' + (result.result || 'complete') + '</span>');
     }
   } catch (e) {
-    addLog('err', 'AILANG session failed: ' + e.message);
+    logError('AILANG session failed', e);
   }
 
   sessionReady = false;
@@ -1302,8 +1383,8 @@ let _statsRafPending = false;
 function handleAudioFrame(b64) {
   if (totalFrames === 0 && promptSentAt > 0) {
     const latency = Date.now() - promptSentAt;
-    document.getElementById('fLatency').textContent = latency + 'ms';
-    document.getElementById('fLatency').classList.add('active');
+    $.fLatency.textContent = latency + 'ms';
+    $.fLatency.classList.add('active');
     addLog('info', 'First audio in <span class="val">' + latency + 'ms</span>');
   }
   totalFrames++;
@@ -1321,6 +1402,9 @@ function handleAudioFrame(b64) {
   // Save a copy for VU meter + waveform before buffer transfer detaches it
   lastPcmChunk = new Int16Array(pcm16);
 
+  // Feed network arrival envelope for scope visualization
+  notifyAudioArrival(sampleCount);
+
   // Enqueue immediately — this is the critical path
   // (postMessage transfers buffer ownership, so pcm16.length becomes 0 after this)
   enqueueAudio(pcm16);
@@ -1332,8 +1416,8 @@ function handleAudioFrame(b64) {
       _statsRafPending = false;
       if (lastPcmChunk) updateVU(lastPcmChunk);
       updateStats();
-      document.getElementById('scopeFrame').classList.add('active');
-      document.getElementById('scopeIdle').classList.add('hidden');
+      $.scopeFrame.classList.add('active');
+      $.scopeIdle.classList.add('hidden');
     });
   }
 
@@ -1343,15 +1427,20 @@ function handleAudioFrame(b64) {
 }
 
 // ── Audio playback ──
+let analyserNode = null;
 async function initAudio() {
   if (audioCtx) return;
-  audioCtx = new AudioContext({ sampleRate: 48000 });
+  audioCtx = new AudioContext({ sampleRate: CONFIG.playbackRate });
   await audioCtx.audioWorklet.addModule('../shared/audio-worklet.js');
   playbackNode = new AudioWorkletNode(audioCtx, 'pcm-playback', {
-    processorOptions: { sourceRate: 24000 }
+    processorOptions: { sourceRate: CONFIG.sourceRate }
   });
-  playbackNode.connect(audioCtx.destination);
-  addLog('ok', 'Audio engine initialized — <span class="val">24kHz → 48kHz</span>');
+  // AnalyserNode taps the actual audio output for waveform visualization
+  analyserNode = audioCtx.createAnalyser();
+  analyserNode.fftSize = CONFIG.fftSize;
+  playbackNode.connect(analyserNode);
+  analyserNode.connect(audioCtx.destination);
+  addLog('ok', 'Audio engine initialized — <span class="val">' + CONFIG.sourceRate/1000 + 'kHz → ' + CONFIG.playbackRate/1000 + 'kHz</span>');
 }
 function enqueueAudio(pcm16) {
   if (!playbackNode) return;
@@ -1366,13 +1455,13 @@ function updateVU(pcm16) {
   const db = rms > 0 ? 20 * Math.log10(rms) : -60;
   const clamped = Math.max(-60, Math.min(0, db));
   const pct = ((clamped + 60) / 60) * 100;
-  document.getElementById('vuFill').style.width = pct + '%';
-  document.getElementById('vuDb').textContent = db > -60 ? db.toFixed(1) + ' dB' : '-∞ dB';
+  $.vuFill.style.width = pct + '%';
+  $.vuDb.textContent = db > -60 ? db.toFixed(1) + ' dB' : '-∞ dB';
 }
 
 // ── Send text — builds message via AILANG, sends through AILANG-managed WebSocket ──
 async function sendText() {
-  const input = document.getElementById('textInput');
+  const input = $.textInput;
   const text = input.value.trim();
   if (!text || !sessionReady) return;
 
@@ -1383,8 +1472,8 @@ async function sendText() {
   await initAudio();
   totalFrames = 0; totalBytes = 0; totalSamples = 0;
   promptSentAt = Date.now();
-  document.getElementById('fLatency').textContent = '—';
-  document.getElementById('fLatency').classList.remove('active');
+  $.fLatency.textContent = '—';
+  $.fLatency.classList.remove('active');
   updateStats();
   if (playbackNode) playbackNode.port.postMessage({ command: 'clear' });
 
@@ -1398,11 +1487,11 @@ async function sendText() {
 
   input.value = '';
   input.disabled = true;
-  document.getElementById('sendBtn').disabled = true;
+  $.sendBtn.disabled = true;
   setState('streaming');
-  document.getElementById('scopeIdle').textContent = 'receiving audio';
-  document.getElementById('scopeIdle').classList.remove('hidden');
-  setTimeout(() => document.getElementById('scopeIdle').classList.add('hidden'), 1500);
+  $.scopeIdle.textContent = 'receiving audio';
+  $.scopeIdle.classList.remove('hidden');
+  setTimeout(() => $.scopeIdle.classList.add('hidden'), 1500);
 }
 
 function escapeHtml(s) {
@@ -1412,8 +1501,9 @@ function escapeHtml(s) {
 }
 
 // ── Microphone capture ──
+let micAnalyserNode = null;
 async function toggleMic() {
-  const btn = document.getElementById('micBtn');
+  const btn = $.micBtn;
   if (isRecording) {
     isRecording = false;
     btn.classList.remove('active');
@@ -1429,8 +1519,12 @@ async function toggleMic() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const source = captureCtx.createMediaStreamSource(stream);
+    // AnalyserNode on mic input for waveform visualization
+    micAnalyserNode = captureCtx.createAnalyser();
+    micAnalyserNode.fftSize = CONFIG.fftSize;
+    source.connect(micAnalyserNode);
     captureNode = new AudioWorkletNode(captureCtx, 'pcm-capture', {
-      processorOptions: { targetRate: 16000 }
+      processorOptions: { targetRate: CONFIG.micRate }
     });
     source.connect(captureNode);
     captureNode.port.onmessage = (e) => {
@@ -1449,7 +1543,7 @@ async function toggleMic() {
     };
     isRecording = true;
     btn.classList.add('active');
-    addLog('ok', 'Mic active — streaming audio at 16kHz');
+    addLog('ok', 'Mic active — streaming audio at ' + CONFIG.micRate/1000 + 'kHz');
     if (!Object.values(connections).find(c => c.ws && c.ws.readyState === 1)) reconnect();
   } catch (e) {
     addLog('err', 'Mic access denied: ' + e.message);
@@ -1457,141 +1551,113 @@ async function toggleMic() {
 }
 
 // ── Waveform visualization ──
+// Triple-trace scope: playback output (amber), mic input (cyan), network arrival (green).
 const canvas = document.getElementById('waveform');
 const ctx = canvas.getContext('2d');
 let animId = null;
-let waveData = new Float32Array(1024).fill(0);
-let targetWave = new Float32Array(1024).fill(0);
+// Network arrival: rolling RMS envelope (decays between frames)
+let arrivalEnvelope = 0;
 
 function resizeCanvas() {
   const rect = canvas.parentElement.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   canvas.width = rect.width * dpr;
-  canvas.height = 180 * dpr;
-  canvas.style.height = '180px';
+  canvas.height = CONFIG.canvasHeight * dpr;
+  canvas.style.height = CONFIG.canvasHeight + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function drawGrid() {
   const w = canvas.width / (window.devicePixelRatio || 1);
-  const h = 180;
-
-  // Subtle grid lines
+  const h = CONFIG.canvasHeight;
   ctx.strokeStyle = 'rgba(212,160,70,0.04)';
   ctx.lineWidth = 0.5;
-
-  // Horizontal grid
   for (let i = 1; i < 6; i++) {
     const y = (h / 6) * i;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
-
-  // Vertical grid
   const cols = Math.floor(w / 40);
   for (let i = 1; i < cols; i++) {
     const x = (w / cols) * i;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
   }
-
-  // Center line (brighter)
   ctx.strokeStyle = 'rgba(212,160,70,0.08)';
   ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+}
+
+// Draw a single waveform trace
+function drawTrace(waveData, w, h, mid, color, glowColor, lineWidth) {
+  // Glow
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = glowColor;
+  ctx.lineWidth = lineWidth + 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, h / 2);
-  ctx.lineTo(w, h / 2);
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor((i / w) * waveData.length);
+    const y = mid + waveData[idx] * mid * 0.85;
+    if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+  // Main line
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor((i / w) * waveData.length);
+    const y = mid + waveData[idx] * mid * 0.85;
+    if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+  }
   ctx.stroke();
 }
 
 function drawWaveform() {
   const w = canvas.width / (window.devicePixelRatio || 1);
-  const h = 180;
+  const h = CONFIG.canvasHeight;
   const mid = h / 2;
 
   ctx.clearRect(0, 0, w, h);
   drawGrid();
 
-  // Interpolate toward target
-  for (let i = 0; i < waveData.length; i++) {
-    waveData[i] += (targetWave[i] - waveData[i]) * 0.18;
+  // 1. Network arrival envelope — green bar along bottom edge
+  arrivalEnvelope *= 0.92;  // decay
+  if (arrivalEnvelope > 0.01) {
+    const barH = Math.min(arrivalEnvelope * 40, 8);
+    ctx.fillStyle = 'rgba(74,222,128,' + Math.min(arrivalEnvelope * 2, 0.5) + ')';
+    ctx.fillRect(0, h - barH, w, barH);
+    ctx.fillStyle = 'rgba(74,222,128,0.08)';
+    ctx.fillRect(0, h - barH - 2, w, 2);
   }
 
-  // Glow layer
-  ctx.shadowColor = 'rgba(212,160,70,0.3)';
-  ctx.shadowBlur = 8;
-  ctx.strokeStyle = 'rgba(212,160,70,0.25)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  for (let i = 0; i < w; i++) {
-    const idx = Math.floor((i / w) * waveData.length);
-    const y = mid + waveData[idx] * mid * 0.85;
-    if (i === 0) ctx.moveTo(i, y);
-    else ctx.lineTo(i, y);
-  }
-  ctx.stroke();
-
-  // Main line
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(212,160,70,0.7)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let i = 0; i < w; i++) {
-    const idx = Math.floor((i / w) * waveData.length);
-    const y = mid + waveData[idx] * mid * 0.85;
-    if (i === 0) ctx.moveTo(i, y);
-    else ctx.lineTo(i, y);
-  }
-  ctx.stroke();
-
-  // Bright peak dots
-  ctx.fillStyle = 'rgba(232,184,90,0.6)';
-  for (let i = 0; i < w; i += 6) {
-    const idx = Math.floor((i / w) * waveData.length);
-    const val = Math.abs(waveData[idx]);
-    if (val > 0.3) {
-      const y = mid + waveData[idx] * mid * 0.85;
-      const r = val * 1.5;
-      ctx.beginPath();
-      ctx.arc(i, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  // 2. Playback output — amber (primary trace)
+  if (analyserNode) {
+    const playData = new Float32Array(analyserNode.fftSize);
+    analyserNode.getFloatTimeDomainData(playData);
+    drawTrace(playData, w, h, mid,
+      'rgba(212,160,70,0.7)', 'rgba(212,160,70,0.25)', 1.5);
   }
 
-  // Decay toward silence
-  for (let i = 0; i < targetWave.length; i++) {
-    targetWave[i] *= 0.97;
+  // 3. Mic input — cyan (when recording)
+  if (micAnalyserNode && isRecording) {
+    const micData = new Float32Array(micAnalyserNode.fftSize);
+    micAnalyserNode.getFloatTimeDomainData(micData);
+    drawTrace(micData, w, h, mid,
+      'rgba(56,189,248,0.5)', 'rgba(56,189,248,0.15)', 1);
   }
 
   animId = requestAnimationFrame(drawWaveform);
 }
 
-// Feed PCM into waveform target
-function feedWaveform(pcm16) {
-  const len = targetWave.length;
-  const step = Math.max(1, Math.floor(pcm16.length / len));
-  for (let i = 0; i < len; i++) {
-    const idx = Math.min(i * step, pcm16.length - 1);
-    targetWave[i] = pcm16[idx] / 32768;
-  }
+// Called when audio frames arrive from network — feeds the arrival envelope
+function notifyAudioArrival(sampleCount) {
+  arrivalEnvelope = Math.min(arrivalEnvelope + (sampleCount / 2400), 1.0);
 }
 
-// Watch for new PCM data
-let lastFedFrame = 0;
-setInterval(() => {
-  if (lastPcmChunk && totalFrames > lastFedFrame) {
-    feedWaveform(lastPcmChunk);
-    lastFedFrame = totalFrames;
-  }
-}, 50);
-
 // ── Keyboard ──
-document.getElementById('textInput').addEventListener('keydown', (e) => {
+$.textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendText();
@@ -1600,6 +1666,7 @@ document.getElementById('textInput').addEventListener('keydown', (e) => {
 
 // ── Init ──
 window.addEventListener('load', async () => {
+  cacheDom();
   loadConfig();
   resizeCanvas();
   drawWaveform();
