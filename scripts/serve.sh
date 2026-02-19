@@ -14,12 +14,18 @@ mkdir -p "$SITE"
 # Hub page
 cp "$REPO_ROOT/site/index.html" "$SITE/"
 
+# Shared WASM runtime (top-level, used by all demos)
+ln -s "$REPO_ROOT/wasm" "$SITE/wasm"
+
 # WASM demos (rename index.html → extractor.html)
-# Use symlinks for css/, js/, wasm/, ailang/, assets/ so edits are live
-for item in css js wasm ailang assets sunholo-logo.svg; do
+# Use symlinks for css/, js/, ailang/, assets/ so edits are live
+for item in css js ailang assets sunholo-logo.svg; do
   [ -e "$REPO_ROOT/invoice_processor_wasm/$item" ] && \
     ln -s "$REPO_ROOT/invoice_processor_wasm/$item" "$SITE/$item"
 done
+# Demo-specific AILANG module alongside WASM runtime
+[ -f "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" ] && \
+  ln -sf "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" "$SITE/wasm/"
 # Copy HTML files (rename index → extractor)
 cp "$REPO_ROOT/invoice_processor_wasm/index.html" "$SITE/extractor.html"
 for f in docparse.html verify.html contracts-ai.html; do

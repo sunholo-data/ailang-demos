@@ -97,12 +97,25 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     this.writePos = 0;       // next write position in ring
     this.readPos = 0.0;      // fractional read position for interpolation
     this.buffered = 0;       // samples available to read
+    this.lastSample = 0;     // for smooth fade-out when buffer runs dry
 
     // Pre-buffer: accumulate this many source samples before starting playback
-    // ~200ms at 24kHz = 4800 samples — absorbs network jitter
-    this.preBufferSamples = Math.floor(this.sourceRate * 0.2);
+    // ~300ms at 24kHz = 7200 samples — absorbs network + event loop jitter
+    // (Firefox needs more buffer than Chrome due to higher setTimeout minimums)
+    this.preBufferSamples = Math.floor(this.sourceRate * 0.3);
+    // Resume threshold: after mid-stream underrun, accumulate this much before resuming.
+    // Much smaller than initial pre-buffer (100ms vs 300ms) to minimize silence gaps,
+    // but large enough to prevent repeated stutter from 1-sample resumes.
+    this.resumeThreshold = Math.floor(this.sourceRate * 0.1);
     this.isPreBuffering = true;
     this.hasStarted = false;    // true after first playback begins (never re-primes)
+
+    // Fade-out: samples of exponential decay when buffer runs dry.
+    // Prevents clicks/pops at end of sentences when frames slow down.
+    // 64 samples at 48kHz ≈ 1.3ms — inaudible but eliminates transients.
+    this.fadeLen = 64;
+    this.fadePos = 0;
+    this.isFading = false;
 
     this.port.onmessage = (e) => {
       if (e.data.type === 'enqueue') {
@@ -118,9 +131,11 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
           this.isPreBuffering = false;
           this.hasStarted = true;
         }
-        // After first start, resume immediately on new data (no re-priming)
-        if (this.hasStarted && this.isPreBuffering && this.buffered > 0) {
+        // After first start, resume once resume threshold is reached.
+        // Prevents repeated stutter from resuming with just 1 sample.
+        if (this.hasStarted && this.isPreBuffering && this.buffered >= this.resumeThreshold) {
           this.isPreBuffering = false;
+          this.isFading = false; // cancel any in-progress fade-out
         }
       } else if (e.data.command === 'clear') {
         this.writePos = 0;
@@ -148,7 +163,26 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < outputData.length; i++) {
+      if (this.isFading) {
+        // Exponential fade-out to silence — prevents end-of-sentence clicks
+        const gain = 1 - (this.fadePos / this.fadeLen);
+        outputData[i] = this.lastSample * gain * gain; // quadratic for fast taper
+        this.fadePos++;
+        if (this.fadePos >= this.fadeLen) {
+          this.isFading = false;
+          this.lastSample = 0;
+        }
+        continue;
+      }
+
       if (this.buffered <= 1) {
+        // Buffer dry — start fade-out from last sample value
+        if (this.lastSample !== 0 && !this.isFading) {
+          this.isFading = true;
+          this.fadePos = 0;
+          i--; // re-process this sample in fade path
+          continue;
+        }
         outputData[i] = 0;
         continue;
       }
@@ -158,7 +192,9 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
       const idx0 = Math.floor(idx) % len;
       const idx1 = (idx0 + 1) % len;
       const frac = idx - Math.floor(idx);
-      outputData[i] = this.ring[idx0] * (1 - frac) + this.ring[idx1] * frac;
+      const sample = this.ring[idx0] * (1 - frac) + this.ring[idx1] * frac;
+      outputData[i] = sample;
+      this.lastSample = sample;
 
       this.readPos += ratio;
       this.buffered -= ratio;

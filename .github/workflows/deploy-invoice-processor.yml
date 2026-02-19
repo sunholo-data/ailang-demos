@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'wasm/**'
       - 'invoice_processor_wasm/**'
       - 'docparse/**'
       - 'verify_demo/**'
@@ -35,7 +36,7 @@ jobs:
       - name: Download AILANG WASM tarball
         run: |
           set -euo pipefail
-          WASM_DIR="invoice_processor_wasm/wasm"
+          WASM_DIR="wasm"
           mkdir -p "$WASM_DIR"
 
           echo "::group::Fetching latest AILANG release info"
@@ -93,7 +94,7 @@ jobs:
       - name: Verify WASM files
         run: |
           set -euo pipefail
-          WASM_DIR="invoice_processor_wasm/wasm"
+          WASM_DIR="wasm"
           echo "::group::File listing"
           ls -lh "$WASM_DIR/"
           echo "::endgroup::"
@@ -186,9 +187,16 @@ jobs:
           # Hub page
           cp site/index.html _site/
 
+          # Shared WASM runtime (used by all demos)
+          cp -r wasm _site/wasm
+
           # WASM demos (rename index.html → extractor.html)
-          cp -r invoice_processor_wasm/* _site/
+          # Exclude wasm/ dir (shared runtime is top-level now)
+          rsync -a --exclude='wasm/' invoice_processor_wasm/ _site/
           mv _site/index.html _site/extractor.html
+
+          # Demo-specific AILANG module alongside WASM runtime
+          cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
 
           # Streaming shared assets
           mkdir -p _site/streaming/shared
