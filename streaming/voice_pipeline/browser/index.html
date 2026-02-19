@@ -1136,20 +1136,20 @@ function saveConfig() {
   const elKey = document.getElementById('elKeyInput').value.trim();
   const voiceId = document.getElementById('voiceIdInput').value.trim();
   const dgModel = document.getElementById('dgModelInput').value.trim();
-  if (dgKey) localStorage.setItem('vp_dg_key', dgKey);
-  if (elKey) localStorage.setItem('vp_el_key', elKey);
+  if (dgKey) localStorage.setItem('deepgram-api-key', dgKey);
+  if (elKey) localStorage.setItem('elevenlabs-api-key', elKey);
   if (voiceId) localStorage.setItem('vp_voice_id', voiceId);
   if (dgModel) localStorage.setItem('vp_dg_model', dgModel);
 }
 
 function getDgKey() {
   return document.getElementById('dgKeyInput').value.trim() ||
-         localStorage.getItem('vp_dg_key') || '';
+         localStorage.getItem('deepgram-api-key') || '';
 }
 
 function getElKey() {
   return document.getElementById('elKeyInput').value.trim() ||
-         localStorage.getItem('vp_el_key') || '';
+         localStorage.getItem('elevenlabs-api-key') || '';
 }
 
 function getVoiceId() {
@@ -1164,8 +1164,10 @@ function getDgModel() {
 
 // Load saved config
 document.addEventListener('DOMContentLoaded', () => {
-  const dgKey = localStorage.getItem('vp_dg_key');
-  const elKey = localStorage.getItem('vp_el_key');
+  if (!localStorage.getItem('deepgram-api-key') && localStorage.getItem('vp_dg_key')) localStorage.setItem('deepgram-api-key', localStorage.getItem('vp_dg_key'));
+  if (!localStorage.getItem('elevenlabs-api-key') && localStorage.getItem('vp_el_key')) localStorage.setItem('elevenlabs-api-key', localStorage.getItem('vp_el_key'));
+  const dgKey = localStorage.getItem('deepgram-api-key');
+  const elKey = localStorage.getItem('elevenlabs-api-key');
   const voiceId = localStorage.getItem('vp_voice_id');
   const dgModel = localStorage.getItem('vp_dg_model');
   if (dgKey) document.getElementById('dgKeyInput').value = dgKey;

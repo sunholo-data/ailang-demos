@@ -1,4 +1,4 @@
-name: Deploy Invoice Processor to GitHub Pages
+name: Deploy AILANG Demos to GitHub Pages
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
       - 'invoice_processor_wasm/**'
       - 'docparse/**'
       - 'verify_demo/**'
+      - 'streaming/**'
+      - 'site/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -176,13 +178,42 @@ jobs:
           cp docparse/data/test_files/track_changes_move.docx invoice_processor_wasm/assets/
           echo "Copied $(ls invoice_processor_wasm/assets/*.docx invoice_processor_wasm/assets/*.pptx invoice_processor_wasm/assets/*.xlsx 2>/dev/null | wc -l) demo Office files to assets/"
 
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+
+          # Hub page
+          cp site/index.html _site/
+
+          # WASM demos (rename index.html → extractor.html)
+          cp -r invoice_processor_wasm/* _site/
+          mv _site/index.html _site/extractor.html
+
+          # Streaming shared assets
+          mkdir -p _site/streaming/shared
+          cp streaming/shared/audio-worklet.js _site/streaming/shared/
+          cp streaming/shared/nav.js _site/streaming/shared/
+
+          # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
+          for demo in claude_chat gemini_live safe_agent transcription \
+                      voice_analytics voice_docparse voice_pipeline; do
+            mkdir -p "_site/streaming/${demo}"
+            cp "streaming/${demo}/browser/index.html" "_site/streaming/${demo}/"
+          done
+
+          echo "::group::Site contents"
+          find _site -type f | head -60
+          echo "::endgroup::"
+          echo "Assembled $(find _site -type f | wc -l) files into _site/"
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'invoice_processor_wasm'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment

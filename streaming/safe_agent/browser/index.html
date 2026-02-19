@@ -1177,7 +1177,7 @@
     <div class="config-row">
       <label>Model</label>
       <input type="text" class="config-input" id="modelInput"
-             value="models/gemini-2.0-flash-exp" autocomplete="off"
+             value="models/gemini-2.5-flash-preview-04-17" autocomplete="off"
              onchange="saveConfig()">
     </div>
   </div>
@@ -1403,24 +1403,25 @@ function toggleConfig() {
 function saveConfig() {
   const key = document.getElementById('apiKeyInput').value.trim();
   const model = document.getElementById('modelInput').value.trim();
-  if (key) localStorage.setItem('ailang_safe_agent_key', key);
+  if (key) localStorage.setItem('gemini-api-key', key);
   if (model) localStorage.setItem('ailang_safe_agent_model', model);
 }
 
 function getApiKey() {
   return document.getElementById('apiKeyInput').value.trim() ||
-         localStorage.getItem('ailang_safe_agent_key') || '';
+         localStorage.getItem('gemini-api-key') || '';
 }
 
 function getModel() {
   return document.getElementById('modelInput').value.trim() ||
          localStorage.getItem('ailang_safe_agent_model') ||
-         'models/gemini-2.0-flash-exp';
+         'models/gemini-2.5-flash-preview-04-17';
 }
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
-  const savedKey = localStorage.getItem('ailang_safe_agent_key');
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('ailang_safe_agent_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('ailang_safe_agent_key'));
+  const savedKey = localStorage.getItem('gemini-api-key');
   const savedModel = localStorage.getItem('ailang_safe_agent_model');
   if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
   if (savedModel) document.getElementById('modelInput').value = savedModel;

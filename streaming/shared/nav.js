@@ -1,7 +1,8 @@
 // ================================================================
-// AILANG Streaming Demos — Shared Navigation
+// AILANG Demos — Unified Navigation
 // ================================================================
-// Include via <script src="../shared/nav.js"></script> at end of body.
+// Include via <script src="streaming/shared/nav.js"></script> (from site root)
+// or <script src="../shared/nav.js"></script> (from streaming/demo/).
 // Injects a floating AILANG logo button that expands to show all demos.
 
 (function () {
@@ -14,22 +15,58 @@
     '<circle cx="153" cy="150" r="80" fill="#e73c17"/>' +
     '</svg>';
 
-  var DEMOS = [
-    { name: 'All Demos',      href: '../index.html',                         icon: '\u2302', color: '#e73c17' },
-    { name: 'Voice DocParse', href: '../voice_docparse/browser/index.html',  icon: '\uD83D\uDCC4', color: '#4a9eff' },
-    { name: 'Voice Analytics',href: '../voice_analytics/browser/index.html', icon: '\uD83D\uDCCA', color: '#10b981' },
-    { name: 'Claude Chat',    href: '../claude_chat/browser/index.html',     icon: '\uD83D\uDCAC', color: '#d4a046' },
-    { name: 'Transcription',  href: '../transcription/browser/index.html',   icon: '\uD83C\uDF99', color: '#00e5c8' },
-    { name: 'Voice Pipeline', href: '../voice_pipeline/browser/index.html',  icon: '\u26A1', color: '#9a6aef' },
-    { name: 'Safe Agent',     href: '../safe_agent/browser/index.html',      icon: '\uD83D\uDEE1', color: '#22c55e' },
-    { name: 'Gemini Live',   href: '../gemini_live/browser/index.html',     icon: '\uD83D\uDD0A', color: '#d4a046' },
+  // Detect base path to site root from the script's own src attribute
+  var scripts = document.getElementsByTagName('script');
+  var thisScript = scripts[scripts.length - 1];
+  var src = thisScript.getAttribute('src') || '';
+  // src is like "streaming/shared/nav.js" or "../shared/nav.js" or "../../streaming/shared/nav.js"
+  var base = src.replace(/streaming\/shared\/nav\.js.*$/, '').replace(/\.\.\/shared\/nav\.js.*$/, '../').replace(/\/+$/, '');
+  if (base === '' || base === '.') base = '.';
+  // For streaming demos: base will be ".." (up from streaming/demo/ to streaming/, then we need to go up one more)
+  // Actually, let's compute it differently:
+  // If src contains "../shared/nav.js", we're inside streaming/demo/, root is "../../"
+  // If src contains "streaming/shared/nav.js", we're at site root
+  if (src.indexOf('../shared/nav.js') !== -1) {
+    base = '../..';
+  } else if (src.indexOf('streaming/shared/nav.js') !== -1) {
+    base = '.';
+  } else {
+    base = '.';
+  }
+
+  var SECTIONS = [
+    {
+      title: 'Documents',
+      demos: [
+        { name: 'Hub',               href: base + '/index.html',                       icon: '\u2302', color: '#e73c17' },
+        { name: 'Extractor',         href: base + '/extractor.html',                   icon: '\uD83D\uDCC4', color: '#e73c17' },
+        { name: 'DocParse',          href: base + '/docparse.html',                    icon: '\uD83D\uDCC3', color: '#2563eb' },
+        { name: 'Z3 Verify',         href: base + '/verify.html',                     icon: '\uD83D\uDEE1', color: '#7c3aed' },
+        { name: 'AI + Contracts',    href: base + '/contracts-ai.html',               icon: '\u2714', color: '#8b5cf6' },
+      ]
+    },
+    {
+      title: 'Streaming',
+      demos: [
+        { name: 'Voice DocParse',    href: base + '/streaming/voice_docparse/index.html',  icon: '\uD83D\uDCC4', color: '#4a9eff' },
+        { name: 'Voice Analytics',   href: base + '/streaming/voice_analytics/index.html', icon: '\uD83D\uDCCA', color: '#10b981' },
+        { name: 'Claude Chat',       href: base + '/streaming/claude_chat/index.html',     icon: '\uD83D\uDCAC', color: '#d4a046' },
+        { name: 'Gemini Live',       href: base + '/streaming/gemini_live/index.html',     icon: '\uD83D\uDD0A', color: '#d4a046' },
+        { name: 'Safe Agent',        href: base + '/streaming/safe_agent/index.html',      icon: '\uD83D\uDEE1', color: '#22c55e' },
+        { name: 'Transcription',     href: base + '/streaming/transcription/index.html',   icon: '\uD83C\uDF99', color: '#00e5c8' },
+        { name: 'Voice Pipeline',    href: base + '/streaming/voice_pipeline/index.html',  icon: '\u26A1', color: '#9a6aef' },
+      ]
+    }
   ];
 
-  // Detect current demo from URL to highlight it
-  var path = window.location.pathname;
+  // Detect current page
+  var loc = window.location.pathname;
   function isCurrent(href) {
-    var norm = href.replace(/\.\.\//g, '');
-    return path.includes(norm.replace('index.html', '').replace('/browser/', '/'));
+    // Normalize both paths: strip base prefix, trailing index.html
+    var h = href.replace(/^\.\.?\/?/, '').replace(/\/index\.html$/, '/').replace(/\.html$/, '');
+    var l = loc.replace(/\/index\.html$/, '/').replace(/\.html$/, '');
+    if (h === '' || h === '/' || h === '.') return l === '/' || l.endsWith('/index') || l === '';
+    return l.indexOf(h) !== -1;
   }
 
   // --- Inject styles ---
@@ -87,6 +124,8 @@
       border-radius: 14px;\
       padding: 8px;\
       min-width: 220px;\
+      max-height: calc(100vh - 120px);\
+      overflow-y: auto;\
       box-shadow: 0 8px 40px rgba(0,0,0,0.6);\
       opacity: 0;\
       visibility: hidden;\
@@ -98,13 +137,14 @@
       visibility: visible;\
       transform: translateY(0) scale(1);\
     }\
+    #ailang-nav-panel::-webkit-scrollbar { width: 4px; }\
+    #ailang-nav-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }\
     \
     #ailang-nav-panel .nav-header {\
       display: flex;\
       align-items: center;\
       gap: 8px;\
       padding: 6px 10px 4px;\
-      margin: 0;\
     }\
     #ailang-nav-panel .nav-header svg {\
       width: 18px;\
@@ -119,11 +159,21 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\
     }\
     \
+    #ailang-nav-panel .nav-section-title {\
+      font-size: 9px;\
+      font-weight: 600;\
+      text-transform: uppercase;\
+      letter-spacing: 1.5px;\
+      color: rgba(255,255,255,0.3);\
+      padding: 8px 10px 2px;\
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\
+    }\
+    \
     #ailang-nav-panel a.nav-item {\
       display: flex;\
       align-items: center;\
       gap: 10px;\
-      padding: 8px 10px;\
+      padding: 7px 10px;\
       border-radius: 8px;\
       text-decoration: none;\
       color: rgba(255,255,255,0.75);\
@@ -143,8 +193,8 @@
       font-weight: 500;\
     }\
     #ailang-nav-panel a.nav-item .nav-icon {\
-      font-size: 16px;\
-      width: 24px;\
+      font-size: 15px;\
+      width: 22px;\
       text-align: center;\
       flex-shrink: 0;\
     }\
@@ -168,7 +218,7 @@
   var toggle = document.createElement('button');
   toggle.id = 'ailang-nav-toggle';
   toggle.innerHTML = LOGO_SVG;
-  toggle.title = 'AILANG Streaming Demos';
+  toggle.title = 'AILANG Demos';
   toggle.setAttribute('aria-label', 'Toggle demo navigation');
 
   var panel = document.createElement('div');
@@ -180,37 +230,46 @@
   header.innerHTML = LOGO_SVG.replace('width="28"', 'width="18"').replace('height="28"', 'height="18"');
   var headerText = document.createElement('span');
   headerText.className = 'nav-header-text';
-  headerText.textContent = 'AILANG Streaming';
+  headerText.textContent = 'AILANG Demos';
   header.appendChild(headerText);
   panel.appendChild(header);
 
-  DEMOS.forEach(function (demo, i) {
-    if (i === 1) {
+  SECTIONS.forEach(function (section, si) {
+    // Separator between sections
+    if (si > 0) {
       var sep = document.createElement('div');
       sep.className = 'nav-sep';
       panel.appendChild(sep);
     }
 
-    var a = document.createElement('a');
-    a.className = 'nav-item';
-    a.href = demo.href;
-    if (isCurrent(demo.href)) a.classList.add('current');
+    // Section title
+    var title = document.createElement('div');
+    title.className = 'nav-section-title';
+    title.textContent = section.title;
+    panel.appendChild(title);
 
-    var icon = document.createElement('span');
-    icon.className = 'nav-icon';
-    icon.textContent = demo.icon;
+    section.demos.forEach(function (demo) {
+      var a = document.createElement('a');
+      a.className = 'nav-item';
+      a.href = demo.href;
+      if (isCurrent(demo.href)) a.classList.add('current');
 
-    var label = document.createElement('span');
-    label.textContent = demo.name;
+      var icon = document.createElement('span');
+      icon.className = 'nav-icon';
+      icon.textContent = demo.icon;
 
-    var dot = document.createElement('span');
-    dot.className = 'nav-dot';
-    dot.style.background = demo.color;
+      var label = document.createElement('span');
+      label.textContent = demo.name;
 
-    a.appendChild(icon);
-    a.appendChild(label);
-    a.appendChild(dot);
-    panel.appendChild(a);
+      var dot = document.createElement('span');
+      dot.className = 'nav-dot';
+      dot.style.background = demo.color;
+
+      a.appendChild(icon);
+      a.appendChild(label);
+      a.appendChild(dot);
+      panel.appendChild(a);
+    });
   });
 
   document.body.appendChild(panel);

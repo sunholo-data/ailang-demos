@@ -611,17 +611,18 @@ function toggleConfig() {
 
 function saveApiKey() {
   const key = document.getElementById('apiKeyInput').value.trim();
-  if (key) localStorage.setItem('ailang_claude_key', key);
+  if (key) localStorage.setItem('anthropic-api-key', key);
 }
 
 function getApiKey() {
   return document.getElementById('apiKeyInput').value.trim() ||
-         localStorage.getItem('ailang_claude_key') || '';
+         localStorage.getItem('anthropic-api-key') || '';
 }
 
 // Load saved key
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('ailang_claude_key');
+  if (!localStorage.getItem('anthropic-api-key') && localStorage.getItem('ailang_claude_key')) localStorage.setItem('anthropic-api-key', localStorage.getItem('ailang_claude_key'));
+  const saved = localStorage.getItem('anthropic-api-key');
   if (saved) document.getElementById('apiKeyInput').value = saved;
   document.getElementById('inputField').focus();
 });

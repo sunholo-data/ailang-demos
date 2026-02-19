@@ -169,7 +169,7 @@
     transition: max-height 0.35s ease, padding 0.35s ease;
     padding: 0 24px;
   }
-  .config.open { max-height: 90px; padding: 14px 24px; }
+  .config.open { max-height: 160px; padding: 14px 24px; }
 
   .config-row {
     display: flex;
@@ -422,6 +422,46 @@
     align-items: center;
   }
 
+  .mic-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .mic-btn:hover { border-color: var(--border-warm); color: var(--amber); }
+  .mic-btn.active {
+    border-color: var(--red);
+    background: var(--red-dim);
+    color: var(--red);
+    animation: micPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+
+  .config-select {
+    flex: 1;
+    background: var(--bg-void);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .config-select:focus { border-color: var(--border-warm); }
+
   .text-input {
     flex: 1;
     background: var(--bg-deep);
@@ -543,7 +583,7 @@
   <div class="header">
     <div class="header-left">
       <div class="logo">AILANG<span>×</span>Gemini Live</div>
-      <span class="badge badge-model">gemini-live-2.5-flash-native-audio</span>
+      <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
       <span class="badge badge-wss" id="wssBadge"><span class="dot"></span>WSS</span>
     </div>
     <div class="header-right">
@@ -559,6 +599,41 @@
       <input type="password" class="config-input" id="apiKey"
              placeholder="Gemini API key (AI Studio)"
              value="">
+    </div>
+    <div class="config-row" style="margin-top:8px">
+      <label>Voice</label>
+      <select class="config-select" id="voiceSelect" onchange="saveConfig()">
+        <option value="Sulafat">Sulafat (Warm)</option>
+        <option value="Zephyr">Zephyr (Bright)</option>
+        <option value="Puck">Puck (Upbeat)</option>
+        <option value="Charon">Charon (Informative)</option>
+        <option value="Kore">Kore (Firm)</option>
+        <option value="Fenrir">Fenrir (Excitable)</option>
+        <option value="Leda">Leda (Youthful)</option>
+        <option value="Orus">Orus (Firm)</option>
+        <option value="Aoede">Aoede (Breezy)</option>
+        <option value="Callirrhoe">Callirrhoe (Easy-going)</option>
+        <option value="Autonoe">Autonoe (Bright)</option>
+        <option value="Enceladus">Enceladus (Breathy)</option>
+        <option value="Iapetus">Iapetus (Clear)</option>
+        <option value="Umbriel">Umbriel (Easy-going)</option>
+        <option value="Algieba">Algieba (Smooth)</option>
+        <option value="Despina">Despina (Smooth)</option>
+        <option value="Erinome">Erinome (Clear)</option>
+        <option value="Algenib">Algenib (Gravelly)</option>
+        <option value="Rasalgethi">Rasalgethi (Informative)</option>
+        <option value="Laomedeia">Laomedeia (Upbeat)</option>
+        <option value="Achernar">Achernar (Soft)</option>
+        <option value="Alnilam">Alnilam (Firm)</option>
+        <option value="Schedar">Schedar (Even)</option>
+        <option value="Gacrux">Gacrux (Mature)</option>
+        <option value="Pulcherrima">Pulcherrima (Forward)</option>
+        <option value="Achird">Achird (Friendly)</option>
+        <option value="Zubenelgenubi">Zubenelgenubi (Casual)</option>
+        <option value="Vindemiatrix">Vindemiatrix (Gentle)</option>
+        <option value="Sadachbia">Sadachbia (Lively)</option>
+        <option value="Sadaltager">Sadaltager (Knowledgeable)</option>
+      </select>
     </div>
     <div class="config-warn">
       API calls go directly from your browser to Google's API. Key is stored in localStorage.
@@ -595,8 +670,9 @@
   <!-- ── Input ── -->
   <div class="input-area">
     <div class="input-row">
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">🎤</button>
       <input type="text" class="text-input" id="textInput"
-             placeholder="Type a message to hear Gemini speak..."
+             placeholder="Type or speak to Gemini..."
              disabled>
       <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
     </div>
@@ -637,8 +713,11 @@
 // ═══════════════════════════════════════════════════
 
 let ws = null;
-let audioCtx = null;
+let audioCtx = null;      // 48kHz for playback
+let captureCtx = null;     // native rate for mic capture
 let playbackNode = null;
+let captureNode = null;
+let isRecording = false;
 let sessionReady = false;
 let promptSentAt = 0;
 let totalFrames = 0;
@@ -653,13 +732,17 @@ function toggleConfig() {
 }
 
 function loadConfig() {
-  const saved = localStorage.getItem('gemini_live_key');
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_live_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_live_key'));
+  const saved = localStorage.getItem('gemini-api-key');
   if (saved) document.getElementById('apiKey').value = saved;
+  const voice = localStorage.getItem('gemini-live-voice');
+  if (voice) document.getElementById('voiceSelect').value = voice;
 }
 
 function saveConfig() {
   const key = document.getElementById('apiKey').value.trim();
-  if (key) localStorage.setItem('gemini_live_key', key);
+  if (key) localStorage.setItem('gemini-api-key', key);
+  localStorage.setItem('gemini-live-voice', document.getElementById('voiceSelect').value);
 }
 
 // ── Logging ──
@@ -710,7 +793,7 @@ function setState(s) {
 // ── WebSocket ──
 function reconnect() {
   if (ws) { ws.close(); ws = null; }
-  const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini_live_key');
+  const key = document.getElementById('apiKey').value.trim() || localStorage.getItem('gemini-api-key');
   if (!key) {
     toggleConfig();
     addLog('warn', 'Enter your Gemini API key');
@@ -739,13 +822,24 @@ function reconnect() {
     sendSetup();
   };
 
-  ws.onmessage = (e) => {
-    // In browser, Gemini Live sends text frames with JSON
+  ws.onmessage = async (e) => {
+    // Gemini Live may send text or binary (Blob) frames
+    let text;
+    if (typeof e.data === 'string') {
+      text = e.data;
+    } else if (e.data instanceof Blob) {
+      text = await e.data.text();
+    } else if (e.data instanceof ArrayBuffer) {
+      text = new TextDecoder().decode(e.data);
+    } else {
+      addLog('err', 'Unknown message type');
+      return;
+    }
     try {
-      const data = JSON.parse(e.data);
+      const data = JSON.parse(text);
       handleServerMessage(data);
     } catch (err) {
-      addLog('err', 'Failed to parse message');
+      addLog('err', 'Failed to parse message: ' + text.substring(0, 80));
     }
   };
 
@@ -765,19 +859,29 @@ function reconnect() {
 
 function sendSetup() {
   if (!ws) return;
+  const voice = document.getElementById('voiceSelect').value;
   const setup = {
     setup: {
-      model: 'models/gemini-live-2.5-flash-native-audio',
+      model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
       generationConfig: {
-        responseModalities: ['AUDIO']
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: voice
+            }
+          }
+        }
       },
       systemInstruction: {
-        parts: [{ text: 'You are a friendly, expressive assistant. Keep responses short and conversational. Speak naturally.' }]
-      }
+        parts: [{ text: 'You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.' }]
+      },
+      outputAudioTranscription: {},
+      inputAudioTranscription: {}
     }
   };
   ws.send(JSON.stringify(setup));
-  addLog('info', 'Setup sent — <span class="hl">AUDIO</span> modality');
+  addLog('info', 'Setup sent — <span class="hl">AUDIO</span> modality, voice: <span class="val">' + voice + '</span>');
 }
 
 function handleServerMessage(data) {
@@ -807,9 +911,23 @@ function handleServerMessage(data) {
       return;
     }
 
+    // Input audio transcription (what user said)
+    if (sc.inputTranscription && sc.inputTranscription.text) {
+      addLog('info', 'You said: <span class="val">' + escapeHtml(sc.inputTranscription.text) + '</span>');
+    }
+
+    // Output audio transcription (what model said)
+    if (sc.outputTranscription && sc.outputTranscription.text) {
+      addLog('info', 'Model: <span class="val">' + escapeHtml(sc.outputTranscription.text) + '</span>');
+    }
+
     // modelTurn with audio parts
     if (sc.modelTurn && sc.modelTurn.parts) {
       sc.modelTurn.parts.forEach(part => {
+        // Text parts (transcription or text-mode response)
+        if (part.text) {
+          addLog('info', 'Transcript: <span class="val">' + escapeHtml(part.text) + '</span>');
+        }
         if (part.inlineData && part.inlineData.data) {
           // First audio frame — record latency
           if (totalFrames === 0 && promptSentAt > 0) {
@@ -941,6 +1059,61 @@ function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// ── Microphone capture ──
+async function toggleMic() {
+  const btn = document.getElementById('micBtn');
+  if (isRecording) {
+    isRecording = false;
+    btn.classList.remove('active');
+    if (captureNode) captureNode.port.postMessage({ command: 'stop' });
+    addLog('info', 'Mic stopped');
+    return;
+  }
+
+  // Init playback audio context (for output)
+  await initAudio();
+
+  // Init separate capture context at native sample rate (mic requires matching rate)
+  if (!captureCtx) {
+    captureCtx = new AudioContext();
+    await captureCtx.audioWorklet.addModule('../shared/audio-worklet.js');
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = captureCtx.createMediaStreamSource(stream);
+    captureNode = new AudioWorkletNode(captureCtx, 'pcm-capture', {
+      processorOptions: { targetRate: 16000 }
+    });
+    source.connect(captureNode);
+    captureNode.port.onmessage = (e) => {
+      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === 1 && sessionReady) {
+        const bytes = new Uint8Array(e.data.pcmData);
+        let b = '';
+        for (let i = 0; i < bytes.length; i++) b += String.fromCharCode(bytes[i]);
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{
+              mimeType: 'audio/pcm;rate=16000',
+              data: btoa(b)
+            }]
+          }
+        }));
+      }
+    };
+    isRecording = true;
+    btn.classList.add('active');
+    addLog('ok', 'Mic active — streaming audio at 16kHz');
+
+    // Connect to Gemini if not already connected
+    if (!ws || ws.readyState !== 1) {
+      reconnect();
+    }
+  } catch (e) {
+    addLog('err', 'Mic access denied: ' + e.message);
+  }
 }
 
 // ── Waveform visualization ──
@@ -1092,7 +1265,7 @@ window.addEventListener('load', () => {
   drawWaveform();
 
   addLog('info', 'Gemini Live text-to-audio demo');
-  addLog('info', 'Model: <span class="hl">gemini-live-2.5-flash-native-audio</span>');
+  addLog('info', 'Model: <span class="hl">gemini-2.5-flash-native-audio</span>');
   addLog('info', 'Click <span class="val">Connect</span> to start');
 });
 

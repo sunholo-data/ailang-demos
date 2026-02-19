@@ -1,4 +1,5 @@
 -- Workaround test for Bug 5: passthrough error type
+-- Updated 2026-02-19: Use typed record config (API changed from string to record)
 module streaming/bug_repros/test_workaround5
 
 import std/stream (sseConnect, transmit, StreamConn, StreamErrorKind)
@@ -7,7 +8,7 @@ import std/result (Ok, Err)
 -- Workaround: return Result[StreamConn, StreamErrorKind] instead of Result[StreamConn, string]
 -- Don't change the error type in the match
 func connectService(url: string) -> Result[StreamConn, StreamErrorKind] ! {Stream} {
-  let config = "{}";
+  let config = {headers: []};
   match sseConnect(url, config) {
     Ok(conn) => {
       let _ = transmit(conn, "hello");

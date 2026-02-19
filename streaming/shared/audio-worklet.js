@@ -90,24 +90,38 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     super();
     // Source sample rate of incoming PCM (default 24kHz for Gemini output)
     this.sourceRate = options?.processorOptions?.sourceRate || 24000;
-    // Queue of audio buffers to play
-    this.queue = [];
-    this.currentBuffer = null;
-    this.currentOffset = 0;
+
+    // Ring buffer: 10 seconds at source rate should be plenty
+    const bufSize = this.sourceRate * 10;
+    this.ring = new Float32Array(bufSize);
+    this.writePos = 0;       // next write position in ring
+    this.readPos = 0.0;      // fractional read position for interpolation
+    this.buffered = 0;       // samples available to read
+
+    // Pre-buffer: accumulate this many source samples before starting playback
+    // ~150ms at 24kHz = 3600 samples — absorbs network jitter
+    this.preBufferSamples = Math.floor(this.sourceRate * 0.15);
+    this.isPreBuffering = true;
 
     this.port.onmessage = (e) => {
       if (e.data.type === 'enqueue') {
-        // Receive PCM 16-bit data and convert to float32
         const pcm16 = new Int16Array(e.data.pcmData);
-        const float32 = new Float32Array(pcm16.length);
+        const len = this.ring.length;
         for (let i = 0; i < pcm16.length; i++) {
-          float32[i] = pcm16[i] / 0x8000;
+          this.ring[this.writePos % len] = pcm16[i] / 0x8000;
+          this.writePos++;
         }
-        this.queue.push(float32);
+        this.buffered += pcm16.length;
+        // Start playback once pre-buffer is filled
+        if (this.isPreBuffering && this.buffered >= this.preBufferSamples) {
+          this.isPreBuffering = false;
+        }
       } else if (e.data.command === 'clear') {
-        this.queue = [];
-        this.currentBuffer = null;
-        this.currentOffset = 0;
+        this.writePos = 0;
+        this.readPos = 0.0;
+        this.buffered = 0;
+        this.ring.fill(0);
+        this.isPreBuffering = true;
       }
     };
   }
@@ -118,32 +132,35 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
 
     const outputData = output[0];
     const ratio = this.sourceRate / sampleRate;
+    const len = this.ring.length;
 
-    for (let i = 0; i < outputData.length; i++) {
-      // Get next sample from queue
-      if (!this.currentBuffer || this.currentOffset >= this.currentBuffer.length) {
-        if (this.queue.length > 0) {
-          this.currentBuffer = this.queue.shift();
-          this.currentOffset = 0;
-        } else {
-          // Silence when no audio queued
-          outputData[i] = 0;
-          continue;
-        }
-      }
-
-      // Resample from sourceRate to audioContext.sampleRate
-      const srcIdx = Math.floor(this.currentOffset);
-      if (srcIdx < this.currentBuffer.length) {
-        outputData[i] = this.currentBuffer[srcIdx];
-      } else {
-        outputData[i] = 0;
-      }
-      this.currentOffset += ratio;
+    // Don't play until pre-buffer is filled
+    if (this.isPreBuffering) {
+      outputData.fill(0);
+      return true;
     }
 
-    // Notify when queue is running low
-    if (this.queue.length === 0 && !this.currentBuffer) {
+    for (let i = 0; i < outputData.length; i++) {
+      if (this.buffered <= 1) {
+        outputData[i] = 0;
+        continue;
+      }
+
+      // Linear interpolation for smooth resampling
+      const idx = this.readPos;
+      const idx0 = Math.floor(idx) % len;
+      const idx1 = (idx0 + 1) % len;
+      const frac = idx - Math.floor(idx);
+      outputData[i] = this.ring[idx0] * (1 - frac) + this.ring[idx1] * frac;
+
+      this.readPos += ratio;
+      this.buffered -= ratio;
+    }
+
+    // Notify when buffer runs dry
+    if (this.buffered <= 0) {
+      this.buffered = 0;
+      this.isPreBuffering = true;
       this.port.postMessage({ type: 'queue-empty' });
     }
 

@@ -11,7 +11,7 @@ import std/string (startsWith)
 func testDefaultConfig() -> () ! {IO} {
   println("[Test 1] defaultConfig...");
   let cfg = defaultConfig(());
-  println("  Result: " ++ cfg);
+  println("  Result: " ++ show(cfg));
   println("  PASS");
   println("")
 }
@@ -117,7 +117,7 @@ func testTransmit() -> () ! {IO, Stream} {
 -- ============================================================================
 func testHeaders() -> () ! {IO, Stream} {
   println("[Test 8] Config with custom headers...");
-  let cfg = "{\"headers\":{\"X-Custom\":\"ailang-test\"}}";
+  let cfg = {headers: [{name: "X-Custom", value: "ailang-test"}]};
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
   println("  Connect with headers: " ++ show(conn));
   disconnect(conn);

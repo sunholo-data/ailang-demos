@@ -36,7 +36,7 @@
   .app {
     display: grid;
     grid-template-columns: 1fr 340px;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     height: 100vh;
   }
 
@@ -380,6 +380,9 @@
     .conversation { border-right: none; }
   }
 </style>
+<script src="../../wasm/wasm_exec.js"></script>
+<script src="../../wasm/ailang-repl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -387,7 +390,7 @@
   <div class="header">
     <div class="header-left">
       <div class="title">AILANG Voice DocParse</div>
-      <span class="badge badge-model">gemini-2.0-flash</span>
+      <span class="badge badge-model">gemini-live-2.5-flash</span>
       <span class="badge badge-ws">● WebSocket</span>
     </div>
     <div>
@@ -398,7 +401,7 @@
   <div class="config" id="config">
     <div class="config-row">
       <label>Gemini Key</label>
-      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="localStorage.setItem('gemini_key',this.value)">
+      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="localStorage.setItem('gemini-api-key',this.value)">
     </div>
   </div>
 
@@ -462,6 +465,26 @@ let isRecording = false;
 let audioCtx = null;
 let captureNode = null;
 let currentFile = null;
+let pendingText = null;   // queued text to send after setupComplete
+let sessionReady = false; // true after setupComplete received
+
+// WASM DocParse state
+let wasmEngine = null;
+let wasmReady = false;
+let wasmLoading = false;
+let docXml = {};          // extracted XML from ZIP: { 'word/document.xml': '...', ... }
+let docBlocks = null;     // cached parsed blocks JSON string
+const DOCPARSE_MODULE = 'docparse/services/docparse_browser';
+const DOCPARSE_MODULES = [
+  { name: 'docparse/types/document',           path: '../../ailang/docparse/types/document.ail' },
+  { name: 'docparse/services/format_router',    path: '../../ailang/docparse/services/format_router.ail' },
+  { name: 'docparse/services/zip_extract',      path: '../../ailang/docparse/services/zip_extract.ail' },
+  { name: 'docparse/services/docx_parser',      path: '../../ailang/docparse/services/docx_parser.ail' },
+  { name: 'docparse/services/pptx_parser',      path: '../../ailang/docparse/services/pptx_parser.ail' },
+  { name: 'docparse/services/xlsx_parser',      path: '../../ailang/docparse/services/xlsx_parser.ail' },
+  { name: 'docparse/services/output_formatter', path: '../../ailang/docparse/services/output_formatter.ail' },
+  { name: 'docparse/services/docparse_browser', path: '../../ailang/docparse/services/docparse_browser.ail' },
+];
 
 function toggleConfig() { document.getElementById('config').classList.toggle('open'); }
 
@@ -472,7 +495,7 @@ function handleDrop(e) {
   if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 }
 
-function handleFile(file) {
+async function handleFile(file) {
   if (!file) return;
   currentFile = file;
   const zone = document.getElementById('uploadZone');
@@ -486,6 +509,12 @@ function handleFile(file) {
   document.getElementById('fileMeta').textContent = `${formatBytes(file.size)} · ${file.type || 'unknown'}`;
 
   addLog('pending', `File loaded: ${file.name}`);
+
+  // Extract XML from ZIP for WASM parsing
+  await extractDocumentXml(file);
+
+  // Ensure WASM is loading
+  if (!wasmReady && !wasmLoading) initWASM();
 }
 
 function formatBytes(b) {
@@ -494,10 +523,187 @@ function formatBytes(b) {
   return (b/1048576).toFixed(1) + ' MB';
 }
 
+// ── WASM DocParse Engine ──
+async function initWASM() {
+  if (wasmReady || wasmLoading) return;
+  wasmLoading = true;
+  addLog('pending', 'Loading AILANG WASM runtime...');
+  try {
+    if (typeof AilangREPL === 'undefined') {
+      addLog('err', 'WASM runtime not available (ailang-repl.js not loaded)');
+      return;
+    }
+    const repl = new AilangREPL();
+    await repl.init('../../wasm/ailang.wasm');
+    for (const lib of ['std/json', 'std/option', 'std/result', 'std/string', 'std/math', 'std/xml', 'std/list', 'std/io']) {
+      repl.importModule(lib);
+    }
+    for (let i = 0; i < DOCPARSE_MODULES.length; i++) {
+      const mod = DOCPARSE_MODULES[i];
+      addLog('pending', `Loading ${mod.name.split('/').pop()} (${i+1}/${DOCPARSE_MODULES.length})`);
+      const resp = await fetch(mod.path + '?v=' + Date.now());
+      if (!resp.ok) throw new Error(`Failed to fetch ${mod.path}`);
+      const code = await resp.text();
+      const result = repl.loadModule(mod.name, code);
+      if (!result.success) throw new Error(`Module ${mod.name}: ${result.error}`);
+    }
+    wasmEngine = repl;
+    wasmReady = true;
+    addLog('ok', 'AILANG DocParse ready');
+  } catch (e) {
+    addLog('err', 'WASM init failed: ' + e.message);
+    console.error('WASM init error:', e);
+  } finally {
+    wasmLoading = false;
+  }
+}
+
+async function extractDocumentXml(file) {
+  docXml = {};
+  docBlocks = null;
+  const buffer = await file.arrayBuffer();
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (['docx', 'pptx', 'xlsx'].includes(ext)) {
+    addLog('pending', 'Extracting ZIP contents...');
+    const zip = await JSZip.loadAsync(buffer);
+    for (const entry of Object.keys(zip.files)) {
+      if (entry.endsWith('.xml') && !zip.files[entry].dir) {
+        try { docXml[entry] = await zip.files[entry].async('string'); } catch (e) { /* skip */ }
+      }
+    }
+    addLog('ok', `Extracted ${Object.keys(docXml).length} XML entries`);
+  }
+}
+
+function callAILANG(funcName, ...args) {
+  if (!wasmReady) return { success: false, error: 'WASM not ready' };
+  try {
+    const result = wasmEngine.call(DOCPARSE_MODULE, funcName, ...args);
+    if (!result.success) return { success: false, error: result.error };
+    let val = result.result || '';
+    const typeMatch = val.match(/^(.+) :: \w+$/s);
+    if (typeMatch) val = typeMatch[1];
+    if (val.startsWith('"') && val.endsWith('"')) {
+      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
+    }
+    return { success: true, result: val };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function ensureBlocksParsed() {
+  if (docBlocks) return true;
+  if (!currentFile) return false;
+  const ext = currentFile.name.split('.').pop().toLowerCase();
+  if (ext === 'docx' && docXml['word/document.xml']) {
+    const r = callAILANG('parseDocxBody', docXml['word/document.xml']);
+    if (r.success) { docBlocks = r.result; return true; }
+  } else if (ext === 'pptx') {
+    const slideXmls = Object.keys(docXml)
+      .filter(k => k.startsWith('ppt/slides/slide') && k.endsWith('.xml') && !k.includes('_rels'))
+      .sort();
+    const all = [];
+    for (const key of slideXmls) {
+      const r = callAILANG('parsePptxSlide', docXml[key]);
+      if (r.success) try { all.push(...JSON.parse(r.result)); } catch {}
+    }
+    docBlocks = JSON.stringify(all); return true;
+  } else if (ext === 'xlsx') {
+    const ss = docXml['xl/sharedStrings.xml'] || '';
+    const sheets = Object.keys(docXml)
+      .filter(k => k.startsWith('xl/worksheets/sheet') && k.endsWith('.xml'))
+      .sort();
+    const all = [];
+    for (const key of sheets) {
+      const r = callAILANG('parseXlsxSheet', docXml[key], ss, key);
+      if (r.success) try { all.push(...JSON.parse(r.result)); } catch {}
+    }
+    docBlocks = JSON.stringify(all); return true;
+  }
+  return false;
+}
+
+function getDocParseResult(toolName, toolArgs) {
+  if (!wasmReady) return 'AILANG WASM is still loading. Please wait and try again.';
+  if (!currentFile || Object.keys(docXml).length === 0) return 'No document uploaded. Please upload a DOCX, PPTX, or XLSX file first.';
+  if (!ensureBlocksParsed()) return 'Failed to parse document.';
+
+  let blocks;
+  try { blocks = JSON.parse(docBlocks); } catch { return 'Failed to parse document blocks.'; }
+
+  switch (toolName) {
+    case 'parseDocument': return blocksToText(blocks);
+    case 'extractTables': {
+      const tables = blocks.filter(b => b.type === 'table');
+      if (!tables.length) return 'No tables found in document.';
+      return `Found ${tables.length} table(s):\n\n` + tables.map((t, i) => {
+        const hdr = (t.headers || []).join(' | ');
+        const rows = (t.rows || []).map(r => (r || []).join(' | ')).join('\n');
+        return `Table ${i+1}:\n${hdr}\n${rows}`;
+      }).join('\n\n');
+    }
+    case 'extractHeadings': {
+      const h = blocks.filter(b => b.type === 'heading');
+      if (!h.length) return 'No headings found in document.';
+      return `Document outline (${h.length} headings):\n` + h.map((x, i) =>
+        `${'  '.repeat((x.level||1)-1)}${i+1}. ${x.text||''}`).join('\n');
+    }
+    case 'countContent': {
+      const c = { paragraph: 0, table: 0, image: 0, heading: 0 };
+      (function count(items) {
+        for (const b of items) {
+          if (b.type === 'text' || b.type === 'change') c.paragraph++;
+          else if (b.type === 'table') c.table++;
+          else if (b.type === 'image') c.image++;
+          else if (b.type === 'heading') c.heading++;
+          if (b.type === 'section' && b.blocks) count(b.blocks);
+        }
+      })(blocks);
+      document.getElementById('statParagraphs').textContent = c.paragraph;
+      document.getElementById('statTables').textContent = c.table;
+      document.getElementById('statImages').textContent = c.image;
+      document.getElementById('statHeadings').textContent = c.heading;
+      return `Document contains: ${c.paragraph} paragraphs, ${c.table} tables, ${c.image} images, ${c.heading} headings (${blocks.length} blocks total)`;
+    }
+    case 'searchDocument': {
+      const query = toolArgs?.query || '';
+      if (!query) return 'No search query provided.';
+      const lq = query.toLowerCase();
+      const matches = [];
+      blocks.forEach((b, i) => {
+        const text = b.text || '';
+        if (text.toLowerCase().includes(lq))
+          matches.push(`Block ${i+1} (${b.type}): ${text.substring(0, 120)}${text.length > 120 ? '...' : ''}`);
+      });
+      return matches.length ? `Found ${matches.length} match(es) for "${query}":\n` + matches.join('\n')
+        : `No matches found for "${query}".`;
+    }
+    default: return 'Unknown tool: ' + toolName;
+  }
+}
+
+function blocksToText(blocks) {
+  let md = '';
+  for (const b of blocks) {
+    if (b.type === 'heading') md += '#'.repeat(b.level||1) + ' ' + (b.text||'') + '\n\n';
+    else if (b.type === 'text') md += (b.text||'') + '\n\n';
+    else if (b.type === 'table') {
+      if (b.headers?.length) { md += '| ' + b.headers.join(' | ') + ' |\n'; md += '| ' + b.headers.map(() => '---').join(' | ') + ' |\n'; }
+      if (b.rows) for (const row of b.rows) md += '| ' + (row||[]).join(' | ') + ' |\n';
+      md += '\n';
+    } else if (b.type === 'image') md += `[Image: ${b.description||'embedded'}]\n\n`;
+    else if (b.type === 'section' && b.blocks) md += blocksToText(b.blocks);
+    else if (b.type === 'change') md += `[${b.changeType||'change'} by ${b.author||'unknown'}] ${b.text||''}\n\n`;
+  }
+  return md || 'Document parsed but no text content found.';
+}
+
 // ── WebSocket ──
 function connectGemini() {
-  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini_key');
-  if (!key) { toggleConfig(); return; }
+  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini-api-key');
+  if (!key) { addLog('err', 'No API key — open config to set one'); toggleConfig(); return; }
+  sessionReady = false;
 
   const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
   ws = new WebSocket(url);
@@ -508,14 +714,25 @@ function connectGemini() {
     sendSetup();
   };
 
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    handleServerMessage(data);
+  ws.onmessage = async (e) => {
+    let text;
+    if (typeof e.data === 'string') text = e.data;
+    else if (e.data instanceof Blob) text = await e.data.text();
+    else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
+    else return;
+    try { handleServerMessage(JSON.parse(text)); }
+    catch (err) { console.error('Failed to parse:', text.substring(0, 100)); }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    sessionReady = false;
     document.getElementById('fStreamStatus').textContent = 'disconnected';
-    addLog('err', 'WebSocket closed');
+    addLog('err', `WebSocket closed (code: ${e.code}${e.reason ? ', ' + e.reason : ''})`);
+  };
+
+  ws.onerror = (e) => {
+    addLog('err', 'WebSocket error');
+    console.error('WebSocket error:', e);
   };
 }
 
@@ -530,7 +747,7 @@ function sendSetup() {
 
   const setup = {
     setup: {
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-live-2.5-flash-preview',
       generationConfig: { responseModalities: ['TEXT'] },
       systemInstruction: { parts: [{ text: 'You are a document analyst. Use the available tools to parse and analyze documents. Summarize results clearly.' }] },
       tools: [{ functionDeclarations: tools }]
@@ -544,8 +761,15 @@ function handleServerMessage(data) {
   document.getElementById('fMessages').textContent = count;
 
   if (data.setupComplete) {
+    sessionReady = true;
     addLog('ok', 'Session ready');
     addAgentMessage('Ready! Ask me about your document.');
+    // Flush any queued text
+    if (pendingText) {
+      const text = pendingText;
+      pendingText = null;
+      sendMessage(text);
+    }
     return;
   }
 
@@ -555,13 +779,10 @@ function handleServerMessage(data) {
       const tc = parseInt(document.getElementById('fToolCalls').textContent) + 1;
       document.getElementById('fToolCalls').textContent = tc;
       addLog('pending', `Tool: ${call.name}`);
-      addToolCard(call.name, JSON.stringify(call.args || {}), 'Processing with DocParse...');
-      // In production, this would call AILANG WASM; for now mock a response
-      setTimeout(() => {
-        const mockResult = getMockResult(call.name);
-        addLog('ok', `${call.name} completed`);
-        sendToolResponse(call.id, mockResult);
-      }, 500);
+      const result = getDocParseResult(call.name, call.args);
+      addToolCard(call.name, JSON.stringify(call.args || {}), result);
+      addLog('ok', `${call.name} completed`);
+      sendToolResponse(call.id, result);
     });
     return;
   }
@@ -580,23 +801,6 @@ function sendToolResponse(id, result) {
   ws.send(JSON.stringify({
     toolResponse: { functionResponses: [{ id, name: '', response: { result } }] }
   }));
-}
-
-function getMockResult(name) {
-  const results = {
-    parseDocument: '# Document Content\n\n## Introduction\nThis is a sample document with multiple sections...',
-    extractTables: 'Found 3 tables:\n\nTable 1: Revenue by Quarter\n| Q1 | Q2 | Q3 | Q4 |\n| $1.2M | $1.5M | $1.8M | $2.1M |',
-    extractHeadings: 'Document outline (5 headings):\n1. Introduction\n2. Analysis\n3. Results\n4. Discussion\n5. Conclusion',
-    countContent: 'Document contains: 24 paragraphs, 3 tables, 2 images, 5 headings (34 blocks total)',
-    searchDocument: 'Found 2 matches for the query in paragraphs 3 and 7.'
-  };
-  if (name === 'countContent') {
-    document.getElementById('statParagraphs').textContent = '24';
-    document.getElementById('statTables').textContent = '3';
-    document.getElementById('statImages').textContent = '2';
-    document.getElementById('statHeadings').textContent = '5';
-  }
-  return results[name] || 'Tool executed successfully.';
 }
 
 // ── Chat UI ──
@@ -637,20 +841,28 @@ function scrollChat() {
 
 function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-function sendText() {
-  const input = document.getElementById('textInput');
-  const text = input.value.trim();
-  if (!text) return;
-  addUserMessage(text);
-  input.value = '';
-  if (!ws || ws.readyState !== 1) connectGemini();
-  if (ws && ws.readyState === 1) {
+function sendMessage(text) {
+  if (ws && ws.readyState === 1 && sessionReady) {
     ws.send(JSON.stringify({
       clientContent: {
         turns: [{ role: 'user', parts: [{ text }] }],
         turnComplete: true
       }
     }));
+  }
+}
+
+function sendText() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text) return;
+  addUserMessage(text);
+  input.value = '';
+  if (!ws || ws.readyState !== 1) {
+    pendingText = text;
+    connectGemini();
+  } else {
+    sendMessage(text);
   }
 }
 
@@ -671,7 +883,7 @@ async function toggleMic() {
     captureNode = new AudioWorkletNode(audioCtx, 'pcm-capture', { processorOptions: { targetRate: 16000 } });
     source.connect(captureNode);
     captureNode.port.onmessage = (e) => {
-      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === 1) {
+      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === 1 && sessionReady) {
         const b64 = arrayBufferToBase64(e.data.pcmData);
         ws.send(JSON.stringify({
           realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
@@ -704,8 +916,11 @@ function addLog(status, text) {
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
-  const k = localStorage.getItem('gemini_key');
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_key'));
+  const k = localStorage.getItem('gemini-api-key');
   if (k) document.getElementById('apiKey').value = k;
+  // Start loading AILANG WASM engine
+  initWASM();
 });
 </script>
 <script src="../shared/nav.js"></script>

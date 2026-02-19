@@ -830,19 +830,20 @@ function toggleConfig() {
 
 function saveApiKey() {
   const key = document.getElementById('apiKeyInput').value.trim();
-  if (key) localStorage.setItem('ailang_deepgram_key', key);
+  if (key) localStorage.setItem('deepgram-api-key', key);
 }
 
 function getApiKey() {
   return document.getElementById('apiKeyInput').value.trim() ||
-         localStorage.getItem('ailang_deepgram_key') || '';
+         localStorage.getItem('deepgram-api-key') || '';
 }
 
 // ================================================================
 // Initialization
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('ailang_deepgram_key');
+  if (!localStorage.getItem('deepgram-api-key') && localStorage.getItem('ailang_deepgram_key')) localStorage.setItem('deepgram-api-key', localStorage.getItem('ailang_deepgram_key'));
+  const saved = localStorage.getItem('deepgram-api-key');
   if (saved) document.getElementById('apiKeyInput').value = saved;
 
   initCanvas();

@@ -3,10 +3,9 @@
 -- the type checker unifies the Ok type with the Err type.
 --
 -- Expected: Result[StreamConn, string] works fine
--- Actual: "cannot unify type constructors: StreamConn vs string"
+-- Actual: Previously "cannot unify type constructors: StreamConn vs string"
 --
--- This is the same family as the Result[unit, X] bug (Bug 1),
--- but with an ADT type instead of unit.
+-- Updated 2026-02-19: Use typed record config (API changed from string to record)
 
 module streaming/bug_repros/bug5_result_adt_leak
 
@@ -14,9 +13,9 @@ import std/stream (sseConnect, transmit, StreamConn, StreamErrorKind)
 import std/result (Ok, Err)
 
 -- Matching sseConnect's Result[StreamConn, StreamErrorKind]
--- and returning Result[StreamConn, string] fails
+-- and returning Result[StreamConn, string] — does the type leak still happen?
 func connectService(url: string) -> Result[StreamConn, string] ! {Stream} {
-  let config = "{}";
+  let config = {headers: []};
   match sseConnect(url, config) {
     Ok(conn) => {
       let _ = transmit(conn, "hello");

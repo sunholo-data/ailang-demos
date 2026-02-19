@@ -57,8 +57,8 @@
   .btn-sm { font-family: var(--mono); font-size: 10px; padding: 4px 10px; background: none; border: 1px solid var(--border); color: var(--text-muted); border-radius: 3px; cursor: pointer; text-transform: uppercase; }
   .btn-sm:hover { border-color: var(--emerald-dim); color: var(--emerald); }
 
-  .config { background: var(--bg-primary); border-bottom: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s; padding: 0 20px; }
-  .config.open { max-height: 80px; padding: 10px 20px; }
+  .config { background: var(--bg-primary); border-bottom: 1px solid var(--border); max-height: 0; overflow: hidden; transition: max-height 0.4s, padding 0.3s; padding: 0 20px; }
+  .config.open { max-height: 260px; padding: 10px 20px; }
   .config-row { display: flex; gap: 10px; align-items: center; }
   .config-row label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-width: 70px; }
   .config-input { flex: 1; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 3px; font-family: var(--mono); font-size: 12px; outline: none; }
@@ -181,6 +181,7 @@
 
   @media (max-width: 600px) { .app { max-width: 100%; border: none; } .budget-bar { flex-wrap: wrap; gap: 10px; } }
 </style>
+<script src="https://accounts.google.com/gsi/client" async></script>
 </head>
 <body>
 
@@ -197,7 +198,24 @@
   <div class="config" id="cfg">
     <div class="config-row">
       <label>Gemini Key</label>
-      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="localStorage.setItem('gemini_key',this.value)">
+      <input type="password" class="config-input" id="apiKey" placeholder="Gemini API key..." onchange="localStorage.setItem('gemini-api-key',this.value)">
+    </div>
+    <div class="config-row" style="margin-top:6px;">
+      <label>Project ID</label>
+      <input class="config-input" id="projectId" placeholder="GCP project ID (for billing)" onchange="localStorage.setItem('gcp-project-id',this.value)">
+    </div>
+    <div class="config-row" style="margin-top:6px;">
+      <label>OAuth ID</label>
+      <input class="config-input" id="oauthClientId" placeholder="OAuth 2.0 Client ID" onchange="localStorage.setItem('gcp-oauth-client-id',this.value);initGoogleAuth()">
+    </div>
+    <div class="config-row" style="margin-top:6px;">
+      <label>Dataset</label>
+      <input class="config-input" id="dataset" placeholder="project.dataset" value="bigquery-public-data.ga4_obfuscated_sample_ecommerce" onchange="localStorage.setItem('bq-dataset',this.value)">
+    </div>
+    <div class="config-row" style="margin-top:8px;">
+      <label></label>
+      <button class="btn-sm" id="signInBtn" onclick="handleSignIn()" style="padding:6px 14px;">Sign in with Google</button>
+      <span id="authStatus" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);">Not signed in — queries use mock data</span>
     </div>
   </div>
 
@@ -247,7 +265,98 @@
 
 <script>
 let ws = null, isRecording = false, audioCtx = null, captureNode = null;
+let pendingText = null, sessionReady = false;
 let budgets = { stream: 0, net: 0 };
+let oauthToken = null, tokenClient = null;
+
+function getProjectId() { return document.getElementById('projectId')?.value || localStorage.getItem('gcp-project-id') || ''; }
+function getDataset() { return document.getElementById('dataset')?.value || localStorage.getItem('bq-dataset') || 'bigquery-public-data.ga4_obfuscated_sample_ecommerce'; }
+
+function initGoogleAuth() {
+  const clientId = document.getElementById('oauthClientId')?.value || localStorage.getItem('gcp-oauth-client-id');
+  if (!clientId || typeof google === 'undefined' || !google.accounts) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/bigquery.readonly',
+    callback: (resp) => {
+      if (resp.access_token) {
+        oauthToken = resp.access_token;
+        document.getElementById('authStatus').textContent = 'Signed in — real BigQuery queries enabled';
+        document.getElementById('authStatus').style.color = 'var(--emerald)';
+        document.getElementById('signInBtn').textContent = 'Re-auth';
+      }
+    }
+  });
+}
+
+function handleSignIn() {
+  if (!tokenClient) initGoogleAuth();
+  if (tokenClient) tokenClient.requestAccessToken();
+  else {
+    document.getElementById('authStatus').textContent = 'Enter OAuth Client ID first';
+    document.getElementById('authStatus').style.color = 'var(--amber)';
+  }
+}
+
+function buildSQL(name, args) {
+  const ds = getDataset();
+  const table = '`' + ds + '.events_*`';
+  const sqls = {
+    queryTopEvents: `SELECT event_name, COUNT(*) as cnt\nFROM ${table}\nGROUP BY event_name\nORDER BY cnt DESC\nLIMIT ${args?.limit || 10}`,
+    queryRevenue: `SELECT item_category, SUM(price * quantity) as revenue\nFROM ${table}, UNNEST(items)\nWHERE event_name = 'purchase'\nGROUP BY item_category\nORDER BY revenue DESC`,
+    queryFunnel: `SELECT event_name, COUNT(DISTINCT user_pseudo_id) as users\nFROM ${table}\nWHERE event_name IN ('page_view','add_to_cart','begin_checkout','purchase')\nGROUP BY event_name`,
+    querySessionMetrics: `SELECT\n  COUNT(DISTINCT user_pseudo_id) as users,\n  COUNT(*) as events\nFROM ${table}`,
+    runCustomQuery: args?.sql || 'SELECT 1'
+  };
+  return sqls[name] || 'SELECT 1';
+}
+
+async function runBigQuery(sql) {
+  const projectId = getProjectId();
+  if (!oauthToken || !projectId) return null;
+  try {
+    const resp = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(projectId)}/queries`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + oauthToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql, useLegacySql: false, maxResults: 100, timeoutMs: 30000 })
+      }
+    );
+    if (resp.status === 401) {
+      oauthToken = null;
+      document.getElementById('authStatus').textContent = 'Token expired — click Re-auth';
+      document.getElementById('authStatus').style.color = 'var(--amber)';
+      return null;
+    }
+    const data = await resp.json();
+    if (data.error) return 'BigQuery error: ' + (data.error.message || JSON.stringify(data.error));
+    return formatBQResult(data);
+  } catch (e) {
+    return 'Query failed: ' + e.message;
+  }
+}
+
+function formatBQResult(data) {
+  if (!data.rows || data.rows.length === 0) return 'Query returned 0 rows.';
+  const fields = (data.schema?.fields || []).map(f => f.name);
+  const rows = data.rows.map(r => r.f.map(c => c.v ?? ''));
+  let out = fields.join(' | ') + '\n' + fields.map(() => '---').join(' | ') + '\n';
+  for (const row of rows) out += row.join(' | ') + '\n';
+  out += `\n(${data.totalRows || rows.length} rows)`;
+  return out;
+}
+
+function getMockResult(name) {
+  const results = {
+    queryTopEvents: 'Top events: page_view (245K), session_start (180K), user_engagement (165K), scroll (98K), click (67K)',
+    queryRevenue: 'Revenue by category: Apparel $42K, Electronics $38K, Accessories $25K, Home $18K',
+    queryFunnel: 'Funnel: page_view 245K → add_to_cart 12K → begin_checkout 8.5K → purchase 5.2K (2.1% conversion)',
+    querySessionMetrics: 'Summary: 89K users, 1.2M events, 245K sessions, 5.2K purchases',
+    runCustomQuery: 'Query returned 15 rows.'
+  };
+  return results[name] || 'Done.';
+}
 
 function updateBudget(type, delta) {
   budgets[type] += delta;
@@ -260,8 +369,9 @@ function updateBudget(type, delta) {
 }
 
 function connectGemini() {
-  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini_key');
+  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini-api-key');
   if (!key) { document.getElementById('cfg').classList.add('open'); return; }
+  sessionReady = false;
   const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
   ws = new WebSocket(url);
   ws.onopen = () => {
@@ -269,13 +379,23 @@ function connectGemini() {
     updateBudget('stream', 1);
     sendSetup();
   };
-  ws.onmessage = (e) => {
+  ws.onmessage = async (e) => {
+    let text;
+    if (typeof e.data === 'string') text = e.data;
+    else if (e.data instanceof Blob) text = await e.data.text();
+    else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
+    else return;
     updateBudget('stream', 1);
     const inc = parseInt(document.getElementById('fMsgs').textContent) + 1;
     document.getElementById('fMsgs').textContent = inc;
-    handleMsg(JSON.parse(e.data));
+    try { handleMsg(JSON.parse(text)); }
+    catch (err) { console.error('Failed to parse:', text.substring(0, 100)); }
   };
-  ws.onclose = () => { document.getElementById('fStatus').textContent = 'disconnected'; };
+  ws.onclose = (e) => {
+    sessionReady = false;
+    document.getElementById('fStatus').textContent = 'disconnected';
+  };
+  ws.onerror = (e) => console.error('WebSocket error:', e);
 }
 
 function sendSetup() {
@@ -288,7 +408,7 @@ function sendSetup() {
   ];
   ws.send(JSON.stringify({
     setup: {
-      model: 'models/gemini-2.0-flash-exp',
+      model: 'models/gemini-live-2.5-flash-preview',
       generationConfig: { responseModalities: ['TEXT'] },
       systemInstruction: { parts: [{ text: 'You are a GA4 analytics assistant. Use BigQuery tools to answer questions about events, revenue, funnels, and sessions. Summarize results clearly.' }] },
       tools: [{ functionDeclarations: tools }]
@@ -296,50 +416,39 @@ function sendSetup() {
   }));
 }
 
-function handleMsg(data) {
-  if (data.setupComplete) { addAgent('Ready! Ask me about your analytics data.'); return; }
+async function handleMsg(data) {
+  if (data.setupComplete) {
+    sessionReady = true;
+    addAgent('Ready! Ask me about your analytics data.');
+    if (pendingText) { const t = pendingText; pendingText = null; sendMessage(t); }
+    return;
+  }
   if (data.toolCall) {
-    (data.toolCall.functionCalls || []).forEach(call => {
+    const calls = data.toolCall.functionCalls || [];
+    for (const call of calls) {
       const tc = parseInt(document.getElementById('fTools').textContent) + 1;
       document.getElementById('fTools').textContent = tc;
       document.getElementById('queryCount').textContent = tc;
       updateBudget('net', 1);
-      const sql = getMockSQL(call.name, call.args);
-      const result = getMockResult(call.name);
-      addQueryCard(call.name, sql, result);
-      setTimeout(() => {
-        ws.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { result } }] } }));
-        updateBudget('stream', 1);
-      }, 300);
-    });
+      const sql = buildSQL(call.name, call.args);
+      const card = addQueryCard(call.name, sql, 'Running query...');
+      let result;
+      if (oauthToken && getProjectId()) {
+        result = await runBigQuery(sql);
+        if (!result) result = getMockResult(call.name) + '\n(mock — auth expired)';
+      } else {
+        result = getMockResult(call.name) + '\n(mock — sign in for real data)';
+      }
+      updateCardResult(card, result);
+      ws.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { result } }] } }));
+      updateBudget('stream', 1);
+    }
     return;
   }
   if (data.serverContent) {
     if (data.serverContent.turnComplete) return;
     (data.serverContent?.modelTurn?.parts || []).forEach(p => { if (p.text) addAgent(p.text); });
   }
-}
-
-function getMockSQL(name, args) {
-  const sqls = {
-    queryTopEvents: `SELECT event_name, COUNT(*) as cnt\nFROM \`ga4_sample.events_*\`\nGROUP BY event_name\nORDER BY cnt DESC LIMIT ${args?.limit||10}`,
-    queryRevenue: `SELECT item_category, SUM(price*quantity) as revenue\nFROM \`ga4_sample.events_*\`, UNNEST(items)\nWHERE event_name='purchase'\nGROUP BY item_category`,
-    queryFunnel: `SELECT event_name, COUNT(DISTINCT user_pseudo_id)\nFROM \`ga4_sample.events_*\`\nWHERE event_name IN ('page_view','add_to_cart','begin_checkout','purchase')`,
-    querySessionMetrics: `SELECT COUNT(DISTINCT user_pseudo_id) as users,\n  COUNT(*) as events\nFROM \`ga4_sample.events_*\``,
-    runCustomQuery: args?.sql || 'SELECT ...'
-  };
-  return sqls[name] || 'SELECT ...';
-}
-
-function getMockResult(name) {
-  const results = {
-    queryTopEvents: 'Top events: page_view (245K), session_start (180K), user_engagement (165K), scroll (98K), click (67K)',
-    queryRevenue: 'Revenue by category: Apparel $42K, Electronics $38K, Accessories $25K, Home $18K',
-    queryFunnel: 'Funnel: page_view 245K → add_to_cart 12K → begin_checkout 8.5K → purchase 5.2K (2.1% conversion)',
-    querySessionMetrics: 'Summary: 89K users, 1.2M events, 245K sessions, 5.2K purchases',
-    runCustomQuery: 'Query returned 15 rows.'
-  };
-  return results[name] || 'Done.';
 }
 
 function addUser(text) {
@@ -361,13 +470,29 @@ function addAgent(text) {
 function addQueryCard(name, sql, result) {
   const el = document.createElement('div');
   el.className = 'msg msg-query';
-  el.innerHTML = `<div class="query-header">⚡ ${name}</div><div class="query-sql">${esc(sql)}</div><div class="query-result">${esc(result)}</div>`;
+  const resultEl = document.createElement('div');
+  resultEl.className = 'query-result';
+  resultEl.textContent = result;
+  el.innerHTML = `<div class="query-header">⚡ ${name}</div><div class="query-sql">${esc(sql)}</div>`;
+  el.appendChild(resultEl);
   document.getElementById('messages').appendChild(el);
   scroll();
+  return resultEl;
+}
+
+function updateCardResult(el, text) {
+  if (el) { el.textContent = text; scroll(); }
 }
 
 function scroll() { const m = document.getElementById('messages'); m.scrollTop = m.scrollHeight; }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function sendMessage(text) {
+  if (ws && ws.readyState === 1 && sessionReady) {
+    ws.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }));
+    updateBudget('stream', 1);
+  }
+}
 
 function sendText() {
   const input = document.getElementById('textInput');
@@ -375,10 +500,11 @@ function sendText() {
   if (!text) return;
   addUser(text);
   input.value = '';
-  if (!ws || ws.readyState !== 1) connectGemini();
-  if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } }));
-    updateBudget('stream', 1);
+  if (!ws || ws.readyState !== 1) {
+    pendingText = text;
+    connectGemini();
+  } else {
+    sendMessage(text);
   }
 }
 
@@ -397,7 +523,7 @@ async function toggleMic() {
     captureNode = new AudioWorkletNode(audioCtx, 'pcm-capture', { processorOptions: { targetRate: 16000 } });
     src.connect(captureNode);
     captureNode.port.onmessage = (e) => {
-      if (e.data.type === 'pcm-chunk' && ws?.readyState === 1) {
+      if (e.data.type === 'pcm-chunk' && ws?.readyState === 1 && sessionReady) {
         const bytes = new Uint8Array(e.data.pcmData);
         let b = ''; for (let i = 0; i < bytes.length; i++) b += String.fromCharCode(bytes[i]);
         ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: btoa(b) }] } }));
@@ -410,8 +536,17 @@ async function toggleMic() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const k = localStorage.getItem('gemini_key');
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_key'));
+  const k = localStorage.getItem('gemini-api-key');
   if (k) document.getElementById('apiKey').value = k;
+  const pid = localStorage.getItem('gcp-project-id');
+  if (pid) document.getElementById('projectId').value = pid;
+  const oid = localStorage.getItem('gcp-oauth-client-id');
+  if (oid) document.getElementById('oauthClientId').value = oid;
+  const ds = localStorage.getItem('bq-dataset');
+  if (ds) document.getElementById('dataset').value = ds;
+  // Init Google OAuth once GIS library loads
+  setTimeout(initGoogleAuth, 500);
 });
 </script>
 <script src="../shared/nav.js"></script>
