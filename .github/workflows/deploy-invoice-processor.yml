@@ -181,6 +181,15 @@ jobs:
             invoice_processor_wasm/ailang/streaming/claude_chat/services/
           cp streaming/claude_chat/services/claude_chat_browser.ail \
             invoice_processor_wasm/ailang/streaming/claude_chat/services/
+          # Safe Agent modules (contract-verified tools)
+          mkdir -p invoice_processor_wasm/ailang/streaming/safe_agent/types
+          mkdir -p invoice_processor_wasm/ailang/streaming/safe_agent/services
+          cp streaming/safe_agent/types/agent_types.ail \
+            invoice_processor_wasm/ailang/streaming/safe_agent/types/
+          cp streaming/safe_agent/services/verified_tools.ail \
+            invoice_processor_wasm/ailang/streaming/safe_agent/services/
+          cp streaming/safe_agent/services/safe_agent_browser.ail \
+            invoice_processor_wasm/ailang/streaming/safe_agent/services/
           echo "Copied streaming modules"
 
       - name: Copy demo Office files
@@ -203,9 +212,6 @@ jobs:
           rm -rf _site
           mkdir -p _site
 
-          # Hub page
-          cp site/index.html _site/
-
           # Shared WASM runtime (used by all demos)
           # Copy individual files to avoid dangling symlinks from checkout
           mkdir -p _site/wasm
@@ -215,6 +221,9 @@ jobs:
           # Exclude wasm/ dir (shared runtime is top-level now)
           rsync -a --exclude='wasm/' invoice_processor_wasm/ _site/
           mv _site/index.html _site/extractor.html
+
+          # Hub page (AFTER rsync+rename so it doesn't get overwritten)
+          cp site/index.html _site/
 
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
