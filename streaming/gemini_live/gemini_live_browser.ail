@@ -239,6 +239,70 @@ export pure func buildSetup(model: string, voice: string, instruction: string) -
     ]))
   ]))
 
+-- Build WebSocket setup message with tools (for tool-calling demos)
+-- toolsJson is a JSON string: [{"functionDeclarations": [...]}]
+export pure func buildSetupWithTools(model: string, voice: string, instruction: string, toolsJson: string) -> string {
+  let toolsVal = match decode(toolsJson) {
+    Ok(arr) => arr,
+    Err(_) => ja([])
+  };
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("tools", toolsVal),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
+  ]))
+}
+
+-- Start a Gemini Live session with tool declarations.
+-- Same as startSession but includes tools in the setup message.
+export func startSessionWithTools(apiKey: string, voice: string, instruction: string, prompt: string, toolsJson: string) -> string ! {Stream, IO} {
+  let model = defaultModel();
+  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
+
+  println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live (with tools)..."))])));
+
+  match connect(url, { headers: [] }) {
+    Ok(conn) => {
+      println(encode(jo([kv("type", js("log")), kv("text", js("Connected. Sending setup with tools..."))])));
+
+      let setupMsg = buildSetupWithTools(model, voice, instruction, toolsJson);
+      match transmit(conn, setupMsg) {
+        Ok(_) => {
+          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent with tools. Voice: " ++ voice))])));
+          onEvent(conn, \event. handleEvent(event, conn, prompt));
+          runEventLoop(conn);
+          disconnect(conn);
+          "session_complete"
+        },
+        Err(e) => {
+          println(encode(jo([kv("type", js("error")), kv("text", js("Setup transmit failed"))])));
+          "error"
+        }
+      }
+    },
+    Err(e) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed"))])));
+      "error"
+    }
+  }
+}
+
 -- Build text message (user typed input)
 export pure func buildTextMessage(text: string) -> string =
   encode(jo([

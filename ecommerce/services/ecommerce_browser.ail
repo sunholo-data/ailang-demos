@@ -1,0 +1,93 @@
+module ecommerce/services/ecommerce_browser
+
+-- Browser adapter for the GA4 ecommerce analytics demo.
+-- Wraps ga4_queries pure functions for WASM boundary (string in, JSON out).
+-- JavaScript handles BigQuery API calls; this module generates SQL.
+
+import std/json (encode, decode, jo, kv, js, ja, jnum, getString, getNumber)
+import std/string (length, stringToInt)
+import std/option (Some, None, getOrElse, isSome)
+import std/math (intToFloat)
+import ecommerce/services/ga4_queries (
+  ga4Table, topEventsQuery, eventCountsByDateQuery,
+  eventTrendQuery, topProductsByRevenueQuery,
+  revenueByCategoryQuery, purchaseFunnelQuery,
+  topCategoriesByViewsQuery, deviceBreakdownQuery,
+  geoDistributionQuery, browserBreakdownQuery,
+  sessionMetricsQuery, dailySummaryQuery
+)
+
+-- Route to the correct query function by name.
+-- arg1/arg2 are string-encoded parameters (ints as "10", dates as "20201101").
+-- Returns JSON: {"sql": "SELECT..."} or {"error": "..."}
+export pure func generateQuery(name: string, arg1: string, arg2: string) -> string {
+  match name {
+    "topEvents" => intQuery(name, arg1, 10),
+    "topProductsByRevenue" => intQuery(name, arg1, 10),
+    "topCategoriesByViews" => intQuery(name, arg1, 5),
+    "geoDistribution" => intQuery(name, arg1, 10),
+    "eventCountsByDate" => sqlResult(eventCountsByDateQuery(arg1, arg2)),
+    "dailySummary" => sqlResult(dailySummaryQuery(arg1, arg2)),
+    "eventTrend" => sqlResult(eventTrendQuery(arg1)),
+    "revenueByCategory" => sqlResult(revenueByCategoryQuery()),
+    "purchaseFunnel" => sqlResult(purchaseFunnelQuery()),
+    "deviceBreakdown" => sqlResult(deviceBreakdownQuery()),
+    "browserBreakdown" => sqlResult(browserBreakdownQuery()),
+    "sessionMetrics" => sqlResult(sessionMetricsQuery()),
+    _ => encode(jo([kv("error", js("Unknown query: " ++ name))]))
+  }
+}
+
+-- Helper: dispatch int-arg queries
+pure func intQuery(name: string, arg: string, fallback: int) -> string {
+  let limit = parseIntArg(arg, fallback);
+  match name {
+    "topEvents" => sqlResult(topEventsQuery(limit)),
+    "topProductsByRevenue" => sqlResult(topProductsByRevenueQuery(limit)),
+    "topCategoriesByViews" => sqlResult(topCategoriesByViewsQuery(limit)),
+    "geoDistribution" => sqlResult(geoDistributionQuery(limit)),
+    _ => encode(jo([kv("error", js("Unknown int query: " ++ name))]))
+  }
+}
+
+-- Parse an int from string, falling back to default
+pure func parseIntArg(s: string, fallback: int) -> int {
+  if length(s) == 0 then fallback
+  else match stringToInt(s) {
+    Some(n) => if n > 0 then n else fallback,
+    None => fallback
+  }
+}
+
+-- Wrap SQL string in JSON result
+pure func sqlResult(sql: string) -> string =
+  encode(jo([kv("sql", js(sql))]))
+
+-- Return available queries as JSON array for the UI dropdown
+export pure func getQueryList() -> string =
+  encode(ja([
+    queryInfo("topEvents", "Top Events by Count", "int", "limit"),
+    queryInfo("eventCountsByDate", "Event Counts by Date", "dateRange", ""),
+    queryInfo("eventTrend", "Event Trend Over Time", "string", "eventName"),
+    queryInfo("topProductsByRevenue", "Top Products by Revenue", "int", "limit"),
+    queryInfo("revenueByCategory", "Revenue by Category", "none", ""),
+    queryInfo("purchaseFunnel", "Purchase Funnel", "none", ""),
+    queryInfo("topCategoriesByViews", "Top Categories by Views", "int", "limit"),
+    queryInfo("deviceBreakdown", "Device Breakdown", "none", ""),
+    queryInfo("geoDistribution", "Geographic Distribution", "int", "limit"),
+    queryInfo("browserBreakdown", "Browser Breakdown", "none", ""),
+    queryInfo("sessionMetrics", "Session Metrics Summary", "none", ""),
+    queryInfo("dailySummary", "Daily Summary", "dateRange", "")
+  ]))
+
+pure func queryInfo(id: string, label: string, argType: string, argName: string) -> Json =
+  jo([
+    kv("id", js(id)),
+    kv("label", js(label)),
+    kv("argType", js(argType)),
+    kv("argName", js(argName))
+  ])
+
+-- Expose the GA4 dataset table path
+export pure func getTable() -> string =
+  encode(jo([kv("table", js(ga4Table()))]))

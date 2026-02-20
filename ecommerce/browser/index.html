@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG - GA4 BigQuery Analytics</title>
+<meta name="description" content="GA4 BigQuery analytics demo powered by AILANG — run locally via CLI">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #e73c17;
+    --primary-light: #f25d3b;
+    --primary-dark: #c43010;
+    --primary-faded: rgba(231, 60, 23, 0.08);
+    --charcoal: #314352;
+    --bg: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-input: #f1f5f9;
+    --border: #e2e8f0;
+    --text-primary: #1a202c;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --success: #059669;
+    --success-bg: #ecfdf5;
+    --teal: #0d9488;
+    --teal-bg: rgba(13, 148, 136, 0.08);
+    --blue: #2563eb;
+    --blue-bg: rgba(37, 99, 235, 0.08);
+    --purple: #7c3aed;
+    --purple-bg: rgba(124, 58, 237, 0.08);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(231, 60, 23, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(231, 60, 23, 0.015) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .header {
+    background: var(--charcoal);
+    color: #fff;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .header svg { width: 32px; height: 32px; flex-shrink: 0; }
+  .header-title { font-weight: 700; font-size: 16px; letter-spacing: -0.3px; }
+  .header-title .ai { color: var(--primary-light); }
+  .header-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 4px; }
+  .header-sub { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.55); }
+  .header-right { margin-left: auto; }
+  .header-right a { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.6); text-decoration: none; }
+  .header-right a:hover { color: #fff; }
+
+  .page { max-width: 780px; margin: 0 auto; padding: 48px 24px 64px; }
+
+  h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+  h1 .accent { color: var(--primary); }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 36px; }
+
+  h2 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 32px 0 12px; text-transform: uppercase; letter-spacing: 0.3px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.7; }
+
+  .code-block {
+    background: var(--charcoal);
+    color: #e2e8f0;
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .code-block .comment { color: #6b7f8e; }
+  .code-block .cmd { color: #7dd3fc; }
+  .code-block .flag { color: #fbbf24; }
+  .code-block .str { color: #86efac; }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .feature {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+  }
+  .feature-icon { font-size: 20px; margin-bottom: 8px; }
+  .feature-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .feature-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+  .badge { font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-right: 4px; }
+  .badge-cli { background: var(--success-bg); color: var(--success); }
+  .badge-wasm { background: var(--blue-bg); color: var(--blue); }
+  .badge-contracts { background: var(--purple-bg); color: var(--purple); }
+
+  .query-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  .query-table th { text-align: left; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; padding: 8px 12px; border-bottom: 2px solid var(--border); }
+  .query-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .query-table td:first-child { font-family: var(--font-mono); font-size: 12px; color: var(--teal); font-weight: 500; }
+  .query-table tr:last-child td { border-bottom: none; }
+  .query-table tr:hover { background: var(--bg-input); }
+
+  .screenshot {
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    margin-bottom: 32px;
+  }
+  .screenshot-caption {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin: -24px 0 32px;
+    font-style: italic;
+  }
+
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 24px; }
+  .back-link:hover { color: var(--primary); }
+
+  @media (max-width: 560px) { .feature-grid { grid-template-columns: 1fr; } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+    <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
+    <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
+    <circle cx="153" cy="150" r="80" fill="#e73c17"/>
+  </svg>
+  <span class="header-title"><span class="ai">AI</span>LANG</span>
+  <span class="header-sep"></span>
+  <span class="header-sub">GA4 Analytics</span>
+  <div class="header-right">
+    <a href="../">&larr; All Demos</a>
+  </div>
+</header>
+
+<div class="page">
+  <a href="../" class="back-link">&larr; Back to demos</a>
+
+  <h1><span class="accent">GA4</span> BigQuery Analytics</h1>
+  <p class="subtitle">
+    Query the Google Analytics 4 public dataset using AILANG &mdash;
+    with contract-verified SQL generation, capability budgets, and ADC authentication.
+  </p>
+
+  <div style="margin-bottom: 28px;">
+    <span class="badge badge-cli">CLI</span>
+    <span class="badge badge-contracts">Contracts</span>
+    <span class="badge badge-wasm">WASM-ready</span>
+  </div>
+
+  <img src="img/ecommerce-dashboard-ui.png" alt="GA4 Analytics Dashboard — AILANG ecommerce demo showing BigQuery queries, SQL generation, and chart visualization" class="screenshot">
+  <p class="screenshot-caption">The React dev UI &mdash; contract-verified SQL generation with live BigQuery results</p>
+
+  <div class="feature-grid">
+    <div class="feature">
+      <div class="feature-icon">&#9889;</div>
+      <div class="feature-name">14 Pre-built Queries</div>
+      <div class="feature-desc">Events, products, revenue, funnel, device, geo, session metrics &mdash; all type-checked and contract-verified</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128274;</div>
+      <div class="feature-name">Capability Budgets</div>
+      <div class="feature-desc">FS and Net effects are budget-limited: max 30 FS ops, 20 Net calls per run</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#9989;</div>
+      <div class="feature-name">Contract Verification</div>
+      <div class="feature-desc">Every query ensures result starts with SELECT and is &gt;50 characters</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128736;</div>
+      <div class="feature-name">ADC Authentication</div>
+      <div class="feature-desc">Uses Application Default Credentials &mdash; no API keys to manage</div>
+    </div>
+  </div>
+
+  <h2>Quick Start</h2>
+
+  <p>Clone the repo and run the BigQuery demo with your GCP credentials:</p>
+
+  <div class="code-block">
+<span class="comment"># 1. Clone the repo</span>
+<span class="cmd">git</span> clone https://github.com/sunholo-data/ailang-demos
+<span class="cmd">cd</span> ailang-demos
+
+<span class="comment"># 2. Authenticate with GCP (one-time)</span>
+<span class="cmd">gcloud</span> auth application-default login
+
+<span class="comment"># 3. Run the BigQuery demo</span>
+<span class="cmd">GOOGLE_API_KEY</span>=<span class="str">""</span> <span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO,FS,Net \
+  ecommerce/bigquery_demo.ail
+  </div>
+
+  <p>The demo queries the public GA4 ecommerce dataset on BigQuery. Your GCP project is auto-detected from <code>gcloud config</code> and used for job billing only &mdash; the dataset itself is public.</p>
+
+  <h2>Other Run Modes</h2>
+
+  <div class="code-block">
+<span class="comment"># AI product recommendations (needs Gemini)</span>
+<span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO,AI <span class="flag">--ai</span> gemini-2-5-flash \
+  ecommerce/main.ail
+
+<span class="comment"># Trusted analytics with budget-as-contract</span>
+<span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO,FS,Net \
+  ecommerce/trusted_analytics_demo.ail
+
+<span class="comment"># Run inline tests (14 queries, all contract-verified)</span>
+<span class="cmd">ailang</span> test ecommerce/services/ga4_queries.ail
+
+<span class="comment"># With contract verification</span>
+<span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO,FS,Net <span class="flag">--verify-contracts</span> \
+  ecommerce/bigquery_demo.ail
+  </div>
+
+  <h2>Available Queries</h2>
+
+  <table class="query-table">
+    <thead><tr><th>Function</th><th>Description</th><th>Args</th></tr></thead>
+    <tbody>
+      <tr><td>topEventsQuery</td><td>Top events by count</td><td>limit: int</td></tr>
+      <tr><td>eventCountsByDateQuery</td><td>Event counts for date range</td><td>start, end: string</td></tr>
+      <tr><td>eventTrendQuery</td><td>Single event trend over time</td><td>eventName: string</td></tr>
+      <tr><td>topProductsByRevenueQuery</td><td>Top products by revenue</td><td>limit: int</td></tr>
+      <tr><td>revenueByCategoryQuery</td><td>Revenue by product category</td><td>&mdash;</td></tr>
+      <tr><td>purchaseFunnelQuery</td><td>View &rarr; cart &rarr; checkout &rarr; purchase</td><td>&mdash;</td></tr>
+      <tr><td>topCategoriesByViewsQuery</td><td>Top categories by page views</td><td>limit: int</td></tr>
+      <tr><td>deviceBreakdownQuery</td><td>Users by device type</td><td>&mdash;</td></tr>
+      <tr><td>geoDistributionQuery</td><td>Users by country</td><td>limit: int</td></tr>
+      <tr><td>browserBreakdownQuery</td><td>Users by browser</td><td>&mdash;</td></tr>
+      <tr><td>sessionMetricsQuery</td><td>Users, events, sessions, purchases</td><td>&mdash;</td></tr>
+      <tr><td>dailySummaryQuery</td><td>Daily summary with key metrics</td><td>start, end: string</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Prerequisites</h2>
+
+  <p>You need <a href="https://github.com/sunholo-data/ailang" style="color: var(--primary);">AILANG</a> installed and GCP credentials configured:</p>
+
+  <div class="code-block">
+<span class="comment"># Install AILANG</span>
+<span class="cmd">brew</span> install sunholo-data/tap/ailang
+
+<span class="comment"># Authenticate with GCP</span>
+<span class="cmd">gcloud</span> auth application-default login
+
+<span class="comment"># Verify</span>
+<span class="cmd">ailang</span> version
+<span class="cmd">gcloud</span> auth application-default print-access-token | <span class="cmd">head</span> -c 20
+  </div>
+
+  <p style="font-size: 12px; color: var(--text-muted); margin-top: 24px;">
+    Dataset: <code>bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*</code><br>
+    Source: <a href="https://github.com/sunholo-data/ailang-demos/tree/main/ecommerce" style="color: var(--text-secondary);">github.com/sunholo-data/ailang-demos/tree/main/ecommerce</a>
+  </p>
+</div>
+
+</body>
+</html>

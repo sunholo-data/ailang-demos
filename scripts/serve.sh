@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # Assemble _site/ from multiple source directories and serve locally.
 # Mirrors what CI does, but uses symlinks for fast iteration.
+# Usage: bash scripts/serve.sh [port]  (default: 8888)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SITE="$REPO_ROOT/_site"
-PORT="${1:-8080}"
+PORT="${1:-8888}"
+
+# Kill any existing server on the target port
+if lsof -ti :"$PORT" >/dev/null 2>&1; then
+  echo "Killing existing process on port $PORT ..."
+  lsof -ti :"$PORT" | xargs kill -9 2>/dev/null || true
+  sleep 0.5
+fi
 
 echo "Assembling site in $SITE ..."
 rm -rf "$SITE"
@@ -36,11 +44,16 @@ done
 # Streaming demos
 mkdir -p "$SITE/streaming/shared"
 ln -s "$REPO_ROOT/streaming/shared/audio-worklet.js" "$SITE/streaming/shared/"
-ln -s "$REPO_ROOT/streaming/shared/nav.js" "$SITE/streaming/shared/"
-for demo in claude_chat gemini_live safe_agent transcription voice_analytics voice_docparse voice_pipeline; do
+ln -s "$REPO_ROOT/streaming/shared/gemini-live-core.js" "$SITE/streaming/shared/"
+for demo in claude_chat gemini_live safe_agent voice_docparse; do
   mkdir -p "$SITE/streaming/$demo"
   ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/index.html"
 done
+
+# Ecommerce landing page (CLI demo — no WASM)
+mkdir -p "$SITE/ecommerce"
+ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
+ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
 # Streaming AILANG modules (for WASM demos)
 mkdir -p "$SITE/ailang/streaming/gemini_live"
@@ -52,6 +65,7 @@ echo "Site assembled. Serving at http://localhost:$PORT/"
 echo "  Hub:       http://localhost:$PORT/"
 echo "  Extractor: http://localhost:$PORT/extractor.html"
 echo "  DocParse:  http://localhost:$PORT/docparse.html"
+echo "  Ecommerce: http://localhost:$PORT/ecommerce/"
 echo "  Streaming: http://localhost:$PORT/streaming/"
 echo ""
 echo "Press Ctrl+C to stop."

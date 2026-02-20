@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG - GA4 BigQuery Analytics</title>
+<meta name="description" content="GA4 BigQuery analytics powered by AILANG WASM with Firebase Auth">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Firebase v11 compat -->
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
+
+<!-- AILANG WASM -->
+<script src="../wasm/wasm_exec.js"></script>
+<script src="../wasm/ailang-repl.js"></script>
+
+<style>
+  /* ================================================================
+     AILANG GA4 Analytics — Sunholo Design System
+     Light theme: #f6f8fa bg | #e73c17 coral | Montserrat + JetBrains Mono
+     ================================================================ */
+
+  :root {
+    --primary: #e73c17;
+    --primary-light: #f25d3b;
+    --primary-dark: #c43010;
+    --primary-faded: rgba(231, 60, 23, 0.08);
+    --charcoal: #314352;
+    --charcoal-light: #3d5468;
+    --bg: #f6f8fa;
+    --bg-card: #ffffff;
+    --bg-input: #f1f5f9;
+    --border: #e2e8f0;
+    --border-active: #cbd5e1;
+    --text-primary: #1a202c;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --success: #059669;
+    --success-bg: #ecfdf5;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --error: #dc2626;
+    --error-bg: #fef2f2;
+    --teal: #0d9488;
+    --teal-bg: rgba(13, 148, 136, 0.08);
+    --blue: #2563eb;
+    --blue-bg: rgba(37, 99, 235, 0.08);
+    --purple: #7c3aed;
+    --purple-bg: rgba(124, 58, 237, 0.08);
+    --amber: #d97706;
+    --amber-bg: rgba(217, 119, 6, 0.08);
+    --indigo: #4f46e5;
+    --violet: #8b5cf6;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 12px 28px rgba(0,0,0,0.10), 0 4px 10px rgba(0,0,0,0.04);
+    --font-display: 'Montserrat', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(231, 60, 23, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(231, 60, 23, 0.015) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--charcoal);
+    color: #fff;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header svg { width: 32px; height: 32px; flex-shrink: 0; }
+
+  .header-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+  .header-title .ai { color: var(--primary-light); }
+
+  .header-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 4px; }
+
+  .header-subtitle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.3px;
+  }
+
+  .header-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .header-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .header-badge--wasm { background: var(--blue-bg); color: #60a5fa; border: 1px solid rgba(96,165,250,0.25); }
+  .header-badge--bq { background: rgba(52,211,153,0.1); color: #34d399; border: 1px solid rgba(52,211,153,0.25); }
+  .header-badge--firebase { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-gear {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .btn-gear:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+  .btn-gear.active { border-color: var(--primary); color: var(--primary-light); background: rgba(231,60,23,0.1); }
+
+  /* ── Auth Bar ── */
+  .auth-bar {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    min-height: 48px;
+  }
+
+  .auth-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .auth-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .auth-dot--ok { background: var(--success); box-shadow: 0 0 6px rgba(5,150,105,0.4); }
+  .auth-dot--off { background: var(--text-muted); }
+
+  .auth-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .auth-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+  }
+
+  .auth-email {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-auth {
+    padding: 6px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .btn-auth--signin {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(231,60,23,0.2);
+  }
+  .btn-auth--signin:hover { box-shadow: 0 4px 12px rgba(231,60,23,0.3); transform: translateY(-1px); }
+  .btn-auth--signout {
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-auth--signout:hover { border-color: var(--border-active); color: var(--text-primary); }
+
+  .auth-spacer { flex: 1; }
+
+  .auth-note {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .access-notice {
+    background: var(--warning-bg);
+    border: 1px solid rgba(217, 119, 6, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 24px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .access-notice strong { color: var(--warning); font-weight: 600; }
+  .access-notice a { color: var(--primary); text-decoration: none; font-weight: 500; }
+  .access-notice a:hover { text-decoration: underline; }
+  .access-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Config Panel ── */
+  .config-panel {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+    padding: 0 24px;
+  }
+  .config-panel.open { max-height: 200px; padding: 16px 24px; }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .config-row:last-child { margin-bottom: 0; }
+
+  .config-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  .config-input {
+    flex: 1;
+    max-width: 480px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .config-input:focus { border-color: var(--primary); }
+
+  .config-note {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* ── Main Layout ── */
+  .main {
+    flex: 1;
+    display: flex;
+    gap: 0;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── Left Panel (Query Builder) ── */
+  .panel-left {
+    width: 420px;
+    min-width: 360px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-right: 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .panel-heading {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .form-group { margin-bottom: 12px; }
+
+  .form-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .form-select:focus { border-color: var(--primary); }
+
+  .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-faded); }
+
+  .args-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .args-row .form-label { min-width: 80px; margin-bottom: 0; line-height: 1; }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(231,60,23,0.2);
+  }
+  .btn-primary:hover { box-shadow: 0 4px 16px rgba(231,60,23,0.3); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--border-active); color: var(--text-primary); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-bq {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+    background: linear-gradient(135deg, var(--charcoal), var(--charcoal-light));
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(49,67,82,0.2);
+  }
+  .btn-bq:hover { box-shadow: 0 4px 16px rgba(49,67,82,0.3); transform: translateY(-1px); }
+  .btn-bq:active { transform: translateY(0); }
+  .btn-bq:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; transform: none; }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* ── SQL Display ── */
+  .sql-block {
+    position: relative;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-top: 12px;
+    overflow-x: auto;
+  }
+
+  .sql-block pre {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.7;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+
+  .sql-block .btn-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #94a3b8;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+  .sql-block .btn-copy:hover { border-color: #475569; color: #e2e8f0; }
+  .sql-block .btn-copy.copied { border-color: var(--success); color: var(--success); }
+
+  .sql-source {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Right Panel (Results) ── */
+  .panel-right {
+    flex: 1;
+    min-width: 0;
+    padding-left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Chart Area ── */
+  .chart-area {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    min-height: 200px;
+    animation: fadeInUp 0.4s ease both;
+  }
+
+  .chart-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .chart-type-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--purple-bg);
+    color: var(--purple);
+  }
+
+  /* HBar Chart */
+  .hbar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .hbar-label {
+    width: 130px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .hbar-track {
+    flex: 1;
+    height: 22px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .hbar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    min-width: 2px;
+  }
+  .hbar-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    font-weight: 600;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  /* Pie Chart */
+  .pie-container {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .pie-circle {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    flex-shrink: 0;
+  }
+  .pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .pie-legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .pie-legend-label {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+  }
+  .pie-legend-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* Funnel Chart */
+  .funnel-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  .funnel-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+  .funnel-bar {
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: #fff;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    transition: width 0.6s ease;
+  }
+  .funnel-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid;
+    gap: 12px;
+  }
+  .kpi-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+  .kpi-value {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  .kpi-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ── Data Table ── */
+  .data-table-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    animation: fadeInUp 0.4s ease both;
+  }
+
+  .data-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .data-table-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .data-table th {
+    padding: 8px 12px;
+    text-align: left;
+    background: var(--bg-input);
+    color: var(--charcoal);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+  .data-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+  }
+  .data-table tr:nth-child(even) { background: #fafbfc; }
+  .data-table-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  /* ── Empty State / Messages ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .empty-state-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-state-text {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .msg-error {
+    background: var(--error-bg);
+    border: 1px solid rgba(220,38,38,0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--error);
+    line-height: 1.5;
+  }
+
+  .msg-info {
+    background: var(--blue-bg);
+    border: 1px solid rgba(37,99,235,0.15);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--blue);
+    line-height: 1.5;
+  }
+
+  /* ── Status Bar ── */
+  .status-bar {
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .status-dot--ok { background: var(--success); }
+  .status-dot--loading { background: var(--amber); animation: pulse-dot 1.5s ease-in-out infinite; }
+  .status-dot--off { background: var(--text-muted); }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .status-sep {
+    width: 1px;
+    height: 12px;
+    background: var(--border);
+  }
+
+  .status-spacer { flex: 1; }
+
+  /* ── Loading Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Animations ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 960px) {
+    .main { flex-direction: column; padding: 16px; }
+    .panel-left { width: 100%; min-width: 0; padding-right: 0; border-right: none; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    .panel-right { padding-left: 0; padding-top: 16px; }
+    .header-badges { display: none; }
+    .header-subtitle { display: none; }
+  }
+
+  @media (max-width: 560px) {
+    .auth-bar { flex-wrap: wrap; gap: 8px; }
+    .auth-note { display: none; }
+    .hbar-label { width: 80px; font-size: 10px; }
+    .pie-container { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+    <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
+    <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
+    <circle cx="153" cy="150" r="80" fill="#e73c17"/>
+  </svg>
+  <span class="header-title"><span class="ai">AI</span>LANG</span>
+  <span class="header-sep"></span>
+  <span class="header-subtitle">GA4 Analytics</span>
+  <div class="header-badges">
+    <span class="header-badge header-badge--wasm">WASM</span>
+    <span class="header-badge header-badge--bq">BigQuery</span>
+    <span class="header-badge header-badge--firebase">Firebase</span>
+  </div>
+  <div class="header-right">
+    <button class="btn-gear" id="gearBtn" onclick="toggleConfig()" title="Settings">&#9881;</button>
+  </div>
+</header>
+
+<!-- ── Auth Bar ── -->
+<div class="auth-bar">
+  <div class="auth-status" id="authStatus">
+    <span class="auth-dot auth-dot--off" id="authDot"></span>
+    <span id="authLabel">Not authenticated</span>
+  </div>
+  <div id="authUserInfo" style="display:none;" class="auth-user">
+    <img id="authAvatar" class="auth-avatar" src="" alt="">
+    <span id="authEmail" class="auth-email"></span>
+  </div>
+  <button id="signInBtn" class="btn-auth btn-auth--signin" onclick="signIn()">Sign in with Google</button>
+  <button id="signOutBtn" class="btn-auth btn-auth--signout" style="display:none;" onclick="signOut()">Sign Out</button>
+  <span class="auth-spacer"></span>
+  <span class="auth-note">OAuth scopes: bigquery.readonly</span>
+</div>
+
+<!-- ── Access Notice ── -->
+<div class="access-notice">
+  <span class="access-notice-icon">&#9888;</span>
+  <div>
+    <strong>Access note:</strong> This demo uses a Firebase app in testing mode with a restricted BigQuery scope.
+    To run queries, you can either <strong>(a)</strong> ask to be added as a test user &mdash;
+    <a href="mailto:m@sunholo.com">contact m@sunholo.com</a> with your Google email &mdash;
+    or <strong>(b)</strong> open Settings (gear icon) and enter your own GCP project ID with BigQuery API enabled and your own OAuth credentials.
+  </div>
+</div>
+
+<!-- ── Config Panel ── -->
+<div class="config-panel" id="configPanel">
+  <div class="config-row">
+    <span class="config-label">Project ID</span>
+    <input type="text" class="config-input" id="cfgProjectId" value="ailang-dev" placeholder="GCP Project ID">
+  </div>
+  <div class="config-row">
+    <span class="config-label">Dataset</span>
+    <input type="text" class="config-input" id="cfgDataset" value="bigquery-public-data.ga4_obfuscated_sample_ecommerce" placeholder="dataset.table">
+  </div>
+  <div class="config-row">
+    <span class="config-label"></span>
+    <span class="config-note">BigQuery queries are executed directly from your browser using OAuth access tokens. No data passes through any intermediary.</span>
+  </div>
+</div>
+
+<!-- ── Main Layout ── -->
+<div class="main">
+  <!-- Left Panel: Query Builder -->
+  <div class="panel-left">
+    <div>
+      <div class="panel-heading">Query Builder</div>
+      <p style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">
+        AILANG generates SQL via WASM. Results come directly from BigQuery.
+      </p>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Query</label>
+      <select class="form-select" id="querySelect" onchange="onQueryChange()"></select>
+    </div>
+
+    <div id="argsContainer"></div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="generateBtn" onclick="generateSQL()">Generate SQL</button>
+    </div>
+
+    <div id="sqlContainer" style="display:none;">
+      <div class="sql-block">
+        <button class="btn-copy" id="copyBtn" onclick="copySQL()">Copy</button>
+        <pre id="sqlDisplay"></pre>
+      </div>
+      <div class="sql-source" id="sqlSource"></div>
+    </div>
+
+    <div id="sqlError" style="display:none;" class="msg-error"></div>
+
+    <div style="margin-top: 12px;">
+      <div class="btn-row">
+        <button class="btn-bq" id="runBqBtn" onclick="runOnBigQuery()" disabled>Run on BigQuery</button>
+        <span id="bqSpinner" style="display:none;"><span class="spinner"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Results -->
+  <div class="panel-right">
+    <div id="chartContainer"></div>
+    <div id="tableContainer"></div>
+    <div id="bqError" style="display:none;" class="msg-error"></div>
+
+    <div id="emptyState" class="empty-state">
+      <div class="empty-state-icon">&#9776;</div>
+      <div class="empty-state-text">
+        Select a query, generate SQL, then run it on BigQuery.<br>
+        Charts and data tables will appear here.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Status Bar ── -->
+<div class="status-bar">
+  <div class="status-item">
+    <span class="status-dot status-dot--off" id="wasmDot"></span>
+    <span id="wasmStatus">WASM: loading...</span>
+  </div>
+  <span class="status-sep"></span>
+  <div class="status-item">
+    <span id="moduleCount">0 modules</span>
+  </div>
+  <span class="status-sep"></span>
+  <div class="status-item">
+    <span class="status-dot status-dot--off" id="firebaseDot"></span>
+    <span id="firebaseStatus">Firebase: initializing</span>
+  </div>
+  <span class="status-spacer"></span>
+  <span>AILANG WASM + BigQuery REST</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// AILANG GA4 BigQuery Analytics
+//
+// Architecture:
+// - AILANG WASM generates SQL via ga4_queries.ail + ecommerce_browser.ail
+// - Firebase Auth provides Google Sign-In with bigquery.readonly scope
+// - BigQuery REST API is called directly from the browser
+// - Charts rendered with pure CSS/DOM (no external chart library)
+// ═══════════════════════════════════════════════════════════════
+
+// ── Constants ──────────────────────────────────────────────────
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBZ9B6v-Xt4TYMni8pctJGPV6sMgtd6xcg",
+  authDomain: "ailang-dev.firebaseapp.com",
+  projectId: "ailang-dev",
+  storageBucket: "ailang-dev.firebasestorage.app",
+  messagingSenderId: "105950082906",
+  appId: "1:105950082906:web:7d5a2c844cbaa09d802563"
+};
+
+const QUERIES = [
+  { id: 'topEvents', name: 'Top Events', chart: 'bar', args: [{name:'limit', type:'int', default:'10'}] },
+  { id: 'topProductsByRevenue', name: 'Top Products by Revenue', chart: 'bar', args: [{name:'limit', type:'int', default:'10'}] },
+  { id: 'revenueByCategory', name: 'Revenue by Category', chart: 'bar', args: [] },
+  { id: 'purchaseFunnel', name: 'Purchase Funnel', chart: 'funnel', args: [] },
+  { id: 'deviceBreakdown', name: 'Device Breakdown', chart: 'pie', args: [] },
+  { id: 'geoDistribution', name: 'Geo Distribution', chart: 'bar', args: [{name:'limit', type:'int', default:'10'}] },
+  { id: 'sessionMetrics', name: 'Session Metrics', chart: 'kpi', args: [] },
+  { id: 'browserBreakdown', name: 'Browser Breakdown', chart: 'pie', args: [] },
+  { id: 'eventTrend', name: 'Event Trend', chart: 'bar', args: [{name:'eventName', type:'string', default:'page_view'}] },
+  { id: 'eventCountsByDate', name: 'Event Counts by Date', chart: 'bar', args: [{name:'startDate', type:'string', default:'20210101'}, {name:'endDate', type:'string', default:'20211231'}] },
+  { id: 'dailySummary', name: 'Daily Summary', chart: 'bar', args: [{name:'startDate', type:'string', default:'20210101'}, {name:'endDate', type:'string', default:'20211231'}] },
+  { id: 'topCategoriesByViews', name: 'Top Categories by Views', chart: 'bar', args: [{name:'limit', type:'int', default:'10'}] },
+];
+
+const CHART_COLORS = [
+  '#e73c17', '#f59e0b', '#10b981', '#6366f1', '#ec4899',
+  '#8b5cf6', '#14b8a6', '#f97316', '#ef4444', '#06b6d4',
+  '#84cc16', '#a855f7', '#22d3ee', '#fb923c', '#4ade80',
+];
+
+const FUNNEL_COLORS = ['#4f46e5', '#8b5cf6', '#f59e0b', '#e73c17'];
+
+// ── State ──────────────────────────────────────────────────────
+
+let wasmEngine = null;
+let wasmReady = false;
+let wasmModuleCount = 0;
+let firebaseApp = null;
+let firebaseAuth = null;
+let accessToken = null;
+let currentUser = null;
+let currentSQL = null;
+
+// ── DOM Refs ───────────────────────────────────────────────────
+
+const $ = (id) => document.getElementById(id);
+
+// ── Firebase Init ──────────────────────────────────────────────
+
+function initFirebase() {
+  try {
+    firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseAuth = firebase.auth();
+
+    firebaseAuth.onAuthStateChanged((user) => {
+      currentUser = user;
+      updateAuthUI();
+    });
+
+    $('firebaseDot').className = 'status-dot status-dot--ok';
+    $('firebaseStatus').textContent = 'Firebase: ready';
+  } catch (e) {
+    $('firebaseDot').className = 'status-dot status-dot--off';
+    $('firebaseStatus').textContent = 'Firebase: error';
+    console.error('Firebase init failed:', e);
+  }
+}
+
+async function signIn() {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/bigquery.readonly');
+    const result = await firebaseAuth.signInWithPopup(provider);
+    if (result.credential) {
+      accessToken = result.credential.accessToken;
+    }
+    updateAuthUI();
+  } catch (e) {
+    console.error('Sign-in failed:', e);
+    showBqError('Sign-in failed: ' + (e.message || e.code || 'Unknown error'));
+  }
+}
+
+async function signOut() {
+  try {
+    await firebaseAuth.signOut();
+    accessToken = null;
+    currentUser = null;
+    updateAuthUI();
+  } catch (e) {
+    console.error('Sign-out failed:', e);
+  }
+}
+
+async function refreshAccessToken() {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/bigquery.readonly');
+    const result = await firebaseAuth.signInWithPopup(provider);
+    if (result.credential) {
+      accessToken = result.credential.accessToken;
+    }
+    return accessToken;
+  } catch (e) {
+    console.error('Token refresh failed:', e);
+    return null;
+  }
+}
+
+function updateAuthUI() {
+  const isAuth = !!currentUser;
+  $('authDot').className = isAuth ? 'auth-dot auth-dot--ok' : 'auth-dot auth-dot--off';
+  $('authLabel').textContent = isAuth ? 'Authenticated' : 'Not authenticated';
+  $('signInBtn').style.display = isAuth ? 'none' : '';
+  $('signOutBtn').style.display = isAuth ? '' : 'none';
+  $('authUserInfo').style.display = isAuth ? 'flex' : 'none';
+
+  if (isAuth && currentUser) {
+    $('authAvatar').src = currentUser.photoURL || '';
+    $('authAvatar').style.display = currentUser.photoURL ? '' : 'none';
+    $('authEmail').textContent = currentUser.email || '';
+  }
+
+  // Enable/disable BigQuery button
+  updateRunBqButton();
+}
+
+function updateRunBqButton() {
+  const btn = $('runBqBtn');
+  btn.disabled = !currentSQL || !accessToken;
+}
+
+// ── AILANG WASM Init ───────────────────────────────────────────
+
+async function initWASM() {
+  try {
+    if (typeof AilangREPL === 'undefined') {
+      $('wasmDot').className = 'status-dot status-dot--off';
+      $('wasmStatus').textContent = 'WASM: not available';
+      return;
+    }
+
+    $('wasmDot').className = 'status-dot status-dot--loading';
+    $('wasmStatus').textContent = 'WASM: loading...';
+
+    const repl = new AilangREPL();
+    await repl.init('../wasm/ailang.wasm');
+
+    // Import stdlib
+    const stdlibs = ['std/json', 'std/option', 'std/result', 'std/string', 'std/math'];
+    for (const lib of stdlibs) {
+      repl.importModule(lib);
+    }
+    wasmModuleCount = stdlibs.length;
+
+    // Load ga4_queries module
+    const ga4Resp = await fetch('../ailang/ecommerce/services/ga4_queries.ail?v=' + Date.now());
+    if (!ga4Resp.ok) throw new Error('Failed to fetch ga4_queries.ail: ' + ga4Resp.status);
+    const ga4Code = await ga4Resp.text();
+    const ga4Result = repl.loadModule('ecommerce/services/ga4_queries', ga4Code);
+    if (!ga4Result.success) throw new Error('ga4_queries load failed: ' + ga4Result.error);
+    wasmModuleCount++;
+
+    // Load ecommerce_browser module
+    const browserResp = await fetch('../ailang/ecommerce/services/ecommerce_browser.ail?v=' + Date.now());
+    if (!browserResp.ok) throw new Error('Failed to fetch ecommerce_browser.ail: ' + browserResp.status);
+    const browserCode = await browserResp.text();
+    const browserResult = repl.loadModule('ecommerce/services/ecommerce_browser', browserCode);
+    if (!browserResult.success) throw new Error('ecommerce_browser load failed: ' + browserResult.error);
+    wasmModuleCount++;
+
+    wasmEngine = repl;
+    wasmReady = true;
+
+    $('wasmDot').className = 'status-dot status-dot--ok';
+    $('wasmStatus').textContent = 'WASM: ready';
+    $('moduleCount').textContent = wasmModuleCount + ' modules';
+  } catch (e) {
+    console.error('WASM init failed:', e);
+    $('wasmDot').className = 'status-dot status-dot--off';
+    $('wasmStatus').textContent = 'WASM: ' + e.message;
+  }
+}
+
+// Call AILANG function and clean up result string
+function callAILANG(moduleName, funcName, ...args) {
+  if (!wasmReady) return null;
+  try {
+    const result = wasmEngine.call(moduleName, funcName, ...args);
+    if (!result.success) {
+      console.error('AILANG error:', result.error);
+      return null;
+    }
+    let val = result.result || '';
+    // Zero-arg functions may return function object
+    if (val === '<function>' && args.length === 0) {
+      val = wasmEngine.eval(funcName + '()');
+    }
+    val = val.trim();
+    // Strip type annotation suffix: "value :: Type"
+    const typeIdx = val.lastIndexOf(' :: ');
+    if (typeIdx > 0) val = val.substring(0, typeIdx).trim();
+    // Unwrap AILANG string quotes
+    if (val.startsWith('"') && val.endsWith('"')) {
+      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
+    }
+    return val;
+  } catch (e) {
+    console.error('AILANG call error:', e);
+    return null;
+  }
+}
+
+// ── Query UI ───────────────────────────────────────────────────
+
+function populateQuerySelect() {
+  const select = $('querySelect');
+  select.innerHTML = '';
+  QUERIES.forEach((q, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = q.name;
+    select.appendChild(opt);
+  });
+  onQueryChange();
+}
+
+function onQueryChange() {
+  const idx = parseInt($('querySelect').value);
+  const query = QUERIES[idx];
+  const container = $('argsContainer');
+  container.innerHTML = '';
+
+  if (query.args.length > 0) {
+    query.args.forEach(arg => {
+      const row = document.createElement('div');
+      row.className = 'args-row';
+      row.innerHTML = `
+        <span class="form-label">${escapeHtml(arg.name)}</span>
+        <input class="form-input" type="${arg.type === 'int' ? 'number' : 'text'}"
+               id="arg_${arg.name}" value="${escapeHtml(arg.default)}"
+               placeholder="${escapeHtml(arg.default)}">
+      `;
+      container.appendChild(row);
+    });
+  }
+
+  // Clear previous results
+  hideSql();
+  clearResults();
+}
+
+function getArgValues() {
+  const idx = parseInt($('querySelect').value);
+  const query = QUERIES[idx];
+  const values = {};
+  query.args.forEach(arg => {
+    const el = $('arg_' + arg.name);
+    values[arg.name] = el ? el.value || arg.default : arg.default;
+  });
+  return values;
+}
+
+// ── Generate SQL via AILANG WASM ───────────────────────────────
+
+function generateSQL() {
+  const idx = parseInt($('querySelect').value);
+  const query = QUERIES[idx];
+  const argValues = getArgValues();
+
+  hideSql();
+  $('sqlError').style.display = 'none';
+  clearResults();
+
+  if (!wasmReady) {
+    $('sqlError').textContent = 'AILANG WASM not loaded. Check that WASM files are available at ../wasm/';
+    $('sqlError').style.display = '';
+    return;
+  }
+
+  try {
+    // Build arguments for the AILANG generateQuery function
+    const arg1 = query.args.length >= 1 ? argValues[query.args[0].name] : '';
+    const arg2 = query.args.length >= 2 ? argValues[query.args[1].name] : '';
+
+    const resultJson = callAILANG('ecommerce/services/ecommerce_browser', 'generateQuery', query.id, arg1, arg2);
+    if (!resultJson) {
+      $('sqlError').textContent = 'AILANG returned null. The WASM module may not have loaded correctly.';
+      $('sqlError').style.display = '';
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(resultJson);
+    } catch {
+      $('sqlError').textContent = 'Failed to parse AILANG result: ' + resultJson;
+      $('sqlError').style.display = '';
+      return;
+    }
+
+    if (parsed.error) {
+      $('sqlError').textContent = 'AILANG error: ' + parsed.error;
+      $('sqlError').style.display = '';
+      return;
+    }
+
+    if (parsed.sql) {
+      currentSQL = parsed.sql;
+      $('sqlDisplay').textContent = formatSQL(parsed.sql);
+      $('sqlContainer').style.display = '';
+      $('sqlSource').textContent = 'Generated by ecommerce_browser.ail > ga4_queries.ail (AILANG WASM)';
+      updateRunBqButton();
+    }
+  } catch (e) {
+    $('sqlError').textContent = 'SQL generation failed: ' + e.message;
+    $('sqlError').style.display = '';
+  }
+}
+
+function formatSQL(sql) {
+  return sql
+    .replace(/\bSELECT\b/gi, '\nSELECT')
+    .replace(/\bFROM\b/gi, '\nFROM')
+    .replace(/\bWHERE\b/gi, '\nWHERE')
+    .replace(/\bGROUP BY\b/gi, '\nGROUP BY')
+    .replace(/\bORDER BY\b/gi, '\nORDER BY')
+    .replace(/\bLIMIT\b/gi, '\nLIMIT')
+    .replace(/\bAND\b/gi, '\n  AND')
+    .replace(/\bUNNEST/gi, '\n  UNNEST')
+    .trim();
+}
+
+function hideSql() {
+  $('sqlContainer').style.display = 'none';
+  currentSQL = null;
+  updateRunBqButton();
+}
+
+function copySQL() {
+  if (!currentSQL) return;
+  navigator.clipboard.writeText(currentSQL).then(() => {
+    const btn = $('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+}
+
+// ── BigQuery REST API ──────────────────────────────────────────
+
+async function runOnBigQuery() {
+  if (!currentSQL || !accessToken) return;
+
+  const projectId = $('cfgProjectId').value.trim() || 'ailang-dev';
+
+  $('bqError').style.display = 'none';
+  $('bqSpinner').style.display = '';
+  $('runBqBtn').disabled = true;
+  clearResults();
+
+  try {
+    const resp = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(projectId)}/queries`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentSQL,
+          useLegacySql: false,
+          maxResults: 100,
+          timeoutMs: 30000,
+        }),
+      }
+    );
+
+    if (resp.status === 401) {
+      // Token expired — try to refresh
+      showBqError('Access token expired. Re-authenticating...');
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        $('bqError').style.display = 'none';
+        // Retry with new token
+        const retryResp = await fetch(
+          `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(projectId)}/queries`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + newToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: currentSQL,
+              useLegacySql: false,
+              maxResults: 100,
+              timeoutMs: 30000,
+            }),
+          }
+        );
+        if (!retryResp.ok) {
+          const errBody = await retryResp.text();
+          showBqError('BigQuery error after re-auth (' + retryResp.status + '): ' + errBody);
+          return;
+        }
+        const retryData = await retryResp.json();
+        handleBqResponse(retryData);
+        return;
+      } else {
+        showBqError('Token expired and re-authentication failed. Please sign in again.');
+        return;
+      }
+    }
+
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      showBqError('BigQuery error (' + resp.status + '): ' + errBody);
+      return;
+    }
+
+    const data = await resp.json();
+    handleBqResponse(data);
+  } catch (e) {
+    showBqError('Network error: ' + e.message);
+  } finally {
+    $('bqSpinner').style.display = 'none';
+    updateRunBqButton();
+  }
+}
+
+function handleBqResponse(data) {
+  if (data.errors && data.errors.length > 0) {
+    showBqError('BigQuery errors: ' + data.errors.map(e => e.message).join('; '));
+    return;
+  }
+
+  // Parse schema
+  const headers = (data.schema && data.schema.fields)
+    ? data.schema.fields.map(f => f.name)
+    : [];
+
+  // Parse rows: [{f: [{v: "value"}, ...]}, ...]
+  const rows = (data.rows || []).map(row =>
+    (row.f || []).map(cell => cell.v !== null && cell.v !== undefined ? String(cell.v) : '')
+  );
+
+  if (rows.length === 0) {
+    showBqInfo('Query returned 0 rows.');
+    return;
+  }
+
+  const parsedData = { headers, rows };
+
+  // Hide empty state
+  $('emptyState').style.display = 'none';
+
+  // Render chart
+  const idx = parseInt($('querySelect').value);
+  const query = QUERIES[idx];
+  renderChart(parsedData, query);
+
+  // Render data table
+  renderTable(parsedData);
+}
+
+function showBqError(msg) {
+  $('bqError').textContent = msg;
+  $('bqError').style.display = '';
+}
+
+function showBqInfo(msg) {
+  $('bqError').className = 'msg-info';
+  $('bqError').textContent = msg;
+  $('bqError').style.display = '';
+}
+
+function clearResults() {
+  $('chartContainer').innerHTML = '';
+  $('tableContainer').innerHTML = '';
+  $('bqError').style.display = 'none';
+  $('bqError').className = 'msg-error';
+  $('emptyState').style.display = '';
+}
+
+// ── Chart Rendering ────────────────────────────────────────────
+
+function formatNumber(n) {
+  if (isNaN(n)) return '0';
+  if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1) + 'K';
+  if (Number.isInteger(n)) return n.toString();
+  return n.toFixed(2);
+}
+
+function renderChart(data, query) {
+  const container = $('chartContainer');
+  container.innerHTML = '';
+
+  if (!data || data.rows.length === 0) return;
+
+  const chartType = query.chart;
+  if (chartType === 'funnel') {
+    renderFunnelChart(container, data, query.name);
+  } else if (chartType === 'kpi') {
+    renderKPICards(container, data, query.name);
+  } else if (chartType === 'pie') {
+    renderSmartChart(container, data, query.name, 'pie');
+  } else if (chartType === 'bar') {
+    renderSmartChart(container, data, query.name, 'bar');
+  }
+}
+
+function renderSmartChart(container, data, title, forcedType) {
+  // Detect label and value columns
+  const isDateLike = (v) => /^20\d{6}$/.test(v);
+  const isTrulyNumeric = (col) =>
+    data.rows.every(r => !isNaN(parseFloat(r[col])) && r[col] !== '' && !isDateLike(r[col]));
+
+  let valueCol = -1;
+  for (let i = 1; i < (data.rows[0] || []).length; i++) {
+    if (isTrulyNumeric(i)) { valueCol = i; break; }
+  }
+  if (valueCol < 0 && data.rows[0] && isTrulyNumeric(0)) valueCol = 0;
+
+  let labelCol = valueCol > 0 ? 0 : ((data.rows[0] || []).length > 1 ? 1 : -1);
+  if (valueCol === 0 && (data.rows[0] || []).length > 1) labelCol = 1;
+
+  if (labelCol < 0 || valueCol < 0 || labelCol === valueCol) return;
+
+  if (forcedType === 'pie') {
+    renderPieChart(container, data, labelCol, valueCol, title);
+  } else {
+    renderHBarChart(container, data, labelCol, valueCol, title);
+  }
+}
+
+function renderHBarChart(container, data, labelCol, valueCol, title) {
+  const values = data.rows.map(r => parseFloat(r[valueCol]) || 0);
+  const maxVal = Math.max(...values, 1);
+  const labels = data.rows.map(r => r[labelCol]);
+
+  const chartTitle = data.headers.length > 0 && data.headers[labelCol] && data.headers[valueCol]
+    ? data.headers[labelCol] + ' vs ' + data.headers[valueCol]
+    : title;
+
+  let html = '<div class="chart-area"><div class="chart-title">' +
+    '<span>' + escapeHtml(chartTitle) + '</span>' +
+    '<span class="chart-type-badge">bar</span></div>';
+
+  const maxRows = Math.min(labels.length, 15);
+  for (let i = 0; i < maxRows; i++) {
+    const pct = (values[i] / maxVal) * 100;
+    const color = CHART_COLORS[i % CHART_COLORS.length];
+    html += '<div class="hbar-row">' +
+      '<div class="hbar-label" title="' + escapeHtml(labels[i]) + '">' + escapeHtml(labels[i]) + '</div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:linear-gradient(90deg,' + color + ',' + color + 'cc);"></div></div>' +
+      '<div class="hbar-value">' + formatNumber(values[i]) + '</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderPieChart(container, data, labelCol, valueCol, title) {
+  const values = data.rows.map(r => parseFloat(r[valueCol]) || 0);
+  const labels = data.rows.map(r => r[labelCol]);
+  const total = values.reduce((a, b) => a + b, 0) || 1;
+
+  // Build conic gradient
+  let acc = 0;
+  const segments = values.map((val, i) => {
+    const start = acc;
+    acc += (val / total) * 360;
+    return { start, end: acc, color: CHART_COLORS[i % CHART_COLORS.length], label: labels[i], val, pct: (val / total) * 100 };
+  });
+
+  const conicGrad = segments.map(seg => seg.color + ' ' + seg.start + 'deg ' + seg.end + 'deg').join(', ');
+
+  let html = '<div class="chart-area"><div class="chart-title">' +
+    '<span>' + escapeHtml(title) + '</span>' +
+    '<span class="chart-type-badge">pie</span></div>' +
+    '<div class="pie-container">' +
+    '<div class="pie-circle" style="background:conic-gradient(' + conicGrad + ');"></div>' +
+    '<div class="pie-legend">';
+
+  const maxItems = Math.min(segments.length, 8);
+  for (let i = 0; i < maxItems; i++) {
+    const seg = segments[i];
+    html += '<div class="pie-legend-item">' +
+      '<div class="pie-legend-swatch" style="background:' + seg.color + ';"></div>' +
+      '<span class="pie-legend-label">' + escapeHtml(seg.label) + '</span>' +
+      '<span class="pie-legend-value">' + formatNumber(seg.val) + ' (' + seg.pct.toFixed(1) + '%)</span>' +
+      '</div>';
+  }
+
+  html += '</div></div></div>';
+  container.innerHTML = html;
+}
+
+function renderFunnelChart(container, data, title) {
+  if (data.rows.length === 0) return;
+
+  const row = data.rows[0];
+  const headers = data.headers.length > 0 ? data.headers : ['views', 'carts', 'checkouts', 'purchases'];
+  const values = row.map(v => parseFloat(v) || 0);
+  const maxVal = Math.max(...values, 1);
+
+  let html = '<div class="chart-area"><div class="chart-title">' +
+    '<span>' + escapeHtml(title) + '</span>' +
+    '<span class="chart-type-badge">funnel</span></div>' +
+    '<div class="funnel-container">';
+
+  values.forEach((val, i) => {
+    const widthPct = Math.max((val / maxVal) * 100, 8);
+    const color = FUNNEL_COLORS[i % FUNNEL_COLORS.length];
+    html += '<div class="funnel-step">' +
+      '<div class="funnel-bar" style="width:' + widthPct + '%;background:' + color + ';">' + formatNumber(val) + '</div>' +
+      '<div class="funnel-label">' + escapeHtml(headers[i] || 'Step ' + (i+1)) + '</div>' +
+      '</div>';
+  });
+
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+function renderKPICards(container, data, title) {
+  if (data.rows.length === 0) return;
+
+  const row = data.rows[0];
+  const headers = data.headers.length > 0 ? data.headers : row.map((_, i) => 'Metric ' + (i+1));
+  const cols = Math.min(row.length, 4);
+
+  let html = '<div class="chart-area"><div class="chart-title">' +
+    '<span>' + escapeHtml(title) + '</span>' +
+    '<span class="chart-type-badge">kpi</span></div>' +
+    '<div class="kpi-grid" style="grid-template-columns:repeat(' + cols + ',1fr);">';
+
+  row.forEach((val, i) => {
+    const color = CHART_COLORS[i % CHART_COLORS.length];
+    html += '<div class="kpi-card">' +
+      '<div class="kpi-value" style="color:' + color + ';">' + formatNumber(parseFloat(val) || 0) + '</div>' +
+      '<div class="kpi-label">' + escapeHtml(headers[i]) + '</div>' +
+      '</div>';
+  });
+
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+// ── Data Table Rendering ───────────────────────────────────────
+
+function renderTable(data) {
+  const container = $('tableContainer');
+  if (!data || data.rows.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const maxRows = Math.min(data.rows.length, 50);
+  let html = '<div class="data-table-wrap">' +
+    '<div class="data-table-header">' +
+    '<span class="data-table-title">Query Results</span>' +
+    '<span class="data-table-count">' + data.rows.length + ' rows' +
+    (data.rows.length > maxRows ? ' (showing ' + maxRows + ')' : '') + '</span>' +
+    '</div>' +
+    '<div class="data-table-scroll"><table class="data-table">';
+
+  if (data.headers.length > 0) {
+    html += '<thead><tr>';
+    data.headers.forEach(h => { html += '<th>' + escapeHtml(h) + '</th>'; });
+    html += '</tr></thead>';
+  }
+
+  html += '<tbody>';
+  for (let ri = 0; ri < maxRows; ri++) {
+    html += '<tr>';
+    data.rows[ri].forEach(cell => { html += '<td>' + escapeHtml(cell) + '</td>'; });
+    html += '</tr>';
+  }
+  html += '</tbody></table></div></div>';
+
+  container.innerHTML = html;
+}
+
+// ── Config Panel ───────────────────────────────────────────────
+
+function toggleConfig() {
+  const panel = $('configPanel');
+  const btn = $('gearBtn');
+  panel.classList.toggle('open');
+  btn.classList.toggle('active');
+}
+
+// ── Utility ────────────────────────────────────────────────────
+
+function escapeHtml(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// ── Init ───────────────────────────────────────────────────────
+
+window.addEventListener('load', async () => {
+  // Populate query selector
+  populateQuerySelect();
+
+  // Init Firebase
+  initFirebase();
+
+  // Init AILANG WASM
+  await initWASM();
+});
+</script>
+</body>
+</html>

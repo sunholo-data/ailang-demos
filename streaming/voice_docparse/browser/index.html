@@ -25,6 +25,7 @@
     --green: #3dd68c;
     --green-dim: #132e20;
     --red: #e05252;
+    --red-dim: #2a1010;
     --purple: #a07ee8;
     --mono: 'IBM Plex Mono', monospace;
     --sans: 'DM Sans', system-ui, sans-serif;
@@ -36,7 +37,7 @@
   .app {
     display: grid;
     grid-template-columns: 1fr 340px;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto auto 1fr auto;
     height: 100vh;
   }
 
@@ -69,8 +70,40 @@
     letter-spacing: 0.5px;
   }
 
-  .badge-ws { background: var(--green-dim); color: var(--green); border: 1px solid #1e4a32; }
+  .badge-ws {
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid #1e4a32;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .badge-ws .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .badge-ws.live .dot {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(61,214,140,0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 4px rgba(61,214,140,0.3); }
+    50% { box-shadow: 0 0 10px rgba(61,214,140,0.6); }
+  }
   .badge-model { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border); }
+  .badge-fallback {
+    display: none;
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid #4a1515;
+    animation: pulse-warn 1.5s ease-in-out infinite;
+  }
+  .badge-fallback.active { display: inline-block; }
+  @keyframes pulse-warn { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .header-right { display: flex; align-items: center; gap: 8px; }
 
   .btn-sm {
     font-family: var(--mono);
@@ -86,6 +119,20 @@
   }
   .btn-sm:hover { border-color: var(--accent-dim); color: var(--accent); }
 
+  /* ── Fallback banner ── */
+  .fallback-banner {
+    grid-column: 1 / -1;
+    display: none;
+    background: var(--red-dim);
+    border-bottom: 1px solid #4a1515;
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 16px;
+    text-align: center;
+  }
+  .fallback-banner.active { display: block; }
+
   /* ── Config ── */
   .config {
     grid-column: 1 / -1;
@@ -96,15 +143,46 @@
     transition: max-height 0.3s, padding 0.3s;
     padding: 0 20px;
   }
-  .config.open { max-height: 120px; padding: 12px 20px; }
+  .config.open { max-height: 140px; padding: 12px 20px; }
 
-  .config-row { display: flex; gap: 10px; align-items: center; }
+  .config-row { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .config-row:last-child { margin-bottom: 0; }
   .config-row label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-width: 80px; }
-  .config-input {
+  .config-input, .config-select {
     flex: 1; background: var(--bg-deep); border: 1px solid var(--border); color: var(--text);
     padding: 6px 10px; border-radius: 3px; font-family: var(--mono); font-size: 12px; outline: none;
   }
-  .config-input:focus { border-color: var(--accent-dim); }
+  .config-input:focus, .config-select:focus { border-color: var(--accent-dim); }
+
+  /* ── Scope strip ── */
+  .scope-strip {
+    grid-column: 1 / -1;
+    height: 80px;
+    background: var(--bg-deep);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .scope-strip canvas {
+    width: 100%;
+    height: 80px;
+    display: block;
+  }
+  .scope-strip .vu-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    background: rgba(0,0,0,0.4);
+  }
+  .vu-label { font-family: var(--mono); font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .vu-track { flex: 1; height: 3px; background: var(--bg-surface); border-radius: 2px; overflow: hidden; }
+  .vu-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent) 0%, var(--accent-bright) 80%, var(--red) 100%); border-radius: 2px; transition: width 0.1s ease-out; }
+  .vu-db { font-family: var(--mono); font-size: 8px; color: var(--text-dim); min-width: 36px; text-align: right; }
 
   /* ── Conversation Panel (left) ── */
   .conversation {
@@ -355,7 +433,11 @@
   .log-dot.ok { background: var(--green); }
   .log-dot.pending { background: var(--orange); }
   .log-dot.err { background: var(--red); }
+  .log-dot.info { background: var(--text-dim); }
+  .log-dot.audio { background: var(--accent); box-shadow: 0 0 4px rgba(74,158,255,0.4); }
   .log-text { color: var(--text-muted); line-height: 1.4; }
+  .log-text .hl { color: var(--accent); }
+  .log-text .val { color: var(--text); }
 
   /* ── Footer ── */
   .footer {
@@ -378,10 +460,13 @@
     .app { grid-template-columns: 1fr; }
     .doc-panel { display: none; }
     .conversation { border-right: none; }
+    .scope-strip { height: 60px; }
+    .scope-strip canvas { height: 60px; }
   }
 </style>
 <script src="../../wasm/wasm_exec.js"></script>
 <script src="../../wasm/ailang-repl.js"></script>
+<script src="../shared/gemini-live-core.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
@@ -390,18 +475,37 @@
   <div class="header">
     <div class="header-left">
       <div class="title">AILANG Voice DocParse</div>
-      <span class="badge badge-model">gemini-live-2.5-flash</span>
-      <span class="badge badge-ws">● WebSocket</span>
+      <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
+      <span class="badge badge-ws" id="wssBadge"><span class="dot"></span>WSS</span>
+      <span class="badge badge-fallback" id="fallbackBadge">FALLBACK</span>
     </div>
-    <div>
-      <button class="btn-sm" onclick="toggleConfig()">⚙ config</button>
+    <div class="header-right">
+      <button class="btn-sm" onclick="toggleConfig()">Config</button>
+      <button class="btn-sm" onclick="connectGemini()" id="connectBtn">Connect</button>
+    </div>
+  </div>
+  <div class="fallback-banner" id="fallbackBanner">AILANG closure failed — running in JS fallback mode. Events processed via AILANG pure functions.</div>
+
+  <div class="config" id="configPanel">
+    <div class="config-row">
+      <label>Gemini Key</label>
+      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="saveConfig()">
+    </div>
+    <div class="config-row">
+      <label>Voice</label>
+      <select class="config-select" id="voiceSelect" onchange="saveConfig()">
+        <option value="Sulafat">Sulafat (Warm)</option>
+      </select>
     </div>
   </div>
 
-  <div class="config" id="config">
-    <div class="config-row">
-      <label>Gemini Key</label>
-      <input type="password" class="config-input" id="apiKey" placeholder="API key..." onchange="localStorage.setItem('gemini-api-key',this.value)">
+  <!-- Scope strip (audio waveform) -->
+  <div class="scope-strip">
+    <canvas id="waveform"></canvas>
+    <div class="vu-strip">
+      <span class="vu-label">VU</span>
+      <div class="vu-track"><div class="vu-fill" id="vuFill"></div></div>
+      <span class="vu-db" id="vuDb">-∞ dB</span>
     </div>
   </div>
 
@@ -410,8 +514,9 @@
     <div class="chat-messages" id="chatMessages">
       <div style="text-align:center;padding:40px 20px;color:var(--text-dim);font-size:12px;">
         <div style="font-size:28px;margin-bottom:10px;opacity:0.3;">📄</div>
-        Upload a document and ask questions about it.<br>
-        The voice agent uses DocParse tools to analyze content.
+        Upload a document, then ask questions by voice or text.<br>
+        The agent uses AILANG DocParse tools to analyze content<br>
+        and responds with voice via Gemini Live audio.
       </div>
     </div>
     <div class="chat-input-area">
@@ -445,48 +550,158 @@
     </div>
 
     <div class="tool-log" id="toolLog">
-      <div class="log-title">Tool Activity</div>
+      <div class="log-title">Activity Log</div>
     </div>
   </div>
 
   <div class="footer">
     <div class="footer-stats">
       <div class="footer-stat">tools: <span id="fToolCalls">0</span></div>
-      <div class="footer-stat">messages: <span id="fMessages">0</span></div>
-      <div class="footer-stat">stream: <span id="fStreamStatus">disconnected</span></div>
+      <div class="footer-stat">audio: <span id="fAudioFrames">0</span></div>
+      <div class="footer-stat">stream: <span id="fStreamStatus">idle</span></div>
     </div>
-    <div>ailang × gemini live</div>
+    <div>ailang × gemini live × docparse wasm</div>
   </div>
 </div>
 
 <script>
-let ws = null;
-let isRecording = false;
-let audioCtx = null;
-let captureNode = null;
-let currentFile = null;
-let pendingText = null;   // queued text to send after setupComplete
-let sessionReady = false; // true after setupComplete received
+// ═══════════════════════════════════════════════════
+// Voice DocParse — AILANG WASM Streaming + Document Analysis
+//
+// Uses GeminiLiveCore (shared library) for WASM init, Stream effect
+// handlers, audio pipeline, and waveform visualization.
+// Loads both the Gemini Live streaming module (protocol) and all
+// DocParse modules (document parsing) into the same WASM engine.
+//
+// Voice responses via Gemini Live native audio.
+// Tool calls dispatched to DocParse WASM functions.
+// ═══════════════════════════════════════════════════
 
-// WASM DocParse state
-let wasmEngine = null;
-let wasmReady = false;
-let wasmLoading = false;
-let docXml = {};          // extracted XML from ZIP: { 'word/document.xml': '...', ... }
-let docBlocks = null;     // cached parsed blocks JSON string
+// ── DOM cache ──
+const $ = {};
+function cacheDom() {
+  for (const id of [
+    'wssBadge', 'fallbackBanner', 'fallbackBadge', 'configPanel',
+    'apiKey', 'voiceSelect', 'chatMessages', 'textInput', 'sendBtn',
+    'micBtn', 'connectBtn', 'toolLog', 'vuFill', 'vuDb',
+    'fToolCalls', 'fAudioFrames', 'fStreamStatus',
+    'statParagraphs', 'statTables', 'statImages', 'statHeadings',
+  ]) {
+    $[id] = document.getElementById(id);
+  }
+}
+
+// ── Module names ──
+const STREAM_MODULE = 'streaming/gemini_live/gemini_live_browser';
 const DOCPARSE_MODULE = 'docparse/services/docparse_browser';
-const DOCPARSE_MODULES = [
-  { name: 'docparse/types/document',           path: '../../ailang/docparse/types/document.ail' },
-  { name: 'docparse/services/format_router',    path: '../../ailang/docparse/services/format_router.ail' },
-  { name: 'docparse/services/zip_extract',      path: '../../ailang/docparse/services/zip_extract.ail' },
-  { name: 'docparse/services/docx_parser',      path: '../../ailang/docparse/services/docx_parser.ail' },
-  { name: 'docparse/services/pptx_parser',      path: '../../ailang/docparse/services/pptx_parser.ail' },
-  { name: 'docparse/services/xlsx_parser',      path: '../../ailang/docparse/services/xlsx_parser.ail' },
-  { name: 'docparse/services/output_formatter', path: '../../ailang/docparse/services/output_formatter.ail' },
-  { name: 'docparse/services/docparse_browser', path: '../../ailang/docparse/services/docparse_browser.ail' },
-];
 
-function toggleConfig() { document.getElementById('config').classList.toggle('open'); }
+// ── GeminiLiveCore instance ──
+const core = new GeminiLiveCore({
+  modules: [
+    { name: STREAM_MODULE,                          path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
+    { name: 'docparse/types/document',              path: '../../ailang/docparse/types/document.ail' },
+    { name: 'docparse/services/format_router',      path: '../../ailang/docparse/services/format_router.ail' },
+    { name: 'docparse/services/zip_extract',        path: '../../ailang/docparse/services/zip_extract.ail' },
+    { name: 'docparse/services/docx_parser',        path: '../../ailang/docparse/services/docx_parser.ail' },
+    { name: 'docparse/services/pptx_parser',        path: '../../ailang/docparse/services/pptx_parser.ail' },
+    { name: 'docparse/services/xlsx_parser',        path: '../../ailang/docparse/services/xlsx_parser.ail' },
+    { name: 'docparse/services/output_formatter',   path: '../../ailang/docparse/services/output_formatter.ail' },
+    { name: DOCPARSE_MODULE,                        path: '../../ailang/docparse/services/docparse_browser.ail' },
+  ],
+  stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io', 'std/stream', 'std/xml', 'std/math'],
+  playbackRate: 48000,
+  sourceRate: 24000,
+  micRate: 16000,
+  fftSize: 2048,
+  canvasHeight: 80,
+  onEvent: handleAILANGEvent,
+  onLog: (type, html) => addLog(type, html),
+  onStatsUpdate: (stats) => {
+    $.fAudioFrames.textContent = stats.frames;
+    if (core.lastPcmChunk) {
+      const vu = core.computeVU(core.lastPcmChunk);
+      $.vuFill.style.width = vu.pct + '%';
+      $.vuDb.textContent = vu.db > -60 ? vu.db.toFixed(1) + ' dB' : '-∞ dB';
+    }
+  },
+  onConnectionChange: (state) => {
+    if (state === 'connected') $.wssBadge.classList.add('live');
+    else $.wssBadge.classList.remove('live');
+  },
+  onFallbackActivated: () => {
+    $.fallbackBanner.classList.add('active');
+    $.fallbackBadge.classList.add('active');
+  },
+  onFallbackDeactivated: () => {
+    $.fallbackBanner.classList.remove('active');
+    $.fallbackBadge.classList.remove('active');
+  },
+  onWasmReady: () => populateVoicesFromAILANG(),
+  onWasmError: () => {},
+});
+
+// ── Config ──
+const SYSTEM_INSTRUCTION = 'You are a document analyst voice assistant powered by AILANG. ' +
+  'When the user asks about a document, use the available tools to parse and analyze it. ' +
+  'Use countContent first to understand structure, then other tools as needed. ' +
+  'Speak with a British English accent. Keep responses conversational and concise. ' +
+  'If no document is uploaded, ask the user to upload one first.';
+
+// ── Document state ──
+let currentFile = null;
+let docXml = {};
+let docBlocks = null;
+
+// ── Logging ──
+function addLog(status, text) {
+  if (!$.toolLog) return;
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  const now = new Date();
+  const ts = String(now.getHours()).padStart(2,'0') + ':' +
+             String(now.getMinutes()).padStart(2,'0') + ':' +
+             String(now.getSeconds()).padStart(2,'0');
+  el.innerHTML = `<span class="log-time">${ts}</span><span class="log-dot ${status}"></span><span class="log-text">${text}</span>`;
+  $.toolLog.appendChild(el);
+  $.toolLog.scrollTop = $.toolLog.scrollHeight;
+}
+
+// ── Config management ──
+function toggleConfig() { $.configPanel.classList.toggle('open'); }
+
+function loadConfig() {
+  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_key'))
+    localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_key'));
+  const k = localStorage.getItem('gemini-api-key');
+  if (k) $.apiKey.value = k;
+  const v = localStorage.getItem('gemini-live-voice');
+  if (v) $.voiceSelect.value = v;
+}
+
+function saveConfig() {
+  const key = $.apiKey.value.trim();
+  if (key) localStorage.setItem('gemini-api-key', key);
+  localStorage.setItem('gemini-live-voice', $.voiceSelect.value);
+}
+
+function populateVoicesFromAILANG() {
+  if (!core.wasmReady) return;
+  try {
+    const raw = core.callAILANG('voiceCatalog');
+    if (!raw) return;
+    const voices = JSON.parse(raw);
+    const current = $.voiceSelect.value;
+    $.voiceSelect.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = `${v.name} (${v.desc})`;
+      $.voiceSelect.appendChild(opt);
+    });
+    const saved = localStorage.getItem('gemini-live-voice');
+    $.voiceSelect.value = saved || current || 'Sulafat';
+  } catch (e) { console.error('Voice catalog error:', e); }
+}
 
 // ── File handling ──
 function handleDrop(e) {
@@ -502,60 +717,12 @@ async function handleFile(file) {
   zone.classList.add('has-file');
   zone.querySelector('.upload-icon').textContent = '✓';
   zone.querySelector('.upload-text').textContent = file.name;
-  zone.querySelector('.upload-hint').textContent = formatBytes(file.size);
-
+  zone.querySelector('.upload-hint').textContent = GeminiLiveCore.fmtBytes(file.size);
   document.getElementById('fileInfo').classList.add('visible');
   document.getElementById('fileName').textContent = file.name;
-  document.getElementById('fileMeta').textContent = `${formatBytes(file.size)} · ${file.type || 'unknown'}`;
-
-  addLog('pending', `File loaded: ${file.name}`);
-
-  // Extract XML from ZIP for WASM parsing
+  document.getElementById('fileMeta').textContent = `${GeminiLiveCore.fmtBytes(file.size)} · ${file.type || 'unknown'}`;
+  addLog('pending', `File loaded: <span class="val">${GeminiLiveCore.escapeHtml(file.name)}</span>`);
   await extractDocumentXml(file);
-
-  // Ensure WASM is loading
-  if (!wasmReady && !wasmLoading) initWASM();
-}
-
-function formatBytes(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
-  return (b/1048576).toFixed(1) + ' MB';
-}
-
-// ── WASM DocParse Engine ──
-async function initWASM() {
-  if (wasmReady || wasmLoading) return;
-  wasmLoading = true;
-  addLog('pending', 'Loading AILANG WASM runtime...');
-  try {
-    if (typeof AilangREPL === 'undefined') {
-      addLog('err', 'WASM runtime not available (ailang-repl.js not loaded)');
-      return;
-    }
-    const repl = new AilangREPL();
-    await repl.init('../../wasm/ailang.wasm');
-    for (const lib of ['std/json', 'std/option', 'std/result', 'std/string', 'std/math', 'std/xml', 'std/list', 'std/io']) {
-      repl.importModule(lib);
-    }
-    for (let i = 0; i < DOCPARSE_MODULES.length; i++) {
-      const mod = DOCPARSE_MODULES[i];
-      addLog('pending', `Loading ${mod.name.split('/').pop()} (${i+1}/${DOCPARSE_MODULES.length})`);
-      const resp = await fetch(mod.path + '?v=' + Date.now());
-      if (!resp.ok) throw new Error(`Failed to fetch ${mod.path}`);
-      const code = await resp.text();
-      const result = repl.loadModule(mod.name, code);
-      if (!result.success) throw new Error(`Module ${mod.name}: ${result.error}`);
-    }
-    wasmEngine = repl;
-    wasmReady = true;
-    addLog('ok', 'AILANG DocParse ready');
-  } catch (e) {
-    addLog('err', 'WASM init failed: ' + e.message);
-    console.error('WASM init error:', e);
-  } finally {
-    wasmLoading = false;
-  }
 }
 
 async function extractDocumentXml(file) {
@@ -568,28 +735,19 @@ async function extractDocumentXml(file) {
     const zip = await JSZip.loadAsync(buffer);
     for (const entry of Object.keys(zip.files)) {
       if (entry.endsWith('.xml') && !zip.files[entry].dir) {
-        try { docXml[entry] = await zip.files[entry].async('string'); } catch (e) { /* skip */ }
+        try { docXml[entry] = await zip.files[entry].async('string'); } catch {}
       }
     }
-    addLog('ok', `Extracted ${Object.keys(docXml).length} XML entries`);
+    addLog('ok', `Extracted <span class="val">${Object.keys(docXml).length}</span> XML entries`);
   }
 }
 
-function callAILANG(funcName, ...args) {
-  if (!wasmReady) return { success: false, error: 'WASM not ready' };
-  try {
-    const result = wasmEngine.call(DOCPARSE_MODULE, funcName, ...args);
-    if (!result.success) return { success: false, error: result.error };
-    let val = result.result || '';
-    const typeMatch = val.match(/^(.+) :: \w+$/s);
-    if (typeMatch) val = typeMatch[1];
-    if (val.startsWith('"') && val.endsWith('"')) {
-      try { val = JSON.parse(val); } catch { val = val.slice(1, -1); }
-    }
-    return { success: true, result: val };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+// ── DocParse WASM calls ──
+function callDocParse(funcName, ...args) {
+  if (!core.wasmReady) return { success: false, error: 'WASM not ready' };
+  const result = core.callAILANGModule(DOCPARSE_MODULE, funcName, ...args);
+  if (result === null) return { success: false, error: 'call failed' };
+  return { success: true, result };
 }
 
 function ensureBlocksParsed() {
@@ -597,7 +755,7 @@ function ensureBlocksParsed() {
   if (!currentFile) return false;
   const ext = currentFile.name.split('.').pop().toLowerCase();
   if (ext === 'docx' && docXml['word/document.xml']) {
-    const r = callAILANG('parseDocxBody', docXml['word/document.xml']);
+    const r = callDocParse('parseDocxBody', docXml['word/document.xml']);
     if (r.success) { docBlocks = r.result; return true; }
   } else if (ext === 'pptx') {
     const slideXmls = Object.keys(docXml)
@@ -605,7 +763,7 @@ function ensureBlocksParsed() {
       .sort();
     const all = [];
     for (const key of slideXmls) {
-      const r = callAILANG('parsePptxSlide', docXml[key]);
+      const r = callDocParse('parsePptxSlide', docXml[key]);
       if (r.success) try { all.push(...JSON.parse(r.result)); } catch {}
     }
     docBlocks = JSON.stringify(all); return true;
@@ -616,7 +774,7 @@ function ensureBlocksParsed() {
       .sort();
     const all = [];
     for (const key of sheets) {
-      const r = callAILANG('parseXlsxSheet', docXml[key], ss, key);
+      const r = callDocParse('parseXlsxSheet', docXml[key], ss, key);
       if (r.success) try { all.push(...JSON.parse(r.result)); } catch {}
     }
     docBlocks = JSON.stringify(all); return true;
@@ -625,7 +783,7 @@ function ensureBlocksParsed() {
 }
 
 function getDocParseResult(toolName, toolArgs) {
-  if (!wasmReady) return 'AILANG WASM is still loading. Please wait and try again.';
+  if (!core.wasmReady) return 'AILANG WASM is still loading. Please wait and try again.';
   if (!currentFile || Object.keys(docXml).length === 0) return 'No document uploaded. Please upload a DOCX, PPTX, or XLSX file first.';
   if (!ensureBlocksParsed()) return 'Failed to parse document.';
 
@@ -660,10 +818,10 @@ function getDocParseResult(toolName, toolArgs) {
           if (b.type === 'section' && b.blocks) count(b.blocks);
         }
       })(blocks);
-      document.getElementById('statParagraphs').textContent = c.paragraph;
-      document.getElementById('statTables').textContent = c.table;
-      document.getElementById('statImages').textContent = c.image;
-      document.getElementById('statHeadings').textContent = c.heading;
+      $.statParagraphs.textContent = c.paragraph;
+      $.statTables.textContent = c.table;
+      $.statImages.textContent = c.image;
+      $.statHeadings.textContent = c.heading;
       return `Document contains: ${c.paragraph} paragraphs, ${c.table} tables, ${c.image} images, ${c.heading} headings (${blocks.length} blocks total)`;
     }
     case 'searchDocument': {
@@ -699,126 +857,132 @@ function blocksToText(blocks) {
   return md || 'Document parsed but no text content found.';
 }
 
-// ── WebSocket ──
-function connectGemini() {
-  const key = document.getElementById('apiKey').value || localStorage.getItem('gemini-api-key');
-  if (!key) { addLog('err', 'No API key — open config to set one'); toggleConfig(); return; }
-  sessionReady = false;
-
-  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
-  ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    document.getElementById('fStreamStatus').textContent = 'connected';
-    addLog('ok', 'WebSocket connected');
-    sendSetup();
-  };
-
-  ws.onmessage = async (e) => {
-    let text;
-    if (typeof e.data === 'string') text = e.data;
-    else if (e.data instanceof Blob) text = await e.data.text();
-    else if (e.data instanceof ArrayBuffer) text = new TextDecoder().decode(e.data);
-    else return;
-    try { handleServerMessage(JSON.parse(text)); }
-    catch (err) { console.error('Failed to parse:', text.substring(0, 100)); }
-  };
-
-  ws.onclose = (e) => {
-    sessionReady = false;
-    document.getElementById('fStreamStatus').textContent = 'disconnected';
-    addLog('err', `WebSocket closed (code: ${e.code}${e.reason ? ', ' + e.reason : ''})`);
-  };
-
-  ws.onerror = (e) => {
-    addLog('err', 'WebSocket error');
-    console.error('WebSocket error:', e);
-  };
+// ── Tool declarations for Gemini ──
+function getToolDeclarations() {
+  return [{
+    functionDeclarations: [
+      { name: 'parseDocument', description: 'Parse the uploaded document and return its full content as markdown. Use this to read document text.', parameters: { type: 'object', properties: {} } },
+      { name: 'extractTables', description: 'Extract all tables from the document with headers and rows.', parameters: { type: 'object', properties: {} } },
+      { name: 'extractHeadings', description: 'Get the document outline showing all headings and their hierarchy.', parameters: { type: 'object', properties: {} } },
+      { name: 'countContent', description: 'Count paragraphs, tables, images, and headings in the document.', parameters: { type: 'object', properties: {} } },
+      { name: 'searchDocument', description: 'Search for specific text within the document.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Text to search for' } }, required: ['query'] } },
+    ]
+  }];
 }
 
-function sendSetup() {
-  const tools = [
-    { name: 'parseDocument', description: 'Parse document content as markdown', parameters: { type: 'object', properties: { filepath: { type: 'string' } }, required: ['filepath'] } },
-    { name: 'extractTables', description: 'Extract tables from document', parameters: { type: 'object', properties: { filepath: { type: 'string' } }, required: ['filepath'] } },
-    { name: 'extractHeadings', description: 'Get document outline', parameters: { type: 'object', properties: { filepath: { type: 'string' } }, required: ['filepath'] } },
-    { name: 'countContent', description: 'Count paragraphs, tables, images, headings', parameters: { type: 'object', properties: { filepath: { type: 'string' } }, required: ['filepath'] } },
-    { name: 'searchDocument', description: 'Search text in document', parameters: { type: 'object', properties: { filepath: { type: 'string' }, query: { type: 'string' } }, required: ['filepath', 'query'] } }
-  ];
-
-  const setup = {
-    setup: {
-      model: 'models/gemini-live-2.5-flash-preview',
-      generationConfig: { responseModalities: ['TEXT'] },
-      systemInstruction: { parts: [{ text: 'You are a document analyst. Use the available tools to parse and analyze documents. Summarize results clearly.' }] },
-      tools: [{ functionDeclarations: tools }]
-    }
-  };
-  ws.send(JSON.stringify(setup));
-}
-
-function handleServerMessage(data) {
-  const count = parseInt(document.getElementById('fMessages').textContent) + 1;
-  document.getElementById('fMessages').textContent = count;
-
-  if (data.setupComplete) {
-    sessionReady = true;
-    addLog('ok', 'Session ready');
-    addAgentMessage('Ready! Ask me about your document.');
-    // Flush any queued text
-    if (pendingText) {
-      const text = pendingText;
-      pendingText = null;
-      sendMessage(text);
-    }
-    return;
+// ── Event handler ──
+function handleAILANGEvent(event) {
+  switch (event.type) {
+    case 'log':
+      addLog('info', GeminiLiveCore.escapeHtml(event.text || ''));
+      break;
+    case 'setup':
+      core.sessionReady = true;
+      $.fStreamStatus.textContent = 'ready';
+      addLog('ok', '<span class="hl">Setup complete</span> — AILANG streaming session with tools');
+      break;
+    case 'sent':
+      addLog('info', 'Sent: <span class="val">' + GeminiLiveCore.escapeHtml(event.text || '') + '</span>');
+      $.fStreamStatus.textContent = 'streaming';
+      core.markPromptSent();
+      break;
+    case 'turnComplete':
+      core.sessionReady = true;
+      resetAgentBubble();
+      $.fStreamStatus.textContent = 'ready';
+      addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' +
+        core.stats.frames + '</span> audio frames');
+      $.sendBtn.disabled = false;
+      $.textInput.disabled = false;
+      break;
+    case 'inputTranscript':
+      if (event.text) {
+        addUserMessage(event.text);
+        addLog('info', 'You: <span class="val">' + GeminiLiveCore.escapeHtml(event.text) + '</span>');
+      }
+      break;
+    case 'outputTranscript':
+      if (event.text) {
+        appendAgentText(event.text);
+        addLog('info', 'Agent: <span class="val">' + GeminiLiveCore.escapeHtml(event.text) + '</span>');
+      }
+      break;
+    case 'modelTurn':
+      if (event.parts && Array.isArray(event.parts)) {
+        event.parts.forEach(part => {
+          if (part.text) appendAgentText(part.text);
+          if (part.inlineData && part.inlineData.data) core.handleAudioFrame(part.inlineData.data);
+        });
+      }
+      break;
+    case 'toolCall':
+      resetAgentBubble();  // tool cards get their own section
+      if (event.calls) {
+        event.calls.forEach(call => {
+          const tc = parseInt($.fToolCalls.textContent) + 1;
+          $.fToolCalls.textContent = tc;
+          addLog('pending', `Tool call: <span class="hl">${GeminiLiveCore.escapeHtml(call.name)}</span>`);
+          const result = getDocParseResult(call.name, call.args);
+          addToolCard(call.name, call.args, result);
+          addLog('ok', `<span class="hl">${GeminiLiveCore.escapeHtml(call.name)}</span> completed`);
+          // Send tool response via AILANG
+          const resp = core.callAILANG('buildToolResponse', call.id, call.name, result);
+          const conn = core.getActiveConnection();
+          if (conn && resp) conn.ws.send(resp);
+          else if (conn) {
+            // Fallback: build response directly
+            conn.ws.send(JSON.stringify({
+              toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { result } }] }
+            }));
+          }
+        });
+      }
+      break;
+    case 'opened':
+      $.fStreamStatus.textContent = 'connected';
+      addLog('ok', 'WebSocket connected (AILANG Stream effect)');
+      break;
+    case 'closed':
+      core.sessionReady = false;
+      $.fStreamStatus.textContent = 'disconnected';
+      $.wssBadge.classList.remove('live');
+      addLog('info', 'Session closed');
+      $.connectBtn.textContent = 'Connect';
+      break;
+    case 'error':
+      addLog('err', GeminiLiveCore.escapeHtml(event.text || 'Unknown error'));
+      break;
   }
-
-  if (data.toolCall) {
-    const calls = data.toolCall.functionCalls || [];
-    calls.forEach(call => {
-      const tc = parseInt(document.getElementById('fToolCalls').textContent) + 1;
-      document.getElementById('fToolCalls').textContent = tc;
-      addLog('pending', `Tool: ${call.name}`);
-      const result = getDocParseResult(call.name, call.args);
-      addToolCard(call.name, JSON.stringify(call.args || {}), result);
-      addLog('ok', `${call.name} completed`);
-      sendToolResponse(call.id, result);
-    });
-    return;
-  }
-
-  if (data.serverContent) {
-    if (data.serverContent.turnComplete) return;
-    const parts = data.serverContent?.modelTurn?.parts || [];
-    parts.forEach(p => {
-      if (p.text) addAgentMessage(p.text);
-    });
-  }
 }
 
-function sendToolResponse(id, result) {
-  if (!ws) return;
-  ws.send(JSON.stringify({
-    toolResponse: { functionResponses: [{ id, name: '', response: { result } }] }
-  }));
-}
+// ── Chat UI (accumulating agent messages) ──
+let _agentEl = null;
 
-// ── Chat UI ──
 function addUserMessage(text) {
+  _agentEl = null;  // new user message breaks the agent bubble
   const el = document.createElement('div');
   el.className = 'chat-msg chat-user';
   el.textContent = text;
-  document.getElementById('chatMessages').appendChild(el);
-  scrollChat();
+  $.chatMessages.appendChild(el);
+  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
 }
 
-function addAgentMessage(text) {
-  const el = document.createElement('div');
-  el.className = 'chat-msg chat-agent';
-  el.innerHTML = `<div class="agent-text">${escapeHtml(text)}</div>`;
-  document.getElementById('chatMessages').appendChild(el);
-  scrollChat();
+// Append text to the current agent bubble (or create one)
+function appendAgentText(text) {
+  if (!text) return;
+  if (!_agentEl) {
+    _agentEl = document.createElement('div');
+    _agentEl.className = 'chat-msg chat-agent';
+    _agentEl.innerHTML = '<div class="agent-text"></div>';
+    $.chatMessages.appendChild(_agentEl);
+  }
+  const inner = _agentEl.querySelector('.agent-text');
+  if (inner.textContent) inner.textContent += ' ' + text;
+  else inner.textContent = text;
+  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
 }
+
+function resetAgentBubble() { _agentEl = null; }
 
 function addToolCard(name, args, result) {
   const el = document.createElement('div');
@@ -826,103 +990,131 @@ function addToolCard(name, args, result) {
   el.innerHTML = `
     <div class="tool-header">
       <span class="tool-icon">⚡</span>
-      <span class="tool-name">${name}</span>
+      <span class="tool-name">${GeminiLiveCore.escapeHtml(name)}</span>
       <span class="tool-status ok">✓ ok</span>
     </div>
-    <div class="tool-result">${escapeHtml(result)}</div>`;
-  document.getElementById('chatMessages').appendChild(el);
-  scrollChat();
+    <div class="tool-result">${GeminiLiveCore.escapeHtml(typeof result === 'string' ? result : JSON.stringify(result))}</div>`;
+  $.chatMessages.appendChild(el);
+  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
 }
 
-function scrollChat() {
-  const c = document.getElementById('chatMessages');
-  c.scrollTop = c.scrollHeight;
-}
+// ── Connect to Gemini Live with tools ──
+async function connectGemini(initialPrompt) {
+  const key = $.apiKey.value.trim() || localStorage.getItem('gemini-api-key');
+  if (!key) { toggleConfig(); addLog('err', 'Enter your Gemini API key'); return; }
+  saveConfig();
 
-function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-function sendMessage(text) {
-  if (ws && ws.readyState === 1 && sessionReady) {
-    ws.send(JSON.stringify({
-      clientContent: {
-        turns: [{ role: 'user', parts: [{ text }] }],
-        turnComplete: true
-      }
-    }));
+  if (!core.wasmReady) {
+    addLog('err', 'AILANG WASM not loaded — cannot start session');
+    return;
   }
+
+  core.sessionReady = false;
+  core.resetStats();
+  $.fStreamStatus.textContent = 'connecting';
+  $.sendBtn.disabled = true;
+  $.textInput.disabled = true;
+  $.connectBtn.textContent = 'Connecting...';
+  core.deactivateFallbackMode();
+
+  await core.initAudio();
+
+  const voice = $.voiceSelect.value;
+  const toolsJson = JSON.stringify(getToolDeclarations());
+  let prompt = initialPrompt || '';
+  if (!prompt && currentFile) {
+    prompt = 'Hello! I have uploaded a document called "' + currentFile.name + '". ' +
+      'Please use your tools to analyze it — start with countContent to see what it contains.';
+  } else if (!prompt) {
+    prompt = 'Hello! I may have a document to analyze.';
+  }
+  core.sessionPrompt = prompt;
+
+  addLog('info', 'Starting AILANG session with <span class="hl">tools</span> (std/stream effects)...');
+
+  try {
+    const result = await core.wasmEngine.callAsync(
+      STREAM_MODULE, 'startSessionWithTools',
+      key, voice, SYSTEM_INSTRUCTION, prompt, toolsJson
+    );
+    if (!result.success) addLog('err', 'Session error: ' + GeminiLiveCore.escapeHtml(result.error || 'unknown'));
+    else addLog('info', 'Session ended: <span class="val">' + (result.result || 'complete') + '</span>');
+  } catch (e) {
+    addLog('err', 'Session failed: ' + GeminiLiveCore.escapeHtml(e.message));
+  }
+
+  core.sessionReady = false;
+  $.fStreamStatus.textContent = 'disconnected';
+  $.connectBtn.textContent = 'Connect';
 }
 
+// ── Send text ──
 function sendText() {
-  const input = document.getElementById('textInput');
-  const text = input.value.trim();
+  const text = $.textInput.value.trim();
   if (!text) return;
   addUserMessage(text);
-  input.value = '';
-  if (!ws || ws.readyState !== 1) {
-    pendingText = text;
-    connectGemini();
-  } else {
-    sendMessage(text);
+  $.textInput.value = '';
+
+  if (!core.getActiveConnection()) {
+    connectGemini(text);
+    return;
   }
+
+  const msgJson = core.callAILANG('buildTextMessage', text);
+  const conn = core.getActiveConnection();
+  if (conn && msgJson) conn.ws.send(msgJson);
+  else if (conn) {
+    conn.ws.send(JSON.stringify({
+      clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true }
+    }));
+  }
+
+  core.resetStats();
+  core.markPromptSent();
+  core.clearAudioQueue();
+  $.sendBtn.disabled = true;
+  $.textInput.disabled = true;
+  $.fStreamStatus.textContent = 'streaming';
 }
 
-// ── Mic ──
+// ── Microphone ──
 async function toggleMic() {
-  const btn = document.getElementById('micBtn');
-  if (isRecording) {
-    isRecording = false;
-    btn.classList.remove('active');
-    if (captureNode) captureNode.port.postMessage({ command: 'stop' });
-  } else {
-    if (!audioCtx) {
-      audioCtx = new AudioContext({ sampleRate: 48000 });
-      await audioCtx.audioWorklet.addModule('../shared/audio-worklet.js');
+  if (core.isRecording) {
+    await core.toggleMic(() => {});
+    $.micBtn.classList.remove('active');
+    return;
+  }
+  const started = await core.toggleMic((b64) => {
+    const conn = core.getActiveConnection();
+    if (conn && core.sessionReady) {
+      const chunkJson = core.callAILANG('buildAudioChunk', b64);
+      conn.ws.send(chunkJson || JSON.stringify({
+        realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
+      }));
     }
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const source = audioCtx.createMediaStreamSource(stream);
-    captureNode = new AudioWorkletNode(audioCtx, 'pcm-capture', { processorOptions: { targetRate: 16000 } });
-    source.connect(captureNode);
-    captureNode.port.onmessage = (e) => {
-      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === 1 && sessionReady) {
-        const b64 = arrayBufferToBase64(e.data.pcmData);
-        ws.send(JSON.stringify({
-          realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
-        }));
-      }
-    };
-    isRecording = true;
-    btn.classList.add('active');
-    if (!ws || ws.readyState !== 1) connectGemini();
+  });
+  if (started) {
+    $.micBtn.classList.add('active');
+    if (!core.getActiveConnection()) connectGemini('');
   }
 }
 
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
+// ── Init ──
+window.addEventListener('load', async () => {
+  cacheDom();
+  loadConfig();
+  core.initWaveform(document.getElementById('waveform'));
 
-// ── Tool Log ──
-function addLog(status, text) {
-  const log = document.getElementById('toolLog');
-  const entry = document.createElement('div');
-  entry.className = 'log-entry';
-  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-dot ${status}"></span><span class="log-text">${text}</span>`;
-  log.appendChild(entry);
-  log.scrollTop = log.scrollHeight;
-}
+  addLog('info', 'Loading AILANG WASM — streaming + DocParse modules...');
+  await core.initWASM();
 
-// Init
-document.addEventListener('DOMContentLoaded', () => {
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_key'));
-  const k = localStorage.getItem('gemini-api-key');
-  if (k) document.getElementById('apiKey').value = k;
-  // Start loading AILANG WASM engine
-  initWASM();
+  if (core.wasmReady) {
+    addLog('ok', 'AILANG <span class="hl">std/stream effects</span> + <span class="hl">DocParse WASM</span> ready');
+    addLog('info', 'Upload a document and click <span class="val">Connect</span> or type a question');
+  } else {
+    addLog('err', 'AILANG WASM failed to load');
+  }
 });
 </script>
-<script src="../shared/nav.js"></script>
 </body>
 </html>

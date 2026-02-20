@@ -7,6 +7,7 @@ on:
       - 'wasm/**'
       - 'invoice_processor_wasm/**'
       - 'docparse/**'
+      - 'ecommerce/**'
       - 'verify_demo/**'
       - 'streaming/**'
       - 'site/**'
@@ -198,14 +199,17 @@ jobs:
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
 
+          # Ecommerce landing page + screenshot
+          mkdir -p _site/ecommerce/img
+          cp ecommerce/browser/index.html _site/ecommerce/
+          cp ecommerce/img/ecommerce-dashboard-ui.png _site/ecommerce/img/
           # Streaming shared assets
           mkdir -p _site/streaming/shared
           cp streaming/shared/audio-worklet.js _site/streaming/shared/
-          cp streaming/shared/nav.js _site/streaming/shared/
+          cp streaming/shared/gemini-live-core.js _site/streaming/shared/
 
           # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
-          for demo in claude_chat gemini_live safe_agent transcription \
-                      voice_analytics voice_docparse voice_pipeline; do
+          for demo in claude_chat gemini_live safe_agent voice_docparse; do
             mkdir -p "_site/streaming/${demo}"
             cp "streaming/${demo}/browser/index.html" "_site/streaming/${demo}/"
           done

@@ -274,9 +274,6 @@
   .card:nth-child(2) { animation-delay: 0.10s; }
   .card:nth-child(3) { animation-delay: 0.15s; }
   .card:nth-child(4) { animation-delay: 0.20s; }
-  .card:nth-child(5) { animation-delay: 0.25s; }
-  .card:nth-child(6) { animation-delay: 0.30s; }
-  .card:nth-child(7) { animation-delay: 0.35s; }
 
   .card:hover {
     transform: translateY(-3px);
@@ -296,10 +293,7 @@
   }
 
   .card--docparse::before { background: var(--blue); }
-  .card--analytics::before { background: linear-gradient(90deg, var(--emerald), var(--purple)); }
   .card--claude::before { background: var(--amber); }
-  .card--transcription::before { background: var(--teal); }
-  .card--pipeline::before { background: linear-gradient(90deg, var(--blue), var(--purple), var(--pink)); }
   .card--safe::before { background: var(--success); }
   .card--live::before { background: linear-gradient(90deg, var(--amber), #e88a30); }
 
@@ -317,10 +311,7 @@
   }
 
   .card--docparse .card-icon { background: var(--blue-bg); color: var(--blue); }
-  .card--analytics .card-icon { background: rgba(5,150,105,0.08); color: var(--emerald); }
   .card--claude .card-icon { background: var(--ai-orange-bg); color: var(--amber); }
-  .card--transcription .card-icon { background: var(--teal-bg); color: var(--teal); }
-  .card--pipeline .card-icon { background: var(--contract-purple-bg); color: var(--purple); }
   .card--safe .card-icon { background: var(--success-bg); color: var(--success); }
   .card--live .card-icon { background: var(--ai-orange-bg); color: var(--amber); }
 
@@ -532,27 +523,7 @@
       </div>
     </a>
 
-    <!-- 2. Voice Analytics -->
-    <a href="voice_analytics/browser/index.html" class="card card--analytics">
-      <span class="card-arrow">&rarr;</span>
-      <div class="card-icon">
-        <svg viewBox="0 0 24 24">
-          <line x1="18" y1="20" x2="18" y2="10"/>
-          <line x1="12" y1="20" x2="12" y2="4"/>
-          <line x1="6" y1="20" x2="6" y2="14"/>
-          <line x1="3" y1="20" x2="21" y2="20"/>
-        </svg>
-      </div>
-      <div class="card-name">Voice Analytics</div>
-      <div class="card-desc">Query BigQuery by voice</div>
-      <div class="card-meta">
-        <span class="badge badge-provider">Google Gemini Live</span>
-        <span class="badge badge-provider">BigQuery</span>
-        <span class="badge badge-ws">WebSocket</span>
-      </div>
-    </a>
-
-    <!-- 3. Claude Chat -->
+    <!-- 2. Claude Chat -->
     <a href="claude_chat/browser/index.html" class="card card--claude">
       <span class="card-arrow">&rarr;</span>
       <div class="card-icon">
@@ -570,46 +541,7 @@
       </div>
     </a>
 
-    <!-- 4. Transcription -->
-    <a href="transcription/browser/index.html" class="card card--transcription">
-      <span class="card-arrow">&rarr;</span>
-      <div class="card-icon">
-        <svg viewBox="0 0 24 24">
-          <path d="M2 12h2l2-6 3 12 3-8 2 4h2"/>
-          <circle cx="20" cy="12" r="1.5"/>
-        </svg>
-      </div>
-      <div class="card-name">Transcription</div>
-      <div class="card-desc">Real-time speech to text</div>
-      <div class="card-meta">
-        <span class="badge badge-provider">Deepgram nova-2</span>
-        <span class="badge badge-ws">WebSocket</span>
-      </div>
-    </a>
-
-    <!-- 5. Voice Pipeline -->
-    <a href="voice_pipeline/browser/index.html" class="card card--pipeline">
-      <span class="card-arrow">&rarr;</span>
-      <div class="card-icon">
-        <svg viewBox="0 0 24 24">
-          <circle cx="5" cy="12" r="2.5"/>
-          <circle cx="19" cy="12" r="2.5"/>
-          <line x1="7.5" y1="12" x2="16.5" y2="12"/>
-          <polyline points="14 9 16.5 12 14 15"/>
-          <line x1="12" y1="12" x2="12" y2="6"/>
-          <circle cx="12" cy="4.5" r="1.5"/>
-        </svg>
-      </div>
-      <div class="card-name">Voice Pipeline</div>
-      <div class="card-desc">Audio &rarr; Text &rarr; Audio</div>
-      <div class="card-meta">
-        <span class="badge badge-provider">Deepgram</span>
-        <span class="badge badge-provider">ElevenLabs</span>
-        <span class="badge badge-ws">2&times; WebSocket</span>
-      </div>
-    </a>
-
-    <!-- 6. Safe Agent -->
+    <!-- 3. Safe Agent -->
     <a href="safe_agent/browser/index.html" class="card card--safe">
       <span class="card-arrow">&rarr;</span>
       <div class="card-icon">
