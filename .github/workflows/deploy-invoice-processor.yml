@@ -183,6 +183,7 @@ jobs:
       - name: Assemble site
         run: |
           set -euo pipefail
+          rm -rf _site
           mkdir -p _site
 
           # Hub page
