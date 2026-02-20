@@ -219,6 +219,16 @@ jobs:
           cp streaming/gemini_live/gemini_live_browser.ail \
             _site/ailang/streaming/gemini_live/
 
+          # Claude Chat AILANG modules (SSE demo)
+          mkdir -p _site/ailang/streaming/claude_chat/types
+          mkdir -p _site/ailang/streaming/claude_chat/services
+          cp streaming/claude_chat/types/claude_types.ail \
+            _site/ailang/streaming/claude_chat/types/
+          cp streaming/claude_chat/services/claude_sse.ail \
+            _site/ailang/streaming/claude_chat/services/
+          cp streaming/claude_chat/services/claude_chat_browser.ail \
+            _site/ailang/streaming/claude_chat/services/
+
           echo "::group::Site contents"
           find _site -type f | head -60
           echo "::endgroup::"

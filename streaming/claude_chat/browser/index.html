@@ -26,6 +26,7 @@
     --green-dim: #1a3d2a;
     --red: #e05252;
     --blue: #5b9ee9;
+    --cyan: #38bdf8;
     --user-bg: #111418;
     --user-border: #1c2028;
     --font-mono: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', monospace;
@@ -139,6 +140,28 @@
     50% { opacity: 0.4; }
   }
 
+  .badge-wasm {
+    background: #0e1520;
+    border: 1px solid #1a2535;
+    color: #4a6fa5;
+    transition: all 0.4s;
+  }
+
+  .badge-wasm.active {
+    background: #0e1a28;
+    border-color: #1a3550;
+    color: var(--cyan);
+  }
+
+  .badge-wasm.active::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+  }
+
   .topbar-right {
     display: flex;
     align-items: center;
@@ -184,12 +207,12 @@
     align-items: flex-start;
     gap: 8px;
     padding: 8px 10px;
-    background: #1a1408;
-    border: 1px solid #2a1f0a;
+    background: #0e1520;
+    border: 1px solid #1a2535;
     border-radius: 3px;
     margin-bottom: 10px;
     font-size: 11px;
-    color: var(--amber-dim);
+    color: #4a6fa5;
     line-height: 1.5;
   }
 
@@ -294,7 +317,7 @@
   }
 
   .msg-assistant .msg-label::before {
-    content: '▸';
+    content: '\25B8';
     color: var(--amber);
   }
 
@@ -393,6 +416,37 @@
     font-size: 10px;
     font-family: var(--font-mono);
   }
+
+  /* WASM init log in welcome area */
+  .init-log {
+    text-align: left;
+    width: 100%;
+    max-width: 460px;
+    padding: 10px 0;
+    font-size: 11px;
+    line-height: 1.8;
+  }
+
+  .init-entry {
+    color: var(--text-dim);
+    padding: 1px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .init-entry .init-icon {
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .init-entry.ok { color: var(--green); }
+  .init-entry.err { color: var(--red); }
+  .init-entry.info { color: var(--text-muted); }
+  .init-entry.warn { color: var(--amber-dim); }
+
+  .init-entry .hl { color: var(--amber); }
 
   /* ── Input Area ── */
   .input-area {
@@ -516,22 +570,22 @@
   <!-- Top Bar -->
   <div class="topbar">
     <div class="topbar-left">
-      <div class="logo">AILANG <span>×</span> Claude SSE</div>
-      <span class="badge badge-model">claude-sonnet-4-5-20250929</span>
+      <div class="logo">AILANG <span>&times;</span> Claude SSE</div>
+      <span class="badge badge-model" id="badgeModel">claude-sonnet-4-5-20250929</span>
       <span class="badge badge-sse">SSE</span>
+      <span class="badge badge-wasm" id="wasmBadge">WASM</span>
     </div>
     <div class="topbar-right">
-      <button class="btn-config" onclick="toggleConfig()" id="configBtn">⚙ config</button>
+      <button class="btn-config" onclick="toggleConfig()" id="configBtn">config</button>
     </div>
   </div>
 
   <!-- Config Panel (collapsible) -->
   <div class="config-panel" id="configPanel">
     <div class="config-warning">
-      <span>⚠</span>
-      <span>API calls go directly from your browser. You may need a CORS proxy
-      (e.g. <code>npx cors-anywhere</code>) or use the AILANG <code>serve-api</code> backend.
-      Your key is stored in localStorage only.</span>
+      <span>&#9432;</span>
+      <span>API calls go from your browser via <code>AILANG ssePost</code>.
+      Your key is stored in localStorage and sent directly to the Anthropic API.</span>
     </div>
     <div class="config-row">
       <label>API Key</label>
@@ -544,10 +598,12 @@
   <!-- Messages -->
   <div class="messages" id="messages">
     <div class="welcome" id="welcome">
-      <div class="welcome-glyph">λ</div>
-      <p>AILANG streaming demo using Claude's SSE protocol.
-         Type a message and watch tokens arrive in real-time.</p>
-      <p><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</p>
+      <div class="welcome-glyph">&lambda;</div>
+      <p>AILANG SSE streaming via WASM.
+         Claude's Messages API driven entirely by AILANG &mdash;
+         <code>ssePost</code>, event parsing, and protocol logic.</p>
+      <div id="initLog" class="init-log"></div>
+      <p><kbd>Enter</kbd> to send &middot; <kbd>Shift+Enter</kbd> for newline &middot; <kbd>Esc</kbd> to cancel</p>
     </div>
   </div>
 
@@ -560,7 +616,8 @@
                   onkeydown="handleKeydown(event)"
                   oninput="autoResize(this)"></textarea>
       </div>
-      <button class="btn-send" id="sendBtn" onclick="sendMessage()">Send</button>
+      <button class="btn-send" id="sendBtn" onclick="sendMessage()" disabled
+              title="Loading WASM...">Send</button>
     </div>
   </div>
 
@@ -571,42 +628,96 @@
         <span class="stat-label">events</span>
         <span class="stat-value" id="statEvents">0</span>
       </div>
-      <span class="separator">│</span>
+      <span class="separator">&vert;</span>
       <div class="stat">
         <span class="stat-label">chars</span>
         <span class="stat-value" id="statChars">0</span>
       </div>
-      <span class="separator">│</span>
+      <span class="separator">&vert;</span>
       <div class="stat">
         <span class="stat-label">tokens/s</span>
-        <span class="stat-value" id="statTps">—</span>
+        <span class="stat-value" id="statTps">&mdash;</span>
       </div>
     </div>
     <div class="statusbar-right">
       <div class="stat">
         <span class="stat-label">latency</span>
-        <span class="stat-value" id="statLatency">—</span>
+        <span class="stat-value" id="statLatency">&mdash;</span>
       </div>
-      <span class="separator">│</span>
+      <span class="separator">&vert;</span>
       <div class="stat">
-        <span class="stat-label" id="statusText">ready</span>
+        <span class="stat-label" id="statusText">loading wasm</span>
       </div>
     </div>
   </div>
 </div>
 
+<!-- AILANG WASM runtime -->
+<script src="../../wasm/wasm_exec.js"></script>
+<script src="../../wasm/ailang-repl.js"></script>
+<script src="../shared/gemini-live-core.js"></script>
+
 <script>
+// ═══════════════════════════════════════════════════════
+// AILANG x Claude SSE — Browser Demo
+//
+// AILANG drives the SSE protocol via std/stream effects:
+//   ssePost → onEvent → runEventLoop → disconnect
+// JS effect handlers bridge ssePost to fetch() + ReadableStream.
+// Claude event parsing is done by AILANG (parseClaudeEvent).
+// ═══════════════════════════════════════════════════════
+
+const BROWSER_MODULE = 'streaming/claude_chat/services/claude_chat_browser';
+const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
+const SYSTEM_PROMPT = 'You are a helpful assistant. Keep responses concise.';
+
+const MODULES = [
+  { name: 'streaming/claude_chat/types/claude_types',
+    path: '../../ailang/streaming/claude_chat/types/claude_types.ail' },
+  { name: 'streaming/claude_chat/services/claude_sse',
+    path: '../../ailang/streaming/claude_chat/services/claude_sse.ail' },
+  { name: 'streaming/claude_chat/services/claude_chat_browser',
+    path: '../../ailang/streaming/claude_chat/services/claude_chat_browser.ail' },
+];
+
 // ── State ──
+let core = null;
 let isStreaming = false;
-let abortController = null;
+let currentMsgEl = null;
+let chatHistory = [];  // Multi-turn conversation
 let stats = { events: 0, chars: 0, startTime: 0, firstTokenTime: 0, tokens: 0 };
+
+// ── DOM cache ──
+const $ = {};
+document.addEventListener('DOMContentLoaded', () => {
+  $.messages = document.getElementById('messages');
+  $.inputField = document.getElementById('inputField');
+  $.sendBtn = document.getElementById('sendBtn');
+  $.initLog = document.getElementById('initLog');
+  $.wasmBadge = document.getElementById('wasmBadge');
+  $.badgeModel = document.getElementById('badgeModel');
+  $.statEvents = document.getElementById('statEvents');
+  $.statChars = document.getElementById('statChars');
+  $.statTps = document.getElementById('statTps');
+  $.statLatency = document.getElementById('statLatency');
+  $.statusText = document.getElementById('statusText');
+
+  // Migrate old localStorage key
+  if (!localStorage.getItem('anthropic-api-key') && localStorage.getItem('ailang_claude_key'))
+    localStorage.setItem('anthropic-api-key', localStorage.getItem('ailang_claude_key'));
+  const saved = localStorage.getItem('anthropic-api-key');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+
+  $.inputField.focus();
+  initWASM();
+});
 
 // ── Config ──
 function toggleConfig() {
   const panel = document.getElementById('configPanel');
   panel.classList.toggle('open');
   document.getElementById('configBtn').textContent =
-    panel.classList.contains('open') ? '⚙ close' : '⚙ config';
+    panel.classList.contains('open') ? 'close' : 'config';
 }
 
 function saveApiKey() {
@@ -618,14 +729,6 @@ function getApiKey() {
   return document.getElementById('apiKeyInput').value.trim() ||
          localStorage.getItem('anthropic-api-key') || '';
 }
-
-// Load saved key
-document.addEventListener('DOMContentLoaded', () => {
-  if (!localStorage.getItem('anthropic-api-key') && localStorage.getItem('ailang_claude_key')) localStorage.setItem('anthropic-api-key', localStorage.getItem('ailang_claude_key'));
-  const saved = localStorage.getItem('anthropic-api-key');
-  if (saved) document.getElementById('apiKeyInput').value = saved;
-  document.getElementById('inputField').focus();
-});
 
 // ── Input handling ──
 function handleKeydown(e) {
@@ -640,56 +743,180 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
 }
 
-// ── Messages ──
-function addUserMessage(text) {
+// ═══════════════════════════════════════════════════════
+// WASM Initialization
+// ═══════════════════════════════════════════════════════
+
+async function initWASM() {
+  core = new GeminiLiveCore({
+    modules: MODULES,
+    stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io', 'std/stream'],
+    onEvent: handleAILANGEvent,
+    onLog: (type, html) => addInitLog(type, html),
+    onConnectionChange: (state) => {
+      if (state === 'connected') setStatus('streaming');
+    },
+    onWasmReady: () => {
+      $.wasmBadge.classList.add('active');
+      $.sendBtn.disabled = false;
+      $.sendBtn.title = '';
+      setStatus('ready');
+    },
+    onWasmError: (err) => {
+      addInitLog('err', 'WASM init failed: ' + err.message);
+      setStatus('wasm error');
+    },
+    // No audio needed for text-only SSE
+    onStatsUpdate: () => {},
+    onFallbackActivated: () => {},
+    onFallbackDeactivated: () => {},
+  });
+
+  await core.initWASM();
+}
+
+function addInitLog(type, html) {
+  if (!$.initLog) return;
+  const icons = { ok: '\u2713', err: '\u2717', info: '\u00B7', warn: '!' };
+  const entry = document.createElement('div');
+  entry.className = 'init-entry ' + type;
+  entry.innerHTML = '<span class="init-icon">' + (icons[type] || '\u00B7') + '</span> ' + html;
+  $.initLog.appendChild(entry);
+}
+
+// ═══════════════════════════════════════════════════════
+// AILANG Event Dispatch
+// ═══════════════════════════════════════════════════════
+
+function handleAILANGEvent(event) {
+  switch (event.type) {
+    case 'log':
+      // Log events during streaming (after welcome is removed)
+      break;
+
+    case 'connected':
+      setStatus('streaming');
+      break;
+
+    case 'textDelta':
+      appendToAssistant(currentMsgEl, event.text);
+      stats.chars += event.text.length;
+      stats.tokens++;
+      if (!stats.firstTokenTime) stats.firstTokenTime = performance.now();
+      stats.events++;
+      updateStatsDisplay();
+      break;
+
+    case 'messageStart':
+      stats.events++;
+      if (event.model) $.badgeModel.textContent = event.model;
+      break;
+
+    case 'messageDelta':
+      stats.events++;
+      break;
+
+    case 'messageStop':
+      stats.events++;
+      updateStatsDisplay();
+      break;
+
+    case 'complete':
+      if (currentMsgEl) {
+        // Capture assistant response for conversation history
+        const textEl = currentMsgEl.querySelector('.msg-text');
+        const cursor = textEl ? textEl.querySelector('.cursor') : null;
+        if (cursor) cursor.remove();
+        const responseText = textEl ? textEl.textContent : '';
+        if (responseText) {
+          chatHistory.push({ role: 'assistant', content: responseText });
+        }
+        finishAssistant(currentMsgEl);
+      }
+      finishStreaming();
+      setStatus('done');
+      break;
+
+    case 'closed':
+      if (isStreaming) {
+        if (currentMsgEl) finishAssistant(currentMsgEl);
+        finishStreaming();
+      }
+      break;
+
+    case 'error':
+      addErrorMessage(event.text || event.errType || 'Unknown error');
+      if (currentMsgEl) finishAssistant(currentMsgEl);
+      finishStreaming();
+      setStatus('error');
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Send Message
+// ═══════════════════════════════════════════════════════
+
+async function sendMessage() {
+  const text = $.inputField.value.trim();
+  if (!text || isStreaming) return;
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    toggleConfig();
+    document.getElementById('apiKeyInput').focus();
+    addErrorMessage('Set your API key first.');
+    return;
+  }
+
+  if (!core || !core.wasmReady) {
+    addErrorMessage('WASM not ready yet. Please wait.');
+    return;
+  }
+
+  // Remove welcome screen
   const welcome = document.getElementById('welcome');
   if (welcome) welcome.remove();
 
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-user';
-  div.innerHTML = `<div class="msg-label">you</div><div class="msg-text">${escapeHtml(text)}</div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-}
+  // UI state
+  addUserMessage(text);
+  $.inputField.value = '';
+  $.inputField.style.height = 'auto';
+  isStreaming = true;
+  $.sendBtn.disabled = true;
+  setStatus('connecting');
+  resetStats();
 
-function createAssistantMessage() {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-assistant streaming';
-  div.innerHTML = `<div class="msg-label">claude</div><div class="msg-text"><span class="cursor"></span></div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  return div;
-}
+  // Add to conversation history
+  chatHistory.push({ role: 'user', content: text });
 
-function appendToAssistant(msgEl, text) {
-  const textEl = msgEl.querySelector('.msg-text');
-  const cursor = textEl.querySelector('.cursor');
-  // Insert text before cursor
-  if (cursor) {
-    cursor.insertAdjacentText('beforebegin', text);
-  } else {
-    textEl.textContent += text;
+  // Create assistant message bubble with cursor
+  currentMsgEl = createAssistantMessage();
+
+  // AILANG drives the entire SSE session:
+  //   ssePost → onEvent(handler) → runEventLoop → disconnect
+  try {
+    const messagesJson = JSON.stringify(chatHistory);
+    await core.wasmEngine.callAsync(
+      BROWSER_MODULE, 'startChat',
+      apiKey, DEFAULT_MODEL, messagesJson, SYSTEM_PROMPT
+    );
+  } catch (e) {
+    addErrorMessage('AILANG error: ' + e.message);
+    if (currentMsgEl) finishAssistant(currentMsgEl);
+    finishStreaming();
   }
-  const container = document.getElementById('messages');
-  container.scrollTop = container.scrollHeight;
 }
 
-function finishAssistant(msgEl) {
-  msgEl.classList.remove('streaming');
-  const cursor = msgEl.querySelector('.cursor');
-  if (cursor) cursor.remove();
+function finishStreaming() {
+  isStreaming = false;
+  $.sendBtn.disabled = false;
+  $.inputField.focus();
 }
 
-function addErrorMessage(text) {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-error';
-  div.textContent = text;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-}
+// ═══════════════════════════════════════════════════════
+// Chat UI
+// ═══════════════════════════════════════════════════════
 
 function escapeHtml(s) {
   const d = document.createElement('div');
@@ -697,175 +924,91 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-// ── Stats ──
+function addUserMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'msg msg-user';
+  div.innerHTML = '<div class="msg-label">you</div><div class="msg-text">' + escapeHtml(text) + '</div>';
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+function createAssistantMessage() {
+  const div = document.createElement('div');
+  div.className = 'msg msg-assistant streaming';
+  div.innerHTML = '<div class="msg-label">claude</div><div class="msg-text"><span class="cursor"></span></div>';
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+  return div;
+}
+
+function appendToAssistant(msgEl, text) {
+  if (!msgEl) return;
+  const textEl = msgEl.querySelector('.msg-text');
+  const cursor = textEl.querySelector('.cursor');
+  if (cursor) {
+    cursor.insertAdjacentText('beforebegin', text);
+  } else {
+    textEl.textContent += text;
+  }
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+function finishAssistant(msgEl) {
+  if (!msgEl) return;
+  msgEl.classList.remove('streaming');
+  const cursor = msgEl.querySelector('.cursor');
+  if (cursor) cursor.remove();
+}
+
+function addErrorMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'msg msg-error';
+  div.textContent = text;
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+// Stats
+// ═══════════════════════════════════════════════════════
+
 function resetStats() {
   stats = { events: 0, chars: 0, startTime: performance.now(), firstTokenTime: 0, tokens: 0 };
   updateStatsDisplay();
 }
 
 function updateStatsDisplay() {
-  document.getElementById('statEvents').textContent = stats.events;
-  document.getElementById('statEvents').classList.toggle('active', isStreaming);
-  document.getElementById('statChars').textContent = stats.chars;
-  document.getElementById('statChars').classList.toggle('active', isStreaming);
+  $.statEvents.textContent = stats.events;
+  $.statEvents.classList.toggle('active', isStreaming);
+  $.statChars.textContent = stats.chars;
+  $.statChars.classList.toggle('active', isStreaming);
 
   if (stats.firstTokenTime > 0) {
     const ttft = Math.round(stats.firstTokenTime - stats.startTime);
-    document.getElementById('statLatency').textContent = ttft + 'ms';
-    document.getElementById('statLatency').classList.add('active');
+    $.statLatency.textContent = ttft + 'ms';
+    $.statLatency.classList.add('active');
   }
 
   if (stats.tokens > 2 && stats.firstTokenTime > 0) {
     const elapsed = (performance.now() - stats.firstTokenTime) / 1000;
-    const tps = elapsed > 0 ? (stats.tokens / elapsed).toFixed(1) : '—';
-    document.getElementById('statTps').textContent = tps;
-    document.getElementById('statTps').classList.toggle('active', isStreaming);
+    const tps = elapsed > 0 ? (stats.tokens / elapsed).toFixed(1) : '\u2014';
+    $.statTps.textContent = tps;
+    $.statTps.classList.toggle('active', isStreaming);
   }
 }
 
 function setStatus(text) {
-  document.getElementById('statusText').textContent = text;
+  $.statusText.textContent = text;
 }
 
-// ── Stream ──
-async function sendMessage() {
-  const input = document.getElementById('inputField');
-  const text = input.value.trim();
-  if (!text || isStreaming) return;
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    toggleConfig();
-    document.getElementById('apiKeyInput').focus();
-    addErrorMessage('Please set your API key first.');
-    return;
-  }
-
-  // UI state
-  addUserMessage(text);
-  input.value = '';
-  input.style.height = 'auto';
-  isStreaming = true;
-  document.getElementById('sendBtn').disabled = true;
-  setStatus('connecting...');
-  resetStats();
-
-  const msgEl = createAssistantMessage();
-  abortController = new AbortController();
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 4096,
-        stream: true,
-        messages: [{ role: 'user', content: text }]
-      }),
-      signal: abortController.signal
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errBody.slice(0, 200)}`);
-    }
-
-    setStatus('streaming');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-
-          try {
-            const event = JSON.parse(data);
-            stats.events++;
-            processSSEEvent(event, msgEl);
-            updateStatsDisplay();
-          } catch (e) {
-            // Skip malformed JSON
-          }
-        }
-      }
-    }
-
-    finishAssistant(msgEl);
-    setStatus('done');
-
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      finishAssistant(msgEl);
-      setStatus('cancelled');
-    } else {
-      finishAssistant(msgEl);
-      addErrorMessage(err.message);
-      setStatus('error');
-    }
-  } finally {
-    isStreaming = false;
-    document.getElementById('sendBtn').disabled = false;
-    abortController = null;
-    document.getElementById('inputField').focus();
-  }
-}
-
-function processSSEEvent(event, msgEl) {
-  switch (event.type) {
-    case 'message_start':
-      // First event — update model badge if different
-      if (event.message?.model) {
-        document.querySelector('.badge-model').textContent = event.message.model;
-      }
-      break;
-
-    case 'content_block_delta':
-      if (event.delta?.type === 'text_delta' && event.delta.text) {
-        const text = event.delta.text;
-        appendToAssistant(msgEl, text);
-        stats.chars += text.length;
-        stats.tokens++;
-        if (!stats.firstTokenTime) {
-          stats.firstTokenTime = performance.now();
-        }
-      }
-      break;
-
-    case 'message_delta':
-      // stop_reason received
-      break;
-
-    case 'message_stop':
-      finishAssistant(msgEl);
-      break;
-
-    case 'error':
-      addErrorMessage(event.error?.message || 'Unknown streaming error');
-      break;
-  }
-}
-
-// ── Keyboard shortcut to cancel ──
+// ── Cancel streaming with Escape ──
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && isStreaming && abortController) {
-    abortController.abort();
+  if (e.key === 'Escape' && isStreaming && core) {
+    // Abort all active SSE connections
+    for (const conn of Object.values(core.connections)) {
+      if (conn.abortController && !conn.done) conn.abortController.abort();
+      if (conn.ws && conn.ws.readyState === 1) conn.ws.close();
+    }
   }
 });
 </script>

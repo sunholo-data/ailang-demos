@@ -60,6 +60,16 @@ mkdir -p "$SITE/ailang/streaming/gemini_live"
 ln -sf "$REPO_ROOT/streaming/gemini_live/gemini_live_browser.ail" \
   "$SITE/ailang/streaming/gemini_live/gemini_live_browser.ail"
 
+# Claude Chat AILANG modules (SSE demo)
+mkdir -p "$SITE/ailang/streaming/claude_chat/types"
+mkdir -p "$SITE/ailang/streaming/claude_chat/services"
+ln -sf "$REPO_ROOT/streaming/claude_chat/types/claude_types.ail" \
+  "$SITE/ailang/streaming/claude_chat/types/claude_types.ail"
+ln -sf "$REPO_ROOT/streaming/claude_chat/services/claude_sse.ail" \
+  "$SITE/ailang/streaming/claude_chat/services/claude_sse.ail"
+ln -sf "$REPO_ROOT/streaming/claude_chat/services/claude_chat_browser.ail" \
+  "$SITE/ailang/streaming/claude_chat/services/claude_chat_browser.ail"
+
 echo ""
 echo "Site assembled. Serving at http://localhost:$PORT/"
 echo "  Hub:       http://localhost:$PORT/"

@@ -504,6 +504,7 @@ class GeminiLiveCore {
                   case 'Opened':  streamEvent = AilangREPL.adt('Opened', event.data || ''); break;
                   case 'Closed':  streamEvent = AilangREPL.adt('Closed', event.code || 0, event.reason || ''); break;
                   case 'StreamError': streamEvent = AilangREPL.adt('StreamError', event.data || ''); break;
+                  case 'SSEData': streamEvent = AilangREPL.adt('SSEData', event.eventType || '', event.data || ''); break;
                   case 'Ping':    streamEvent = AilangREPL.adt('Ping', event.data || ''); break;
                   default:        streamEvent = AilangREPL.adt('StreamError', 'unknown event'); break;
                 }
@@ -537,8 +538,9 @@ class GeminiLiveCore {
       close: (connArg) => {
         const connId = self._extractConnId(connArg);
         const conn = self._connections[connId];
-        if (conn && conn.ws) {
-          conn.ws.close();
+        if (conn) {
+          if (conn.ws) conn.ws.close();
+          if (conn.abortController) conn.abortController.abort();
           conn.done = true;
         }
         delete self._connections[connId];
@@ -547,13 +549,151 @@ class GeminiLiveCore {
       status: (connArg) => {
         const connId = self._extractConnId(connArg);
         const conn = self._connections[connId];
-        if (!conn || !conn.ws) return 'StreamClosed';
-        switch (conn.ws.readyState) {
-          case 0: return 'Connecting';
-          case 1: return 'Open';
-          case 2: return 'Closing';
-          default: return 'StreamClosed';
+        if (!conn) return 'StreamClosed';
+        if (conn.ws) {
+          switch (conn.ws.readyState) {
+            case 0: return 'Connecting';
+            case 1: return 'Open';
+            case 2: return 'Closing';
+            default: return 'StreamClosed';
+          }
         }
+        // SSE connection (no WebSocket)
+        return conn.done ? 'StreamClosed' : 'Open';
+      },
+
+      // ── SSE over HTTP POST ──
+      // Bridges AILANG ssePost(url, body, config) to fetch() + ReadableStream.
+      // Events are delivered as SSEData(eventType, data) through the event queue,
+      // so onEvent/runEventLoop work identically to WebSocket connections.
+      // Note: Go effects register this as "sse_post" (not camelCase).
+      sse_post: (url, body, config) => {
+        return new Promise(async (resolve) => {
+          const connId = self._nextConnId++;
+          const abortCtrl = new AbortController();
+          self._connections[connId] = {
+            ws: null, abortController: abortCtrl,
+            eventHandler: null, eventQueue: [], resolveRecv: null, done: false
+          };
+
+          // Build headers from AILANG config record
+          const headers = {};
+          if (config && config.headers) {
+            for (const h of config.headers) {
+              headers[h.name || h.Name] = h.value || h.Value;
+            }
+          }
+
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: headers,
+              body: body,
+              signal: abortCtrl.signal
+            });
+
+            if (!response.ok) {
+              const errText = await response.text().catch(() => '');
+              resolve(AilangREPL.streamErr('ConnectionFailed',
+                'HTTP ' + response.status + ': ' + errText.slice(0, 200)));
+              return;
+            }
+
+            const conn = self._connections[connId];
+
+            // Push Opened event
+            conn.eventQueue.push({ type: 'Opened', data: url });
+            if (conn.resolveRecv) {
+              conn.resolveRecv(conn.eventQueue.shift());
+              conn.resolveRecv = null;
+            }
+
+            self.config.onConnectionChange('connected');
+
+            // Resolve with stream connection immediately
+            resolve(AilangREPL.streamOk(AilangREPL.streamConn(connId)));
+
+            // Read SSE stream asynchronously
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentEventType = '';
+            let currentData = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (!self._connections[connId]) break; // closed externally
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                  currentEventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                  currentData += (currentData ? '\n' : '') + line.slice(6);
+                } else if (line.trim() === '') {
+                  // Empty line = end of SSE event
+                  if (currentData) {
+                    const c = self._connections[connId];
+                    if (!c) break;
+                    c.eventQueue.push({
+                      type: 'SSEData',
+                      eventType: currentEventType || 'message',
+                      data: currentData
+                    });
+                    if (c.resolveRecv) {
+                      c.resolveRecv(c.eventQueue.shift());
+                      c.resolveRecv = null;
+                    }
+                  }
+                  currentEventType = '';
+                  currentData = '';
+                }
+              }
+            }
+
+            // Stream complete
+            const c2 = self._connections[connId];
+            if (c2) {
+              c2.eventQueue.push({ type: 'Closed', code: 1000, reason: 'stream complete' });
+              c2.done = true;
+              if (c2.resolveRecv) {
+                c2.resolveRecv(c2.eventQueue.shift());
+                c2.resolveRecv = null;
+              }
+              self.config.onConnectionChange('disconnected');
+            }
+          } catch (e) {
+            if (e.name === 'AbortError') {
+              const c = self._connections[connId];
+              if (c) {
+                c.eventQueue.push({ type: 'Closed', code: 1000, reason: 'aborted' });
+                c.done = true;
+                if (c.resolveRecv) {
+                  c.resolveRecv(c.eventQueue.shift());
+                  c.resolveRecv = null;
+                }
+              }
+              self.config.onConnectionChange('disconnected');
+              return;
+            }
+            const c = self._connections[connId];
+            if (c) {
+              c.eventQueue.push({ type: 'Closed', code: 1006, reason: e.message });
+              c.done = true;
+              if (c.resolveRecv) {
+                c.resolveRecv(c.eventQueue.shift());
+                c.resolveRecv = null;
+              }
+              self.config.onConnectionChange('disconnected');
+            }
+            // If not yet resolved, resolve with error
+            resolve(AilangREPL.streamErr('ConnectionFailed', e.message));
+          }
+        });
       }
     });
   }

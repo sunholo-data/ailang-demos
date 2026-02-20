@@ -1,0 +1,152 @@
+-- Browser adapter for Claude SSE streaming via AILANG WASM.
+--
+-- Thin entry point that bridges the existing CLI modules to the browser.
+-- JS loads this module via WASM and calls startChat(). AILANG drives the
+-- SSE connection through std/stream effects — JS effect handlers bridge
+-- ssePost to fetch() + ReadableStream.
+--
+-- Events are emitted as JSON via println so the IO effect handler in JS
+-- can dispatch them to the UI.
+--
+-- Browser CORS: Adds anthropic-dangerous-direct-browser-access header,
+-- since Claude's API requires it for direct browser calls.
+--
+-- Multi-turn: Accepts messagesJson (a JSON array of {role, content} objects)
+-- so JS can manage conversation history and pass the full thread each turn.
+
+module streaming/claude_chat/services/claude_chat_browser
+
+import std/stream (ssePost, onEvent, runEventLoop, disconnect,
+                   StreamConn, StreamEvent, StreamErrorKind,
+                   SSEData, Message, Opened, Closed, StreamError, Ping)
+import std/io (println)
+import std/json (encode, decode, jo, kv, js, ja, jb, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length)
+import streaming/claude_chat/services/claude_sse (parseClaudeEvent)
+import streaming/claude_chat/types/claude_types (
+  ClaudeEvent, TextDelta, MessageStart, ContentBlockStart,
+  ContentBlockStop, MessageStop, MessageDelta, ClaudeError, UnknownEvent
+)
+
+-- ══════════════════════════════════════════════════════
+-- Session Entry Point
+-- ══════════════════════════════════════════════════════
+
+-- Start a Claude SSE session. Called from JS via:
+--   engine.callAsync(MODULE, 'startChat', apiKey, model, messagesJson, systemPrompt)
+--
+-- messagesJson: JSON array of {role, content} objects (multi-turn history)
+-- Returns "complete" or "error". All streaming events are emitted as JSON
+-- via println (intercepted by the JS IO effect handler).
+export func startChat(apiKey: string, model: string, messagesJson: string, systemPrompt: string) -> string ! {Stream, IO} {
+  println(encode(jo([kv("type", js("log")), kv("text", js("AILANG ssePost → Claude Messages API..."))])));
+
+  let url = "https://api.anthropic.com/v1/messages";
+  let config = { headers: [
+    { name: "x-api-key", value: apiKey },
+    { name: "anthropic-version", value: "2023-06-01" },
+    { name: "content-type", value: "application/json" },
+    { name: "anthropic-dangerous-direct-browser-access", value: "true" }
+  ] };
+
+  -- Parse messages from JS JSON string
+  let msgs = match decode(messagesJson) { Ok(v) => v, Err(_) => ja([]) };
+
+  -- Build request body
+  let fields = [
+    kv("model", js(model)),
+    kv("max_tokens", jnum(4096.0)),
+    kv("stream", jb(true)),
+    kv("messages", msgs)
+  ];
+  let allFields = if length(systemPrompt) > 0
+    then kv("system", js(systemPrompt)) :: fields
+    else fields;
+  let body = encode(jo(allFields));
+
+  match ssePost(url, body, config) {
+    Ok(conn) => {
+      println(encode(jo([kv("type", js("log")), kv("text", js("SSE stream open. Model: " ++ model))])));
+
+      onEvent(conn, \event. handleBrowserEvent(event));
+      runEventLoop(conn);
+      disconnect(conn);
+
+      println(encode(jo([kv("type", js("complete"))])));
+      "complete"
+    },
+    Err(e) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed: " ++ show(e)))])));
+      "error"
+    }
+  }
+}
+
+-- ══════════════════════════════════════════════════════
+-- SSE Event Handler
+-- ══════════════════════════════════════════════════════
+
+-- Handle SSE stream events. Returns true to continue, false to stop.
+func handleBrowserEvent(event: StreamEvent) -> bool ! {IO} =
+  match event {
+    SSEData(eventType, data) => {
+      match parseClaudeEvent(data) {
+        Ok(claudeEvent) => dispatchClaudeEvent(claudeEvent),
+        Err(_) => true
+      }
+    },
+    Message(data) => {
+      -- Fallback: some SSE implementations deliver as Message
+      match parseClaudeEvent(data) {
+        Ok(claudeEvent) => dispatchClaudeEvent(claudeEvent),
+        Err(_) => true
+      }
+    },
+    Opened(_) => {
+      println(encode(jo([kv("type", js("connected"))])));
+      true
+    },
+    Closed(code, reason) => {
+      println(encode(jo([kv("type", js("closed"))])));
+      false
+    },
+    StreamError(err) => {
+      println(encode(jo([kv("type", js("error")), kv("text", js(show(err)))])));
+      false
+    },
+    Ping(_) => true
+  }
+
+-- ══════════════════════════════════════════════════════
+-- Claude Event Dispatch
+-- ══════════════════════════════════════════════════════
+
+-- Dispatch parsed Claude events as JSON for the JS UI layer.
+func dispatchClaudeEvent(event: ClaudeEvent) -> bool ! {IO} =
+  match event {
+    TextDelta(text) => {
+      println(encode(jo([kv("type", js("textDelta")), kv("text", js(text))])));
+      true
+    },
+    MessageStart(info) => {
+      println(encode(jo([kv("type", js("messageStart")), kv("id", js(info.id)), kv("model", js(info.model))])));
+      true
+    },
+    ContentBlockStart(idx) => true,
+    ContentBlockStop(idx) => true,
+    MessageDelta(delta) => {
+      println(encode(jo([kv("type", js("messageDelta")), kv("stopReason", js(delta.stopReason))])));
+      true
+    },
+    MessageStop => {
+      println(encode(jo([kv("type", js("messageStop"))])));
+      false
+    },
+    ClaudeError(err) => {
+      println(encode(jo([kv("type", js("error")), kv("errType", js(err.errType)), kv("text", js(err.message))])));
+      false
+    },
+    UnknownEvent(_) => true
+  }
