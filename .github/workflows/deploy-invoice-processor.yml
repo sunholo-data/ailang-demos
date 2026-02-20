@@ -166,6 +166,23 @@ jobs:
           cp verify_demo/main.ail invoice_processor_wasm/ailang/verify_demo/
           echo "Copied $(find invoice_processor_wasm/ailang/verify_demo -name '*.ail' | wc -l) verify_demo modules"
 
+      - name: Copy streaming modules
+        run: |
+          # Clean up dev symlinks (absolute paths, dangling in CI)
+          rm -rf invoice_processor_wasm/ailang/streaming
+          mkdir -p invoice_processor_wasm/ailang/streaming/gemini_live
+          mkdir -p invoice_processor_wasm/ailang/streaming/claude_chat/types
+          mkdir -p invoice_processor_wasm/ailang/streaming/claude_chat/services
+          cp streaming/gemini_live/gemini_live_browser.ail \
+            invoice_processor_wasm/ailang/streaming/gemini_live/
+          cp streaming/claude_chat/types/claude_types.ail \
+            invoice_processor_wasm/ailang/streaming/claude_chat/types/
+          cp streaming/claude_chat/services/claude_sse.ail \
+            invoice_processor_wasm/ailang/streaming/claude_chat/services/
+          cp streaming/claude_chat/services/claude_chat_browser.ail \
+            invoice_processor_wasm/ailang/streaming/claude_chat/services/
+          echo "Copied streaming modules"
+
       - name: Copy demo Office files
         run: |
           # Copy representative test files for demo buttons
@@ -190,7 +207,9 @@ jobs:
           cp site/index.html _site/
 
           # Shared WASM runtime (used by all demos)
-          cp -r wasm _site/wasm
+          # Copy individual files to avoid dangling symlinks from checkout
+          mkdir -p _site/wasm
+          cp wasm/ailang.wasm wasm/wasm_exec.js wasm/ailang-repl.js _site/wasm/
 
           # WASM demos (rename index.html → extractor.html)
           # Exclude wasm/ dir (shared runtime is top-level now)
@@ -215,20 +234,8 @@ jobs:
             cp "streaming/${demo}/browser/index.html" "_site/streaming/${demo}/"
           done
 
-          # Streaming AILANG modules (for WASM-powered demos)
-          mkdir -p _site/ailang/streaming/gemini_live
-          cp streaming/gemini_live/gemini_live_browser.ail \
-            _site/ailang/streaming/gemini_live/
-
-          # Claude Chat AILANG modules (SSE demo)
-          mkdir -p _site/ailang/streaming/claude_chat/types
-          mkdir -p _site/ailang/streaming/claude_chat/services
-          cp streaming/claude_chat/types/claude_types.ail \
-            _site/ailang/streaming/claude_chat/types/
-          cp streaming/claude_chat/services/claude_sse.ail \
-            _site/ailang/streaming/claude_chat/services/
-          cp streaming/claude_chat/services/claude_chat_browser.ail \
-            _site/ailang/streaming/claude_chat/services/
+          # Streaming AILANG modules already copied via rsync from
+          # invoice_processor_wasm/ailang/streaming/ (cleaned in earlier step)
 
           echo "::group::Site contents"
           find _site -type f | head -60
