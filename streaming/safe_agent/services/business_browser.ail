@@ -1,0 +1,112 @@
+-- Browser adapter for Business Contract Tools.
+--
+-- Pure-only wrapper around business_tools for WASM access.
+-- JS loads this module and calls pure functions.
+-- String params let JS pass enum values as lowercase strings.
+
+module streaming/safe_agent/services/business_browser
+
+import streaming/safe_agent/services/business_tools (
+  invoiceTotal, applyTierDiscount, calculateTax, taxRate, tierDiscountRate, promoRebate,
+  calculatePremium, basePremium, riskMultiplier, coverageSurcharge,
+  netPay, grossPay, totalDeductions, taxableIncome, federalTax, stateTax, ficaTax,
+  shippingCost, shippingBaseCost, priorityMultiplier,
+  riskScore, severityScore, sourceModifier, repeatPenalty
+)
+import std/string (intToStr)
+
+-- ══════════════════════════════════════════════════════
+-- 1. Invoice (4-deep contract chain)
+-- ══════════════════════════════════════════════════════
+
+export pure func calcInvoice(subtotalCents: int, tier: string, region: string, promoCode: string) -> string {
+  if subtotalCents < 0
+    then "{\"ok\":false,\"error\":\"Precondition violated: subtotal must be >= 0\"}"
+    else {
+      let total = invoiceTotal(subtotalCents, tier, region, promoCode);
+      let discount = applyTierDiscount(subtotalCents, tier);
+      let tax = calculateTax(discount, region);
+      let rebate = promoRebate(promoCode, discount);
+      "{\"ok\":true,\"total\":" ++ intToStr(total)
+        ++ ",\"afterDiscount\":" ++ intToStr(discount)
+        ++ ",\"tax\":" ++ intToStr(tax)
+        ++ ",\"rebate\":" ++ intToStr(rebate) ++ "}"
+    }
+}
+
+-- ══════════════════════════════════════════════════════
+-- 2. Insurance (768 paths)
+-- ══════════════════════════════════════════════════════
+
+export pure func calcInsurance(ageBand: string, riskTier: string, claimHistory: string, coverage: string, region: string) -> string {
+  let premium = calculatePremium(ageBand, riskTier, claimHistory, coverage, region);
+  let base = basePremium(ageBand);
+  let mult = riskMultiplier(riskTier, claimHistory);
+  let surcharge = coverageSurcharge(coverage, region);
+  "{\"ok\":true,\"premium\":" ++ intToStr(premium)
+    ++ ",\"base\":" ++ intToStr(base)
+    ++ ",\"multiplier\":" ++ intToStr(mult)
+    ++ ",\"surcharge\":" ++ intToStr(surcharge) ++ "}"
+}
+
+-- ══════════════════════════════════════════════════════
+-- 3. Payroll (net >= 0 invariant)
+-- ══════════════════════════════════════════════════════
+
+export pure func calcPayroll(hourlyRateCents: int, hoursWorked: int) -> string {
+  if hourlyRateCents < 0 || hoursWorked < 0
+    then "{\"ok\":false,\"error\":\"Precondition violated: rate and hours must be >= 0\"}"
+    else {
+      let gross = grossPay(hourlyRateCents, hoursWorked);
+      let deductions = totalDeductions(gross);
+      let net = netPay(hourlyRateCents, hoursWorked);
+      let ti = taxableIncome(gross);
+      let fed = federalTax(ti);
+      let state = stateTax(ti);
+      let fica = ficaTax(gross);
+      "{\"ok\":true,\"gross\":" ++ intToStr(gross)
+        ++ ",\"net\":" ++ intToStr(net)
+        ++ ",\"deductions\":" ++ intToStr(deductions)
+        ++ ",\"federal\":" ++ intToStr(fed)
+        ++ ",\"state\":" ++ intToStr(state)
+        ++ ",\"fica\":" ++ intToStr(fica) ++ "}"
+    }
+}
+
+-- ══════════════════════════════════════════════════════
+-- 4. Shipping (discount clamping)
+-- ══════════════════════════════════════════════════════
+
+export pure func calcShipping(region: string, priority: string, weightKg: int, discountCents: int) -> string {
+  if weightKg < 0 || discountCents < 0
+    then "{\"ok\":false,\"error\":\"Precondition violated: weight and discount must be >= 0\"}"
+    else {
+      let cost = shippingCost(region, priority, weightKg, discountCents);
+      let base = shippingBaseCost(region);
+      let mult = priorityMultiplier(priority);
+      "{\"ok\":true,\"cost\":" ++ intToStr(cost)
+        ++ ",\"baseCost\":" ++ intToStr(base)
+        ++ ",\"multiplier\":" ++ intToStr(mult)
+        ++ ",\"weightSurcharge\":" ++ intToStr(weightKg * 50)
+        ++ ",\"discount\":" ++ intToStr(discountCents) ++ "}"
+    }
+}
+
+-- ══════════════════════════════════════════════════════
+-- 5. Risk Score (bounded [0, 200])
+-- ══════════════════════════════════════════════════════
+
+export pure func calcRisk(severity: string, source: string, repeatCount: int) -> string {
+  if repeatCount < 0
+    then "{\"ok\":false,\"error\":\"Precondition violated: repeatCount must be >= 0\"}"
+    else {
+      let score = riskScore(severity, source, repeatCount);
+      let sevScore = severityScore(severity);
+      let srcMod = sourceModifier(source);
+      let repPen = repeatPenalty(repeatCount);
+      "{\"ok\":true,\"score\":" ++ intToStr(score)
+        ++ ",\"severity\":" ++ intToStr(sevScore)
+        ++ ",\"source\":" ++ intToStr(srcMod)
+        ++ ",\"repeat\":" ++ intToStr(repPen) ++ "}"
+    }
+}

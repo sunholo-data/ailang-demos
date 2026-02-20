@@ -70,6 +70,20 @@ ln -sf "$REPO_ROOT/streaming/claude_chat/services/claude_sse.ail" \
 ln -sf "$REPO_ROOT/streaming/claude_chat/services/claude_chat_browser.ail" \
   "$SITE/ailang/streaming/claude_chat/services/claude_chat_browser.ail"
 
+# Safe Agent AILANG modules (contract-verified tools)
+mkdir -p "$SITE/ailang/streaming/safe_agent/types"
+mkdir -p "$SITE/ailang/streaming/safe_agent/services"
+ln -sf "$REPO_ROOT/streaming/safe_agent/types/agent_types.ail" \
+  "$SITE/ailang/streaming/safe_agent/types/agent_types.ail"
+ln -sf "$REPO_ROOT/streaming/safe_agent/services/verified_tools.ail" \
+  "$SITE/ailang/streaming/safe_agent/services/verified_tools.ail"
+ln -sf "$REPO_ROOT/streaming/safe_agent/services/safe_agent_browser.ail" \
+  "$SITE/ailang/streaming/safe_agent/services/safe_agent_browser.ail"
+ln -sf "$REPO_ROOT/streaming/safe_agent/services/business_tools.ail" \
+  "$SITE/ailang/streaming/safe_agent/services/business_tools.ail"
+ln -sf "$REPO_ROOT/streaming/safe_agent/services/business_browser.ail" \
+  "$SITE/ailang/streaming/safe_agent/services/business_browser.ail"
+
 echo ""
 echo "Site assembled. Serving at http://localhost:$PORT/"
 echo "  Hub:       http://localhost:$PORT/"

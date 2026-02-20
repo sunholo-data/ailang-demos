@@ -407,19 +407,20 @@ Contracts are also used in the service layer — `pipeline.ail` uses `requires`/
 
 ---
 
-### 6. REST API & React UI
+### 6. REST API, MCP, A2A & React UI
 
-Serves existing AILANG modules as a REST API using `ailang serve-api`, with a React dashboard for interactive endpoint testing. **Zero AILANG code changes** — `serve-api` automatically exposes all exported functions.
+Serves existing AILANG modules as a REST API with auto-generated **OpenAPI 3.1**, **MCP** (Model Context Protocol), and **A2A** (Agent-to-Agent) endpoints. Also includes a React dashboard for interactive testing. **Zero AILANG code changes** — `serve-api` automatically exposes all exported functions across all protocols.
 
-**Key concept:** Every `export func` becomes a POST endpoint at `/api/{module}/{function}`.
+**Key concept:** Every `export func` becomes:
+- A **REST** endpoint at `POST /api/{module}/{function}`
+- An **MCP tool** with auto-generated JSON Schema
+- An **A2A skill** in the Agent Card
 
-**Run:**
+#### Start the Server
+
 ```bash
-# Start API server with React UI (dev mode):
-cd ecommerce/ui && npm install && npm run dev &
-
-# With AI stub (no API keys needed):
-ailang serve-api --port 8092 --caps IO,AI,FS,Net --ai-stub \
+# With all protocols enabled (MCP HTTP + A2A + REST + OpenAPI):
+ailang serve-api --port 8092 --mcp-http --caps IO,AI,FS,Net --ai-stub \
   ecommerce/contracts_demo.ail \
   ecommerce/services/ga4_queries.ail \
   ecommerce/services/bigquery.ail \
@@ -429,7 +430,7 @@ ailang serve-api --port 8092 --caps IO,AI,FS,Net --ai-stub \
   ecommerce/services/recommendations.ail
 
 # With real AI provider:
-ANTHROPIC_API_KEY=sk-... ailang serve-api --port 8092 \
+ANTHROPIC_API_KEY=sk-... ailang serve-api --port 8092 --mcp-http \
   --caps IO,AI,FS,Net --ai claude-haiku-4-5 \
   ecommerce/contracts_demo.ail \
   ecommerce/services/ga4_queries.ail \
@@ -439,32 +440,112 @@ ANTHROPIC_API_KEY=sk-... ailang serve-api --port 8092 \
   ecommerce/data/products.ail \
   ecommerce/services/recommendations.ail
 
-# Open http://localhost:5173 — API proxied via Vite
+# Optional: Start React dev UI (proxies /api to port 8092)
+cd ecommerce/ui && npm install && npm run dev
+# Open http://localhost:5173
 ```
 
-**curl examples:**
+#### API Documentation
+
+The server auto-generates interactive API docs from AILANG's Hindley-Milner type signatures:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/_meta/docs` | **Swagger UI** — interactive try-it-out explorer (like FastAPI's `/docs`) |
+| `GET /api/_meta/redoc` | **ReDoc** — clean read-only API reference |
+| `GET /api/_meta/openapi.json` | **OpenAPI 3.1** spec — for code generation and tooling |
+| `GET /api/_meta/modules` | Module introspection — list all modules and exports |
+| `GET /api/_health` | Health check |
+
+![OpenAPI ReDoc](img/openapi-redoc.png)
+
+#### Protocol Endpoints
+
+| Protocol | Endpoint | Transport | Description |
+|----------|----------|-----------|-------------|
+| **REST** | `POST /api/{module}/{func}` | HTTP JSON | Direct function invocation |
+| **MCP** | `POST /mcp/` | Streamable HTTP (SSE) | MCP tools/list, tools/call |
+| **A2A** | `POST /a2a/` | HTTP JSON-RPC | Agent-to-Agent task execution |
+| **A2A** | `GET /.well-known/agent.json` | HTTP JSON | A2A Agent Card (37 skills) |
+
+#### Connect as MCP Server
+
+AILANG modules can be used as an MCP server in **Claude Desktop**, **Cursor**, or any MCP client.
+
+**Stdio transport** (Claude Desktop, Cursor — local):
+```json
+{
+  "mcpServers": {
+    "ailang-ecommerce": {
+      "command": "ailang",
+      "args": [
+        "serve-api", "--mcp",
+        "--caps", "IO,AI,FS,Net", "--ai-stub",
+        "ecommerce/contracts_demo.ail",
+        "ecommerce/services/ga4_queries.ail",
+        "ecommerce/services/bigquery.ail",
+        "ecommerce/services/gcp_auth.ail",
+        "ecommerce/api/handlers.ail",
+        "ecommerce/data/products.ail",
+        "ecommerce/services/recommendations.ail"
+      ]
+    }
+  }
+}
+```
+
+**HTTP transport** (remote clients):
 ```bash
-# Health check
-curl http://localhost:8092/api/_health
-# → {"status":"ok","modules_count":5,"exports_count":31}
+# Start with --mcp-http to expose MCP at /mcp/ alongside REST
+ailang serve-api --port 8092 --mcp-http --caps IO,AI,FS,Net --ai-stub \
+  ecommerce/contracts_demo.ail ecommerce/services/*.ail \
+  ecommerce/api/handlers.ail ecommerce/data/products.ail
+```
 
-# Call a contracted function
-curl -X POST http://localhost:8092/api/ecommerce/contracts_demo/calculateTotal \
+All 37 exported functions appear as MCP tools with auto-generated JSON Schema input schemas derived from AILANG's type system.
+
+#### curl Examples
+
+```bash
+# REST — call a contracted function
+curl -X POST http://localhost:8092/api/ecommerce/contracts_demo/clampQuantity \
   -H 'Content-Type: application/json' \
-  -d '{"args":[29.99, 3]}'
-# → {"result":89.97,"module":"ecommerce/contracts_demo","func":"calculateTotal","elapsed_ms":0}
+  -d '{"args":[150, 1, 100]}'
+# → {"result":100,"module":"ecommerce/contracts_demo","func":"clampQuantity","elapsed_ms":0}
 
-# Generate a BigQuery SQL query
+# REST — generate BigQuery SQL
 curl -X POST http://localhost:8092/api/ecommerce/services/ga4_queries/topEventsQuery \
   -H 'Content-Type: application/json' \
   -d '{"args":[5]}'
-# → {"result":"SELECT event_name, COUNT(*)...LIMIT 5","elapsed_ms":3}
+# → {"result":"SELECT event_name, COUNT(*)...LIMIT 5","elapsed_ms":0}
 
-# Introspect all endpoints
-curl http://localhost:8092/api/_meta/modules
+# MCP — initialize session
+curl -X POST http://localhost:8092/mcp/ \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# → SSE stream with session ID and capabilities
+
+# MCP — call a tool (use Mcp-Session-Id from initialize)
+curl -X POST http://localhost:8092/mcp/ \
+  -H 'Content-Type: application/json' \
+  -H 'Mcp-Session-Id: <SESSION_ID>' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ecommerce.contracts_demo.clampQuantity","arguments":{"args":[150,1,100]}}}'
+# → {"result":{"content":[{"type":"text","text":"100"}]}}
+
+# A2A — Agent Card
+curl http://localhost:8092/.well-known/agent.json
+
+# A2A — execute a task
+curl -X POST http://localhost:8092/a2a/ \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tasks/send","params":{"id":"q1","metadata":{"skill_id":"ecommerce.services.ga4_queries.topEventsQuery"},"message":{"role":"user","parts":[{"type":"data","data":{"args":[5]}}]}}}'
+# → {"result":{"id":"q1","status":{"state":"completed"},"artifacts":[...]}}
+
+# OpenAPI spec
+curl http://localhost:8092/api/_meta/openapi.json
 ```
 
-The React UI provides:
+The **React UI** (at `http://localhost:5173` when running Vite) provides:
 - **Contracts tab** — interactive forms for applyDiscount, calculateTotal, clampQuantity, validateQuantity
 - **Analytics tab** — generate BigQuery SQL, run queries live against BigQuery (with data tables + bar charts), or copy SQL to BigQuery Console
 - **AI tab** — product recommendations, descriptions, review analysis (graceful fallback when no API key)
@@ -473,7 +554,7 @@ The React UI provides:
 
 > **Note:** BigQuery execution and AI calls require `--caps IO,AI,FS,Net` and an AI provider flag (`--ai` or `--ai-stub`). Without these flags, effect-dependent endpoints will return errors. The UI provides graceful fallbacks with explanations.
 
-**AILANG features shown:** `serve-api` auto-endpoint generation, module introspection, capability-aware serving, React frontend integration
+**AILANG features shown:** `serve-api` auto-endpoint generation, OpenAPI 3.1 spec generation, MCP tool exposure, A2A Agent Card + task execution, module introspection, capability-aware serving, React frontend integration
 
 ---
 

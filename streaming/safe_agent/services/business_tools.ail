@@ -1,0 +1,323 @@
+-- Contract-Verified Business Tools for Voice Agent (Browser Demo)
+--
+-- 5 tools with ensures/requires contracts, adapted from:
+--   - invoice.ail (4-deep chain, 10 Z3-verified)
+--   - insurance.ail (768 paths, all proven safe)
+--   - payroll_chain.ail (progressive tax, net >= 0)
+--   - cross_function.ail + fair_split.ail (discount clamping)
+--   - risk_score.ail (bounded [0,200])
+--
+-- All monetary values in cents. Percentages as basis points (10000 = 100%).
+
+module streaming/safe_agent/services/business_tools
+
+import std/string (startsWith, length as strLength)
+
+-- ════════════════════════════════════════════════════════════════
+-- 1. INVOICE — 4-deep contract chain
+-- ════════════════════════════════════════════════════════════════
+
+-- Tax rate by region (basis points: 875 = 8.75%)
+export pure func taxRate(region: string) -> int
+  ensures { result >= 0 }
+{
+  match region {
+    "us_standard" => 875,
+    "us_reduced"  => 400,
+    "eu_standard" => 2000,
+    "eu_reduced"  => 700,
+    "tax_exempt"  => 0,
+    _ => 875
+  }
+}
+
+-- Tax on amount
+export pure func calculateTax(amount: int, region: string) -> int
+  ensures { result >= 0 }
+{
+  if amount < 0 then 0
+  else amount * taxRate(region) / 10000
+}
+
+-- Discount rate by tier (basis points)
+export pure func tierDiscountRate(tier: string) -> int
+  ensures { result >= 0 }
+{
+  match tier {
+    "enterprise" => 2500,
+    "business"   => 1500,
+    "starter"    => 500,
+    "trial"      => 1000,
+    "free"       => 0,
+    _ => 0
+  }
+}
+
+-- Apply tier discount
+export pure func applyTierDiscount(amount: int, tier: string) -> int
+  ensures { result >= 0 }
+{
+  if amount < 0 then 0
+  else amount - amount * tierDiscountRate(tier) / 10000
+}
+
+-- Promo rebate: 10% off if valid code (starts with "PROMO-", >= 8 chars)
+export pure func promoRebate(code: string, amount: int) -> int
+  ensures { result >= 0 }
+{
+  if amount < 0 then 0
+  else if startsWith(code, "PROMO-") && strLength(code) >= 8
+    then amount / 10
+    else 0
+}
+
+-- Full invoice total: 4-deep chain
+-- subtotal -> tier discount -> tax -> promo rebate
+export pure func invoiceTotal(subtotal: int, tier: string, region: string, promoCode: string) -> int
+  requires { subtotal >= 0 }
+  ensures { result >= 0 }
+{
+  let afterDiscount = applyTierDiscount(subtotal, tier);
+  let tax = calculateTax(afterDiscount, region);
+  let rebate = promoRebate(promoCode, afterDiscount);
+  afterDiscount + tax - rebate
+}
+
+-- ════════════════════════════════════════════════════════════════
+-- 2. INSURANCE — 768 input paths, all proven safe
+-- ════════════════════════════════════════════════════════════════
+
+-- Base premium by age band (cents)
+export pure func basePremium(ageBand: string) -> int
+  ensures { result >= 100 }
+{
+  match ageBand {
+    "youth"   => 200,
+    "adult"   => 150,
+    "senior"  => 300,
+    "elderly" => 500,
+    _ => 200
+  }
+}
+
+-- Risk multiplier (100 = 1.0x)
+export pure func riskMultiplier(tier: string, history: string) -> int
+  ensures { result >= 100 }
+{
+  let tierBase = match tier {
+    "low"      => 100,
+    "medium"   => 150,
+    "high"     => 250,
+    "critical" => 400,
+    _ => 100
+  };
+  let histAdj = match history {
+    "clean"    => 0,
+    "minor"    => 25,
+    "major"    => 75,
+    "multiple" => 150,
+    _ => 0
+  };
+  tierBase + histAdj
+}
+
+-- Coverage surcharge
+export pure func coverageSurcharge(coverage: string, region: string) -> int
+  ensures { result >= 0 }
+{
+  let covBase = match coverage {
+    "basic"    => 0,
+    "standard" => 50,
+    "premium"  => 150,
+    "platinum" => 350,
+    _ => 0
+  };
+  let regionAdj = match region {
+    "urban"    => 40,
+    "suburban" => 20,
+    "rural"    => 0,
+    _ => 0
+  };
+  covBase + regionAdj
+}
+
+-- Full premium: 768 paths (4*4*4*4*3), all proven >= 100
+export pure func calculatePremium(ageBand: string, riskTier: string, claimHistory: string, coverage: string, region: string) -> int
+  ensures { result >= 100 }
+{
+  let base = basePremium(ageBand);
+  let mult = riskMultiplier(riskTier, claimHistory);
+  let surcharge = coverageSurcharge(coverage, region);
+  base * mult / 100 + surcharge
+}
+
+-- ════════════════════════════════════════════════════════════════
+-- 3. PAYROLL — Take-home pay (net >= 0 invariant)
+-- ════════════════════════════════════════════════════════════════
+
+-- Gross pay
+export pure func grossPay(hourlyRate: int, hours: int) -> int
+  requires { hourlyRate >= 0, hours >= 0 }
+  ensures { result >= 0 }
+{
+  hourlyRate * hours
+}
+
+-- Standard deduction (cents)
+export pure func standardDeduction() -> int
+  ensures { result == 1250000 }
+{
+  1250000
+}
+
+-- Taxable income after deduction
+export pure func taxableIncome(gross: int) -> int
+  ensures { result >= 0 }
+{
+  let ti = gross - standardDeduction();
+  if ti < 0 then 0 else ti
+}
+
+-- Federal tax: 3 progressive brackets
+export pure func federalTax(taxable: int) -> int
+  ensures { result >= 0 }
+{
+  if taxable <= 0 then 0
+  else {
+    let b1 = if taxable > 3000000 then 3000000 * 10 / 100 else taxable * 10 / 100;
+    let over3m = if taxable > 3000000 then taxable - 3000000 else 0;
+    let b2 = if over3m > 4000000 then 4000000 * 22 / 100 else over3m * 22 / 100;
+    let over7m = if taxable > 7000000 then taxable - 7000000 else 0;
+    let b3 = over7m * 32 / 100;
+    b1 + b2 + b3
+  }
+}
+
+-- State tax: flat 5%
+export pure func stateTax(taxable: int) -> int
+  ensures { result >= 0 }
+{
+  if taxable <= 0 then 0
+  else taxable * 5 / 100
+}
+
+-- FICA tax: 7.65% up to wage base
+export pure func ficaTax(gross: int) -> int
+  ensures { result >= 0 }
+{
+  if gross <= 0 then 0
+  else {
+    let base = if gross > 16020000 then 16020000 else gross;
+    base * 765 / 10000
+  }
+}
+
+-- Total deductions
+export pure func totalDeductions(gross: int) -> int
+  ensures { result >= 0 }
+{
+  if gross <= 0 then 0
+  else {
+    let ti = taxableIncome(gross);
+    federalTax(ti) + stateTax(ti) + ficaTax(gross)
+  }
+}
+
+-- Net pay: THE key invariant — you never owe more than you earn
+export pure func netPay(hourlyRate: int, hours: int) -> int
+  requires { hourlyRate >= 0, hours >= 0 }
+  ensures { result >= 0 }
+{
+  let gross = grossPay(hourlyRate, hours);
+  let deductions = totalDeductions(gross);
+  if deductions > gross then 0 else gross - deductions
+}
+
+-- ════════════════════════════════════════════════════════════════
+-- 4. SHIPPING — Cross-function, discount clamping
+-- ════════════════════════════════════════════════════════════════
+
+-- Base cost by region (cents)
+export pure func shippingBaseCost(region: string) -> int
+  ensures { result >= 0 }
+{
+  match region {
+    "domestic"      => 500,
+    "regional"      => 1200,
+    "international" => 2500,
+    _ => 500
+  }
+}
+
+-- Priority multiplier (100 = 1x)
+export pure func priorityMultiplier(priority: string) -> int
+  ensures { result >= 100 }
+{
+  match priority {
+    "economy"  => 100,
+    "standard" => 150,
+    "express"  => 300,
+    "overnight" => 500,
+    _ => 100
+  }
+}
+
+-- Shipping cost: base * priority + weight surcharge - discount (clamped to 0)
+export pure func shippingCost(region: string, priority: string, weightKg: int, discountCents: int) -> int
+  requires { weightKg >= 0, discountCents >= 0 }
+  ensures { result >= 0 }
+{
+  let base = shippingBaseCost(region);
+  let mult = priorityMultiplier(priority);
+  let weightSurcharge = weightKg * 50;
+  let subtotal = base * mult / 100 + weightSurcharge;
+  let final = subtotal - discountCents;
+  if final < 0 then 0 else final
+}
+
+-- ════════════════════════════════════════════════════════════════
+-- 5. RISK SCORE — Bounded [0, 200]
+-- ════════════════════════════════════════════════════════════════
+
+-- Severity score
+export pure func severityScore(severity: string) -> int
+  ensures { result >= 0 }
+{
+  match severity {
+    "critical" => 100,
+    "high"     => 70,
+    "medium"   => 40,
+    "low"      => 10,
+    _ => 10
+  }
+}
+
+-- Source modifier
+export pure func sourceModifier(source: string) -> int
+  ensures { result >= 0 }
+{
+  match source {
+    "internal"  => 10,
+    "external"  => 50,
+    "automated" => 0,
+    _ => 0
+  }
+}
+
+-- Repeat penalty (capped at 50)
+export pure func repeatPenalty(count: int) -> int
+  requires { count >= 0 }
+  ensures { result >= 0 }
+{
+  let raw = count * 5;
+  if raw > 50 then 50 else raw
+}
+
+-- Full risk score: bounded [0, 200]
+export pure func riskScore(severity: string, source: string, repeatCount: int) -> int
+  requires { repeatCount >= 0 }
+  ensures { result >= 0 }
+{
+  let raw = severityScore(severity) + sourceModifier(source) + repeatPenalty(repeatCount);
+  if raw > 200 then 200 else raw
+}

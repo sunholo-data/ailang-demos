@@ -145,17 +145,22 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string) -> bool ! {
 
 func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {Stream, IO} {
   println(encode(jo([kv("type", js("setup"))])));
-  let textMsg = buildTextMessage(prompt);
-  match transmit(conn, textMsg) {
-    Ok(_) => {
-      println(encode(jo([kv("type", js("sent")), kv("text", js(prompt))])));
-      true
-    },
-    Err(_) => {
-      println(encode(jo([kv("type", js("error")), kv("text", js("Failed to send prompt"))])));
-      false
+  -- Only send a text turn if there's an actual prompt.
+  -- Empty prompt (mic-only connect) must NOT send a turn — otherwise Gemini
+  -- generates a greeting response that overlaps with incoming mic audio.
+  if length(prompt) > 0 then {
+    let textMsg = buildTextMessage(prompt);
+    match transmit(conn, textMsg) {
+      Ok(_) => {
+        println(encode(jo([kv("type", js("sent")), kv("text", js(prompt))])));
+        true
+      },
+      Err(_) => {
+        println(encode(jo([kv("type", js("error")), kv("text", js("Failed to send prompt"))])));
+        false
+      }
     }
-  }
+  } else true
 }
 
 func handleServerContent(json: Json) -> bool ! {IO} {

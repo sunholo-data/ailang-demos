@@ -190,6 +190,10 @@ jobs:
             invoice_processor_wasm/ailang/streaming/safe_agent/services/
           cp streaming/safe_agent/services/safe_agent_browser.ail \
             invoice_processor_wasm/ailang/streaming/safe_agent/services/
+          cp streaming/safe_agent/services/business_tools.ail \
+            invoice_processor_wasm/ailang/streaming/safe_agent/services/
+          cp streaming/safe_agent/services/business_browser.ail \
+            invoice_processor_wasm/ailang/streaming/safe_agent/services/
           echo "Copied streaming modules"
 
       - name: Copy demo Office files

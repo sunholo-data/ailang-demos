@@ -91,61 +91,90 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     // Source sample rate of incoming PCM (default 24kHz for Gemini output)
     this.sourceRate = options?.processorOptions?.sourceRate || 24000;
 
-    // Ring buffer: 10 seconds at source rate should be plenty
-    const bufSize = this.sourceRate * 10;
-    this.ring = new Float32Array(bufSize);
-    this.writePos = 0;       // next write position in ring
-    this.readPos = 0.0;      // fractional read position for interpolation
-    this.buffered = 0;       // samples available to read
+    // Linear FIFO buffer — no ring wrap, no modulo, guaranteed ordering.
+    // Compacts by shifting unread data to front when write pointer reaches end.
+    // Grows if needed. Starts at 30s; speech rarely buffers more than that.
+    this.buf = new Float32Array(this.sourceRate * 30);
+    this.wIdx = 0;           // write index (next write position)
+    this.rIdx = 0;           // integer read index
+    this.frac = 0.0;         // fractional accumulator for resampling
     this.lastSample = 0;     // for smooth fade-out when buffer runs dry
 
-    // Pre-buffer: accumulate this many source samples before starting playback
-    // ~300ms at 24kHz = 7200 samples — absorbs network + event loop jitter
-    // (Firefox needs more buffer than Chrome due to higher setTimeout minimums)
+    // Pre-buffer: ~300ms only for INITIAL startup. After first playback,
+    // we never re-enter pre-buffering — just output zeros inline when empty
+    // and resume instantly when data arrives. This eliminates the 100ms
+    // resume gap that was causing audible drops mid-stream.
     this.preBufferSamples = Math.floor(this.sourceRate * 0.3);
-    // Resume threshold: after mid-stream underrun, accumulate this much before resuming.
-    // Much smaller than initial pre-buffer (100ms vs 300ms) to minimize silence gaps,
-    // but large enough to prevent repeated stutter from 1-sample resumes.
-    this.resumeThreshold = Math.floor(this.sourceRate * 0.1);
     this.isPreBuffering = true;
-    this.hasStarted = false;    // true after first playback begins (never re-primes)
+    this.hasStarted = false;  // once true, never re-enters pre-buffering
 
-    // Fade-out: samples of exponential decay when buffer runs dry.
-    // Prevents clicks/pops at end of sentences when frames slow down.
-    // 64 samples at 48kHz ≈ 1.3ms — inaudible but eliminates transients.
+    // Fade-out: 64 samples of exponential decay to prevent clicks/pops
     this.fadeLen = 64;
     this.fadePos = 0;
     this.isFading = false;
 
+    // Diagnostics — lightweight counters, posted every ~1s
+    this._diag = { enqueues: 0, samples: 0, underruns: 0, compacts: 0, grows: 0, minBuf: Infinity, maxBuf: 0 };
+    this._diagInterval = Math.floor(sampleRate / 128); // process() calls per second
+    this._diagCounter = 0;
+
     this.port.onmessage = (e) => {
       if (e.data.type === 'enqueue') {
         const pcm16 = new Int16Array(e.data.pcmData);
-        const len = this.ring.length;
-        for (let i = 0; i < pcm16.length; i++) {
-          this.ring[this.writePos % len] = pcm16[i] / 0x8000;
-          this.writePos++;
+        const needed = pcm16.length;
+
+        // Ensure we have room to write
+        this._ensureCapacity(needed);
+
+        // Append PCM as float32
+        for (let i = 0; i < needed; i++) {
+          this.buf[this.wIdx++] = pcm16[i] / 0x8000;
         }
-        this.buffered += pcm16.length;
-        // Start playback once pre-buffer is filled
-        if (this.isPreBuffering && this.buffered >= this.preBufferSamples) {
+
+        this._diag.enqueues++;
+        this._diag.samples += needed;
+
+        const buffered = this.wIdx - this.rIdx;
+        if (buffered > this._diag.maxBuf) this._diag.maxBuf = buffered;
+
+        // Initial pre-buffer: wait for 300ms before first playback
+        if (this.isPreBuffering && buffered >= this.preBufferSamples) {
           this.isPreBuffering = false;
           this.hasStarted = true;
         }
-        // After first start, resume once resume threshold is reached.
-        // Prevents repeated stutter from resuming with just 1 sample.
-        if (this.hasStarted && this.isPreBuffering && this.buffered >= this.resumeThreshold) {
-          this.isPreBuffering = false;
-          this.isFading = false; // cancel any in-progress fade-out
-        }
       } else if (e.data.command === 'clear') {
-        this.writePos = 0;
-        this.readPos = 0.0;
-        this.buffered = 0;
-        this.ring.fill(0);
+        this.wIdx = 0;
+        this.rIdx = 0;
+        this.frac = 0.0;
+        this.lastSample = 0;
         this.isPreBuffering = true;
         this.hasStarted = false;
+        this._diag = { enqueues: 0, samples: 0, underruns: 0, compacts: 0, grows: 0, minBuf: Infinity, maxBuf: 0 };
       }
     };
+  }
+
+  // Compact buffer: shift unread data to front, grow if still not enough
+  _ensureCapacity(needed) {
+    if (this.wIdx + needed <= this.buf.length) return;
+
+    // Shift unread data to front
+    const unread = this.wIdx - this.rIdx;
+    if (unread > 0) {
+      this.buf.copyWithin(0, this.rIdx, this.wIdx);
+    }
+    this.wIdx = unread;
+    this.rIdx = 0;
+    this._diag.compacts++;
+
+    // Still not enough? Double the buffer
+    if (this.wIdx + needed > this.buf.length) {
+      const newLen = Math.max(this.buf.length * 2, this.wIdx + needed + this.sourceRate);
+      const newBuf = new Float32Array(newLen);
+      newBuf.set(this.buf.subarray(0, this.wIdx));
+      this.buf = newBuf;
+      this._diag.grows++;
+    }
   }
 
   process(inputs, outputs, parameters) {
@@ -153,20 +182,20 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     if (!output || !output[0]) return true;
 
     const outputData = output[0];
-    const ratio = this.sourceRate / sampleRate;
-    const len = this.ring.length;
+    const step = this.sourceRate / sampleRate; // source samples per output sample
 
-    // Don't play until pre-buffer is filled
+    // Initial pre-buffer only — wait for 300ms before first sound
     if (this.isPreBuffering) {
       outputData.fill(0);
       return true;
     }
 
+    let underranThisFrame = false;
+
     for (let i = 0; i < outputData.length; i++) {
       if (this.isFading) {
-        // Exponential fade-out to silence — prevents end-of-sentence clicks
         const gain = 1 - (this.fadePos / this.fadeLen);
-        outputData[i] = this.lastSample * gain * gain; // quadratic for fast taper
+        outputData[i] = this.lastSample * gain * gain;
         this.fadePos++;
         if (this.fadePos >= this.fadeLen) {
           this.isFading = false;
@@ -175,37 +204,63 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
         continue;
       }
 
-      if (this.buffered <= 1) {
-        // Buffer dry — start fade-out from last sample value
+      // Buffer empty — output zero inline (no pre-buffering state change)
+      if (this.rIdx + 1 >= this.wIdx) {
         if (this.lastSample !== 0 && !this.isFading) {
           this.isFading = true;
           this.fadePos = 0;
-          i--; // re-process this sample in fade path
+          i--;
           continue;
         }
         outputData[i] = 0;
+        underranThisFrame = true;
         continue;
       }
 
-      // Linear interpolation for smooth resampling
-      const idx = this.readPos;
-      const idx0 = Math.floor(idx) % len;
-      const idx1 = (idx0 + 1) % len;
-      const frac = idx - Math.floor(idx);
-      const sample = this.ring[idx0] * (1 - frac) + this.ring[idx1] * frac;
+      // Cancel any fade if data arrived mid-frame
+      if (this.isFading) {
+        this.isFading = false;
+      }
+
+      // Linear interpolation between rIdx and rIdx+1
+      const s0 = this.buf[this.rIdx];
+      const s1 = this.buf[this.rIdx + 1];
+      const sample = s0 + (s1 - s0) * this.frac;
       outputData[i] = sample;
       this.lastSample = sample;
 
-      this.readPos += ratio;
-      this.buffered -= ratio;
+      // Advance fractional read position
+      this.frac += step;
+      while (this.frac >= 1.0) {
+        this.frac -= 1.0;
+        this.rIdx++;
+      }
     }
 
-    // Notify when buffer runs dry (but don't re-prime — resume immediately on next data)
-    if (this.buffered <= 0) {
-      this.buffered = 0;
-      this.isPreBuffering = true;  // outputs silence until data arrives
-      // Don't reset hasStarted — next enqueue resumes instantly without waiting for pre-buffer
-      this.port.postMessage({ type: 'queue-empty' });
+    // Track diagnostics
+    if (underranThisFrame) this._diag.underruns++;
+    const buffered = this.wIdx - this.rIdx;
+    if (buffered < this._diag.minBuf) this._diag.minBuf = buffered;
+
+    // Post diagnostics every ~1 second (cheap: just a counter check)
+    this._diagCounter++;
+    if (this._diagCounter >= this._diagInterval) {
+      this._diagCounter = 0;
+      this.port.postMessage({
+        type: 'diag',
+        enqueues: this._diag.enqueues,
+        samples: this._diag.samples,
+        underruns: this._diag.underruns,
+        compacts: this._diag.compacts,
+        grows: this._diag.grows,
+        buffered: buffered,
+        bufSize: this.buf.length,
+        minBuf: this._diag.minBuf === Infinity ? 0 : this._diag.minBuf,
+        maxBuf: this._diag.maxBuf
+      });
+      // Reset per-interval counters (keep cumulative ones)
+      this._diag.minBuf = Infinity;
+      this._diag.maxBuf = 0;
     }
 
     return true;

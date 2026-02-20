@@ -155,11 +155,15 @@ class GeminiLiveCore {
         this.config.onLog('err', GeminiLiveCore.escapeHtml('AILANG: ' + result.error));
         return null;
       }
-      let val = result.result || '';
+      let val = result.result;
+      // New WASM returns native types (bool, number) — return directly
+      if (typeof val === 'boolean' || typeof val === 'number') return val;
+      // Null/undefined → empty string for legacy string processing
+      if (val == null) val = '';
       if (val === '<function>' && args.length === 0) {
         val = this.wasmEngine.eval(funcName + '()');
       }
-      val = val.trim();
+      val = String(val).trim();
       // Strip type annotation
       const typeIdx = val.lastIndexOf(' :: ');
       if (typeIdx > 0) val = val.substring(0, typeIdx).trim();
@@ -189,6 +193,23 @@ class GeminiLiveCore {
     this._playbackNode = new AudioWorkletNode(this._audioCtx, 'pcm-playback', {
       processorOptions: { sourceRate: this.config.sourceRate }
     });
+    // Worklet diagnostics — logged to console every ~1s (no UI impact)
+    this._playbackNode.port.onmessage = (e) => {
+      if (e.data.type === 'diag') {
+        const d = e.data;
+        const bufSec = (d.buffered / this.config.sourceRate).toFixed(2);
+        const minSec = (d.minBuf / this.config.sourceRate).toFixed(3);
+        const parts = ['[audio]',
+          'buf=' + bufSec + 's',
+          'min=' + minSec + 's',
+          'enq=' + d.enqueues,
+          'samples=' + d.samples];
+        if (d.underruns > 0) parts.push('UNDERRUNS=' + d.underruns);
+        if (d.compacts > 0) parts.push('compacts=' + d.compacts);
+        if (d.grows > 0) parts.push('grows=' + d.grows);
+        console.log(parts.join(' '));
+      }
+    };
     this._analyserNode = this._audioCtx.createAnalyser();
     this._analyserNode.fftSize = this.config.fftSize;
     this._playbackNode.connect(this._analyserNode);

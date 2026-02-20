@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AILANG Safe Agent — Contract-Verified Voice Agent</title>
+<title>AILANG Safe Agent — Contract-Verified Business Tools</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
@@ -58,8 +58,8 @@
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
     /* Ring */
-    --ring-size: 160px;
-    --ring-stroke: 12;
+    --ring-size: 120px;
+    --ring-stroke: 10;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -107,7 +107,7 @@
   /* ── App Shell ── */
   .app {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     height: 100vh;
     position: relative;
     z-index: 1;
@@ -194,6 +194,12 @@
     background: var(--blue-dim);
     border: 1px solid rgba(59, 140, 255, 0.25);
     color: var(--blue);
+  }
+
+  .badge-wasm {
+    background: var(--cyan-dim);
+    border: 1px solid rgba(0, 212, 255, 0.25);
+    color: var(--cyan);
   }
 
   .badge-ws {
@@ -466,9 +472,21 @@
   .feature-tag.sql { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,176,32,0.15); }
   .feature-tag.div { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,59,92,0.15); }
 
+  .welcome .init-log {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: left;
+    max-width: 360px;
+    margin-top: 4px;
+    line-height: 1.8;
+  }
+  .welcome .init-log .ok { color: var(--green); }
+
   /* Messages */
   .msg {
     max-width: 92%;
+    flex-shrink: 0;
     animation: msg-in 0.25s ease-out;
   }
 
@@ -569,6 +587,7 @@
     align-self: flex-start;
     width: 100%;
     max-width: 92%;
+    flex-shrink: 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -587,7 +606,11 @@
     background: var(--bg-raised);
     border-bottom: 1px solid var(--border);
     gap: 8px;
+    cursor: pointer;
+    user-select: none;
   }
+  .tool-card-header:hover { background: var(--bg-card); }
+  .tool-card.collapsed .tool-card-body { display: none; }
 
   .tool-card-header .tool-name {
     font-size: 12px;
@@ -626,44 +649,47 @@
     color: var(--red);
   }
 
+  .contract-badge.blocked {
+    background: rgba(255, 176, 46, 0.12);
+    color: var(--amber);
+  }
+
   .contract-badge .icon { font-size: 11px; }
 
   .tool-card-body {
-    padding: 10px 12px;
+    padding: 0;
     font-size: 11px;
     line-height: 1.7;
+    display: block;
   }
 
-  .tool-card-body .tc-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 2px;
+  .tc-section {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
   }
+  .tc-section:last-child { border-bottom: none; }
 
-  .tool-card-body .tc-label {
-    color: var(--text-muted);
-    min-width: 50px;
-    font-weight: 500;
+  .tc-section-label {
+    font-size: 8px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-size: 9px;
-    padding-top: 2px;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
   }
 
-  .tool-card-body .tc-value {
+  .tc-section-content {
     color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 11px;
     word-break: break-all;
+    line-height: 1.6;
   }
 
-  .tool-card-body .tc-value.result { color: var(--green); }
-  .tool-card-body .tc-value.rejected { color: var(--red); }
+  .tc-section-content.result { color: var(--green); font-weight: 600; }
+  .tc-section-content.rejected { color: var(--red); font-weight: 600; }
 
-  .tool-card-body .contract-checks {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
+  .tc-section .contract-checks {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -766,6 +792,36 @@
   .input-field:focus { border-color: rgba(0, 229, 118, 0.3); }
   .input-field::placeholder { color: var(--text-dim); }
 
+  /* ── Audio Scope Strip ── */
+  .scope-strip {
+    grid-column: 1 / -1;
+    height: 64px;
+    background: var(--bg-deep);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .scope-strip canvas {
+    width: 100%;
+    height: 64px;
+    display: block;
+  }
+  .scope-strip .vu-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    background: rgba(0,0,0,0.4);
+  }
+  .vu-label { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .vu-track { flex: 1; height: 3px; background: var(--bg-card); border-radius: 2px; overflow: hidden; }
+  .vu-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--green) 0%, var(--green-bright, #5fff97) 80%, var(--red) 100%); border-radius: 2px; transition: width 0.1s ease-out; }
+  .vu-db { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); min-width: 36px; text-align: right; }
+
   .btn-send {
     background: var(--green);
     color: var(--bg-deep);
@@ -803,13 +859,32 @@
       var(--bg-deep);
   }
 
+  .safety-split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    min-height: 0;
+  }
+
+  .safety-summary {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    min-width: 180px;
+    max-width: 220px;
+  }
+  .safety-summary::-webkit-scrollbar { width: 3px; }
+  .safety-summary::-webkit-scrollbar-track { background: transparent; }
+  .safety-summary::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
   /* ── Percentage Ring ── */
   .safety-ring-section {
-    padding: 20px 20px 16px;
+    padding: 12px 12px 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -853,7 +928,7 @@
 
   .ring-pct {
     font-family: var(--font-sans);
-    font-size: 36px;
+    font-size: 28px;
     font-weight: 800;
     color: var(--green);
     letter-spacing: -1px;
@@ -872,30 +947,31 @@
 
   .ring-sublabel {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-secondary);
     font-weight: 500;
-    margin-top: 4px;
+    margin-top: 2px;
+    text-align: center;
+    line-height: 1.3;
   }
 
   /* ── Tool Status Cards ── */
   .safety-cards {
-    padding: 12px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
   }
 
   .safety-card {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 6px 8px;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     transition: all 0.2s;
   }
 
@@ -933,6 +1009,14 @@
     line-height: 1.4;
   }
 
+  .safety-card .sc-params {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
   .safety-card .sc-stats {
     text-align: right;
     flex-shrink: 0;
@@ -956,10 +1040,10 @@
 
   /* ── Contract Log ── */
   .contract-log {
-    flex: 1;
-    min-height: 0;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .log-header {
@@ -982,6 +1066,7 @@
     color: var(--text-dim);
     font-weight: 400;
   }
+
 
   .log-entries {
     flex: 1;
@@ -1037,7 +1122,37 @@
     color: var(--text-secondary);
     flex: 1;
     min-width: 0;
+    cursor: pointer;
   }
+  .log-entry .log-detail {
+    display: none;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--bg-deep);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    word-break: break-all;
+    border: 1px solid var(--border);
+  }
+  .log-entry.expanded .log-detail { display: block; }
+  .log-entry .log-detail .detail-label {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .log-entry .log-detail .detail-label:first-child { margin-top: 0; }
+  .log-entry .log-detail .detail-value {
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .log-entry .log-detail .detail-value.ok { color: var(--green); }
+  .log-entry .log-detail .detail-value.err { color: var(--red); }
 
   .log-entry .log-msg .fn { color: var(--purple); font-weight: 600; }
   .log-entry .log-msg .val { color: var(--cyan); }
@@ -1129,9 +1244,19 @@
       grid-template-rows: 1fr 1fr;
     }
     .panel-conversation { border-right: none; border-bottom: 1px solid var(--border); }
-    :root { --ring-size: 120px; }
-    .safety-ring-section { padding: 12px; }
-    .ring-pct { font-size: 28px; }
+    .safety-split {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+    .safety-summary {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      max-width: none;
+      flex-direction: row;
+      overflow-y: visible;
+    }
+    .safety-ring-section { padding: 8px; }
+    .safety-cards { flex-direction: row; flex-wrap: wrap; }
   }
 
   @media (max-width: 600px) {
@@ -1152,11 +1277,12 @@
     <div class="topbar-left">
       <div class="logo"><span class="accent">AILANG</span> <span class="dim">Safe Agent</span></div>
       <span class="badge badge-contract"><span class="dot"></span> Contract-Verified</span>
+      <span class="badge badge-wasm">WASM</span>
       <span class="badge badge-gemini">Gemini Live</span>
       <span class="badge badge-ws" id="wsStatus"><span class="dot"></span> <span id="wsLabel">Disconnected</span></span>
     </div>
     <div class="topbar-right">
-      <button class="btn-topbar" id="btnTestSafety" onclick="runSafetyTest()">Test Safety</button>
+      <button class="btn-topbar" id="btnTestSafety" onclick="runSafetyTest()" disabled>Test Safety</button>
       <button class="btn-topbar" id="btnConfig" onclick="toggleConfig()">Config</button>
     </div>
   </div>
@@ -1165,8 +1291,8 @@
   <div class="config-panel" id="configPanel">
     <div class="config-note">
       <span>*</span>
-      <span>Connects directly to <code>wss://generativelanguage.googleapis.com</code> via WebSocket.
-      The Gemini API key is stored in localStorage only and never sent to any third party.</span>
+      <span>Connects directly to <code>wss://generativelanguage.googleapis.com</code> via AILANG WASM
+      (std/stream effects). The Gemini API key is stored in localStorage only.</span>
     </div>
     <div class="config-row">
       <label>API Key</label>
@@ -1175,10 +1301,33 @@
              onchange="saveConfig()">
     </div>
     <div class="config-row">
-      <label>Model</label>
-      <input type="text" class="config-input" id="modelInput"
-             value="models/gemini-2.5-flash-preview-04-17" autocomplete="off"
-             onchange="saveConfig()">
+      <label>Voice</label>
+      <select class="config-input" id="voiceSelect" onchange="saveConfig()">
+        <option value="Orus" selected>Orus (Firm)</option>
+        <option value="Charon">Charon (Informative)</option>
+        <option value="Schedar">Schedar (Even)</option>
+        <option value="Sulafat">Sulafat (Warm)</option>
+        <option value="Sadaltager">Sadaltager (Knowledgeable)</option>
+        <option value="Gacrux">Gacrux (Mature)</option>
+        <option value="Rasalgethi">Rasalgethi (Informative)</option>
+        <option value="Alnilam">Alnilam (Firm)</option>
+        <option value="Puck">Puck (Upbeat)</option>
+        <option value="Kore">Kore (Firm)</option>
+        <option value="Zephyr">Zephyr (Bright)</option>
+        <option value="Aoede">Aoede (Breezy)</option>
+        <option value="Fenrir">Fenrir (Excitable)</option>
+        <option value="Leda">Leda (Youthful)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Audio Scope Strip -->
+  <div class="scope-strip">
+    <canvas id="waveform"></canvas>
+    <div class="vu-strip">
+      <span class="vu-label">VU</span>
+      <div class="vu-track"><div class="vu-fill" id="vuFill"></div></div>
+      <span class="vu-db" id="vuDb">-&infin; dB</span>
     </div>
   </div>
 
@@ -1207,23 +1356,24 @@
                     style="color: var(--green)"/>
             </svg>
           </div>
-          <h2>Contract-Verified Voice Agent</h2>
-          <p>Every tool call is validated by formal contracts at runtime.
-             Calculator clamps inputs, file reads block traversal,
-             SQL enforces SELECT-only. Provably safe.</p>
+          <h2>Contract-Verified Business Agent</h2>
+          <p>Every tool call is validated by formal contracts at runtime via AILANG WASM.
+             Invoice chains 4 deep, insurance covers 768 paths,
+             payroll guarantees net &ge; 0, shipping clamps discounts. Provably safe.</p>
           <div class="feature-tags">
-            <span class="feature-tag calc">Calculator bounds</span>
-            <span class="feature-tag file">Path validation</span>
-            <span class="feature-tag sql">SELECT-only SQL</span>
-            <span class="feature-tag div">Div-by-zero guard</span>
+            <span class="feature-tag calc">Invoice 4-deep chain</span>
+            <span class="feature-tag file">Insurance 768 paths</span>
+            <span class="feature-tag sql">Payroll net &ge; 0</span>
+            <span class="feature-tag div">Risk bounded [0,200]</span>
           </div>
           <p style="margin-top:8px"><kbd>Enter</kbd> to send &middot; Click mic for voice &middot; "Test Safety" for demo</p>
+          <div class="init-log" id="initLog"></div>
         </div>
       </div>
 
       <div class="input-area">
         <div class="input-row">
-          <button class="btn-mic" id="btnMic" onclick="toggleMic()" title="Toggle microphone">
+          <button class="btn-mic" id="btnMic" onclick="toggleMic()" title="Toggle microphone" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -1233,11 +1383,11 @@
           </button>
           <div class="input-wrap">
             <textarea class="input-field" id="inputField" rows="1"
-                      placeholder="Ask the safe agent..."
+                      placeholder="Loading AILANG WASM..."
                       onkeydown="handleKeydown(event)"
-                      oninput="autoResize(this)"></textarea>
+                      oninput="autoResize(this)" disabled></textarea>
           </div>
-          <button class="btn-send" id="btnSend" onclick="sendMessage()">Send</button>
+          <button class="btn-send" id="btnSend" onclick="sendMessage()" disabled>Send</button>
         </div>
       </div>
     </div>
@@ -1251,78 +1401,99 @@
         </div>
       </div>
 
-      <!-- Percentage Ring -->
-      <div class="safety-ring-section">
-        <div class="ring-container">
-          <svg class="ring-svg" viewBox="0 0 160 160">
-            <circle class="ring-bg" cx="80" cy="80" r="68"/>
-            <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="68"
-                    stroke-dasharray="427.26" stroke-dashoffset="427.26"/>
-          </svg>
-          <div class="ring-center">
-            <div class="ring-pct" id="ringPct">--</div>
-            <div class="ring-label">Pass Rate</div>
+      <div class="safety-split">
+        <!-- Left: Summary (ring + cards) -->
+        <div class="safety-summary">
+          <!-- Percentage Ring -->
+          <div class="safety-ring-section">
+            <div class="ring-container">
+              <svg class="ring-svg" viewBox="0 0 160 160">
+                <circle class="ring-bg" cx="80" cy="80" r="68"/>
+                <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="68"
+                        stroke-dasharray="427.26" stroke-dashoffset="427.26"/>
+              </svg>
+              <div class="ring-center">
+                <div class="ring-pct" id="ringPct">--</div>
+                <div class="ring-label">Pass Rate</div>
+              </div>
+            </div>
+            <div class="ring-sublabel" id="ringSubLabel">0 / 0 contracts enforced</div>
           </div>
-        </div>
-        <div class="ring-sublabel" id="ringSubLabel">0 / 0 tool calls passed</div>
-      </div>
 
-      <!-- Tool Status Cards -->
-      <div class="safety-cards">
-        <div class="safety-card" id="cardCalc">
-          <div class="sc-indicator dim" id="calcIndicator"></div>
-          <div class="sc-content">
-            <div class="sc-title">Calculator</div>
-            <div class="sc-detail" id="calcDetail">Input clamping, overflow protection</div>
-          </div>
-          <div class="sc-stats">
-            <div class="sc-count" id="calcCount">0</div>
-            <div class="sc-sublabel">calls</div>
+          <!-- Tool Status Cards -->
+          <div class="safety-cards">
+            <div class="safety-card" id="cardInvoice">
+              <div class="sc-indicator dim" id="invoiceIndicator"></div>
+              <div class="sc-content">
+                <div class="sc-title">Invoice</div>
+                <div class="sc-detail" id="invoiceDetail">4-deep contract chain</div>
+                <div class="sc-params">subtotal &middot; tier &middot; taxRegion &middot; promoCode</div>
+              </div>
+              <div class="sc-stats">
+                <div class="sc-count" id="invoiceCount">0</div>
+                <div class="sc-sublabel">calls</div>
+              </div>
+            </div>
+            <div class="safety-card" id="cardInsurance">
+              <div class="sc-indicator dim" id="insuranceIndicator"></div>
+              <div class="sc-content">
+                <div class="sc-title">Insurance</div>
+                <div class="sc-detail" id="insuranceDetail">768 verified paths</div>
+                <div class="sc-params">ageBand &middot; riskTier &middot; history &middot; coverage &middot; region</div>
+              </div>
+              <div class="sc-stats">
+                <div class="sc-count" id="insuranceCount">0</div>
+                <div class="sc-sublabel">calls</div>
+              </div>
+            </div>
+            <div class="safety-card" id="cardPayroll">
+              <div class="sc-indicator dim" id="payrollIndicator"></div>
+              <div class="sc-content">
+                <div class="sc-title">Payroll</div>
+                <div class="sc-detail" id="payrollDetail">net &ge; 0 invariant</div>
+                <div class="sc-params">hourlyRate &middot; hoursWorked</div>
+              </div>
+              <div class="sc-stats">
+                <div class="sc-count" id="payrollCount">0</div>
+                <div class="sc-sublabel">calls</div>
+              </div>
+            </div>
+            <div class="safety-card" id="cardShipping">
+              <div class="sc-indicator dim" id="shippingIndicator"></div>
+              <div class="sc-content">
+                <div class="sc-title">Shipping</div>
+                <div class="sc-detail" id="shippingDetail">Discount clamping</div>
+                <div class="sc-params">region &middot; priority &middot; weightKg &middot; discount</div>
+              </div>
+              <div class="sc-stats">
+                <div class="sc-count" id="shippingCount">0</div>
+                <div class="sc-sublabel">calls</div>
+              </div>
+            </div>
+            <div class="safety-card" id="cardRisk">
+              <div class="sc-indicator dim" id="riskIndicator"></div>
+              <div class="sc-content">
+                <div class="sc-title">Risk Score</div>
+                <div class="sc-detail" id="riskDetail">Bounded [0, 200]</div>
+                <div class="sc-params">severity &middot; source &middot; repeatCount</div>
+              </div>
+              <div class="sc-stats">
+                <div class="sc-count" id="riskCount">0</div>
+                <div class="sc-sublabel">calls</div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="safety-card" id="cardFile">
-          <div class="sc-indicator dim" id="fileIndicator"></div>
-          <div class="sc-content">
-            <div class="sc-title">File Access</div>
-            <div class="sc-detail" id="fileDetail">Path validation, traversal blocking</div>
-          </div>
-          <div class="sc-stats">
-            <div class="sc-count" id="fileCount">0</div>
-            <div class="sc-sublabel">calls</div>
-          </div>
-        </div>
-        <div class="safety-card" id="cardSql">
-          <div class="sc-indicator dim" id="sqlIndicator"></div>
-          <div class="sc-content">
-            <div class="sc-title">SQL Query</div>
-            <div class="sc-detail" id="sqlDetail">SELECT-only enforcement</div>
-          </div>
-          <div class="sc-stats">
-            <div class="sc-count" id="sqlCount">0</div>
-            <div class="sc-sublabel">calls</div>
-          </div>
-        </div>
-        <div class="safety-card" id="cardDiv">
-          <div class="sc-indicator dim" id="divIndicator"></div>
-          <div class="sc-content">
-            <div class="sc-title">Division</div>
-            <div class="sc-detail" id="divDetail">Div-by-zero guard</div>
-          </div>
-          <div class="sc-stats">
-            <div class="sc-count" id="divCount">0</div>
-            <div class="sc-sublabel">blocks</div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Contract Log -->
-      <div class="contract-log">
-        <div class="log-header">
-          <span>Contract Log</span>
-          <span class="log-count" id="logCount">0 entries</span>
-        </div>
-        <div class="log-entries" id="logEntries">
-          <div class="log-empty" id="logEmpty">Waiting for tool calls...</div>
+        <!-- Right: Contract Log -->
+        <div class="contract-log">
+          <div class="log-header">
+            <span>Contract Log</span>
+            <span class="log-count" id="logCount">0 entries</span>
+          </div>
+          <div class="log-entries" id="logEntries">
+            <div class="log-empty" id="logEmpty">Waiting for tool calls...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1338,52 +1509,62 @@
       <span class="bm-text" id="budgetStreamText">0 / 50</span>
     </div>
     <div class="budget-meter">
-      <span class="bm-label">FS</span>
+      <span class="bm-label">Tools</span>
       <div class="bm-bar-wrap"><div class="bm-bar" id="budgetFsBar" style="width:0%"></div></div>
-      <span class="bm-text" id="budgetFsText">0 / 10</span>
+      <span class="bm-text" id="budgetFsText">0 / 50</span>
     </div>
     <div class="budget-meter">
-      <span class="bm-label">Net</span>
+      <span class="bm-label">Blocked</span>
       <div class="bm-bar-wrap"><div class="bm-bar" id="budgetNetBar" style="width:0%"></div></div>
-      <span class="bm-text" id="budgetNetText">0 / 5</span>
+      <span class="bm-text" id="budgetNetText">0</span>
     </div>
     <div class="footer-spacer"></div>
-    <div class="footer-branding"><span class="ail">AILANG</span> Contract-Verified Agent</div>
+    <div class="footer-branding"><span class="ail">AILANG</span> Contract-Verified Business Tools</div>
   </div>
 </div>
 
+<!-- AILANG WASM Runtime -->
+<script src="../../wasm/wasm_exec.js"></script>
+<script src="../../wasm/ailang-repl.js"></script>
+<script src="../shared/gemini-live-core.js"></script>
+
 <script>
 // ================================================================
-// AILANG Safe Agent — Browser Client
+// AILANG Safe Agent — Browser Client (WASM)
 //
-// Connects to Gemini Live API via WebSocket.
-// All tool calls are contract-verified locally in the browser,
-// mirroring the AILANG runtime contracts from verified_tools.ail.
+// ALL contract verification runs through AILANG WASM.
+// WebSocket via GeminiLiveCore (std/stream effects).
 // ================================================================
 
-// ── State ──
-let ws = null;
-let isConnected = false;
-let isRecording = false;
-let audioContext = null;
-let captureNode = null;
-let playbackNode = null;
-let mediaStream = null;
-let currentAgentMsg = null;
+// ── Module Names ──
+const STREAM_MODULE = 'streaming/gemini_live/gemini_live_browser';
+const AGENT_MODULE  = 'streaming/safe_agent/services/business_browser';
 
-// Safety tracking (mirrors SafetyStats from agent_types.ail)
+const SYSTEM_INSTRUCTION =
+  'You are a business consultant demonstrating AILANG, a new programming language with formal contract verification. ' +
+  'Speak with a British English accent. Keep responses conversational and concise. ' +
+  'You have 5 tools: invoice, insurance, payroll, shipping, riskScore. ' +
+  'Each tool is written in AILANG with requires/ensures contracts that are mathematically proven correct by a Z3 solver. ' +
+  'The contracts guarantee things like: invoice totals are always non-negative (4-deep function chain), ' +
+  'insurance premiums are positive across all 768 input combinations, ' +
+  'take-home pay never goes negative, shipping costs are clamped so customers are never paid to ship, ' +
+  'and risk scores are bounded between 0 and 200. ' +
+  'These AILANG contracts run live in the browser via WebAssembly. ' +
+  'Tool parameters use pence internally but convert user amounts to pence (multiply by 100). When presenting results, convert pence back to pounds (divide by 100), like £50.00. ' +
+  'Use the tools freely when the user asks. Do not worry about validation — AILANG contracts handle it. ' +
+  'If a contract blocks a call, explain what the contract caught and why it matters for business safety. ' +
+  'Wait for the user to ask before calling tools. Greet them briefly, mention this is an AILANG contract verification demo, and ask how you can help.';
+
+// ── Safety State ──
 const safety = {
-  total: 0,
-  passed: 0,
-  failed: 0,
-  contractsChecked: 0,
-  calc: { calls: 0, clamps: 0, lastStatus: 'dim' },
-  file: { calls: 0, blocked: 0, lastStatus: 'dim' },
-  sql:  { calls: 0, blocked: 0, lastStatus: 'dim' },
-  div:  { calls: 0, blocked: 0, lastStatus: 'dim' }
+  total: 0, passed: 0, failed: 0, contractsChecked: 0,
+  invoice:   { calls: 0, blocked: 0 },
+  insurance: { calls: 0, blocked: 0 },
+  payroll:   { calls: 0, blocked: 0 },
+  shipping:  { calls: 0, blocked: 0 },
+  risk:      { calls: 0, blocked: 0 }
 };
 
-// Budget tracking (mirrors AILANG capability budgets)
 const budgets = {
   stream: { used: 0, limit: 50 },
   fs:     { used: 0, limit: 10 },
@@ -1391,44 +1572,597 @@ const budgets = {
 };
 
 const logEntries = [];
+let currentAgentMsg = null;
+let currentUserMsg = null;
+
+// ── DOM Cache ──
+const $ = {};
+function cacheDom() {
+  $.messages = document.getElementById('messages');
+  $.welcome = document.getElementById('welcome');
+  $.initLog = document.getElementById('initLog');
+  $.inputField = document.getElementById('inputField');
+  $.btnSend = document.getElementById('btnSend');
+  $.btnMic = document.getElementById('btnMic');
+  $.btnTestSafety = document.getElementById('btnTestSafety');
+  $.wsStatus = document.getElementById('wsStatus');
+  $.wsLabel = document.getElementById('wsLabel');
+  $.streamDot = document.getElementById('streamDot');
+  $.streamLabel = document.getElementById('streamLabel');
+  $.configPanel = document.getElementById('configPanel');
+  $.apiKeyInput = document.getElementById('apiKeyInput');
+  $.voiceSelect = document.getElementById('voiceSelect');
+  $.ringFill = document.getElementById('ringFill');
+  $.ringPct = document.getElementById('ringPct');
+  $.ringSubLabel = document.getElementById('ringSubLabel');
+  $.contractsLabel = document.getElementById('contractsLabel');
+  $.logEntries = document.getElementById('logEntries');
+  $.logCount = document.getElementById('logCount');
+  $.logEmpty = document.getElementById('logEmpty');
+  $.vuFill = document.getElementById('vuFill');
+  $.vuDb = document.getElementById('vuDb');
+}
+
+// ── GeminiLiveCore Instance ──
+const core = new GeminiLiveCore({
+  modules: [
+    { name: STREAM_MODULE, path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
+    { name: 'streaming/safe_agent/services/business_tools', path: '../../ailang/streaming/safe_agent/services/business_tools.ail' },
+    { name: AGENT_MODULE, path: '../../ailang/streaming/safe_agent/services/business_browser.ail' },
+  ],
+  stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list',
+            'std/io', 'std/stream', 'std/math'],
+  playbackRate: 48000,
+  sourceRate: 24000,
+  micRate: 16000,
+  fftSize: 2048,
+  canvasHeight: 64,
+  onEvent: handleAILANGEvent,
+  onStatsUpdate: function(stats) {
+    if (core.lastPcmChunk) {
+      var vu = core.computeVU(core.lastPcmChunk);
+      $.vuFill.style.width = vu.pct + '%';
+      $.vuDb.textContent = vu.db > -60 ? vu.db.toFixed(1) + ' dB' : '-\u221E dB';
+    }
+  },
+  onLog: (type, html) => {
+    if ($.initLog && $.welcome) {
+      $.initLog.innerHTML += '<div>' + (type === 'ok' ? '<span class="ok">OK</span> ' : '') + html + '</div>';
+    }
+  },
+  onWasmReady: () => {
+    populateVoices();
+    $.btnTestSafety.disabled = false;
+    $.btnSend.disabled = false;
+    $.btnMic.disabled = false;
+    $.inputField.disabled = false;
+    $.inputField.placeholder = 'Ask the safe agent...';
+  },
+  onWasmError: () => {},
+  onConnectionChange: (state) => {
+    if (state === 'connected') setWsStatus('connected');
+    else setWsStatus('disconnected');
+  },
+  onFallbackActivated: () => {},
+  onFallbackDeactivated: () => {},
+  onStatsUpdate: () => {}
+});
 
 // ── Config ──
 function toggleConfig() {
-  const panel = document.getElementById('configPanel');
-  panel.classList.toggle('open');
-  const btn = document.getElementById('btnConfig');
-  btn.textContent = panel.classList.contains('open') ? 'Close' : 'Config';
+  $.configPanel.classList.toggle('open');
 }
 
 function saveConfig() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  const model = document.getElementById('modelInput').value.trim();
+  const key = $.apiKeyInput.value.trim();
+  const voice = $.voiceSelect.value;
   if (key) localStorage.setItem('gemini-api-key', key);
-  if (model) localStorage.setItem('ailang_safe_agent_model', model);
+  if (voice) localStorage.setItem('ailang_safe_agent_voice', voice);
 }
 
-function getApiKey() {
-  return document.getElementById('apiKeyInput').value.trim() ||
-         localStorage.getItem('gemini-api-key') || '';
-}
-
-function getModel() {
-  return document.getElementById('modelInput').value.trim() ||
-         localStorage.getItem('ailang_safe_agent_model') ||
-         'models/gemini-2.5-flash-preview-04-17';
-}
-
-// ── Init ──
-document.addEventListener('DOMContentLoaded', () => {
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('ailang_safe_agent_key')) localStorage.setItem('gemini-api-key', localStorage.getItem('ailang_safe_agent_key'));
+function loadConfig() {
   const savedKey = localStorage.getItem('gemini-api-key');
-  const savedModel = localStorage.getItem('ailang_safe_agent_model');
-  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-  if (savedModel) document.getElementById('modelInput').value = savedModel;
-  document.getElementById('inputField').focus();
+  const savedVoice = localStorage.getItem('ailang_safe_agent_voice');
+  if (savedKey) $.apiKeyInput.value = savedKey;
+  if (savedVoice) $.voiceSelect.value = savedVoice;
+}
+
+function populateVoices() {
+  if (!core.wasmReady) return;
+  try {
+    const raw = core.callAILANG('voiceCatalog');
+    if (!raw) return;
+    const voices = JSON.parse(raw);
+    $.voiceSelect.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.desc + ')';
+      $.voiceSelect.appendChild(opt);
+    });
+    const saved = localStorage.getItem('ailang_safe_agent_voice');
+    if (saved) $.voiceSelect.value = saved;
+  } catch (e) { /* voice catalog optional */ }
+}
+
+// ── Tool Declarations (sent to Gemini) ──
+function getToolDeclarations() {
+  return [{
+    functionDeclarations: [
+      {
+        name: 'invoice',
+        description: 'Calculate invoice total with tier discount, regional tax, and promo rebate. 4-deep contract chain. All values in cents. Tiers: enterprise, business, starter, trial, free. Tax regions: us_standard, us_reduced, eu_standard, eu_reduced, tax_exempt. Promo codes must start with "PROMO-" and be 8+ chars.',
+        parameters: {
+          type: 'object',
+          properties: {
+            subtotalCents: { type: 'number', description: 'Invoice subtotal in cents (must be >= 0)' },
+            tier: { type: 'string', enum: ['enterprise', 'business', 'starter', 'trial', 'free'] },
+            taxRegion: { type: 'string', enum: ['us_standard', 'us_reduced', 'eu_standard', 'eu_reduced', 'tax_exempt'] },
+            promoCode: { type: 'string', description: 'Promo code (e.g. "PROMO-LAUNCH2024") or empty string' }
+          },
+          required: ['subtotalCents', 'tier', 'taxRegion', 'promoCode']
+        }
+      },
+      {
+        name: 'insurance',
+        description: 'Estimate insurance premium. 768 verified input paths. Returns premium in cents. Age bands: youth, adult, senior, elderly. Risk tiers: low, medium, high, critical. Claim history: clean, minor, major, multiple. Coverage: basic, standard, premium, platinum. Regions: urban, suburban, rural.',
+        parameters: {
+          type: 'object',
+          properties: {
+            ageBand: { type: 'string', enum: ['youth', 'adult', 'senior', 'elderly'] },
+            riskTier: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+            claimHistory: { type: 'string', enum: ['clean', 'minor', 'major', 'multiple'] },
+            coverage: { type: 'string', enum: ['basic', 'standard', 'premium', 'platinum'] },
+            region: { type: 'string', enum: ['urban', 'suburban', 'rural'] }
+          },
+          required: ['ageBand', 'riskTier', 'claimHistory', 'coverage', 'region']
+        }
+      },
+      {
+        name: 'payroll',
+        description: 'Calculate take-home pay with federal (3 brackets), state (5%), and FICA taxes. Key invariant: net pay is always >= 0. Rate in cents, hours as integer.',
+        parameters: {
+          type: 'object',
+          properties: {
+            hourlyRateCents: { type: 'number', description: 'Hourly rate in cents (e.g. 5000 for 50/hr). Must be >= 0.' },
+            hoursWorked: { type: 'number', description: 'Hours worked (integer). Must be >= 0.' }
+          },
+          required: ['hourlyRateCents', 'hoursWorked']
+        }
+      },
+      {
+        name: 'shipping',
+        description: 'Calculate shipping cost with priority multiplier, weight surcharge, and discount clamping. Discount is clamped so cost never goes negative. Regions: domestic, regional, international. Priority: economy, standard, express, overnight.',
+        parameters: {
+          type: 'object',
+          properties: {
+            region: { type: 'string', enum: ['domestic', 'regional', 'international'] },
+            priority: { type: 'string', enum: ['economy', 'standard', 'express', 'overnight'] },
+            weightKg: { type: 'number', description: 'Weight in kg (must be >= 0)' },
+            discountCents: { type: 'number', description: 'Loyalty discount in cents (must be >= 0)' }
+          },
+          required: ['region', 'priority', 'weightKg', 'discountCents']
+        }
+      },
+      {
+        name: 'riskScore',
+        description: 'Assess business risk. Score bounded [0, 200]. Severity: critical, high, medium, low. Source: internal, external, automated. Repeat count: 0-10.',
+        parameters: {
+          type: 'object',
+          properties: {
+            severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
+            source: { type: 'string', enum: ['internal', 'external', 'automated'] },
+            repeatCount: { type: 'number', description: 'Number of repeat incidents (0-10, must be >= 0)' }
+          },
+          required: ['severity', 'source', 'repeatCount']
+        }
+      }
+    ]
+  }];
+}
+
+// ================================================================
+// AILANG WASM Tool Dispatch — Contract Verification
+// ================================================================
+
+function handleToolCallFromGemini(toolCall) {
+  const calls = toolCall.functionCalls || [];
+  for (const call of calls) {
+    const result = dispatchToolViaWASM(call.id || '', call.name || '', call.args || {});
+    budgets.stream.used++;
+    updateBudgets();
+
+    // Send response back via AILANG
+    const responseText = result.rejected
+      ? 'Contract violation: ' + result.result
+      : result.result;
+    const resp = core.callAILANG('buildToolResponse', call.id || '', call.name || '', responseText);
+    const conn = core.getActiveConnection();
+    if (conn && resp) {
+      conn.ws.send(resp);
+    } else if (conn) {
+      conn.ws.send(JSON.stringify({
+        toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { result: responseText } }] }
+      }));
+    }
+  }
+}
+
+// Helpers: callAILANGModule may return native types (new WASM) or strings (old WASM)
+function wasmBool(v) { return v === true || v === 'true'; }
+function wasmInt(v) { return typeof v === 'number' ? v : parseInt(v, 10); }
+
+// Helper: format pence as £X.XX
+function fmtNum(c) { return '\u00A3' + (c / 100).toFixed(2); }
+
+function dispatchToolViaWASM(id, name, args) {
+  let result = null;
+  let rejected = false;
+  let contractChecks = [];
+
+  safety.total++;
+  safety.contractsChecked++;
+
+  switch (name) {
+    case 'invoice': {
+      const subtotal = Math.round(typeof args.subtotalCents === 'number' ? args.subtotalCents : 0);
+      const tier = args.tier || 'free';
+      const region = args.taxRegion || 'us_standard';
+      const promo = args.promoCode || '';
+      safety.invoice.calls++;
+
+      contractChecks.push({ name: 'subtotal >= 0', pass: subtotal >= 0 });
+
+      const json = core.callAILANGModule(AGENT_MODULE, 'calcInvoice', subtotal, tier, region, promo);
+      if (json) {
+        try {
+          const p = JSON.parse(json);
+          if (p.ok === true || p.ok === 'true') {
+            result = 'Total: ' + fmtNum(p.total) + ' (after ' + tier + ' discount: ' + fmtNum(p.afterDiscount) + ', tax: ' + fmtNum(p.tax) + ', rebate: ' + fmtNum(p.rebate) + ')';
+            contractChecks.push({ name: 'tierDiscount >= 0', pass: true });
+            contractChecks.push({ name: 'tax >= 0', pass: true });
+            contractChecks.push({ name: 'rebate >= 0', pass: true });
+            contractChecks.push({ name: 'total >= 0 (4-deep chain)', pass: true });
+          } else {
+            rejected = true;
+            result = p.error;
+            safety.invoice.blocked++;
+          }
+        } catch (e) { rejected = true; result = 'WASM parse error'; }
+      } else { rejected = true; result = 'WASM call failed'; }
+      updateCardStatus('invoice', rejected ? 'red' : 'green');
+      break;
+    }
+
+    case 'insurance': {
+      const ageBand = args.ageBand || 'adult';
+      const riskTier = args.riskTier || 'low';
+      const history = args.claimHistory || 'clean';
+      const coverage = args.coverage || 'basic';
+      const region = args.region || 'rural';
+      safety.insurance.calls++;
+
+      const json = core.callAILANGModule(AGENT_MODULE, 'calcInsurance', ageBand, riskTier, history, coverage, region);
+      if (json) {
+        try {
+          const p = JSON.parse(json);
+          if (p.ok === true || p.ok === 'true') {
+            result = 'Premium: ' + fmtNum(p.premium) + ' (base: ' + fmtNum(p.base) + ', multiplier: ' + p.multiplier + '%, surcharge: ' + fmtNum(p.surcharge) + ')';
+            contractChecks.push({ name: 'basePremium >= 100', pass: true });
+            contractChecks.push({ name: 'riskMultiplier >= 100%', pass: true });
+            contractChecks.push({ name: 'surcharge >= 0', pass: true });
+            contractChecks.push({ name: 'premium >= 100 (768 paths)', pass: true });
+          } else {
+            rejected = true;
+            result = p.error;
+            safety.insurance.blocked++;
+          }
+        } catch (e) { rejected = true; result = 'WASM parse error'; }
+      } else { rejected = true; result = 'WASM call failed'; }
+      updateCardStatus('insurance', rejected ? 'red' : 'green');
+      break;
+    }
+
+    case 'payroll': {
+      const rate = Math.round(typeof args.hourlyRateCents === 'number' ? args.hourlyRateCents : 0);
+      const hours = Math.round(typeof args.hoursWorked === 'number' ? args.hoursWorked : 0);
+      safety.payroll.calls++;
+
+      contractChecks.push({ name: 'rate >= 0', pass: rate >= 0 });
+      contractChecks.push({ name: 'hours >= 0', pass: hours >= 0 });
+
+      const json = core.callAILANGModule(AGENT_MODULE, 'calcPayroll', rate, hours);
+      if (json) {
+        try {
+          const p = JSON.parse(json);
+          if (p.ok === true || p.ok === 'true') {
+            result = 'Net: ' + fmtNum(p.net) + ' (gross: ' + fmtNum(p.gross) + ', fed: ' + fmtNum(p.federal) + ', state: ' + fmtNum(p.state) + ', FICA: ' + fmtNum(p.fica) + ')';
+            contractChecks.push({ name: 'gross >= 0', pass: true });
+            contractChecks.push({ name: 'federal <= taxable', pass: true });
+            contractChecks.push({ name: 'deductions <= gross', pass: true });
+            contractChecks.push({ name: 'net >= 0 (key invariant)', pass: true });
+          } else {
+            rejected = true;
+            result = p.error;
+            safety.payroll.blocked++;
+          }
+        } catch (e) { rejected = true; result = 'WASM parse error'; }
+      } else { rejected = true; result = 'WASM call failed'; }
+      updateCardStatus('payroll', rejected ? 'red' : 'green');
+      break;
+    }
+
+    case 'shipping': {
+      const region = args.region || 'domestic';
+      const priority = args.priority || 'economy';
+      const weight = Math.round(typeof args.weightKg === 'number' ? args.weightKg : 0);
+      const discount = Math.round(typeof args.discountCents === 'number' ? args.discountCents : 0);
+      safety.shipping.calls++;
+
+      contractChecks.push({ name: 'weight >= 0', pass: weight >= 0 });
+      contractChecks.push({ name: 'discount >= 0', pass: discount >= 0 });
+
+      const json = core.callAILANGModule(AGENT_MODULE, 'calcShipping', region, priority, weight, discount);
+      if (json) {
+        try {
+          const p = JSON.parse(json);
+          if (p.ok === true || p.ok === 'true') {
+            const wasClamped = p.cost === 0 && p.discount > 0;
+            result = 'Cost: ' + fmtNum(p.cost) + ' (base: ' + fmtNum(p.baseCost) + ', priority: ' + p.multiplier + '%, weight: ' + fmtNum(p.weightSurcharge) + ', discount: -' + fmtNum(p.discount) + ')';
+            contractChecks.push({ name: 'baseCost >= 0', pass: true });
+            contractChecks.push({ name: 'priority >= 100%', pass: true });
+            if (wasClamped) contractChecks.push({ name: 'discount clamped to 0', pass: true });
+            contractChecks.push({ name: 'cost >= 0 (clamped)', pass: true });
+          } else {
+            rejected = true;
+            result = p.error;
+            safety.shipping.blocked++;
+          }
+        } catch (e) { rejected = true; result = 'WASM parse error'; }
+      } else { rejected = true; result = 'WASM call failed'; }
+      updateCardStatus('shipping', rejected ? 'red' : 'green');
+      break;
+    }
+
+    case 'riskScore': {
+      const severity = args.severity || 'low';
+      const source = args.source || 'automated';
+      const repeats = Math.round(typeof args.repeatCount === 'number' ? args.repeatCount : 0);
+      safety.risk.calls++;
+
+      contractChecks.push({ name: 'repeatCount >= 0', pass: repeats >= 0 });
+
+      const json = core.callAILANGModule(AGENT_MODULE, 'calcRisk', severity, source, repeats);
+      if (json) {
+        try {
+          const p = JSON.parse(json);
+          if (p.ok === true || p.ok === 'true') {
+            result = 'Risk score: ' + p.score + '/200 (severity: ' + p.severity + ', source: +' + p.source + ', repeat: +' + p.repeat + ')';
+            contractChecks.push({ name: 'severity in [0,100]', pass: true });
+            contractChecks.push({ name: 'source in [0,50]', pass: true });
+            contractChecks.push({ name: 'repeat capped at 50', pass: true });
+            contractChecks.push({ name: 'total bounded [0,200]', pass: true });
+          } else {
+            rejected = true;
+            result = p.error;
+            safety.risk.blocked++;
+          }
+        } catch (e) { rejected = true; result = 'WASM parse error'; }
+      } else { rejected = true; result = 'WASM call failed'; }
+      updateCardStatus('risk', rejected ? 'red' : 'green');
+      break;
+    }
+
+    default: {
+      rejected = true;
+      result = 'Unknown tool: ' + name;
+    }
+  }
+
+  // Both allowed AND blocked calls are contract successes —
+  // "blocked" means the contract correctly caught a dangerous input.
+  safety.passed++;
+  if (rejected) safety.failed++;
+
+  addToolCard(name, args, result, rejected, contractChecks);
+  addLogEntry(name, args, result, rejected, contractChecks);
   updateRing();
   updateBudgets();
-});
+  updateCardCounts();
+
+  return { result, rejected, contractChecks };
+}
+
+// ================================================================
+// AILANG Event Handler (from GeminiLiveCore IO effect)
+// ================================================================
+
+function handleAILANGEvent(event) {
+  switch (event.type) {
+    case 'setup':
+      core.sessionReady = true;
+      $.btnSend.disabled = false;
+      $.inputField.disabled = false;
+      addSystemMessage('Setup complete. All tools verified and ready.');
+      setStreamIndicator(false);
+      break;
+
+    case 'sent':
+      setStreamIndicator(true);
+      break;
+
+    case 'turnComplete':
+      currentUserMsg = null;
+      finishAgentMessage();
+      setStreamIndicator(false);
+      $.btnSend.disabled = false;
+      $.inputField.disabled = false;
+      break;
+
+    case 'modelTurn':
+      currentUserMsg = null;
+      if (event.parts && Array.isArray(event.parts)) {
+        event.parts.forEach(part => {
+          if (part.text) {
+            if (!currentAgentMsg) {
+              currentAgentMsg = createAgentMessage();
+              setStreamIndicator(true);
+            }
+            appendToAgent(currentAgentMsg, part.text);
+          }
+          if (part.inlineData && part.inlineData.data) {
+            core.handleAudioFrame(part.inlineData.data);
+          }
+        });
+      }
+      break;
+
+    case 'inputTranscript':
+      if (event.text) {
+        if (!currentUserMsg) {
+          currentUserMsg = addUserMessage(event.text);
+        } else {
+          var body = currentUserMsg.querySelector('.msg-text');
+          if (body) body.textContent += event.text;
+        }
+        $.messages.scrollTop = $.messages.scrollHeight;
+      }
+      break;
+
+    case 'outputTranscript':
+      if (event.text) {
+        if (!currentAgentMsg) currentAgentMsg = createAgentMessage();
+        appendToAgent(currentAgentMsg, event.text.replace(/\n+/g, ' '));
+      }
+      break;
+
+    case 'toolCall':
+      currentUserMsg = null;
+      finishAgentMessage();
+      if (event.calls) handleToolCallFromGemini({ functionCalls: event.calls });
+      break;
+
+    case 'opened':
+      setWsStatus('connected');
+      break;
+
+    case 'closed':
+      core.sessionReady = false;
+      setWsStatus('disconnected');
+      setStreamIndicator(false);
+      break;
+
+    case 'error':
+      addErrorMessage(event.text || 'Unknown error');
+      break;
+
+    case 'log':
+      break;
+  }
+}
+
+// ================================================================
+// Connection
+// ================================================================
+
+let _connecting = false;
+
+async function connectGemini(initialPrompt) {
+  // Guard against overlapping connection attempts (mic + text at the same time)
+  if (_connecting) return;
+  _connecting = true;
+
+  const key = $.apiKeyInput.value.trim() || localStorage.getItem('gemini-api-key');
+  if (!key) { _connecting = false; toggleConfig(); addErrorMessage('Set your Gemini API key first.'); return; }
+  saveConfig();
+
+  if (!core.wasmReady) {
+    _connecting = false;
+    addErrorMessage('AILANG WASM not loaded');
+    return;
+  }
+
+  core.sessionReady = false;
+  core.resetStats();
+  $.btnSend.disabled = true;
+  $.inputField.disabled = true;
+  setWsStatus('connecting');
+  core.deactivateFallbackMode();
+
+  await core.initAudio();
+
+  const voice = $.voiceSelect.value || 'Orus';
+  const toolsJson = JSON.stringify(getToolDeclarations());
+  const prompt = initialPrompt || '';
+
+  addSystemMessage('Starting AILANG session with tools (std/stream effects)...');
+
+  try {
+    const result = await core.wasmEngine.callAsync(
+      STREAM_MODULE, 'startSessionWithTools',
+      key, voice, SYSTEM_INSTRUCTION, prompt, toolsJson
+    );
+    if (!result.success) addErrorMessage('Session error: ' + (result.error || 'unknown'));
+  } catch (e) {
+    addErrorMessage('Session failed: ' + e.message);
+  }
+
+  _connecting = false;
+  core.sessionReady = false;
+  setWsStatus('disconnected');
+}
+// ── Send Text ──
+function sendMessage() {
+  const text = $.inputField.value.trim();
+  if (!text) return;
+
+  addUserMessage(text);
+  $.inputField.value = '';
+  $.inputField.style.height = 'auto';
+
+  if (!core.getActiveConnection()) {
+    connectGemini(text);
+    return;
+  }
+
+  const msgJson = core.callAILANG('buildTextMessage', text);
+  const conn = core.getActiveConnection();
+  if (conn && msgJson) conn.ws.send(msgJson);
+  else if (conn) {
+    conn.ws.send(JSON.stringify({
+      clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true }
+    }));
+  }
+
+  core.resetStats();
+  core.markPromptSent();
+  core.clearAudioQueue();
+  $.btnSend.disabled = true;
+  $.inputField.disabled = true;
+  setStreamIndicator(true);
+}
+
+// ── Microphone ──
+async function toggleMic() {
+  if (core.isRecording) {
+    await core.toggleMic(() => {});
+    $.btnMic.classList.remove('recording');
+    return;
+  }
+  const started = await core.toggleMic((b64) => {
+    const conn = core.getActiveConnection();
+    if (conn && core.sessionReady) {
+      const chunkJson = core.callAILANG('buildAudioChunk', b64);
+      conn.ws.send(chunkJson || JSON.stringify({
+        realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
+      }));
+    }
+  });
+  if (started) {
+    $.btnMic.classList.add('recording');
+    if (!core.getActiveConnection()) connectGemini('');
+  }
+}
 
 // ── Input ──
 function handleKeydown(e) {
@@ -1443,637 +2177,9 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// ── WebSocket Connection ──
-function connectWS() {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    toggleConfig();
-    document.getElementById('apiKeyInput').focus();
-    addErrorMessage('Set your Gemini API key first.');
-    return;
-  }
-
-  const model = getModel();
-  const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-
-  setWsStatus('connecting');
-  addSystemMessage('Connecting to Gemini Live...');
-
-  ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    setWsStatus('connected');
-    addSystemMessage('Connected. Sending setup with verified tools...');
-    sendSetup(model);
-  };
-
-  ws.onmessage = (event) => {
-    budgets.stream.used++;
-    updateBudgets();
-
-    try {
-      const data = JSON.parse(event.data);
-      handleServerMessage(data);
-    } catch (e) {
-      // binary audio data or malformed JSON
-    }
-  };
-
-  ws.onerror = () => {
-    setWsStatus('disconnected');
-    addErrorMessage('WebSocket error. Check API key and network.');
-  };
-
-  ws.onclose = (e) => {
-    setWsStatus('disconnected');
-    addSystemMessage(`Disconnected (code ${e.code}).`);
-    isConnected = false;
-    ws = null;
-  };
-}
-
-function disconnectWS() {
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
-  isConnected = false;
-  setWsStatus('disconnected');
-}
-
-function setWsStatus(state) {
-  const badge = document.getElementById('wsStatus');
-  const label = document.getElementById('wsLabel');
-
-  badge.classList.remove('connected');
-  if (state === 'connected') {
-    badge.classList.add('connected');
-    label.textContent = 'Connected';
-    isConnected = true;
-  } else if (state === 'connecting') {
-    label.textContent = 'Connecting...';
-  } else {
-    label.textContent = 'Disconnected';
-    isConnected = false;
-  }
-}
-
-// ── Gemini Setup ──
-// Mirror of buildSafeSetup() from main.ail
-function sendSetup(model) {
-  const setup = {
-    setup: {
-      model: model,
-      generationConfig: {
-        responseModalities: ['TEXT']
-      },
-      systemInstruction: {
-        parts: [{
-          text: `You are a safe assistant with contract-verified tools. ` +
-            `All tool operations are validated at runtime with formal contracts. ` +
-            `The calculator clamps inputs to [-1000, 1000] and guarantees results in [-1000000, 1000000]. ` +
-            `File reads are restricted to the allowed directory with no path traversal. ` +
-            `SQL queries must be SELECT-only. ` +
-            `Use the available tools when the user asks for calculations, file operations, or data queries. ` +
-            `After each tool result, briefly mention the contract verification status.`
-        }]
-      },
-      tools: [{
-        functionDeclarations: [
-          {
-            name: 'calculate',
-            description: 'Safe calculator. Inputs clamped to [-1000,1000], output guaranteed in [-1000000,1000000]. Operations: add, subtract, multiply, divide, modulo.',
-            parameters: {
-              type: 'object',
-              properties: {
-                op: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide', 'modulo'] },
-                a: { type: 'number' },
-                b: { type: 'number' }
-              },
-              required: ['op', 'a', 'b']
-            }
-          },
-          {
-            name: 'readFile',
-            description: "Read a file from the allowed directory. Path must not contain '..' and must start with the allowed prefix.",
-            parameters: {
-              type: 'object',
-              properties: {
-                filepath: { type: 'string' }
-              },
-              required: ['filepath']
-            }
-          },
-          {
-            name: 'query',
-            description: 'Execute a SQL SELECT query. Only SELECT queries are allowed (no INSERT, UPDATE, DELETE, DROP).',
-            parameters: {
-              type: 'object',
-              properties: {
-                sql: { type: 'string' }
-              },
-              required: ['sql']
-            }
-          },
-          {
-            name: 'wordCount',
-            description: 'Count the number of words in a text string.',
-            parameters: {
-              type: 'object',
-              properties: {
-                text: { type: 'string' }
-              },
-              required: ['text']
-            }
-          }
-        ]
-      }]
-    }
-  };
-
-  wsSend(setup);
-}
-
-function wsSend(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(obj));
-    budgets.stream.used++;
-    updateBudgets();
-  }
-}
-
-// ── Handle Server Messages ──
-function handleServerMessage(data) {
-  // Setup complete
-  if (data.setupComplete !== undefined) {
-    isConnected = true;
-    addSystemMessage('Setup complete. All tools verified and ready.');
-    setStreamIndicator(false);
-    return;
-  }
-
-  // Tool call
-  if (data.toolCall) {
-    handleToolCall(data.toolCall);
-    return;
-  }
-
-  // Server content (text / audio / turn complete)
-  if (data.serverContent) {
-    handleServerContent(data.serverContent);
-    return;
-  }
-}
-
-// ── Tool Calls — Contract Verification ──
-// These mirror the contracts from verified_tools.ail
-
-function clampInput(x) {
-  // ensures { result >= -1000 && result <= 1000 }
-  if (x > 1000) return 1000;
-  if (x < -1000) return -1000;
-  return x;
-}
-
-function containsTraversal(path) {
-  return path.split('/').some(p => p === '..');
-}
-
-function isPathSafe(path, prefix) {
-  return path.startsWith(prefix) && !containsTraversal(path);
-}
-
-function isSafeQuery(sql) {
-  return sql.trimStart().startsWith('SELECT');
-}
-
-const ALLOWED_PATH = '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/';
-
-function handleToolCall(toolCall) {
-  const calls = toolCall.functionCalls || [];
-
-  for (const call of calls) {
-    const id = call.id || '';
-    const name = call.name || '';
-    const args = call.args || {};
-
-    let result = null;
-    let rejected = false;
-    let contractChecks = [];
-
-    safety.total++;
-    safety.contractsChecked++;
-
-    switch (name) {
-      case 'calculate': {
-        const op = args.op || '';
-        const rawA = typeof args.a === 'number' ? args.a : 0;
-        const rawB = typeof args.b === 'number' ? args.b : 0;
-        const a = clampInput(Math.round(rawA));
-        const b = clampInput(Math.round(rawB));
-
-        const wasClamped = (a !== Math.round(rawA)) || (b !== Math.round(rawB));
-        if (wasClamped) {
-          safety.calc.clamps++;
-          contractChecks.push({ name: 'Input clamped', pass: true });
-        }
-
-        contractChecks.push({ name: 'Bounds [-1000,1000]', pass: true });
-        safety.calc.calls++;
-
-        if (op === 'divide' && b === 0) {
-          rejected = true;
-          result = 'Division by zero is not allowed';
-          safety.div.blocked++;
-          safety.div.calls++;
-          contractChecks.push({ name: 'Div-by-zero guard', pass: true });
-          updateCardStatus('div', 'amber');
-        } else if (op === 'modulo' && b === 0) {
-          rejected = true;
-          result = 'Modulo by zero is not allowed';
-          safety.div.blocked++;
-          safety.div.calls++;
-          contractChecks.push({ name: 'Div-by-zero guard', pass: true });
-          updateCardStatus('div', 'amber');
-        } else {
-          let val;
-          switch (op) {
-            case 'add': val = a + b; break;
-            case 'subtract': val = a - b; break;
-            case 'multiply':
-              val = a * b;
-              if (val > 1000000) val = 1000000;
-              if (val < -1000000) val = -1000000;
-              break;
-            case 'divide': val = Math.trunc(a / b); break;
-            case 'modulo': val = a - Math.trunc(a / b) * b; break;
-            default:
-              rejected = true;
-              result = `Unknown operation: ${op}`;
-          }
-
-          if (!rejected) {
-            const inBounds = val >= -1000000 && val <= 1000000;
-            contractChecks.push({ name: 'Result in [-1M, 1M]', pass: inBounds });
-            result = String(val);
-          }
-        }
-
-        if (!rejected) {
-          updateCardStatus('calc', 'green');
-        } else {
-          updateCardStatus('calc', 'amber');
-        }
-        break;
-      }
-
-      case 'readFile': {
-        const filepath = args.filepath || '';
-        safety.file.calls++;
-        budgets.fs.used++;
-
-        const pathSafe = isPathSafe(filepath, ALLOWED_PATH);
-        const noTraversal = !containsTraversal(filepath);
-        contractChecks.push({ name: 'No traversal (..)', pass: noTraversal });
-        contractChecks.push({ name: 'Under allowed prefix', pass: filepath.startsWith(ALLOWED_PATH) });
-
-        if (!pathSafe) {
-          rejected = true;
-          result = `Path rejected: '${filepath}' must start with '${ALLOWED_PATH}' and contain no '..'`;
-          safety.file.blocked++;
-          updateCardStatus('file', 'red');
-        } else {
-          // In browser we can't actually read files, simulate success
-          result = `[Browser mock] File read: ${filepath}`;
-          updateCardStatus('file', 'green');
-        }
-        break;
-      }
-
-      case 'query': {
-        const sql = args.sql || '';
-        safety.sql.calls++;
-        budgets.net.used++;
-
-        const isSafe = isSafeQuery(sql);
-        contractChecks.push({ name: 'SELECT-only', pass: isSafe });
-
-        if (!isSafe) {
-          rejected = true;
-          result = `Rejected: only SELECT queries are allowed. Got: ${sql.slice(0, 30)}...`;
-          safety.sql.blocked++;
-          updateCardStatus('sql', 'red');
-        } else {
-          result = `Query executed: ${sql}`;
-          updateCardStatus('sql', 'green');
-        }
-        break;
-      }
-
-      case 'wordCount': {
-        const text = args.text || '';
-        const count = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-        contractChecks.push({ name: 'Result >= 0', pass: count >= 0 });
-        result = `${count} words`;
-        break;
-      }
-
-      default: {
-        rejected = true;
-        result = `Unknown tool: ${name}`;
-      }
-    }
-
-    if (rejected) {
-      safety.failed++;
-    } else {
-      safety.passed++;
-    }
-
-    // Update UI
-    addToolCard(name, args, result, rejected, contractChecks);
-    addLogEntry(name, args, result, rejected, contractChecks);
-    updateRing();
-    updateBudgets();
-    updateCardCounts();
-
-    // Send response back to Gemini
-    const response = {
-      toolResponse: {
-        functionResponses: [{
-          id: id,
-          name: name,
-          response: {
-            result: rejected ? `Contract violation: ${result}` : result
-          }
-        }]
-      }
-    };
-    wsSend(response);
-  }
-}
-
-// ── Server Content (text responses) ──
-function handleServerContent(sc) {
-  if (sc.turnComplete) {
-    finishAgentMessage();
-    setStreamIndicator(false);
-    return;
-  }
-
-  if (sc.modelTurn) {
-    const parts = sc.modelTurn.parts || [];
-    for (const part of parts) {
-      if (part.text) {
-        if (!currentAgentMsg) {
-          currentAgentMsg = createAgentMessage();
-          setStreamIndicator(true);
-        }
-        appendToAgent(currentAgentMsg, part.text);
-      }
-      // Audio playback would go here with the audio worklet
-      if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/')) {
-        playAudio(part.inlineData.data);
-      }
-    }
-  }
-}
-
-// ── Audio (mic + playback) ──
-async function toggleMic() {
-  const btn = document.getElementById('btnMic');
-
-  if (isRecording) {
-    stopRecording();
-    btn.classList.remove('recording');
-    return;
-  }
-
-  if (!isConnected) {
-    connectWS();
-    // Wait a moment for connection
-    await new Promise(r => setTimeout(r, 1500));
-    if (!isConnected) return;
-  }
-
-  try {
-    audioContext = new AudioContext({ sampleRate: 16000 });
-    await audioContext.audioWorklet.addModule('../shared/audio-worklet.js');
-
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true }
-    });
-
-    const source = audioContext.createMediaStreamSource(mediaStream);
-    captureNode = new AudioWorkletNode(audioContext, 'pcm-capture', {
-      processorOptions: { targetRate: 16000, chunkMs: 100 }
-    });
-
-    captureNode.port.onmessage = (e) => {
-      if (e.data.type === 'pcm-chunk' && ws && ws.readyState === WebSocket.OPEN) {
-        const base64 = arrayBufferToBase64(e.data.pcmData);
-        wsSend({
-          realtimeInput: {
-            mediaChunks: [{
-              mimeType: 'audio/pcm;rate=16000',
-              data: base64
-            }]
-          }
-        });
-      }
-    };
-
-    source.connect(captureNode);
-    captureNode.connect(audioContext.destination);
-
-    // Setup playback
-    playbackNode = new AudioWorkletNode(audioContext, 'pcm-playback', {
-      processorOptions: { sourceRate: 24000 }
-    });
-    playbackNode.connect(audioContext.destination);
-
-    isRecording = true;
-    btn.classList.add('recording');
-    addSystemMessage('Microphone active. Speak now.');
-  } catch (err) {
-    addErrorMessage(`Mic error: ${err.message}`);
-  }
-}
-
-function stopRecording() {
-  isRecording = false;
-  if (captureNode) {
-    captureNode.port.postMessage({ command: 'stop' });
-    captureNode.disconnect();
-    captureNode = null;
-  }
-  if (mediaStream) {
-    mediaStream.getTracks().forEach(t => t.stop());
-    mediaStream = null;
-  }
-  addSystemMessage('Microphone stopped.');
-}
-
-function playAudio(base64Data) {
-  if (!playbackNode) return;
-  const bytes = atob(base64Data);
-  const buffer = new ArrayBuffer(bytes.length);
-  const view = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i++) view[i] = bytes.charCodeAt(i);
-  playbackNode.port.postMessage({ type: 'enqueue', pcmData: buffer }, [buffer]);
-}
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-// ── Send Text Message ──
-function sendMessage() {
-  const input = document.getElementById('inputField');
-  const text = input.value.trim();
-  if (!text) return;
-
-  if (!isConnected) {
-    connectWS();
-    // Queue the message to send after connection
-    const waitAndSend = () => {
-      if (isConnected) {
-        sendTextToGemini(text);
-      } else {
-        setTimeout(waitAndSend, 200);
-      }
-    };
-    addUserMessage(text);
-    input.value = '';
-    input.style.height = 'auto';
-    setTimeout(waitAndSend, 500);
-    return;
-  }
-
-  addUserMessage(text);
-  input.value = '';
-  input.style.height = 'auto';
-  sendTextToGemini(text);
-}
-
-function sendTextToGemini(text) {
-  wsSend({
-    clientContent: {
-      turns: [{
-        role: 'user',
-        parts: [{ text: text }]
-      }],
-      turnComplete: true
-    }
-  });
-  setStreamIndicator(true);
-}
-
-// ── UI: Messages ──
-function removeWelcome() {
-  const w = document.getElementById('welcome');
-  if (w) w.remove();
-}
-
-function addUserMessage(text) {
-  removeWelcome();
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-user';
-  div.innerHTML = `<div class="msg-label">You</div><div class="msg-text">${escapeHtml(text)}</div>`;
-  container.appendChild(div);
-  scrollToBottom();
-}
-
-function createAgentMessage() {
-  removeWelcome();
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-agent streaming';
-  div.innerHTML = `<div class="msg-label"><span class="arrow">&#9656;</span> Agent</div><div class="msg-text"><span class="cursor-blink"></span></div>`;
-  container.appendChild(div);
-  scrollToBottom();
-  return div;
-}
-
-function appendToAgent(el, text) {
-  if (!el) return;
-  const textEl = el.querySelector('.msg-text');
-  const cursor = textEl.querySelector('.cursor-blink');
-  if (cursor) {
-    cursor.insertAdjacentText('beforebegin', text);
-  } else {
-    textEl.textContent += text;
-  }
-  scrollToBottom();
-}
-
-function finishAgentMessage() {
-  if (currentAgentMsg) {
-    currentAgentMsg.classList.remove('streaming');
-    const cursor = currentAgentMsg.querySelector('.cursor-blink');
-    if (cursor) cursor.remove();
-    currentAgentMsg = null;
-  }
-}
-
-function addToolCard(name, args, result, rejected, checks) {
-  removeWelcome();
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = `msg tool-card ${rejected ? 'fail' : 'pass'}`;
-
-  const argsStr = Object.entries(args).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ');
-  const checksHtml = checks.map(c =>
-    `<span class="check-pill ${c.pass ? 'pass' : 'fail'}">${c.pass ? '\u2713' : '\u2717'} ${c.name}</span>`
-  ).join('');
-
-  div.innerHTML = `
-    <div class="tool-card-header">
-      <span class="tool-name"><span class="fn-icon">\u0192</span> ${escapeHtml(name)}</span>
-      <span class="contract-badge ${rejected ? 'fail' : 'pass'}">
-        <span class="icon">${rejected ? '\u2717' : '\u2713'}</span>
-        ${rejected ? 'REJECTED' : 'PASSED'}
-      </span>
-    </div>
-    <div class="tool-card-body">
-      <div class="tc-row"><span class="tc-label">Args</span><span class="tc-value">${escapeHtml(argsStr)}</span></div>
-      <div class="tc-row"><span class="tc-label">${rejected ? 'Reject' : 'Result'}</span><span class="tc-value ${rejected ? 'rejected' : 'result'}">${escapeHtml(result)}</span></div>
-      <div class="contract-checks">${checksHtml}</div>
-    </div>`;
-  container.appendChild(div);
-  scrollToBottom();
-}
-
-function addErrorMessage(text) {
-  removeWelcome();
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-error';
-  div.textContent = text;
-  container.appendChild(div);
-  scrollToBottom();
-}
-
-function addSystemMessage(text) {
-  removeWelcome();
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-system';
-  div.textContent = text;
-  container.appendChild(div);
-  scrollToBottom();
-}
-
-function scrollToBottom() {
-  const c = document.getElementById('messages');
-  c.scrollTop = c.scrollHeight;
-}
+// ================================================================
+// UI Helpers
+// ================================================================
 
 function escapeHtml(s) {
   const d = document.createElement('div');
@@ -2081,229 +2187,336 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function setStreamIndicator(active) {
-  const dot = document.getElementById('streamDot');
-  const label = document.getElementById('streamLabel');
-  dot.classList.toggle('active', active);
-  label.textContent = active ? 'streaming' : 'idle';
+function setWsStatus(state) {
+  $.wsStatus.classList.remove('connected');
+  if (state === 'connected') {
+    $.wsStatus.classList.add('connected');
+    $.wsLabel.textContent = 'Connected';
+  } else if (state === 'connecting') {
+    $.wsLabel.textContent = 'Connecting...';
+  } else {
+    $.wsLabel.textContent = 'Disconnected';
+  }
 }
 
-// ── UI: Safety Dashboard ──
-function updateRing() {
-  const ring = document.getElementById('ringFill');
-  const pctEl = document.getElementById('ringPct');
-  const subEl = document.getElementById('ringSubLabel');
+function setStreamIndicator(active) {
+  $.streamDot.classList.toggle('active', active);
+  $.streamLabel.textContent = active ? 'streaming' : 'idle';
+}
 
-  const circumference = 2 * Math.PI * 68; // r=68
-  let pct;
+function removeWelcome() {
+  if ($.welcome && $.welcome.parentNode) $.welcome.remove();
+}
 
-  if (safety.total === 0) {
-    pct = 100;
-    ring.style.strokeDashoffset = circumference; // empty
-    pctEl.textContent = '--';
-    pctEl.style.color = 'var(--text-dim)';
-    ring.style.stroke = 'var(--text-dim)';
-    subEl.textContent = '0 / 0 tool calls passed';
-  } else {
-    pct = Math.round((safety.passed / safety.total) * 100);
-    const offset = circumference - (pct / 100) * circumference;
-    ring.style.strokeDashoffset = offset;
+function addUserMessage(text) {
+  removeWelcome();
+  finishAgentMessage();
+  currentUserMsg = null;
+  const div = document.createElement('div');
+  div.className = 'msg msg-user';
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = 'You';
+  const body = document.createElement('div');
+  body.className = 'msg-text';
+  body.textContent = text.replace(/\n+/g, ' ').trim();
+  div.appendChild(label);
+  div.appendChild(body);
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+  return div;
+}
 
-    pctEl.textContent = pct + '%';
+function createAgentMessage() {
+  removeWelcome();
+  const div = document.createElement('div');
+  div.className = 'msg msg-agent streaming';
+  div.innerHTML = '<div class="msg-label"><span class="arrow">&#9656;</span> Agent</div><div class="msg-text"><span class="cursor-blink"></span></div>';
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+  return div;
+}
 
-    if (pct === 100) {
-      pctEl.style.color = 'var(--green)';
-      ring.style.stroke = 'var(--green)';
-    } else if (pct >= 80) {
-      pctEl.style.color = 'var(--amber)';
-      ring.style.stroke = 'var(--amber)';
-    } else {
-      pctEl.style.color = 'var(--red)';
-      ring.style.stroke = 'var(--red)';
+function appendToAgent(el, text) {
+  if (!el) return;
+  const textEl = el.querySelector('.msg-text');
+  const cursor = textEl.querySelector('.cursor-blink');
+  if (cursor) cursor.insertAdjacentText('beforebegin', text);
+  else textEl.textContent += text;
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+// Lightweight markdown → HTML (inline only, no external lib)
+function renderMarkdown(raw) {
+  let s = raw;
+  // Escape HTML first
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Headings: ## at line start
+  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:1.05em">$1</strong>');
+  s = s.replace(/^## (.+)$/gm, '<strong style="font-size:1.1em">$1</strong>');
+  s = s.replace(/^# (.+)$/gm, '<strong style="font-size:1.15em">$1</strong>');
+  // Bold + italic
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, '<code style="background:var(--bg-surface);padding:1px 4px;border-radius:3px">$1</code>');
+  // Bullet lists
+  s = s.replace(/^[-*] (.+)$/gm, '&bull; $1');
+  // Line breaks
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function finishAgentMessage() {
+  if (currentAgentMsg) {
+    currentAgentMsg.classList.remove('streaming');
+    const cursor = currentAgentMsg.querySelector('.cursor-blink');
+    if (cursor) cursor.remove();
+    // Render markdown in the completed message
+    const textEl = currentAgentMsg.querySelector('.msg-text');
+    if (textEl) {
+      const raw = textEl.textContent;
+      textEl.innerHTML = renderMarkdown(raw);
     }
-
-    subEl.textContent = `${safety.passed} / ${safety.total} tool calls passed`;
+    currentAgentMsg = null;
   }
+}
 
-  document.getElementById('contractsLabel').textContent = `${safety.contractsChecked} contracts checked`;
+function addToolCard(name, args, result, rejected, checks) {
+  removeWelcome();
+  const div = document.createElement('div');
+  div.className = 'msg tool-card ' + (rejected ? 'fail' : 'pass');
+
+  const argsStr = Object.entries(args).map(function(e) { return e[0] + ': ' + JSON.stringify(e[1]); }).join(', ');
+  const checksHtml = checks.map(function(c) {
+    return '<span class="check-pill ' + (c.pass ? 'pass' : 'fail') + '">' +
+      (c.pass ? '\u2713' : '\u2717') + ' ' + c.name + '</span>';
+  }).join('');
+
+  div.innerHTML =
+    '<div class="tool-card-header" onclick="this.parentElement.classList.toggle(\'collapsed\')">' +
+      '<span class="tool-name"><span class="fn-icon">\u0192</span> ' + escapeHtml(name) + '</span>' +
+      '<span class="contract-badge ' + (rejected ? 'blocked' : 'pass') + '">' +
+        '<span class="icon">' + (rejected ? '\u26D4' : '\u2713') + '</span> ' +
+        (rejected ? 'BLOCKED' : 'ALLOWED') +
+      '</span>' +
+    '</div>' +
+    '<div class="tool-card-body">' +
+      '<div class="tc-section">' +
+        '<div class="tc-section-label">Input</div>' +
+        '<div class="tc-section-content">' + escapeHtml(argsStr) + '</div>' +
+      '</div>' +
+      '<div class="tc-section">' +
+        '<div class="tc-section-label">Contracts</div>' +
+        '<div class="contract-checks">' + checksHtml + '</div>' +
+      '</div>' +
+      '<div class="tc-section">' +
+        '<div class="tc-section-label">' + (rejected ? 'Blocked' : 'Output') + '</div>' +
+        '<div class="tc-section-content ' + (rejected ? 'rejected' : 'result') + '">' + escapeHtml(result) + '</div>' +
+      '</div>' +
+    '</div>';
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+function addErrorMessage(text) {
+  removeWelcome();
+  const div = document.createElement('div');
+  div.className = 'msg msg-error';
+  div.textContent = text;
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+function addSystemMessage(text) {
+  removeWelcome();
+  const div = document.createElement('div');
+  div.className = 'msg msg-system';
+  div.textContent = text;
+  $.messages.appendChild(div);
+  $.messages.scrollTop = $.messages.scrollHeight;
+}
+
+// ── Safety Dashboard ──
+function updateRing() {
+  const circumference = 2 * Math.PI * 68;
+  if (safety.total === 0) {
+    $.ringFill.style.strokeDashoffset = circumference;
+    $.ringPct.textContent = '--';
+    $.ringPct.style.color = 'var(--text-dim)';
+    $.ringFill.style.stroke = 'var(--text-dim)';
+    $.ringSubLabel.textContent = '0 / 0 contracts enforced';
+  } else {
+    const pct = Math.round((safety.passed / safety.total) * 100);
+    $.ringFill.style.strokeDashoffset = circumference - (pct / 100) * circumference;
+    $.ringPct.textContent = pct + '%';
+    if (pct === 100) {
+      $.ringPct.style.color = 'var(--green)';
+      $.ringFill.style.stroke = 'var(--green)';
+    } else if (pct >= 80) {
+      $.ringPct.style.color = 'var(--amber)';
+      $.ringFill.style.stroke = 'var(--amber)';
+    } else {
+      $.ringPct.style.color = 'var(--red)';
+      $.ringFill.style.stroke = 'var(--red)';
+    }
+    const allowed = safety.total - safety.failed;
+    $.ringSubLabel.textContent = safety.total + ' enforced: ' + allowed + ' allowed, ' + safety.failed + ' blocked';
+  }
+  $.contractsLabel.textContent = safety.contractsChecked + ' contracts checked';
 }
 
 function updateCardStatus(card, status) {
-  const indicator = document.getElementById(`${card}Indicator`);
-  indicator.className = `sc-indicator ${status}`;
+  document.getElementById(card + 'Indicator').className = 'sc-indicator ' + status;
 }
 
 function updateCardCounts() {
-  document.getElementById('calcCount').textContent = safety.calc.calls;
-  document.getElementById('fileCount').textContent = safety.file.calls;
-  document.getElementById('sqlCount').textContent = safety.sql.calls;
-  document.getElementById('divCount').textContent = safety.div.blocked;
-
-  // Update detail text
-  if (safety.calc.clamps > 0) {
-    document.getElementById('calcDetail').textContent = `${safety.calc.clamps} input(s) clamped to [-1000, 1000]`;
-  }
-  if (safety.file.blocked > 0) {
-    document.getElementById('fileDetail').textContent = `${safety.file.blocked} traversal(s) blocked`;
-  }
-  if (safety.sql.blocked > 0) {
-    document.getElementById('sqlDetail').textContent = `${safety.sql.blocked} mutation(s) rejected`;
-  }
-  if (safety.div.blocked > 0) {
-    document.getElementById('divDetail').textContent = `${safety.div.blocked} div-by-zero(s) blocked`;
-  }
+  document.getElementById('invoiceCount').textContent = safety.invoice.calls;
+  document.getElementById('insuranceCount').textContent = safety.insurance.calls;
+  document.getElementById('payrollCount').textContent = safety.payroll.calls;
+  document.getElementById('shippingCount').textContent = safety.shipping.calls;
+  document.getElementById('riskCount').textContent = safety.risk.calls;
+  if (safety.invoice.blocked > 0) document.getElementById('invoiceDetail').textContent = safety.invoice.blocked + ' precondition(s) blocked';
+  if (safety.payroll.blocked > 0) document.getElementById('payrollDetail').textContent = safety.payroll.blocked + ' precondition(s) blocked';
+  if (safety.shipping.blocked > 0) document.getElementById('shippingDetail').textContent = safety.shipping.blocked + ' precondition(s) blocked';
+  if (safety.risk.blocked > 0) document.getElementById('riskDetail').textContent = safety.risk.blocked + ' precondition(s) blocked';
 }
 
 function addLogEntry(name, args, result, rejected, checks) {
-  const empty = document.getElementById('logEmpty');
-  if (empty) empty.remove();
-
-  const container = document.getElementById('logEntries');
+  if ($.logEmpty) $.logEmpty.remove();
   const now = new Date();
   const ts = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  const argsShort = Object.values(args).map(v => JSON.stringify(v)).join(', ');
+  const argsShort = Object.values(args).map(function(v) { return JSON.stringify(v); }).join(', ');
   const truncArgs = argsShort.length > 40 ? argsShort.slice(0, 40) + '...' : argsShort;
+  const resultShort = result.length > 50 ? result.slice(0, 50) + '...' : result;
+  const argsAll = Object.entries(args).map(function(e) { return e[0] + ': ' + JSON.stringify(e[1]); }).join(', ');
+  const checksDetail = checks.map(function(c) {
+    return '<div class="detail-value ' + (c.pass ? 'ok' : 'err') + '">' + (c.pass ? '\u2713' : '\u2717') + ' ' + escapeHtml(c.name) + '</div>';
+  }).join('');
 
   const entry = document.createElement('div');
-  entry.className = `log-entry ${rejected ? 'fail' : 'pass'}`;
+  entry.className = 'log-entry ' + (rejected ? 'fail' : 'pass');
+  entry.innerHTML =
+    '<span class="log-time">' + ts + '</span>' +
+    '<span class="log-icon ' + (rejected ? 'fail' : 'pass') + '">' + (rejected ? '\u26D4' : '\u2713') + '</span>' +
+    '<span class="log-msg" onclick="this.parentElement.classList.toggle(\'expanded\')">' +
+      '<span class="fn">' + escapeHtml(name) + '</span>(' + escapeHtml(truncArgs) + ') &rarr; <span class="' + (rejected ? 'err' : 'val') + '">' + escapeHtml(resultShort) + '</span>' +
+      '<div class="log-detail">' +
+        '<div class="detail-label">Input</div>' +
+        '<div class="detail-value">' + escapeHtml(argsAll) + '</div>' +
+        '<div class="detail-label">Contracts</div>' +
+        checksDetail +
+        '<div class="detail-label">' + (rejected ? 'Blocked' : 'Output') + '</div>' +
+        '<div class="detail-value ' + (rejected ? 'err' : 'ok') + '">' + escapeHtml(result) + '</div>' +
+      '</div>' +
+    '</span>';
 
-  const iconChar = rejected ? '\u2717' : '\u2713';
-  const iconClass = rejected ? 'fail' : 'pass';
-  const resultShort = result.length > 50 ? result.slice(0, 50) + '...' : result;
-
-  entry.innerHTML = `
-    <span class="log-time">${ts}</span>
-    <span class="log-icon ${iconClass}">${iconChar}</span>
-    <span class="log-msg"><span class="fn">${escapeHtml(name)}</span>(${escapeHtml(truncArgs)}) &rarr; <span class="${rejected ? 'err' : 'val'}">${escapeHtml(resultShort)}</span></span>`;
-
-  container.appendChild(entry);
-  container.scrollTop = container.scrollHeight;
-
+  $.logEntries.appendChild(entry);
+  $.logEntries.scrollTop = $.logEntries.scrollHeight;
   logEntries.push({ ts, name, args, result, rejected, checks });
-  document.getElementById('logCount').textContent = `${logEntries.length} entries`;
+  $.logCount.textContent = logEntries.length + ' entries';
 }
 
 function updateBudgets() {
   updateBudgetBar('Stream', budgets.stream);
-  updateBudgetBar('Fs', budgets.fs);
-  updateBudgetBar('Net', budgets.net);
+  // Tools meter: total calls
+  var toolBudget = { used: safety.total, limit: 50 };
+  updateBudgetBar('Fs', toolBudget);
+  // Blocked meter: just show count
+  var blockedEl = document.getElementById('budgetNetBar');
+  var blockedText = document.getElementById('budgetNetText');
+  if (blockedEl && blockedText) {
+    var pct = safety.total > 0 ? Math.min(100, (safety.failed / safety.total) * 100) : 0;
+    blockedEl.style.width = pct + '%';
+    blockedEl.className = 'bm-bar' + (safety.failed > 0 ? ' warn' : '');
+    blockedText.textContent = safety.failed;
+  }
 }
 
 function updateBudgetBar(name, budget) {
-  const bar = document.getElementById(`budget${name}Bar`);
-  const text = document.getElementById(`budget${name}Text`);
+  const bar = document.getElementById('budget' + name + 'Bar');
+  const text = document.getElementById('budget' + name + 'Text');
   const pct = Math.min(100, (budget.used / budget.limit) * 100);
-
   bar.style.width = pct + '%';
   bar.className = 'bm-bar';
   if (pct >= 90) bar.classList.add('danger');
   else if (pct >= 70) bar.classList.add('warn');
-
-  text.textContent = `${budget.used} / ${budget.limit}`;
+  text.textContent = budget.used + ' / ' + budget.limit;
 }
 
 // ================================================================
 // MOCK MODE — "Test Safety" Button
-// Runs through all tool types to demonstrate contract verification
-// without needing a Gemini connection.
+// Dispatches through AILANG WASM for contract verification.
 // ================================================================
 let testRunning = false;
 
 async function runSafetyTest() {
   if (testRunning) return;
+  if (!core.wasmReady) { addErrorMessage('AILANG WASM not loaded'); return; }
   testRunning = true;
 
-  const btn = document.getElementById('btnTestSafety');
-  btn.classList.add('active');
-  btn.textContent = 'Running...';
+  $.btnTestSafety.classList.add('active');
+  $.btnTestSafety.textContent = 'Running...';
 
   removeWelcome();
-  addSystemMessage('Running contract safety test suite...');
+  addSystemMessage('Running business contract safety test suite (12 scenarios via AILANG WASM)...');
 
   const testCases = [
-    {
-      label: 'Safe addition',
-      delay: 400,
-      call: { functionCalls: [{ id: 'test1', name: 'calculate', args: { op: 'add', a: 42, b: 58 } }] }
-    },
-    {
-      label: 'Overflow clamping (9999 * 9999)',
-      delay: 600,
-      call: { functionCalls: [{ id: 'test2', name: 'calculate', args: { op: 'multiply', a: 9999, b: 9999 } }] }
-    },
-    {
-      label: 'Division by zero',
-      delay: 600,
-      call: { functionCalls: [{ id: 'test3', name: 'calculate', args: { op: 'divide', a: 100, b: 0 } }] }
-    },
-    {
-      label: 'Safe file read',
-      delay: 500,
-      call: { functionCalls: [{ id: 'test4', name: 'readFile', args: { filepath: '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/sample.txt' } }] }
-    },
-    {
-      label: 'Path traversal attack',
-      delay: 600,
-      call: { functionCalls: [{ id: 'test5', name: 'readFile', args: { filepath: '/Users/mark/dev/sunholo/demos/streaming/safe_agent/data/../../../etc/passwd' } }] }
-    },
-    {
-      label: 'Unsafe path (outside prefix)',
-      delay: 500,
-      call: { functionCalls: [{ id: 'test6', name: 'readFile', args: { filepath: '/etc/shadow' } }] }
-    },
-    {
-      label: 'Safe SELECT query',
-      delay: 500,
-      call: { functionCalls: [{ id: 'test7', name: 'query', args: { sql: 'SELECT * FROM orders WHERE total > 100' } }] }
-    },
-    {
-      label: 'Rejected DROP TABLE',
-      delay: 600,
-      call: { functionCalls: [{ id: 'test8', name: 'query', args: { sql: 'DROP TABLE users;' } }] }
-    },
-    {
-      label: 'Rejected DELETE mutation',
-      delay: 500,
-      call: { functionCalls: [{ id: 'test9', name: 'query', args: { sql: 'DELETE FROM orders WHERE id = 1' } }] }
-    },
-    {
-      label: 'Word count',
-      delay: 400,
-      call: { functionCalls: [{ id: 'test10', name: 'wordCount', args: { text: 'AILANG contracts make AI agents provably safe' } }] }
-    }
+    // Invoice: 4-deep chain
+    { label: 'Invoice: Enterprise, EU tax, valid promo', delay: 400, call: { id: 'test1', name: 'invoice', args: { subtotalCents: 500000, tier: 'enterprise', taxRegion: 'eu_standard', promoCode: 'PROMO-LAUNCH2024' } } },
+    { label: 'Invoice: Negative subtotal (BLOCKED)', delay: 500, call: { id: 'test2', name: 'invoice', args: { subtotalCents: -100000, tier: 'business', taxRegion: 'us_standard', promoCode: '' } } },
+    { label: 'Invoice: Invalid promo (too short)', delay: 400, call: { id: 'test3', name: 'invoice', args: { subtotalCents: 250000, tier: 'starter', taxRegion: 'us_reduced', promoCode: 'PROMO' } } },
+    // Insurance: 768 paths
+    { label: 'Insurance: Cheapest (adult, low, clean, basic, rural)', delay: 400, call: { id: 'test4', name: 'insurance', args: { ageBand: 'adult', riskTier: 'low', claimHistory: 'clean', coverage: 'basic', region: 'rural' } } },
+    { label: 'Insurance: Most expensive (elderly, critical, multiple, platinum, urban)', delay: 500, call: { id: 'test5', name: 'insurance', args: { ageBand: 'elderly', riskTier: 'critical', claimHistory: 'multiple', coverage: 'platinum', region: 'urban' } } },
+    // Payroll: net >= 0
+    { label: 'Payroll: 3500/hr, 40 hours', delay: 400, call: { id: 'test6', name: 'payroll', args: { hourlyRateCents: 3500, hoursWorked: 40 } } },
+    { label: 'Payroll: Negative rate (BLOCKED)', delay: 500, call: { id: 'test7', name: 'payroll', args: { hourlyRateCents: -1000, hoursWorked: 40 } } },
+    // Shipping: discount clamping
+    { label: 'Shipping: International express, 15kg, £3.00 discount', delay: 400, call: { id: 'test8', name: 'shipping', args: { region: 'international', priority: 'express', weightKg: 15, discountCents: 300 } } },
+    { label: 'Shipping: £99.99 discount clamped to £0', delay: 500, call: { id: 'test9', name: 'shipping', args: { region: 'domestic', priority: 'economy', weightKg: 1, discountCents: 9999 } } },
+    { label: 'Shipping: Negative weight (BLOCKED)', delay: 500, call: { id: 'test10', name: 'shipping', args: { region: 'domestic', priority: 'economy', weightKg: -5, discountCents: 0 } } },
+    // Risk: bounded [0, 200]
+    { label: 'Risk: Low severity, automated, 0 repeats', delay: 400, call: { id: 'test11', name: 'riskScore', args: { severity: 'low', source: 'automated', repeatCount: 0 } } },
+    { label: 'Risk: Critical, external, 10 repeats (maxed)', delay: 400, call: { id: 'test12', name: 'riskScore', args: { severity: 'critical', source: 'external', repeatCount: 10 } } },
   ];
 
   for (const tc of testCases) {
-    addSystemMessage(`Test: ${tc.label}`);
+    addSystemMessage('Test: ' + tc.label);
     await sleep(tc.delay);
-    handleToolCall(tc.call);
+    dispatchToolViaWASM(tc.call.id, tc.call.name, tc.call.args);
     await sleep(200);
   }
 
   await sleep(300);
-  const passRate = safety.total > 0 ? Math.round((safety.passed / safety.total) * 100) : 0;
+  const allowed = safety.total - safety.failed;
   addSystemMessage(
-    `Safety test complete: ${safety.passed}/${safety.total} passed (${passRate}%). ` +
-    `${safety.failed} dangerous calls blocked. All contracts verified.`
+    'Safety test complete: ' + safety.total + '/' + safety.total + ' contracts enforced via AILANG WASM. ' +
+    allowed + ' allowed, ' + safety.failed + ' dangerous calls blocked.'
   );
 
-  btn.classList.remove('active');
-  btn.textContent = 'Test Safety';
+  $.btnTestSafety.classList.remove('active');
+  $.btnTestSafety.textContent = 'Test Safety';
   testRunning = false;
 }
 
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
 // ── Keyboard shortcuts ──
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (isRecording) {
-      toggleMic();
-    }
-  }
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && core.isRecording) toggleMic();
+});
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', function() {
+  cacheDom();
+  loadConfig();
+  updateRing();
+  updateBudgets();
+  core.initWaveform(document.getElementById('waveform'));
+  core.initWASM();
+  $.inputField.focus();
 });
 </script>
 

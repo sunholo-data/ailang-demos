@@ -227,6 +227,93 @@
 
   <p>The demo queries the public GA4 ecommerce dataset on BigQuery. Your GCP project is auto-detected from <code>gcloud config</code> and used for job billing only &mdash; the dataset itself is public.</p>
 
+  <h2>REST API &amp; Protocol Server</h2>
+
+  <p>Serve all AILANG modules as a REST API with auto-generated OpenAPI, MCP, and A2A endpoints &mdash; zero code changes required:</p>
+
+  <div class="code-block">
+<span class="comment"># Start the API server (with AI stub for testing)</span>
+<span class="cmd">ailang</span> serve-api <span class="flag">--port</span> 8092 <span class="flag">--mcp-http</span> <span class="flag">--caps</span> IO,AI,FS,Net <span class="flag">--ai-stub</span> \
+  ecommerce/contracts_demo.ail \
+  ecommerce/services/ga4_queries.ail \
+  ecommerce/services/bigquery.ail \
+  ecommerce/services/gcp_auth.ail \
+  ecommerce/api/handlers.ail \
+  ecommerce/data/products.ail \
+  ecommerce/services/recommendations.ail
+  </div>
+
+  <p>Every <code>export func</code> becomes a POST endpoint. All protocol endpoints are auto-generated from the same AILANG source.</p>
+
+  <h2>API Documentation</h2>
+
+  <img src="img/openapi-redoc.png" alt="OpenAPI ReDoc — auto-generated API reference from AILANG type signatures" class="screenshot">
+  <p class="screenshot-caption">ReDoc &mdash; auto-generated from AILANG&rsquo;s Hindley-Milner type signatures</p>
+
+  <div class="feature-grid">
+    <div class="feature">
+      <div class="feature-icon">&#128214;</div>
+      <div class="feature-name">Swagger UI</div>
+      <div class="feature-desc"><a href="http://localhost:8092/api/_meta/docs" style="color:var(--primary)">/api/_meta/docs</a> &mdash; interactive, try-it-out API explorer (like FastAPI)</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128209;</div>
+      <div class="feature-name">ReDoc</div>
+      <div class="feature-desc"><a href="http://localhost:8092/api/_meta/redoc" style="color:var(--primary)">/api/_meta/redoc</a> &mdash; clean read-only API reference</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128300;</div>
+      <div class="feature-name">OpenAPI 3.1</div>
+      <div class="feature-desc"><a href="http://localhost:8092/api/_meta/openapi.json" style="color:var(--primary)">/api/_meta/openapi.json</a> &mdash; raw spec for code generation</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128737;</div>
+      <div class="feature-name">Health Check</div>
+      <div class="feature-desc"><a href="http://localhost:8092/api/_health" style="color:var(--primary)">/api/_health</a> &mdash; module count and export count</div>
+    </div>
+  </div>
+
+  <h2>Protocol Endpoints</h2>
+
+  <table class="query-table">
+    <thead><tr><th>Protocol</th><th>Endpoint</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>MCP</td><td>POST /mcp/</td><td>MCP Streamable HTTP (tools/list, tools/call)</td></tr>
+      <tr><td>A2A</td><td>POST /a2a/</td><td>Agent-to-Agent JSON-RPC task execution</td></tr>
+      <tr><td>A2A</td><td>GET /.well-known/agent.json</td><td>A2A Agent Card (37 skills)</td></tr>
+      <tr><td>REST</td><td>POST /api/{module}/{func}</td><td>Direct function invocation</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Connect as MCP Server</h2>
+
+  <p>Add AILANG as an MCP server in Claude Desktop, Cursor, or any MCP client:</p>
+
+  <div class="code-block">
+<span class="comment"># claude_desktop_config.json</span>
+{
+  <span class="str">"mcpServers"</span>: {
+    <span class="str">"ailang-ecommerce"</span>: {
+      <span class="str">"command"</span>: <span class="str">"ailang"</span>,
+      <span class="str">"args"</span>: [
+        <span class="str">"serve-api"</span>, <span class="str">"--mcp"</span>,
+        <span class="str">"--caps"</span>, <span class="str">"IO,AI,FS,Net"</span>,
+        <span class="str">"--ai-stub"</span>,
+        <span class="str">"ecommerce/contracts_demo.ail"</span>,
+        <span class="str">"ecommerce/services/ga4_queries.ail"</span>,
+        <span class="str">"ecommerce/services/bigquery.ail"</span>,
+        <span class="str">"ecommerce/services/gcp_auth.ail"</span>,
+        <span class="str">"ecommerce/api/handlers.ail"</span>,
+        <span class="str">"ecommerce/data/products.ail"</span>,
+        <span class="str">"ecommerce/services/recommendations.ail"</span>
+      ]
+    }
+  }
+}
+  </div>
+
+  <p>Use <code>--mcp</code> for stdio transport (Claude Desktop) or <code>--mcp-http</code> for HTTP transport (remote clients). All 37 exported functions appear as MCP tools with auto-generated JSON Schema from AILANG types.</p>
+
   <h2>Other Run Modes</h2>
 
   <div class="code-block">
@@ -242,8 +329,8 @@
 <span class="cmd">ailang</span> test ecommerce/services/ga4_queries.ail
 
 <span class="comment"># With contract verification</span>
-<span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO,FS,Net <span class="flag">--verify-contracts</span> \
-  ecommerce/bigquery_demo.ail
+<span class="cmd">ailang</span> run <span class="flag">--entry</span> main <span class="flag">--caps</span> IO <span class="flag">--verify-contracts</span> \
+  ecommerce/contracts_demo.ail
   </div>
 
   <h2>Available Queries</h2>
