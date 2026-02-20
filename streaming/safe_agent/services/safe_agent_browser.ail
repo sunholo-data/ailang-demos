@@ -1,0 +1,59 @@
+-- Browser adapter for the Contract-Verified Safe Agent.
+--
+-- Pure-only wrapper around verified_tools for WASM access.
+-- JS loads this module and calls pure functions for contract verification.
+-- Effectful operations (file I/O, network) are mocked in the browser —
+-- the contracts (clamping, path validation, SQL checks) are what matter.
+
+module streaming/safe_agent/services/safe_agent_browser
+
+import streaming/safe_agent/services/verified_tools (
+  safeCalculate, clampInput, containsTraversal, isPathSafe,
+  isSafeQuery, wordCount
+)
+import std/result (Ok, Err)
+import std/string (intToStr)
+
+-- ══════════════════════════════════════════════════════
+-- Contract-Verified Calculator
+-- ══════════════════════════════════════════════════════
+
+-- Dispatch calculation through AILANG contracts.
+-- Returns JSON: {"ok":true,"result":"100"} or {"ok":false,"error":"..."}
+export func calculate(op: string, a: int, b: int) -> string {
+  match safeCalculate(op, a, b) {
+    Ok(n) => "{\"ok\":true,\"result\":\"" ++ intToStr(n) ++ "\"}",
+    Err(e) => "{\"ok\":false,\"error\":\"" ++ e ++ "\"}"
+  }
+}
+
+-- Clamp input to [-1000, 1000] via AILANG contracts
+export pure func clamp(x: int) -> int = clampInput(x)
+
+-- ══════════════════════════════════════════════════════
+-- Contract-Verified Path Validation
+-- ══════════════════════════════════════════════════════
+
+-- Check path safety: under prefix and no traversal
+export pure func checkPath(path: string, prefix: string) -> bool =
+  isPathSafe(path, prefix)
+
+-- Check if path contains ".." traversal
+export pure func hasTraversal(path: string) -> bool =
+  containsTraversal(path)
+
+-- ══════════════════════════════════════════════════════
+-- Contract-Verified SQL Validation
+-- ══════════════════════════════════════════════════════
+
+-- Check if SQL is a safe SELECT query
+export pure func checkQuery(sql: string) -> bool =
+  isSafeQuery(sql)
+
+-- ══════════════════════════════════════════════════════
+-- Contract-Verified Word Count
+-- ══════════════════════════════════════════════════════
+
+-- Count words in text
+export pure func countWords(text: string) -> int =
+  wordCount(text)
