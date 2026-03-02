@@ -99,11 +99,14 @@
     z-index: 100;
   }
 
+  .nav-home { display: flex; align-items: center; }
+  .nav-home:hover .header-logo { opacity: 0.8; }
   .header img.header-logo {
     width: 32px;
     height: 32px;
     flex-shrink: 0;
     border-radius: 4px;
+    transition: opacity 0.15s;
   }
 
   .header-title {
@@ -474,7 +477,7 @@
 
 <!-- Header bar (matches DocParse charcoal header) -->
 <header class="header">
-  <img src="shared/ailang-logo.svg" alt="AILANG" class="header-logo">
+  <a href="../" class="nav-home" title="Back to Demo Hub"><img src="shared/ailang-logo.svg" alt="AILANG" class="header-logo"></a>
   <span class="header-title"><span class="ai">AI</span>LANG</span>
   <span class="header-sep"></span>
   <span class="header-subtitle">Streaming Demos</span>
@@ -581,7 +584,7 @@
       <span><span class="ai">AI</span>LANG</span>
     </div>
     <div class="footer-line">
-      The AI-First Programming Language &mdash; <a href="https://ailang.dev">ailang.dev</a>
+      The AI-First Programming Language &mdash; <a href="https://ailang.sunholo.com">ailang.sunholo.com</a>
       <span class="footer-sep"></span>
       <a href="https://github.com/ailang-dev/ailang/issues/136">std/stream design doc</a>
     </div>
