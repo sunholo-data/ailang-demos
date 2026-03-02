@@ -45,6 +45,7 @@ done
 mkdir -p "$SITE/streaming/shared"
 ln -s "$REPO_ROOT/streaming/shared/audio-worklet.js" "$SITE/streaming/shared/"
 ln -s "$REPO_ROOT/streaming/shared/gemini-live-core.js" "$SITE/streaming/shared/"
+ln -s "$REPO_ROOT/streaming/shared/streaming-ui.js" "$SITE/streaming/shared/"
 for demo in claude_chat gemini_live safe_agent voice_docparse; do
   mkdir -p "$SITE/streaming/$demo"
   ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/index.html"

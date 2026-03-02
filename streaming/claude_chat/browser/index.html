@@ -656,6 +656,7 @@
 <script src="../../wasm/wasm_exec.js"></script>
 <script src="../../wasm/ailang-repl.js"></script>
 <script src="../shared/gemini-live-core.js"></script>
+<script src="../shared/streaming-ui.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -682,8 +683,8 @@ const MODULES = [
 
 // ── State ──
 let core = null;
+let ui = null;
 let isStreaming = false;
-let currentMsgEl = null;
 let chatHistory = [];  // Multi-turn conversation
 let stats = { events: 0, chars: 0, startTime: 0, firstTokenTime: 0, tokens: 0 };
 
@@ -702,11 +703,21 @@ document.addEventListener('DOMContentLoaded', () => {
   $.statLatency = document.getElementById('statLatency');
   $.statusText = document.getElementById('statusText');
 
-  // Migrate old localStorage key
-  if (!localStorage.getItem('anthropic-api-key') && localStorage.getItem('ailang_claude_key'))
-    localStorage.setItem('anthropic-api-key', localStorage.getItem('ailang_claude_key'));
-  const saved = localStorage.getItem('anthropic-api-key');
-  if (saved) document.getElementById('apiKeyInput').value = saved;
+  ui = new StreamingUI({
+    elements: {
+      configPanel: document.getElementById('configPanel'),
+      apiKeyInput: document.getElementById('apiKeyInput'),
+      chatContainer: $.messages,
+      textInput: $.inputField,
+      sendButton: $.sendBtn,
+    },
+    localStorage: { apiKey: 'anthropic-api-key' },
+    agentName: 'claude',
+    userName: 'you',
+    cssClasses: { cursor: 'cursor', agentMsg: 'msg msg-assistant' },
+    welcomeElement: document.getElementById('welcome'),
+  });
+  ui.loadConfig({ 'ailang_claude_key': 'anthropic-api-key' });
 
   $.inputField.focus();
   initWASM();
@@ -714,21 +725,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Config ──
 function toggleConfig() {
+  ui.toggleConfig();
   const panel = document.getElementById('configPanel');
-  panel.classList.toggle('open');
   document.getElementById('configBtn').textContent =
     panel.classList.contains('open') ? 'close' : 'config';
 }
 
-function saveApiKey() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (key) localStorage.setItem('anthropic-api-key', key);
-}
-
-function getApiKey() {
-  return document.getElementById('apiKeyInput').value.trim() ||
-         localStorage.getItem('anthropic-api-key') || '';
-}
+function saveApiKey() { ui.saveConfig(); }
 
 // ── Input handling ──
 function handleKeydown(e) {
@@ -791,7 +794,6 @@ function addInitLog(type, html) {
 function handleAILANGEvent(event) {
   switch (event.type) {
     case 'log':
-      // Log events during streaming (after welcome is removed)
       break;
 
     case 'connected':
@@ -799,7 +801,7 @@ function handleAILANGEvent(event) {
       break;
 
     case 'textDelta':
-      appendToAssistant(currentMsgEl, event.text);
+      ui.appendAgentText(event.text);
       stats.chars += event.text.length;
       stats.tokens++;
       if (!stats.firstTokenTime) stats.firstTokenTime = performance.now();
@@ -821,32 +823,29 @@ function handleAILANGEvent(event) {
       updateStatsDisplay();
       break;
 
-    case 'complete':
-      if (currentMsgEl) {
-        // Capture assistant response for conversation history
-        const textEl = currentMsgEl.querySelector('.msg-text');
-        const cursor = textEl ? textEl.querySelector('.cursor') : null;
-        if (cursor) cursor.remove();
-        const responseText = textEl ? textEl.textContent : '';
-        if (responseText) {
-          chatHistory.push({ role: 'assistant', content: responseText });
-        }
-        finishAssistant(currentMsgEl);
+    case 'complete': {
+      // Capture assistant response for conversation history before finishing
+      const responseText = ui.getAgentText();
+      if (responseText) {
+        chatHistory.push({ role: 'assistant', content: responseText });
       }
+      ui.finishAgentMessage(true);
       finishStreaming();
       setStatus('done');
       break;
+    }
 
     case 'closed':
       if (isStreaming) {
-        if (currentMsgEl) finishAssistant(currentMsgEl);
+        ui.finishAgentMessage(true);
         finishStreaming();
       }
+      ui.addSystemMessage('Connection closed. Send a message to start a new session.');
       break;
 
     case 'error':
-      addErrorMessage(event.text || event.errType || 'Unknown error');
-      if (currentMsgEl) finishAssistant(currentMsgEl);
+      ui.addErrorMessage(event.text || event.errType || 'Unknown error');
+      ui.finishAgentMessage();
       finishStreaming();
       setStatus('error');
       break;
@@ -860,41 +859,34 @@ function handleAILANGEvent(event) {
 async function sendMessage() {
   const text = $.inputField.value.trim();
   if (!text || isStreaming) return;
+  if (!core.acquireConnectLock()) return;
 
-  const apiKey = getApiKey();
+  const apiKey = ui.getApiKey();
   if (!apiKey) {
+    core.releaseConnectLock();
     toggleConfig();
     document.getElementById('apiKeyInput').focus();
-    addErrorMessage('Set your API key first.');
+    ui.addErrorMessage('Set your API key first.');
     return;
   }
 
   if (!core || !core.wasmReady) {
-    addErrorMessage('WASM not ready yet. Please wait.');
+    core.releaseConnectLock();
+    ui.addErrorMessage('WASM not ready yet. Please wait.');
     return;
   }
 
-  // Remove welcome screen
-  const welcome = document.getElementById('welcome');
-  if (welcome) welcome.remove();
-
-  // UI state
-  addUserMessage(text);
+  ui.addUserMessage(text);
   $.inputField.value = '';
   $.inputField.style.height = 'auto';
   isStreaming = true;
-  $.sendBtn.disabled = true;
+  ui.disableInput();
   setStatus('connecting');
   resetStats();
 
-  // Add to conversation history
   chatHistory.push({ role: 'user', content: text });
+  ui.startAgentMessage();
 
-  // Create assistant message bubble with cursor
-  currentMsgEl = createAssistantMessage();
-
-  // AILANG drives the entire SSE session:
-  //   ssePost → onEvent(handler) → runEventLoop → disconnect
   try {
     const messagesJson = JSON.stringify(chatHistory);
     await core.wasmEngine.callAsync(
@@ -902,71 +894,24 @@ async function sendMessage() {
       apiKey, DEFAULT_MODEL, messagesJson, SYSTEM_PROMPT
     );
   } catch (e) {
-    addErrorMessage('AILANG error: ' + e.message);
-    if (currentMsgEl) finishAssistant(currentMsgEl);
+    ui.addErrorMessage('AILANG error: ' + e.message);
+    ui.finishAgentMessage();
     finishStreaming();
   }
+
+  core.releaseConnectLock();
 }
 
 function finishStreaming() {
   isStreaming = false;
-  $.sendBtn.disabled = false;
-  $.inputField.focus();
+  ui.enableInput(true);
 }
 
 // ═══════════════════════════════════════════════════════
 // Chat UI
 // ═══════════════════════════════════════════════════════
 
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function addUserMessage(text) {
-  const div = document.createElement('div');
-  div.className = 'msg msg-user';
-  div.innerHTML = '<div class="msg-label">you</div><div class="msg-text">' + escapeHtml(text) + '</div>';
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
-
-function createAssistantMessage() {
-  const div = document.createElement('div');
-  div.className = 'msg msg-assistant streaming';
-  div.innerHTML = '<div class="msg-label">claude</div><div class="msg-text"><span class="cursor"></span></div>';
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-  return div;
-}
-
-function appendToAssistant(msgEl, text) {
-  if (!msgEl) return;
-  const textEl = msgEl.querySelector('.msg-text');
-  const cursor = textEl.querySelector('.cursor');
-  if (cursor) {
-    cursor.insertAdjacentText('beforebegin', text);
-  } else {
-    textEl.textContent += text;
-  }
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
-
-function finishAssistant(msgEl) {
-  if (!msgEl) return;
-  msgEl.classList.remove('streaming');
-  const cursor = msgEl.querySelector('.cursor');
-  if (cursor) cursor.remove();
-}
-
-function addErrorMessage(text) {
-  const div = document.createElement('div');
-  div.className = 'msg msg-error';
-  div.textContent = text;
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
+// Chat UI delegated to StreamingUI (ui.addUserMessage, ui.appendAgentText, etc.)
 
 // ═══════════════════════════════════════════════════════
 // Stats

@@ -240,6 +240,7 @@ jobs:
           mkdir -p _site/streaming/shared
           cp streaming/shared/audio-worklet.js _site/streaming/shared/
           cp streaming/shared/gemini-live-core.js _site/streaming/shared/
+          cp streaming/shared/streaming-ui.js _site/streaming/shared/
 
           # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
           for demo in claude_chat gemini_live safe_agent voice_docparse; do

@@ -602,6 +602,7 @@
 <script src="../../wasm/wasm_exec.js"></script>
 <script src="../../wasm/ailang-repl.js"></script>
 <script src="../shared/gemini-live-core.js"></script>
+<script src="../shared/streaming-ui.js"></script>
 </head>
 <body>
 
@@ -826,8 +827,7 @@ const core = new GeminiLiveCore({
   onLog: (type, html) => addLog(type, html),
   onStatsUpdate: updateStatsUI,
   onConnectionChange: (state) => {
-    if (state === 'connected') $.wssBadge.classList.add('live');
-    else $.wssBadge.classList.remove('live');
+    if (ui) ui.setConnectionStatus(state);
   },
   onFallbackActivated: () => {
     $.fallbackBanner.classList.add('active');
@@ -837,7 +837,7 @@ const core = new GeminiLiveCore({
     $.fallbackBanner.classList.remove('active');
     $.fallbackBadge.classList.remove('active');
   },
-  onWasmReady: () => populateVoicesFromAILANG(),
+  onWasmReady: () => { if (ui) ui.populateVoices(core, 'Sulafat'); },
   onWasmError: () => {},
 });
 
@@ -865,9 +865,7 @@ function handleAILANGEvent(event) {
       core.sessionReady = true;
       setState('ready');
       addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' + core.stats.frames + '</span> frames, <span class="val">' + GeminiLiveCore.fmtBytes(core.stats.bytes) + '</span>');
-      $.sendBtn.disabled = false;
-      $.textInput.disabled = false;
-      $.textInput.focus();
+      ui.enableInput(true);
       break;
     case 'inputTranscript':
       if (event.text) addLog('info', 'You said: <span class="val">' + GeminiLiveCore.escapeHtml(event.text) + '</span>');
@@ -894,7 +892,9 @@ function handleAILANGEvent(event) {
       core.sessionReady = false;
       setState('closed');
       addLog('info', 'WebSocket closed <span class="val">' + (event.code || '') + '</span>');
-      $.wssBadge.classList.remove('live');
+      ui.setConnectionStatus('disconnected');
+      ui.enableInput(true);
+      core.releaseConnectLock();
       break;
     case 'error':
       addLog('err', 'AILANG: ' + GeminiLiveCore.escapeHtml(event.text || ''));
@@ -902,54 +902,35 @@ function handleAILANGEvent(event) {
   }
 }
 
-// ── Voice catalog ──
-function populateVoicesFromAILANG() {
-  if (!core.wasmReady) return;
-  try {
-    const raw = core.callAILANG('voiceCatalog');
-    if (!raw) return;
-    const voices = JSON.parse(raw);
-    const select = $.voiceSelect;
-    const current = select.value;
-    select.innerHTML = '';
-    voices.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = `${v.name} (${v.desc})`;
-      select.appendChild(opt);
-    });
-    const saved = localStorage.getItem('gemini-live-voice');
-    if (saved) select.value = saved;
-    else select.value = current || core.callAILANG('defaultVoice') || 'Sulafat';
-  } catch (e) { logError('Voice catalog parse error', e); }
+// ── StreamingUI instance (config, voice, input management) ──
+let ui;
+function initUI() {
+  ui = new StreamingUI({
+    elements: {
+      configPanel: $.configPanel,
+      apiKeyInput: $.apiKey,
+      voiceSelect: $.voiceSelect,
+      textInput: $.textInput,
+      sendButton: $.sendBtn,
+      statusBadge: $.wssBadge,
+    },
+    localStorage: { apiKey: 'gemini-api-key', voice: 'gemini-live-voice' },
+    agentName: 'Gemini',
+  });
 }
-
-// ── Config ──
-function toggleConfig() { $.configPanel.classList.toggle('open'); }
-
-function loadConfig() {
-  // Migrate legacy key name
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_live_key'))
-    localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_live_key'));
-  const saved = localStorage.getItem('gemini-api-key');
-  if (saved) $.apiKey.value = saved;
-  const voice = localStorage.getItem('gemini-live-voice');
-  if (voice) $.voiceSelect.value = voice;
-}
-
-function saveConfig() {
-  const key = $.apiKey.value.trim();
-  if (key) localStorage.setItem('gemini-api-key', key);
-  localStorage.setItem('gemini-live-voice', $.voiceSelect.value);
-}
+function toggleConfig() { ui.toggleConfig(); }
+function saveConfig() { ui.saveConfig(); }
 
 // ── Connect ──
 async function reconnect() {
-  const key = $.apiKey.value.trim() || localStorage.getItem('gemini-api-key');
-  if (!key) { toggleConfig(); addLog('warn', 'Enter your Gemini API key'); return; }
-  saveConfig();
+  if (!core.acquireConnectLock()) { addLog('warn', 'Connection already in progress'); return; }
+
+  const key = ui.getApiKey();
+  if (!key) { core.releaseConnectLock(); toggleConfig(); addLog('warn', 'Enter your Gemini API key'); return; }
+  ui.saveConfig();
 
   if (!core.wasmReady) {
+    core.releaseConnectLock();
     addLog('err', 'AILANG WASM not loaded — cannot start streaming session');
     return;
   }
@@ -959,8 +940,7 @@ async function reconnect() {
   $.fLatency.textContent = '—';
   $.fLatency.classList.remove('active');
   setState('connecting');
-  $.sendBtn.disabled = true;
-  $.textInput.disabled = true;
+  ui.disableInput();
 
   await core.initAudio();
 
@@ -982,6 +962,8 @@ async function reconnect() {
 
   core.sessionReady = false;
   setState('closed');
+  core.releaseConnectLock();
+  ui.enableInput(true);
 }
 
 // ── Send text ──
@@ -1007,8 +989,7 @@ async function sendText() {
   }));
 
   $.textInput.value = '';
-  $.textInput.disabled = true;
-  $.sendBtn.disabled = true;
+  ui.disableInput();
   setState('streaming');
   $.scopeIdle.textContent = 'receiving audio';
   $.scopeIdle.classList.remove('hidden');
@@ -1040,12 +1021,13 @@ async function toggleMic() {
 // ── Init ──
 window.addEventListener('load', async () => {
   cacheDom();
+  initUI();
 
   $.textInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
   });
 
-  loadConfig();
+  ui.loadConfig({ 'gemini_live_key': 'gemini-api-key' });
   core.initWaveform(document.getElementById('waveform'));
 
   addLog('info', 'AILANG × Gemini Live — loading WASM streaming engine...');

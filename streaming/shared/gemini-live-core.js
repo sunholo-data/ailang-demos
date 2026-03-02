@@ -46,6 +46,7 @@ class GeminiLiveCore {
     // Connection state
     this._connections = {};
     this._nextConnId = 1;
+    this._connecting = false;
 
     // Session state
     this.sessionReady = false;
@@ -118,6 +119,7 @@ class GeminiLiveCore {
       // Register effect handlers
       this._registerStreamHandlers(repl);
       this._registerIOHandler(repl);
+      this._registerAIHandler(repl);
 
       // Load AILANG modules
       for (const mod of this.config.modules) {
@@ -183,6 +185,17 @@ class GeminiLiveCore {
   getActiveConnection() {
     return Object.values(this._connections).find(c => c.ws && c.ws.readyState === 1) || null;
   }
+
+  // Prevent overlapping connection attempts. Returns false if already connecting.
+  acquireConnectLock() {
+    if (this._connecting) return false;
+    this._connecting = true;
+    return true;
+  }
+
+  releaseConnectLock() { this._connecting = false; }
+
+  get isConnecting() { return this._connecting; }
 
   // ── Audio Pipeline ──
 
@@ -447,6 +460,9 @@ class GeminiLiveCore {
           };
 
           socket.onclose = (e) => {
+            const reason = e.reason || ('code ' + e.code);
+            console.warn('[ws] closed — ' + reason, e);
+            self.config.onLog('warn', 'WebSocket closed: ' + GeminiLiveCore.escapeHtml(reason));
             const conn = self._connections[connId];
             if (!conn) return;
             conn.eventQueue.push({ type: 'Closed', code: e.code, reason: e.reason || '' });
@@ -458,11 +474,13 @@ class GeminiLiveCore {
             self.config.onConnectionChange('disconnected');
             if (!settled) {
               settled = true;
-              resolve(AilangREPL.streamErr('ConnectionFailed', 'closed: ' + (e.reason || e.code)));
+              resolve(AilangREPL.streamErr('ConnectionFailed', 'closed: ' + reason));
             }
           };
 
-          socket.onerror = () => {
+          socket.onerror = (ev) => {
+            console.error('[ws] error', ev);
+            self.config.onLog('err', 'WebSocket error (check Network tab for details)');
             const conn = self._connections[connId];
             if (conn && !conn.done) {
               conn.eventQueue.push({ type: 'Closed', code: 1006, reason: 'WebSocket error' });
@@ -733,6 +751,59 @@ class GeminiLiveCore {
         }
       }
     });
+  }
+
+  // ── AI Effect Handler ──
+  // Bridges AILANG std/ai operations (callJsonSimple, callJson, call)
+  // to browser Gemini REST API. Supports multimodal (PDF, images).
+
+  _registerAIHandler(repl) {
+    const self = this;
+    const result = repl.setAIHandler(async (input) => {
+      const k = self.config.localStorageKeys?.apiKey;
+      const apiKey = k ? localStorage.getItem(k) : '';
+      console.log('[AI Handler] called, apiKey present:', !!apiKey, 'input length:', input?.length);
+      if (!apiKey) throw new Error('No API key configured — set API key in settings');
+
+      let parts, genConfig;
+      try {
+        const req = JSON.parse(input);
+        if (req.mode === 'multimodal' && req.data) {
+          console.log('[AI Handler] multimodal request, mimeType:', req.mimeType, 'data length:', req.data?.length);
+          parts = [
+            { text: req.prompt || '' },
+            { inlineData: { mimeType: req.mimeType, data: req.data } }
+          ];
+          genConfig = { responseMimeType: 'application/json', temperature: 0.1 };
+        }
+      } catch { /* not JSON — text mode below */ }
+
+      if (!parts) {
+        parts = [{ text: input }];
+        genConfig = { temperature: 0.3 };
+      }
+
+      const resp = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: genConfig
+          })
+        }
+      );
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error('Gemini API ' + resp.status + ': ' + body.substring(0, 200));
+      }
+      const data = await resp.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.log('[AI Handler] response length:', text.length);
+      return text;
+    });
+    console.log('[AI Handler] registration:', result);
   }
 
   // ── Fallback Event Processing ──

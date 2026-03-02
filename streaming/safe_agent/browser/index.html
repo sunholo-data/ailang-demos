@@ -1527,6 +1527,7 @@
 <script src="../../wasm/wasm_exec.js"></script>
 <script src="../../wasm/ailang-repl.js"></script>
 <script src="../shared/gemini-live-core.js"></script>
+<script src="../shared/streaming-ui.js"></script>
 
 <script>
 // ================================================================
@@ -1572,8 +1573,7 @@ const budgets = {
 };
 
 const logEntries = [];
-let currentAgentMsg = null;
-let currentUserMsg = null;
+let ui = null;
 
 // ── DOM Cache ──
 const $ = {};
@@ -1617,6 +1617,7 @@ const core = new GeminiLiveCore({
   micRate: 16000,
   fftSize: 2048,
   canvasHeight: 64,
+  localStorageKeys: { apiKey: 'gemini-api-key', voice: 'gemini-live-voice' },
   onEvent: handleAILANGEvent,
   onStatsUpdate: function(stats) {
     if (core.lastPcmChunk) {
@@ -1631,59 +1632,24 @@ const core = new GeminiLiveCore({
     }
   },
   onWasmReady: () => {
-    populateVoices();
+    if (ui) ui.populateVoices(core, 'Orus');
     $.btnTestSafety.disabled = false;
-    $.btnSend.disabled = false;
+    if (ui) ui.enableInput(true);
     $.btnMic.disabled = false;
-    $.inputField.disabled = false;
     $.inputField.placeholder = 'Ask the safe agent...';
   },
   onWasmError: () => {},
   onConnectionChange: (state) => {
-    if (state === 'connected') setWsStatus('connected');
-    else setWsStatus('disconnected');
+    if (ui) ui.setConnectionStatus(state);
   },
   onFallbackActivated: () => {},
   onFallbackDeactivated: () => {},
   onStatsUpdate: () => {}
 });
 
-// ── Config ──
-function toggleConfig() {
-  $.configPanel.classList.toggle('open');
-}
-
-function saveConfig() {
-  const key = $.apiKeyInput.value.trim();
-  const voice = $.voiceSelect.value;
-  if (key) localStorage.setItem('gemini-api-key', key);
-  if (voice) localStorage.setItem('ailang_safe_agent_voice', voice);
-}
-
-function loadConfig() {
-  const savedKey = localStorage.getItem('gemini-api-key');
-  const savedVoice = localStorage.getItem('ailang_safe_agent_voice');
-  if (savedKey) $.apiKeyInput.value = savedKey;
-  if (savedVoice) $.voiceSelect.value = savedVoice;
-}
-
-function populateVoices() {
-  if (!core.wasmReady) return;
-  try {
-    const raw = core.callAILANG('voiceCatalog');
-    if (!raw) return;
-    const voices = JSON.parse(raw);
-    $.voiceSelect.innerHTML = '';
-    voices.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = v.name + ' (' + v.desc + ')';
-      $.voiceSelect.appendChild(opt);
-    });
-    const saved = localStorage.getItem('ailang_safe_agent_voice');
-    if (saved) $.voiceSelect.value = saved;
-  } catch (e) { /* voice catalog optional */ }
-}
+// ── Config (delegated to StreamingUI) ──
+function toggleConfig() { ui.toggleConfig(); }
+function saveConfig() { ui.saveConfig(); }
 
 // ── Tool Declarations (sent to Gemini) ──
 function getToolDeclarations() {
@@ -1981,34 +1947,29 @@ function handleAILANGEvent(event) {
   switch (event.type) {
     case 'setup':
       core.sessionReady = true;
-      $.btnSend.disabled = false;
-      $.inputField.disabled = false;
-      addSystemMessage('Setup complete. All tools verified and ready.');
-      setStreamIndicator(false);
+      ui.enableInput(true);
+      ui.addSystemMessage('Setup complete. All tools verified and ready.');
+      ui.setStreamIndicator(false);
       break;
 
     case 'sent':
-      setStreamIndicator(true);
+      ui.setStreamIndicator(true);
       break;
 
     case 'turnComplete':
-      currentUserMsg = null;
-      finishAgentMessage();
-      setStreamIndicator(false);
-      $.btnSend.disabled = false;
-      $.inputField.disabled = false;
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
+      ui.setStreamIndicator(false);
+      ui.enableInput(true);
       break;
 
     case 'modelTurn':
-      currentUserMsg = null;
+      ui.resetUserTranscript();
       if (event.parts && Array.isArray(event.parts)) {
         event.parts.forEach(part => {
           if (part.text) {
-            if (!currentAgentMsg) {
-              currentAgentMsg = createAgentMessage();
-              setStreamIndicator(true);
-            }
-            appendToAgent(currentAgentMsg, part.text);
+            if (!ui.currentAgentMessage) ui.setStreamIndicator(true);
+            ui.appendAgentText(part.text);
           }
           if (part.inlineData && part.inlineData.data) {
             core.handleAudioFrame(part.inlineData.data);
@@ -2019,41 +1980,36 @@ function handleAILANGEvent(event) {
 
     case 'inputTranscript':
       if (event.text) {
-        if (!currentUserMsg) {
-          currentUserMsg = addUserMessage(event.text);
-        } else {
-          var body = currentUserMsg.querySelector('.msg-text');
-          if (body) body.textContent += event.text;
-        }
-        $.messages.scrollTop = $.messages.scrollHeight;
+        ui.appendUserTranscript(event.text);
       }
       break;
 
     case 'outputTranscript':
       if (event.text) {
-        if (!currentAgentMsg) currentAgentMsg = createAgentMessage();
-        appendToAgent(currentAgentMsg, event.text.replace(/\n+/g, ' '));
+        ui.appendAgentText(event.text.replace(/\n+/g, ' '));
       }
       break;
 
     case 'toolCall':
-      currentUserMsg = null;
-      finishAgentMessage();
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
       if (event.calls) handleToolCallFromGemini({ functionCalls: event.calls });
       break;
 
     case 'opened':
-      setWsStatus('connected');
+      ui.setConnectionStatus('connected');
       break;
 
     case 'closed':
       core.sessionReady = false;
-      setWsStatus('disconnected');
-      setStreamIndicator(false);
+      ui.handleDisconnect('Connection closed' +
+        (event.reason ? ': ' + event.reason : '') +
+        (event.code ? ' (code ' + event.code + ')' : '') +
+        '. Click mic or send a message to reconnect.');
       break;
 
     case 'error':
-      addErrorMessage(event.text || 'Unknown error');
+      ui.addErrorMessage(event.text || 'Unknown error');
       break;
 
     case 'log':
@@ -2065,28 +2021,23 @@ function handleAILANGEvent(event) {
 // Connection
 // ================================================================
 
-let _connecting = false;
-
 async function connectGemini(initialPrompt) {
-  // Guard against overlapping connection attempts (mic + text at the same time)
-  if (_connecting) return;
-  _connecting = true;
+  if (!core.acquireConnectLock()) return;
 
-  const key = $.apiKeyInput.value.trim() || localStorage.getItem('gemini-api-key');
-  if (!key) { _connecting = false; toggleConfig(); addErrorMessage('Set your Gemini API key first.'); return; }
+  const key = ui.getApiKey();
+  if (!key) { core.releaseConnectLock(); toggleConfig(); ui.addErrorMessage('Set your Gemini API key first.'); return; }
   saveConfig();
 
   if (!core.wasmReady) {
-    _connecting = false;
-    addErrorMessage('AILANG WASM not loaded');
+    core.releaseConnectLock();
+    ui.addErrorMessage('AILANG WASM not loaded');
     return;
   }
 
   core.sessionReady = false;
   core.resetStats();
-  $.btnSend.disabled = true;
-  $.inputField.disabled = true;
-  setWsStatus('connecting');
+  ui.disableInput();
+  ui.setConnectionStatus('connecting');
   core.deactivateFallbackMode();
 
   await core.initAudio();
@@ -2095,28 +2046,28 @@ async function connectGemini(initialPrompt) {
   const toolsJson = JSON.stringify(getToolDeclarations());
   const prompt = initialPrompt || '';
 
-  addSystemMessage('Starting AILANG session with tools (std/stream effects)...');
+  ui.addSystemMessage('Starting AILANG session with tools (std/stream effects)...');
 
   try {
     const result = await core.wasmEngine.callAsync(
       STREAM_MODULE, 'startSessionWithTools',
       key, voice, SYSTEM_INSTRUCTION, prompt, toolsJson
     );
-    if (!result.success) addErrorMessage('Session error: ' + (result.error || 'unknown'));
+    if (!result.success) ui.addErrorMessage('Session error: ' + (result.error || 'unknown'));
   } catch (e) {
-    addErrorMessage('Session failed: ' + e.message);
+    ui.addErrorMessage('Session failed: ' + e.message);
   }
 
-  _connecting = false;
+  core.releaseConnectLock();
   core.sessionReady = false;
-  setWsStatus('disconnected');
+  ui.setConnectionStatus('disconnected');
 }
 // ── Send Text ──
 function sendMessage() {
   const text = $.inputField.value.trim();
   if (!text) return;
 
-  addUserMessage(text);
+  ui.addUserMessage(text);
   $.inputField.value = '';
   $.inputField.style.height = 'auto';
 
@@ -2137,9 +2088,8 @@ function sendMessage() {
   core.resetStats();
   core.markPromptSent();
   core.clearAudioQueue();
-  $.btnSend.disabled = true;
-  $.inputField.disabled = true;
-  setStreamIndicator(true);
+  ui.disableInput();
+  ui.setStreamIndicator(true);
 }
 
 // ── Microphone ──
@@ -2181,110 +2131,11 @@ function autoResize(el) {
 // UI Helpers
 // ================================================================
 
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function setWsStatus(state) {
-  $.wsStatus.classList.remove('connected');
-  if (state === 'connected') {
-    $.wsStatus.classList.add('connected');
-    $.wsLabel.textContent = 'Connected';
-  } else if (state === 'connecting') {
-    $.wsLabel.textContent = 'Connecting...';
-  } else {
-    $.wsLabel.textContent = 'Disconnected';
-  }
-}
-
-function setStreamIndicator(active) {
-  $.streamDot.classList.toggle('active', active);
-  $.streamLabel.textContent = active ? 'streaming' : 'idle';
-}
-
-function removeWelcome() {
-  if ($.welcome && $.welcome.parentNode) $.welcome.remove();
-}
-
-function addUserMessage(text) {
-  removeWelcome();
-  finishAgentMessage();
-  currentUserMsg = null;
-  const div = document.createElement('div');
-  div.className = 'msg msg-user';
-  const label = document.createElement('div');
-  label.className = 'msg-label';
-  label.textContent = 'You';
-  const body = document.createElement('div');
-  body.className = 'msg-text';
-  body.textContent = text.replace(/\n+/g, ' ').trim();
-  div.appendChild(label);
-  div.appendChild(body);
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-  return div;
-}
-
-function createAgentMessage() {
-  removeWelcome();
-  const div = document.createElement('div');
-  div.className = 'msg msg-agent streaming';
-  div.innerHTML = '<div class="msg-label"><span class="arrow">&#9656;</span> Agent</div><div class="msg-text"><span class="cursor-blink"></span></div>';
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-  return div;
-}
-
-function appendToAgent(el, text) {
-  if (!el) return;
-  const textEl = el.querySelector('.msg-text');
-  const cursor = textEl.querySelector('.cursor-blink');
-  if (cursor) cursor.insertAdjacentText('beforebegin', text);
-  else textEl.textContent += text;
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
-
-// Lightweight markdown → HTML (inline only, no external lib)
-function renderMarkdown(raw) {
-  let s = raw;
-  // Escape HTML first
-  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // Headings: ## at line start
-  s = s.replace(/^### (.+)$/gm, '<strong style="font-size:1.05em">$1</strong>');
-  s = s.replace(/^## (.+)$/gm, '<strong style="font-size:1.1em">$1</strong>');
-  s = s.replace(/^# (.+)$/gm, '<strong style="font-size:1.15em">$1</strong>');
-  // Bold + italic
-  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // Inline code
-  s = s.replace(/`([^`]+)`/g, '<code style="background:var(--bg-surface);padding:1px 4px;border-radius:3px">$1</code>');
-  // Bullet lists
-  s = s.replace(/^[-*] (.+)$/gm, '&bull; $1');
-  // Line breaks
-  s = s.replace(/\n/g, '<br>');
-  return s;
-}
-
-function finishAgentMessage() {
-  if (currentAgentMsg) {
-    currentAgentMsg.classList.remove('streaming');
-    const cursor = currentAgentMsg.querySelector('.cursor-blink');
-    if (cursor) cursor.remove();
-    // Render markdown in the completed message
-    const textEl = currentAgentMsg.querySelector('.msg-text');
-    if (textEl) {
-      const raw = textEl.textContent;
-      textEl.innerHTML = renderMarkdown(raw);
-    }
-    currentAgentMsg = null;
-  }
-}
+// escapeHtml used by tool cards (delegate to StreamingUI static)
+function escapeHtml(s) { return StreamingUI.escapeHtml(s); }
 
 function addToolCard(name, args, result, rejected, checks) {
-  removeWelcome();
+  ui.removeWelcome();
   const div = document.createElement('div');
   div.className = 'msg tool-card ' + (rejected ? 'fail' : 'pass');
 
@@ -2316,24 +2167,6 @@ function addToolCard(name, args, result, rejected, checks) {
         '<div class="tc-section-content ' + (rejected ? 'rejected' : 'result') + '">' + escapeHtml(result) + '</div>' +
       '</div>' +
     '</div>';
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
-
-function addErrorMessage(text) {
-  removeWelcome();
-  const div = document.createElement('div');
-  div.className = 'msg msg-error';
-  div.textContent = text;
-  $.messages.appendChild(div);
-  $.messages.scrollTop = $.messages.scrollHeight;
-}
-
-function addSystemMessage(text) {
-  removeWelcome();
-  const div = document.createElement('div');
-  div.className = 'msg msg-system';
-  div.textContent = text;
   $.messages.appendChild(div);
   $.messages.scrollTop = $.messages.scrollHeight;
 }
@@ -2453,14 +2286,14 @@ let testRunning = false;
 
 async function runSafetyTest() {
   if (testRunning) return;
-  if (!core.wasmReady) { addErrorMessage('AILANG WASM not loaded'); return; }
+  if (!core.wasmReady) { ui.addErrorMessage('AILANG WASM not loaded'); return; }
   testRunning = true;
 
   $.btnTestSafety.classList.add('active');
   $.btnTestSafety.textContent = 'Running...';
 
-  removeWelcome();
-  addSystemMessage('Running business contract safety test suite (12 scenarios via AILANG WASM)...');
+  ui.removeWelcome();
+  ui.addSystemMessage('Running business contract safety test suite (12 scenarios via AILANG WASM)...');
 
   const testCases = [
     // Invoice: 4-deep chain
@@ -2483,7 +2316,7 @@ async function runSafetyTest() {
   ];
 
   for (const tc of testCases) {
-    addSystemMessage('Test: ' + tc.label);
+    ui.addSystemMessage('Test: ' + tc.label);
     await sleep(tc.delay);
     dispatchToolViaWASM(tc.call.id, tc.call.name, tc.call.args);
     await sleep(200);
@@ -2491,7 +2324,7 @@ async function runSafetyTest() {
 
   await sleep(300);
   const allowed = safety.total - safety.failed;
-  addSystemMessage(
+  ui.addSystemMessage(
     'Safety test complete: ' + safety.total + '/' + safety.total + ' contracts enforced via AILANG WASM. ' +
     allowed + ' allowed, ' + safety.failed + ' dangerous calls blocked.'
   );
@@ -2511,7 +2344,25 @@ document.addEventListener('keydown', function(e) {
 // ── Init ──
 document.addEventListener('DOMContentLoaded', function() {
   cacheDom();
-  loadConfig();
+  ui = new StreamingUI({
+    elements: {
+      configPanel: $.configPanel,
+      apiKeyInput: $.apiKeyInput,
+      voiceSelect: $.voiceSelect,
+      chatContainer: $.messages,
+      textInput: $.inputField,
+      sendButton: $.btnSend,
+      statusBadge: $.wsStatus,
+      statusLabel: $.wsLabel,
+      streamIndicator: $.streamDot,
+      streamLabel: $.streamLabel,
+    },
+    localStorage: { apiKey: 'gemini-api-key', voice: 'ailang_safe_agent_voice' },
+    agentName: 'Agent',
+    cssClasses: { cursor: 'cursor-blink', connectedBadge: 'connected' },
+    welcomeElement: $.welcome,
+  });
+  ui.loadConfig();
   updateRing();
   updateBudgets();
   core.initWaveform(document.getElementById('waveform'));

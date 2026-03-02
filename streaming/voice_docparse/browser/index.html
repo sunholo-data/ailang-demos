@@ -203,7 +203,7 @@
   .chat-messages::-webkit-scrollbar { width: 5px; }
   .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  .chat-msg { max-width: 90%; animation: fadeIn 0.2s ease-out; }
+  .chat-msg { max-width: 90%; flex-shrink: 0; animation: fadeIn 0.2s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } }
 
   .chat-user {
@@ -226,6 +226,8 @@
     padding-left: 10px;
     border-left: 2px solid var(--border);
   }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  .chat-user .agent-text { padding: 0; border: none; }
 
   .chat-tool {
     align-self: flex-start;
@@ -235,6 +237,43 @@
     padding: 10px 14px;
     width: 85%;
   }
+
+  /* Document preview card in chat */
+  .chat-doc-preview {
+    align-self: flex-start;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 92%;
+    overflow: hidden;
+  }
+  .doc-preview-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11px;
+  }
+  .doc-preview-header .dp-icon { font-size: 16px; }
+  .doc-preview-header .dp-name { color: var(--accent); font-weight: 500; flex: 1; }
+  .doc-preview-header .dp-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; background: var(--accent-dim); color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .doc-preview-stats {
+    display: flex; gap: 12px; padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  }
+  .doc-preview-stats .dp-stat { display: flex; gap: 4px; align-items: center; }
+  .doc-preview-stats .dp-stat-val { color: var(--text); font-weight: 600; }
+  .doc-preview-body {
+    max-height: 300px; overflow-y: auto; padding: 12px 14px;
+  }
+  .doc-preview-body::-webkit-scrollbar { width: 3px; }
+  .doc-preview-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .doc-preview-embed { padding: 0; }
+  .doc-preview-embed object { border: none; }
+  .doc-preview-embed img { max-width: 100%; display: block; border-radius: 0 0 8px 8px; }
 
   .tool-header {
     display: flex;
@@ -367,6 +406,14 @@
   }
   .upload-zone:hover { border-color: var(--accent-dim); background: var(--bg-raised); }
   .upload-zone.has-file { border-color: var(--green); border-style: solid; }
+  .upload-zone.extracting {
+    border-color: var(--orange); border-style: solid;
+    animation: pulse-border 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%, 100% { border-color: var(--orange); box-shadow: 0 0 0 0 rgba(224,133,58,0.2); }
+    50% { border-color: var(--accent); box-shadow: 0 0 12px 2px rgba(224,133,58,0.15); }
+  }
 
   .upload-icon { font-size: 28px; color: var(--text-dim); margin-bottom: 8px; }
   .upload-text { font-size: 12px; color: var(--text-muted); }
@@ -400,6 +447,59 @@
   }
   .stat-label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
   .stat-val { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); margin-top: 2px; }
+
+  /* Extracted blocks (dark theme) */
+  .blocks-list .blk { margin-bottom: 6px; }
+  .blk-heading { color: var(--text); margin-top: 12px; font-weight: 600; }
+  h1.blk-heading { font-size: 1.15rem; }
+  h2.blk-heading { font-size: 1.05rem; }
+  h3.blk-heading { font-size: 0.95rem; }
+  h4.blk-heading, h5.blk-heading, h6.blk-heading { font-size: 0.85rem; }
+
+  .blk-text { font-size: 0.82rem; line-height: 1.6; color: var(--text-muted); }
+  .blk-style { font-family: var(--mono); font-size: 0.6rem; color: var(--text-dim); background: var(--bg-deep); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+
+  .blk-table { overflow-x: auto; margin: 8px 0; }
+  .blk-table table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+  .blk-table th {
+    padding: 6px 10px; text-align: left; font-family: var(--mono); font-size: 0.65rem;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+    color: var(--text-dim); background: var(--bg-deep); border-bottom: 2px solid var(--border);
+  }
+  .blk-table td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted);
+  }
+  .blk-table tbody tr:hover { background: var(--bg-hover); }
+
+  .blk-list { margin: 6px 0 6px 18px; font-size: 0.82rem; color: var(--text-muted); }
+  .blk-list li { margin: 3px 0; }
+
+  .blk-image, .blk-audio, .blk-video {
+    padding: 8px 12px; background: var(--bg-deep); border-radius: 4px;
+    border: 1px solid var(--border); font-size: 0.78rem;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .blk-badge {
+    font-family: var(--mono); font-size: 0.55rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px; background: var(--accent-dim);
+    color: var(--accent); letter-spacing: 0.4px; flex-shrink: 0;
+  }
+  .blk-image img { max-width: 100%; margin-top: 6px; border-radius: 4px; }
+
+  .blk-section { border-left: 2px solid var(--accent-dim); padding-left: 12px; margin: 10px 0; }
+  .blk-section .section-lbl {
+    font-family: var(--mono); font-size: 0.6rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent); margin-bottom: 6px;
+  }
+
+  .blk-change { display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-left: 3px solid; margin: 3px 0; font-size: 0.82rem; border-radius: 0 4px 4px 0; }
+  .blk-change.ch-insert { background: rgba(61,214,140,0.08); border-left-color: var(--green); }
+  .blk-change.ch-delete { background: rgba(224,82,82,0.08); border-left-color: var(--red); }
+  .blk-change.ch-move-to { background: rgba(74,158,255,0.08); border-left-color: var(--accent); }
+  .blk-change.ch-move-from { background: rgba(224,133,58,0.08); border-left-color: var(--orange); }
+  .ch-badge { font-family: var(--mono); font-size: 0.55rem; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--bg-surface); color: var(--text-dim); }
+  .ch-author { font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); }
 
   /* ── Tool Activity Log ── */
   .tool-log {
@@ -467,6 +567,7 @@
 <script src="../../wasm/wasm_exec.js"></script>
 <script src="../../wasm/ailang-repl.js"></script>
 <script src="../shared/gemini-live-core.js"></script>
+<script src="../shared/streaming-ui.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
@@ -532,10 +633,10 @@
     <div class="doc-upload">
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor=''" ondrop="handleDrop(event)">
         <div class="upload-icon">↑</div>
-        <div class="upload-text">Drop DOCX, PPTX, or XLSX</div>
+        <div class="upload-text">Drop DOCX, PPTX, XLSX, PDF, or images</div>
         <div class="upload-hint">or click to browse</div>
       </div>
-      <input type="file" id="fileInput" accept=".docx,.pptx,.xlsx,.pdf" style="display:none" onchange="handleFile(this.files[0])">
+      <input type="file" id="fileInput" accept=".docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" style="display:none" onchange="handleFile(this.files[0])">
       <div class="file-info" id="fileInfo">
         <div class="file-name" id="fileName"></div>
         <div class="file-meta" id="fileMeta"></div>
@@ -608,12 +709,13 @@ const core = new GeminiLiveCore({
     { name: 'docparse/services/output_formatter',   path: '../../ailang/docparse/services/output_formatter.ail' },
     { name: DOCPARSE_MODULE,                        path: '../../ailang/docparse/services/docparse_browser.ail' },
   ],
-  stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io', 'std/stream', 'std/xml', 'std/math'],
+  stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io', 'std/stream', 'std/xml', 'std/math', 'std/ai'],
   playbackRate: 48000,
   sourceRate: 24000,
   micRate: 16000,
   fftSize: 2048,
   canvasHeight: 80,
+  localStorageKeys: { apiKey: 'gemini-api-key', voice: 'gemini-live-voice' },
   onEvent: handleAILANGEvent,
   onLog: (type, html) => addLog(type, html),
   onStatsUpdate: (stats) => {
@@ -625,8 +727,7 @@ const core = new GeminiLiveCore({
     }
   },
   onConnectionChange: (state) => {
-    if (state === 'connected') $.wssBadge.classList.add('live');
-    else $.wssBadge.classList.remove('live');
+    if (ui) ui.setConnectionStatus(state);
   },
   onFallbackActivated: () => {
     $.fallbackBanner.classList.add('active');
@@ -636,21 +737,39 @@ const core = new GeminiLiveCore({
     $.fallbackBanner.classList.remove('active');
     $.fallbackBadge.classList.remove('active');
   },
-  onWasmReady: () => populateVoicesFromAILANG(),
+  onWasmReady: () => { if (ui) ui.populateVoices(core, 'Orus'); },
   onWasmError: () => {},
 });
 
 // ── Config ──
-const SYSTEM_INSTRUCTION = 'You are a document analyst voice assistant powered by AILANG. ' +
-  'When the user asks about a document, use the available tools to parse and analyze it. ' +
-  'Use countContent first to understand structure, then other tools as needed. ' +
+const BASE_SYSTEM_INSTRUCTION = 'You are a document analyst voice assistant powered by AILANG. ' +
   'Speak with a British English accent. Keep responses conversational and concise. ' +
-  'If no document is uploaded, ask the user to upload one first.';
+  'If a document has been provided in the context below, you already have its full content — ' +
+  'answer questions directly without needing to call tools. ' +
+  'You also have tools available for structured queries like extracting tables, searching, or counting content. ' +
+  'If no document is in the context, ask the user to upload one first.';
+
+function buildSystemInstruction() {
+  if (!currentFile) return BASE_SYSTEM_INSTRUCTION;
+  if (_extracting) {
+    return BASE_SYSTEM_INSTRUCTION +
+      '\n\nNOTE: The user has uploaded "' + currentFile.name + '" but it is still being processed. ' +
+      'Tell the user the document is being analyzed and you will have the content shortly. ' +
+      'Do NOT attempt to use tools on the document yet — wait until the content arrives.';
+  }
+  if (!ensureBlocksParsed()) return BASE_SYSTEM_INSTRUCTION;
+  let blocks;
+  try { blocks = JSON.parse(docBlocks); } catch { return BASE_SYSTEM_INSTRUCTION; }
+  let docText = blocksToText(blocks);
+  if (docText.length > 12000) docText = docText.substring(0, 12000) + '\n\n[Document truncated — use searchDocument tool for content beyond this point]';
+  return BASE_SYSTEM_INSTRUCTION + '\n\n--- DOCUMENT: ' + currentFile.name + ' ---\n\n' + docText;
+}
 
 // ── Document state ──
 let currentFile = null;
 let docXml = {};
 let docBlocks = null;
+let _embeddedMedia = [];
 
 // ── Logging ──
 function addLog(status, text) {
@@ -666,44 +785,14 @@ function addLog(status, text) {
   $.toolLog.scrollTop = $.toolLog.scrollHeight;
 }
 
-// ── Config management ──
-function toggleConfig() { $.configPanel.classList.toggle('open'); }
-
-function loadConfig() {
-  if (!localStorage.getItem('gemini-api-key') && localStorage.getItem('gemini_key'))
-    localStorage.setItem('gemini-api-key', localStorage.getItem('gemini_key'));
-  const k = localStorage.getItem('gemini-api-key');
-  if (k) $.apiKey.value = k;
-  const v = localStorage.getItem('gemini-live-voice');
-  if (v) $.voiceSelect.value = v;
-}
-
-function saveConfig() {
-  const key = $.apiKey.value.trim();
-  if (key) localStorage.setItem('gemini-api-key', key);
-  localStorage.setItem('gemini-live-voice', $.voiceSelect.value);
-}
-
-function populateVoicesFromAILANG() {
-  if (!core.wasmReady) return;
-  try {
-    const raw = core.callAILANG('voiceCatalog');
-    if (!raw) return;
-    const voices = JSON.parse(raw);
-    const current = $.voiceSelect.value;
-    $.voiceSelect.innerHTML = '';
-    voices.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = `${v.name} (${v.desc})`;
-      $.voiceSelect.appendChild(opt);
-    });
-    const saved = localStorage.getItem('gemini-live-voice');
-    $.voiceSelect.value = saved || current || 'Sulafat';
-  } catch (e) { console.error('Voice catalog error:', e); }
-}
+// ── Config (delegated to StreamingUI) ──
+let ui = null;
+function toggleConfig() { ui.toggleConfig(); }
+function saveConfig() { ui.saveConfig(); }
 
 // ── File handling ──
+let _extracting = false;
+
 function handleDrop(e) {
   e.preventDefault();
   e.currentTarget.style.borderColor = '';
@@ -713,6 +802,10 @@ function handleDrop(e) {
 async function handleFile(file) {
   if (!file) return;
   currentFile = file;
+  docBlocks = null;
+  _lastFileBuffer = null;
+  _embeddedMedia = [];
+  resetStats();
   const zone = document.getElementById('uploadZone');
   zone.classList.add('has-file');
   zone.querySelector('.upload-icon').textContent = '✓';
@@ -722,13 +815,91 @@ async function handleFile(file) {
   document.getElementById('fileName').textContent = file.name;
   document.getElementById('fileMeta').textContent = `${GeminiLiveCore.fmtBytes(file.size)} · ${file.type || 'unknown'}`;
   addLog('pending', `File loaded: <span class="val">${GeminiLiveCore.escapeHtml(file.name)}</span>`);
+
+  // AI extraction needed for PDF and images
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf' || isImageExt(ext)) {
+    _lastFileBuffer = await file.arrayBuffer();
+    _extracting = true;
+    zone.classList.add('extracting');
+    zone.querySelector('.upload-hint').textContent = isImageExt(ext) ? 'Analyzing with AI...' : 'Extracting with AI...';
+    ui.addSystemMessage('Processing "' + file.name + '" with AI — this may take a moment...');
+  }
+
   await extractDocumentXml(file);
+
+  // Extraction complete
+  const wasExtracting = _extracting;
+  _extracting = false;
+  zone.classList.remove('extracting');
+  if (ensureBlocksParsed()) {
+    zone.querySelector('.upload-hint').textContent = GeminiLiveCore.fmtBytes(file.size) + ' · ready';
+    if (wasExtracting) {
+      ui.addSystemMessage('Document "' + file.name + '" processed and ready');
+    }
+    updateDocumentPreview();
+  } else {
+    zone.querySelector('.upload-hint').textContent = GeminiLiveCore.fmtBytes(file.size);
+  }
+
+  // If a live session is active, send parsed document content into the conversation
+  injectDocumentIntoSession(file.name);
+}
+
+// Inject parsed document content into an active Gemini Live session
+function injectDocumentIntoSession(filename) {
+  const conn = core.getActiveConnection();
+  if (!conn || !core.sessionReady || !ensureBlocksParsed()) return;
+
+  let blocks;
+  try { blocks = JSON.parse(docBlocks); } catch { return; }
+  let docText = blocksToText(blocks);
+  if (docText.length > 12000) docText = docText.substring(0, 12000) + '\n\n[Document truncated]';
+
+  const ext = filename.split('.').pop().toLowerCase();
+
+  // For images, send inline multimodal data so the model can see the image
+  if (isImageExt(ext) && _lastFileBuffer) {
+    const mime = imageMime(ext);
+    const b64 = arrayBufferToBase64(_lastFileBuffer);
+    const textPart = 'The user uploaded an image "' + filename + '". Here is the image and its AI-generated description:\n\n' + docText +
+      '\n\nDescribe what you see in the image and acknowledge that you have it.';
+    conn.ws.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: 'user', parts: [
+          { text: textPart },
+          { inlineData: { mimeType: mime, data: b64 } }
+        ]}],
+        turnComplete: true
+      }
+    }));
+  } else {
+    const contextMsg = 'The user\'s document "' + filename + '" has been processed. ' +
+      'Here is its full content:\n\n' + docText + '\n\n' +
+      'Acknowledge that you now have the document and briefly summarize what it contains.';
+    const msgJson = core.callAILANG('buildTextMessage', contextMsg);
+    if (msgJson) conn.ws.send(msgJson);
+    else conn.ws.send(JSON.stringify({
+      clientContent: { turns: [{ role: 'user', parts: [{ text: contextMsg }] }], turnComplete: true }
+    }));
+  }
+
+  ui.addSystemMessage('Document "' + filename + '" parsed and sent to voice session');
+  addLog('ok', 'Document content injected into live session');
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 async function extractDocumentXml(file) {
   docXml = {};
   docBlocks = null;
-  const buffer = await file.arrayBuffer();
+  const buffer = _lastFileBuffer || await file.arrayBuffer();
+  if (!_lastFileBuffer) _lastFileBuffer = buffer;
   const ext = file.name.split('.').pop().toLowerCase();
   if (['docx', 'pptx', 'xlsx'].includes(ext)) {
     addLog('pending', 'Extracting ZIP contents...');
@@ -739,6 +910,96 @@ async function extractDocumentXml(file) {
       }
     }
     addLog('ok', `Extracted <span class="val">${Object.keys(docXml).length}</span> XML entries`);
+
+    // Extract embedded images from Office media folders
+    const mediaPrefix = ext === 'docx' ? 'word/media/' : ext === 'pptx' ? 'ppt/media/' : 'xl/media/';
+    const mediaEntries = Object.keys(zip.files).filter(e => e.startsWith(mediaPrefix) && !zip.files[e].dir);
+    if (mediaEntries.length > 0) {
+      _embeddedMedia = [];
+      for (const entry of mediaEntries) {
+        try {
+          const data = await zip.files[entry].async('base64');
+          const fname = entry.split('/').pop();
+          const mime = imageMime(fname.split('.').pop().toLowerCase());
+          _embeddedMedia.push({ dataUrl: 'data:' + mime + ';base64,' + data, mime, filename: fname, base64: data });
+        } catch {}
+      }
+      addLog('ok', `Extracted <span class="val">${_embeddedMedia.length}</span> embedded media files`);
+
+      // Describe each embedded image via AILANG AI (same as CLI's describeImages)
+      const describable = _embeddedMedia.filter(m => m.mime.startsWith('image/') && !m.mime.includes('emf') && !m.mime.includes('wmf'));
+      if (describable.length > 0 && core.wasmReady) {
+        _extracting = true;
+        const zone = document.getElementById('uploadZone');
+        zone.classList.add('extracting');
+        zone.querySelector('.upload-hint').textContent = 'Describing ' + describable.length + ' image(s) with AI...';
+        addLog('pending', `Describing <span class="val">${describable.length}</span> embedded images via AILANG AI...`);
+        for (let i = 0; i < describable.length; i++) {
+          const m = describable[i];
+          try {
+            const result = await core.wasmEngine.callAsync(DOCPARSE_MODULE, 'describeImageBase64', m.base64, m.mime);
+            if (result.success && result.result) {
+              let desc = result.result;
+              if (desc.startsWith('"') && desc.endsWith('"')) {
+                try { desc = JSON.parse(desc); } catch {}
+              }
+              m.description = desc;
+              addLog('ok', `Image ${i + 1}/${describable.length}: ${GeminiLiveCore.escapeHtml(desc.substring(0, 80))}${desc.length > 80 ? '...' : ''}`);
+            }
+          } catch (e) {
+            addLog('err', `Image ${i + 1} description failed: ${GeminiLiveCore.escapeHtml(e.message)}`);
+          }
+        }
+        addLog('ok', `Described <span class="val">${describable.filter(m => m.description).length}/${describable.length}</span> images`);
+      }
+    }
+  } else if (ext === 'pdf') {
+    addLog('pending', 'Sending PDF to Gemini for extraction via AILANG...');
+    const base64 = arrayBufferToBase64(buffer);
+    try {
+      const result = await core.wasmEngine.callAsync(DOCPARSE_MODULE, 'parsePdfFromBase64', base64, file.name);
+      if (result.success && result.result) {
+        docBlocks = result.result;
+        if (docBlocks.startsWith('"') && docBlocks.endsWith('"')) {
+          try { docBlocks = JSON.parse(docBlocks); } catch {}
+        }
+        let count = 0;
+        try { count = JSON.parse(docBlocks).length; } catch {}
+        addLog('ok', `PDF extracted via AILANG AI — <span class="val">${count}</span> blocks`);
+      } else {
+        addLog('err', 'PDF extraction failed: ' + GeminiLiveCore.escapeHtml(result.error || 'unknown'));
+      }
+    } catch (e) {
+      addLog('err', 'PDF extraction error: ' + GeminiLiveCore.escapeHtml(e.message));
+    }
+  } else if (isImageExt(ext)) {
+    // Image upload — send to AI for description via AILANG
+    addLog('pending', 'Sending image to Gemini for analysis via AILANG...');
+    const mime = imageMime(ext);
+    const base64 = arrayBufferToBase64(buffer);
+    const dataUrl = 'data:' + mime + ';base64,' + base64;
+    try {
+      const result = await core.wasmEngine.callAsync(DOCPARSE_MODULE, 'parseFileFromBase64', base64, mime, file.name);
+      if (result.success && result.result) {
+        let raw = result.result;
+        if (raw.startsWith('"') && raw.endsWith('"')) {
+          try { raw = JSON.parse(raw); } catch {}
+        }
+        // Prepend image block with dataUrl, then AI-extracted text blocks
+        let aiBlocks = [];
+        try { aiBlocks = JSON.parse(raw); } catch {}
+        const imageBlock = { type: 'image', description: file.name, mime: mime, dataUrl: dataUrl };
+        docBlocks = JSON.stringify([imageBlock, ...aiBlocks]);
+        addLog('ok', `Image analyzed via AILANG AI — <span class="val">${aiBlocks.length}</span> description blocks`);
+      } else {
+        // Fallback: just the image block without AI description
+        docBlocks = JSON.stringify([{ type: 'image', description: 'Uploaded image: ' + file.name, mime: mime, dataUrl: dataUrl }]);
+        addLog('err', 'Image AI analysis failed: ' + GeminiLiveCore.escapeHtml(result.error || 'unknown'));
+      }
+    } catch (e) {
+      docBlocks = JSON.stringify([{ type: 'image', description: 'Uploaded image: ' + file.name, mime: mime, dataUrl: dataUrl }]);
+      addLog('err', 'Image AI error: ' + GeminiLiveCore.escapeHtml(e.message));
+    }
   }
 }
 
@@ -778,6 +1039,10 @@ function ensureBlocksParsed() {
       if (r.success) try { all.push(...JSON.parse(r.result)); } catch {}
     }
     docBlocks = JSON.stringify(all); return true;
+  } else if (ext === 'pdf') {
+    return !!docBlocks; // PDF blocks set during extractDocumentXml
+  } else if (isImageExt(ext)) {
+    return !!docBlocks; // Image blocks set during extractDocumentXml
   }
   return false;
 }
@@ -857,6 +1122,209 @@ function blocksToText(blocks) {
   return md || 'Document parsed but no text content found.';
 }
 
+// ── Document Preview Rendering ──
+// Adapted from docparse-output.js + office-preview.js for the dark theme.
+
+let _lastFileBuffer = null;  // retained for PDF embed
+
+function updateDocumentPreview() {
+  if (!docBlocks) return;
+  let blocks;
+  try { blocks = JSON.parse(docBlocks); } catch { return; }
+  if (!Array.isArray(blocks)) return;
+
+  // Inject embedded media (Office docs) into image blocks
+  injectMediaIntoBlocks(blocks);
+
+  // Populate stats cards (right panel)
+  const nTexts = countBlockType(blocks, 'text') + countBlockType(blocks, 'heading');
+  const nTables = countBlockType(blocks, 'table');
+  const nImages = countBlockType(blocks, 'image');
+  const nHeadings = countBlockType(blocks, 'heading');
+  $.statParagraphs.textContent = nTexts || '0';
+  $.statTables.textContent = nTables || '0';
+  $.statImages.textContent = nImages || '0';
+  $.statHeadings.textContent = nHeadings || '0';
+
+  const ext = currentFile ? currentFile.name.split('.').pop().toLowerCase() : '';
+
+  // Show rich preview card in main chat only
+  addDocPreviewToChat(blocks, nTexts, nTables, nImages, nHeadings, ext);
+}
+
+// Rich document preview card in chat window
+function addDocPreviewToChat(blocks, nTexts, nTables, nImages, nHeadings, ext) {
+  if (!$.chatMessages || !currentFile) return;
+  ui.removeWelcome();
+
+  const div = document.createElement('div');
+  div.className = 'chat-msg chat-doc-preview';
+
+  // Header
+  const icon = ext === 'pdf' ? '📄' : isImageExt(ext) ? '🖼' : '📎';
+  const badge = ext.toUpperCase();
+  let h = '<div class="doc-preview-header">';
+  h += '<span class="dp-icon">' + icon + '</span>';
+  h += '<span class="dp-name">' + esc(currentFile.name) + '</span>';
+  h += '<span class="dp-badge">' + badge + '</span>';
+  h += '</div>';
+
+  // Stats bar
+  h += '<div class="doc-preview-stats">';
+  h += '<span class="dp-stat"><span class="dp-stat-val">' + blocks.length + '</span> blocks</span>';
+  if (nHeadings) h += '<span class="dp-stat"><span class="dp-stat-val">' + nHeadings + '</span> headings</span>';
+  if (nTables) h += '<span class="dp-stat"><span class="dp-stat-val">' + nTables + '</span> tables</span>';
+  if (nImages) h += '<span class="dp-stat"><span class="dp-stat-val">' + nImages + '</span> images</span>';
+  h += '</div>';
+
+  // Body: render first ~8 blocks as preview + image embed for images
+  h += '<div class="doc-preview-body">';
+  if (isImageExt(ext) && _lastFileBuffer) {
+    const mime = imageMime(ext);
+    const blob = new Blob([_lastFileBuffer], { type: mime });
+    const url = URL.createObjectURL(blob);
+    h += '<img src="' + url + '" alt="' + esc(currentFile.name) + '" style="max-width:100%;max-height:200px;border-radius:4px;margin-bottom:8px">';
+  }
+  if (ext === 'pdf' && _lastFileBuffer) {
+    const blob = new Blob([_lastFileBuffer], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    h += '<object data="' + url + '" type="application/pdf" width="100%" height="250" style="border-radius:4px;margin-bottom:8px">';
+    h += '<div style="color:var(--text-dim);font-size:11px">PDF preview not available</div></object>';
+  }
+  const preview = blocks.slice(0, 8);
+  h += '<div class="blocks-list">';
+  for (const b of preview) h += renderBlk(b);
+  if (blocks.length > 8) h += '<div class="blk blk-text" style="color:var(--text-dim);font-style:italic">... and ' + (blocks.length - 8) + ' more blocks</div>';
+  h += '</div></div>';
+
+  div.innerHTML = h;
+  $.chatMessages.appendChild(div);
+  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
+}
+
+function isImageExt(ext) {
+  return ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(ext);
+}
+
+function imageMime(ext) {
+  const m = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+  return m[ext] || 'image/png';
+}
+
+function countBlockType(blocks, type) {
+  let n = 0;
+  for (const b of blocks) {
+    if (b.type === type) n++;
+    if (b.type === 'section' && b.blocks) n += countBlockType(b.blocks, type);
+  }
+  return n;
+}
+
+// Inject extracted media dataUrls into parsed image blocks (Office docs)
+function injectMediaIntoBlocks(blocks) {
+  if (!_embeddedMedia.length) return;
+  let idx = 0;
+  function walk(items) {
+    for (const b of items) {
+      if (b.type === 'image' && !b.dataUrl && idx < _embeddedMedia.length) {
+        const m = _embeddedMedia[idx++];
+        b.dataUrl = m.dataUrl;
+        b.mime = m.mime;
+        if (m.description) b.description = m.description;
+      }
+      if (b.type === 'section' && b.blocks) walk(b.blocks);
+    }
+  }
+  walk(blocks);
+  // Append unmatched media as new image blocks (with AI descriptions)
+  for (let i = idx; i < _embeddedMedia.length; i++) {
+    const m = _embeddedMedia[i];
+    if (m.mime.startsWith('image/')) {
+      blocks.push({ type: 'image', description: m.description || m.filename, mime: m.mime, dataUrl: m.dataUrl });
+    }
+  }
+}
+
+function resetStats() {
+  $.statParagraphs.textContent = '—';
+  $.statTables.textContent = '—';
+  $.statImages.textContent = '—';
+  $.statHeadings.textContent = '—';
+}
+
+// Block renderers (dark-theme variants, "blk-" prefix to avoid collisions)
+const esc = s => GeminiLiveCore.escapeHtml(s || '');
+
+function renderBlk(b) {
+  switch (b.type) {
+    case 'heading': {
+      const lvl = Math.min(b.level || 1, 6);
+      return '<h' + lvl + ' class="blk blk-heading">' + esc(b.text) + '</h' + lvl + '>';
+    }
+    case 'text': {
+      if (!(b.text || '').trim()) return '';
+      const st = b.style && b.style !== 'Normal' ? ' <span class="blk-style">' + esc(b.style) + '</span>' : '';
+      return '<div class="blk blk-text">' + esc(b.text) + st + '</div>';
+    }
+    case 'table': {
+      const hd = b.headers || [], rw = b.rows || [];
+      let h = '<div class="blk blk-table"><table>';
+      if (hd.length) {
+        h += '<thead><tr>';
+        for (const c of hd) {
+          const t = typeof c === 'string' ? c : (c.text || '');
+          const cs = (typeof c === 'object' && c.colSpan > 1) ? ' colspan="' + c.colSpan + '"' : '';
+          h += '<th' + cs + '>' + esc(t) + '</th>';
+        }
+        h += '</tr></thead>';
+      }
+      if (rw.length) {
+        h += '<tbody>';
+        for (const row of rw) {
+          h += '<tr>';
+          for (const c of (Array.isArray(row) ? row : [])) {
+            const t = typeof c === 'string' ? c : (c.text || '');
+            const cs = (typeof c === 'object' && c.colSpan > 1) ? ' colspan="' + c.colSpan + '"' : '';
+            h += '<td' + cs + '>' + esc(t) + '</td>';
+          }
+          h += '</tr>';
+        }
+        h += '</tbody>';
+      }
+      return h + '</table></div>';
+    }
+    case 'list': {
+      const tag = b.ordered ? 'ol' : 'ul';
+      return '<div class="blk blk-list"><' + tag + '>' +
+        (b.items || []).map(i => '<li>' + esc(i) + '</li>').join('') +
+        '</' + tag + '></div>';
+    }
+    case 'image': {
+      let h = '<div class="blk blk-image"><span class="blk-badge">IMAGE</span> ' + esc(b.description || 'No description');
+      if (b.dataUrl) h += '<img src="' + b.dataUrl + '" alt="' + esc(b.description) + '" loading="lazy">';
+      return h + '</div>';
+    }
+    case 'audio':
+      return '<div class="blk blk-audio"><span class="blk-badge">AUDIO</span> ' + esc(b.transcription || 'No transcription') + '</div>';
+    case 'video':
+      return '<div class="blk blk-video"><span class="blk-badge">VIDEO</span> ' + esc(b.description || 'No description') + '</div>';
+    case 'section': {
+      let h = '<div class="blk blk-section"><div class="section-lbl">' + esc(b.kind || 'section') + '</div>';
+      for (const sub of (b.blocks || [])) h += renderBlk(sub);
+      return h + '</div>';
+    }
+    case 'change': {
+      const ct = b.changeType || 'unknown';
+      const cls = 'ch-' + ct;
+      const del = ct === 'delete' || ct === 'move-from';
+      const txt = del ? '<del>' + esc(b.text) + '</del>' : '<ins>' + esc(b.text) + '</ins>';
+      return '<div class="blk blk-change ' + cls + '"><span class="ch-badge">' + ct.toUpperCase() + '</span><span class="ch-author">' + esc(b.author) + '</span> ' + txt + '</div>';
+    }
+    default:
+      return '<div class="blk blk-text">[' + esc(b.type) + ']</div>';
+  }
+}
+
 // ── Tool declarations for Gemini ──
 function getToolDeclarations() {
   return [{
@@ -888,35 +1356,36 @@ function handleAILANGEvent(event) {
       break;
     case 'turnComplete':
       core.sessionReady = true;
-      resetAgentBubble();
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
       $.fStreamStatus.textContent = 'ready';
       addLog('ok', '<span class="hl">Turn complete</span> — <span class="val">' +
         core.stats.frames + '</span> audio frames');
-      $.sendBtn.disabled = false;
-      $.textInput.disabled = false;
+      ui.enableInput(true);
       break;
     case 'inputTranscript':
       if (event.text) {
-        addUserMessage(event.text);
+        ui.appendUserTranscript(event.text);
         addLog('info', 'You: <span class="val">' + GeminiLiveCore.escapeHtml(event.text) + '</span>');
       }
       break;
     case 'outputTranscript':
       if (event.text) {
-        appendAgentText(event.text);
+        ui.appendAgentText(event.text);
         addLog('info', 'Agent: <span class="val">' + GeminiLiveCore.escapeHtml(event.text) + '</span>');
       }
       break;
     case 'modelTurn':
       if (event.parts && Array.isArray(event.parts)) {
         event.parts.forEach(part => {
-          if (part.text) appendAgentText(part.text);
+          if (part.text) ui.appendAgentText(part.text);
           if (part.inlineData && part.inlineData.data) core.handleAudioFrame(part.inlineData.data);
         });
       }
       break;
     case 'toolCall':
-      resetAgentBubble();  // tool cards get their own section
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
       if (event.calls) {
         event.calls.forEach(call => {
           const tc = parseInt($.fToolCalls.textContent) + 1;
@@ -945,8 +1414,12 @@ function handleAILANGEvent(event) {
     case 'closed':
       core.sessionReady = false;
       $.fStreamStatus.textContent = 'disconnected';
-      $.wssBadge.classList.remove('live');
-      addLog('info', 'Session closed');
+      ui.setConnectionStatus('disconnected');
+      ui.finishAgentMessage(true);
+      ui.enableInput(true);
+      addLog('info', 'Session closed' +
+        (event.reason ? ': ' + event.reason : '') +
+        (event.code ? ' (code ' + event.code + ')' : ''));
       $.connectBtn.textContent = 'Connect';
       break;
     case 'error':
@@ -955,34 +1428,7 @@ function handleAILANGEvent(event) {
   }
 }
 
-// ── Chat UI (accumulating agent messages) ──
-let _agentEl = null;
-
-function addUserMessage(text) {
-  _agentEl = null;  // new user message breaks the agent bubble
-  const el = document.createElement('div');
-  el.className = 'chat-msg chat-user';
-  el.textContent = text;
-  $.chatMessages.appendChild(el);
-  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
-}
-
-// Append text to the current agent bubble (or create one)
-function appendAgentText(text) {
-  if (!text) return;
-  if (!_agentEl) {
-    _agentEl = document.createElement('div');
-    _agentEl.className = 'chat-msg chat-agent';
-    _agentEl.innerHTML = '<div class="agent-text"></div>';
-    $.chatMessages.appendChild(_agentEl);
-  }
-  const inner = _agentEl.querySelector('.agent-text');
-  if (inner.textContent) inner.textContent += ' ' + text;
-  else inner.textContent = text;
-  $.chatMessages.scrollTop = $.chatMessages.scrollHeight;
-}
-
-function resetAgentBubble() { _agentEl = null; }
+// Chat UI delegated to StreamingUI (ui.addUserMessage, ui.appendAgentText, etc.)
 
 function addToolCard(name, args, result) {
   const el = document.createElement('div');
@@ -1000,11 +1446,14 @@ function addToolCard(name, args, result) {
 
 // ── Connect to Gemini Live with tools ──
 async function connectGemini(initialPrompt) {
-  const key = $.apiKey.value.trim() || localStorage.getItem('gemini-api-key');
-  if (!key) { toggleConfig(); addLog('err', 'Enter your Gemini API key'); return; }
+  if (!core.acquireConnectLock()) return;
+
+  const key = ui.getApiKey();
+  if (!key) { core.releaseConnectLock(); toggleConfig(); addLog('err', 'Enter your Gemini API key'); return; }
   saveConfig();
 
   if (!core.wasmReady) {
+    core.releaseConnectLock();
     addLog('err', 'AILANG WASM not loaded — cannot start session');
     return;
   }
@@ -1012,8 +1461,7 @@ async function connectGemini(initialPrompt) {
   core.sessionReady = false;
   core.resetStats();
   $.fStreamStatus.textContent = 'connecting';
-  $.sendBtn.disabled = true;
-  $.textInput.disabled = true;
+  ui.disableInput();
   $.connectBtn.textContent = 'Connecting...';
   core.deactivateFallbackMode();
 
@@ -1021,21 +1469,29 @@ async function connectGemini(initialPrompt) {
 
   const voice = $.voiceSelect.value;
   const toolsJson = JSON.stringify(getToolDeclarations());
+  const sysInstruction = buildSystemInstruction();
   let prompt = initialPrompt || '';
-  if (!prompt && currentFile) {
+  if (!prompt && currentFile && _extracting) {
+    // File uploaded but still being extracted — tell model to wait
     prompt = 'Hello! I have uploaded a document called "' + currentFile.name + '". ' +
-      'Please use your tools to analyze it — start with countContent to see what it contains.';
+      'It is currently being processed and I will share the content with you shortly. ' +
+      'Please wait for the document content before trying to analyze it.';
+  } else if (!prompt && currentFile) {
+    prompt = 'Hello! I have uploaded a document called "' + currentFile.name + '". ' +
+      'Give me a brief overview of what it contains.';
   } else if (!prompt) {
     prompt = 'Hello! I may have a document to analyze.';
   }
   core.sessionPrompt = prompt;
 
-  addLog('info', 'Starting AILANG session with <span class="hl">tools</span> (std/stream effects)...');
+  const hasDoc = currentFile && ensureBlocksParsed();
+  const extractingNote = _extracting ? ' (<span class="hl">document still extracting</span>)' : '';
+  addLog('info', 'Starting AILANG session' + (hasDoc ? ' with <span class="hl">document context</span>' : extractingNote) + ' (std/stream effects)...');
 
   try {
     const result = await core.wasmEngine.callAsync(
       STREAM_MODULE, 'startSessionWithTools',
-      key, voice, SYSTEM_INSTRUCTION, prompt, toolsJson
+      key, voice, sysInstruction, prompt, toolsJson
     );
     if (!result.success) addLog('err', 'Session error: ' + GeminiLiveCore.escapeHtml(result.error || 'unknown'));
     else addLog('info', 'Session ended: <span class="val">' + (result.result || 'complete') + '</span>');
@@ -1043,6 +1499,7 @@ async function connectGemini(initialPrompt) {
     addLog('err', 'Session failed: ' + GeminiLiveCore.escapeHtml(e.message));
   }
 
+  core.releaseConnectLock();
   core.sessionReady = false;
   $.fStreamStatus.textContent = 'disconnected';
   $.connectBtn.textContent = 'Connect';
@@ -1052,7 +1509,7 @@ async function connectGemini(initialPrompt) {
 function sendText() {
   const text = $.textInput.value.trim();
   if (!text) return;
-  addUserMessage(text);
+  ui.addUserMessage(text);
   $.textInput.value = '';
 
   if (!core.getActiveConnection()) {
@@ -1072,8 +1529,7 @@ function sendText() {
   core.resetStats();
   core.markPromptSent();
   core.clearAudioQueue();
-  $.sendBtn.disabled = true;
-  $.textInput.disabled = true;
+  ui.disableInput();
   $.fStreamStatus.textContent = 'streaming';
 }
 
@@ -1102,7 +1558,21 @@ async function toggleMic() {
 // ── Init ──
 window.addEventListener('load', async () => {
   cacheDom();
-  loadConfig();
+  ui = new StreamingUI({
+    elements: {
+      configPanel: $.configPanel,
+      apiKeyInput: $.apiKey,
+      voiceSelect: $.voiceSelect,
+      chatContainer: $.chatMessages,
+      textInput: $.textInput,
+      sendButton: $.sendBtn,
+      statusBadge: $.wssBadge,
+    },
+    localStorage: { apiKey: 'gemini-api-key', voice: 'gemini-live-voice' },
+    agentName: 'Agent',
+    cssClasses: { userMsg: 'chat-msg chat-user', agentMsg: 'chat-msg chat-agent', msgText: 'agent-text', msgLabel: 'sr-only' },
+  });
+  ui.loadConfig({ 'gemini_key': 'gemini-api-key' });
   core.initWaveform(document.getElementById('waveform'));
 
   addLog('info', 'Loading AILANG WASM — streaming + DocParse modules...');

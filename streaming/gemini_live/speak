@@ -162,5 +162,23 @@ fi
 # Run from repo root (AILANG needs relative module paths)
 # Audio playback is handled natively by AILANG via std/process (exec afplay)
 cd "$REPO_ROOT"
-exec ailang run --entry main --caps IO,FS,Stream,Net,Env,Process \
-  streaming/gemini_live/main.ail "${PROMPT_ARGS[@]}"
+
+RUN_CMD=(ailang run --entry main --caps IO,FS,Stream,Net,Env,Process
+  streaming/gemini_live/main.ail "${PROMPT_ARGS[@]}")
+
+# First attempt — may fail if session.handle is stale
+if "${RUN_CMD[@]}"; then
+  exit 0
+fi
+
+# If there's a session handle, the failure was likely a stale session — retry fresh
+if [ -f "$SESSION_DIR/session.handle" ]; then
+  echo ""
+  echo "[speak] Session expired — starting fresh session for '$SESSION_SCOPE'"
+  rm -f "$SESSION_DIR/session.handle"
+  export GEMINI_NEW_SESSION=1
+  exec "${RUN_CMD[@]}"
+fi
+
+# No handle to clear — genuine failure
+exit 1
