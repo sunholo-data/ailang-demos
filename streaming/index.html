@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG Streaming Demos</title>
+<link rel="icon" type="image/svg+xml" href="shared/ailang-logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -98,10 +99,11 @@
     z-index: 100;
   }
 
-  .header svg {
+  .header img.header-logo {
     width: 32px;
     height: 32px;
     flex-shrink: 0;
+    border-radius: 4px;
   }
 
   .header-title {
@@ -472,11 +474,7 @@
 
 <!-- Header bar (matches DocParse charcoal header) -->
 <header class="header">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
-    <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
-    <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
-    <circle cx="153" cy="150" r="80" fill="#e73c17"/>
-  </svg>
+  <img src="shared/ailang-logo.svg" alt="AILANG" class="header-logo">
   <span class="header-title"><span class="ai">AI</span>LANG</span>
   <span class="header-sep"></span>
   <span class="header-subtitle">Streaming Demos</span>
@@ -579,11 +577,7 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="footer-brand">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="22" height="22">
-        <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
-        <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
-        <circle cx="153" cy="150" r="80" fill="#e73c17"/>
-      </svg>
+      <img src="shared/ailang-logo.svg" alt="AILANG" width="22" height="22" style="border-radius: 3px;">
       <span><span class="ai">AI</span>LANG</span>
     </div>
     <div class="footer-line">

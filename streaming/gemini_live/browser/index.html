@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG × Gemini Live — Text to Audio</title>
+<link rel="icon" type="image/svg+xml" href="../../shared/ailang-logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -86,6 +87,9 @@
     align-items: center;
     gap: 16px;
   }
+  .nav-home { display: flex; flex-shrink: 0; }
+  .nav-logo { width: 24px; height: 24px; opacity: 0.7; transition: opacity 0.15s; }
+  .nav-home:hover .nav-logo { opacity: 1; }
 
   .logo {
     font-family: var(--display);
@@ -610,6 +614,7 @@
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
+      <a href="../" class="nav-home" title="Back to Streaming Demos"><img src="../shared/ailang-logo.svg" alt="AILANG" class="nav-logo"></a>
       <div class="logo">AILANG<span>×</span>Gemini Live</div>
       <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
       <span class="badge badge-wss" id="wssBadge"><span class="dot"></span>WSS</span>

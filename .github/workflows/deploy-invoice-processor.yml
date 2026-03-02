@@ -241,6 +241,8 @@ jobs:
           cp streaming/shared/audio-worklet.js _site/streaming/shared/
           cp streaming/shared/gemini-live-core.js _site/streaming/shared/
           cp streaming/shared/streaming-ui.js _site/streaming/shared/
+          cp streaming/shared/ailang-logo.svg _site/streaming/shared/
+          cp streaming/index.html _site/streaming/
 
           # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
           for demo in claude_chat gemini_live safe_agent voice_docparse; do

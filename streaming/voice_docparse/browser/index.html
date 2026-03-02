@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG Voice Document Analyst</title>
+<link rel="icon" type="image/svg+xml" href="../../shared/ailang-logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -53,6 +54,9 @@
   }
 
   .header-left { display: flex; align-items: center; gap: 14px; }
+  .nav-home { display: flex; flex-shrink: 0; }
+  .nav-logo { width: 24px; height: 24px; opacity: 0.7; transition: opacity 0.15s; }
+  .nav-home:hover .nav-logo { opacity: 1; }
 
   .title {
     font-family: var(--mono);
@@ -575,6 +579,7 @@
 <div class="app">
   <div class="header">
     <div class="header-left">
+      <a href="../" class="nav-home" title="Back to Streaming Demos"><img src="../shared/ailang-logo.svg" alt="AILANG" class="nav-logo"></a>
       <div class="title">AILANG Voice DocParse</div>
       <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
       <span class="badge badge-ws" id="wssBadge"><span class="dot"></span>WSS</span>
@@ -1347,6 +1352,7 @@ function handleAILANGEvent(event) {
     case 'setup':
       core.sessionReady = true;
       $.fStreamStatus.textContent = 'ready';
+      $.connectBtn.textContent = 'Disconnect';
       addLog('ok', '<span class="hl">Setup complete</span> — AILANG streaming session with tools');
       break;
     case 'sent':
@@ -1446,6 +1452,13 @@ function addToolCard(name, args, result) {
 
 // ── Connect to Gemini Live with tools ──
 async function connectGemini(initialPrompt) {
+  // Disconnect if already connected
+  const active = core.getActiveConnection();
+  if (active) {
+    active.ws.close();
+    $.connectBtn.textContent = 'Connect';
+    return;
+  }
   if (!core.acquireConnectLock()) return;
 
   const key = ui.getApiKey();

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG Demos</title>
+<link rel="icon" type="image/svg+xml" href="ailang-logo.svg">
 <meta name="description" content="AILANG demos: document intelligence, streaming, voice agents, and contract-verified AI tools">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,7 +82,7 @@
     top: 0;
     z-index: 100;
   }
-  .header svg { width: 32px; height: 32px; flex-shrink: 0; }
+  .header img.header-logo { width: 32px; height: 32px; flex-shrink: 0; border-radius: 4px; }
   .header-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; letter-spacing: -0.3px; }
   .header-title .ai { color: var(--primary-light); }
   .header-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 4px; }
@@ -253,11 +254,7 @@
 <body>
 
 <header class="header">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
-    <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
-    <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
-    <circle cx="153" cy="150" r="80" fill="#e73c17"/>
-  </svg>
+  <img src="ailang-logo.svg" alt="AILANG" class="header-logo">
   <span class="header-title"><span class="ai">AI</span>LANG</span>
   <span class="header-sep"></span>
   <span class="header-subtitle">Demo Hub</span>
@@ -442,11 +439,7 @@
 
   <footer class="footer">
     <div class="footer-brand">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="22" height="22">
-        <circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/>
-        <circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/>
-        <circle cx="153" cy="150" r="80" fill="#e73c17"/>
-      </svg>
+      <img src="ailang-logo.svg" alt="AILANG" width="22" height="22" style="border-radius: 3px;">
       <span><span class="ai">AI</span>LANG</span>
     </div>
     <div class="footer-line">
