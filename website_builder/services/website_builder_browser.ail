@@ -1,0 +1,74 @@
+module website_builder/services/website_builder_browser
+
+-- Browser/WASM adapter for the website builder.
+-- Thin re-exports with JSON-serialized return types so JS can consume them.
+-- Same pattern as docparse/services/docparse_browser.ail.
+-- JS calls via: engine.callFunctionAsync(BROWSER_MODULE, "buildSiteStructure", ...)
+
+import std/json (encode, jo, kv, js, ja, jb)
+import std/list (map)
+import website_builder/services/content_extractor (wrapDocumentContent, wrapImageContent, wrapTextContent)
+import website_builder/services/site_structurer (structureSite, refineSite, suggestPages)
+import website_builder/services/html_generator (generatePageHtml, generateSiteCss, extractPageSlugs, extractSiteTitle)
+import website_builder/services/validator (validateAll, validateHtml)
+
+-- ── Content Wrapping (pure) ───────────────────────────────────────────
+-- Called from JS for each uploaded item before bundling.
+
+export func parseAndWrapDocument(blocksJson: string, filename: string, format: string) -> string =
+  wrapDocumentContent(blocksJson, filename, format)
+
+export func parseAndWrapImage(base64: string, mimeType: string, filename: string, description: string) -> string =
+  wrapImageContent(base64, mimeType, filename, description)
+
+export func parseAndWrapText(text: string, label: string) -> string =
+  wrapTextContent(text, label)
+
+-- ── Site Generation (AI effects) ─────────────────────────────────────
+-- contentJson: JSON array of wrapped content items (bundled by JS)
+-- Returns: structured site JSON with designBrief
+
+export func buildSiteStructure(contentJson: string, description: string, styleDirection: string) -> string ! {AI} =
+  structureSite(contentJson, description, styleDirection)
+
+export func refineStructure(currentStructure: string, feedback: string) -> string ! {AI} =
+  refineSite(currentStructure, feedback)
+
+export func getPageSuggestions(description: string) -> string ! {AI} =
+  suggestPages(description)
+
+export func renderPage(siteJson: string, pageSlug: string) -> string ! {AI} =
+  generatePageHtml(siteJson, pageSlug)
+
+export func renderCss(siteJson: string) -> string ! {AI} =
+  generateSiteCss(siteJson)
+
+-- ── Utilities (pure) ─────────────────────────────────────────────────
+
+-- Returns JSON array of slug strings: ["home","about","gallery","contact"]
+export func getPageSlugs(siteJson: string) -> string =
+  encode(ja(map(js, extractPageSlugs(siteJson))))
+
+-- Returns the site title string
+export func getSiteTitle(siteJson: string) -> string =
+  extractSiteTitle(siteJson)
+
+-- ── Validation (pure, returns JSON strings) ───────────────────────────
+-- Returns {"valid":bool,"errors":["...",...]}
+
+export func validateSite(siteJson: string) -> string {
+  let v = validateAll(siteJson);
+  encode(jo([
+    kv("valid", jb(v.valid)),
+    kv("errors", ja(map(js, v.errors)))
+  ]))
+}
+
+-- Returns {"valid":bool,"errors":["...",...]}
+export func validatePageHtml(html: string) -> string {
+  let v = validateHtml(html);
+  encode(jo([
+    kv("valid", jb(v.valid)),
+    kv("errors", ja(map(js, v.errors)))
+  ]))
+}

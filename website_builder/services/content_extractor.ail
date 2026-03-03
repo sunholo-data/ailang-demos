@@ -1,0 +1,90 @@
+module website_builder/services/content_extractor
+
+-- Wraps raw content (text, images, parsed documents) into JSON
+-- for the AI site structurer to consume.
+
+import std/json (encode, decode, jo, kv, js, ja)
+import std/string (length)
+import std/list (map, flatMap, length as listLength)
+import std/result (Ok, Err)
+
+-- Wrap a parsed document as a JSON content item
+export pure func wrapDocumentContent(blocksJson: string, filename: string, format: string) -> string
+  ensures { length(result) > 0 }
+{
+  encode(jo([
+    kv("type", js("document")),
+    kv("blocksJson", js(blocksJson)),
+    kv("filename", js(filename)),
+    kv("format", js(format))
+  ]))
+}
+
+-- Wrap an image as a JSON content item
+export pure func wrapImageContent(base64: string, mimeType: string, filename: string, description: string) -> string
+  ensures { length(result) > 0 }
+{
+  encode(jo([
+    kv("type", js("image")),
+    kv("mimeType", js(mimeType)),
+    kv("filename", js(filename)),
+    kv("description", js(description))
+  ]))
+}
+
+-- Wrap user-typed text as a JSON content item
+export pure func wrapTextContent(text: string, label: string) -> string
+  ensures { length(result) > 0 }
+{
+  encode(jo([
+    kv("type", js("text")),
+    kv("text", js(text)),
+    kv("label", js(label))
+  ]))
+}
+
+-- Bundle multiple JSON content items into a single JSON array string.
+-- Each item is already a JSON string; we decode and re-encode as
+-- a proper JSON array to avoid double-encoding.
+export pure func bundleContent(items: [string]) -> string
+  ensures { length(result) > 1 }
+{
+  let decoded = flatMap(\item. match decode(item) {
+    Ok(json) => [json],
+    Err(_) => []
+  }, items);
+  encode(ja(decoded))
+}
+
+-- Hardcoded test content: a flower arranging business.
+-- Simulates what a real user would upload (3 text items + 3 image descriptions).
+export pure func testFlowerShopContent() -> string {
+  let text1 = wrapTextContent(
+    "Sarah's Flower Studio has been creating beautiful arrangements for weddings, " ++
+    "events, and everyday joy since 2015. Based in Edinburgh, we source locally " ++
+    "grown flowers whenever possible and specialise in seasonal, sustainable designs.",
+    "About the business"
+  );
+  let text2 = wrapTextContent(
+    "We offer: Wedding bouquets and venue flowers, Corporate event arrangements, " ++
+    "Weekly office flower subscriptions, Funeral tributes, Birthday and anniversary gifts. " ++
+    "Free delivery within Edinburgh. Order by 2pm for same-day delivery.",
+    "Services"
+  );
+  let text3 = wrapTextContent(
+    "Contact us: Phone 0131 555 1234, Email hello@sarahsflowers.co.uk, " ++
+    "Visit us at 42 Rose Street, Edinburgh EH2 2NH. " ++
+    "Open Monday-Saturday 9am-6pm, Sunday 10am-4pm.",
+    "Contact details"
+  );
+  let img1 = wrapImageContent("", "image/jpeg", "spring_bouquet.jpg",
+    "A vibrant spring bouquet with tulips, daffodils, and ranunculus in soft pastel colours"
+  );
+  let img2 = wrapImageContent("", "image/jpeg", "wedding_table.jpg",
+    "An elegant wedding table centrepiece with white roses, eucalyptus, and candles"
+  );
+  let img3 = wrapImageContent("", "image/jpeg", "shop_front.jpg",
+    "The cosy shopfront of Sarah's Flower Studio with window displays of seasonal flowers"
+  );
+  bundleContent([text1, text2, text3, img1, img2, img3])
+}

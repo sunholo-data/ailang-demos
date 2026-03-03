@@ -1,0 +1,53 @@
+#!/bin/bash
+# Website Builder Portal — local dev server
+#
+# Usage:
+#   ./website_builder/portal/serve                    # opens browser, prompts for API key if needed
+#   GOOGLE_API_KEY=AIza... ./website_builder/portal/serve   # pre-loads key from env
+#
+# Symlink to ~/.local/bin for convenience:
+#   ln -s $(pwd)/website_builder/portal/serve ~/.local/bin/website-builder
+
+set -e
+cd "$(dirname "$0")"   # run from portal/
+
+PORT=5174
+URL="http://localhost:${PORT}"
+
+# Inject API key via URL hash if GOOGLE_API_KEY is set
+# (hash never sent to server — key goes straight to localStorage)
+KEY="${GOOGLE_API_KEY:-}"
+if [ -n "$KEY" ]; then
+  URL="${URL}/#apikey=${KEY}"
+  echo "🔑 API key injected from GOOGLE_API_KEY"
+else
+  echo "⚠️  No GOOGLE_API_KEY set — enter key in the Settings panel (⚙️)"
+fi
+
+echo "🌐 Starting Website Builder at http://localhost:${PORT}"
+echo ""
+
+# Install deps if needed
+if [ ! -d node_modules ]; then
+  echo "📦 Installing dependencies..."
+  npm install
+fi
+
+# Start Vite in background and open browser once ready
+npx vite --port "$PORT" &
+VITE_PID=$!
+
+# Wait for server to be ready
+for i in $(seq 1 20); do
+  sleep 0.5
+  if curl -s -o /dev/null "http://localhost:${PORT}"; then
+    break
+  fi
+done
+
+# Open browser (macOS)
+open "$URL" 2>/dev/null || echo "Open $URL in your browser"
+
+echo ""
+echo "Press Ctrl+C to stop the server"
+wait "$VITE_PID"

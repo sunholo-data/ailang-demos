@@ -1,0 +1,191 @@
+module website_builder/services/validator
+
+-- Contract-verified validation for generated website structures.
+-- Every public function has:
+--   ensures { result.valid == (listLength(result.errors) == 0) }
+
+import std/string (length, find)
+import std/list (length as listLength, foldl, concat, flatMap, any)
+import std/json (decode, getString, getArray, getObject)
+import std/result (Ok, Err)
+import std/option (Some, None)
+
+-- Helper: check a required string field exists and is non-empty
+pure func checkStringField(json: Json, field: string, errorMsg: string) -> [string] =
+  match getString(json, field) {
+    Some(v) => if length(v) > 0 then [] else [errorMsg],
+    None => [errorMsg]
+  }
+
+-- Helper: check a required array field exists and is non-empty
+pure func checkArrayField(json: Json, field: string, errorMsg: string) -> [string] =
+  match getArray(json, field) {
+    Some(arr) => if listLength(arr) > 0 then [] else [errorMsg],
+    None => [errorMsg]
+  }
+
+-- Helper: check a required object field exists
+pure func checkObjectField(json: Json, field: string, errorMsg: string) -> [string] =
+  match getObject(json, field) {
+    Some(_) => [],
+    None => [errorMsg]
+  }
+
+-- Helper: validate one page has slug, title, and sections
+pure func validateOnePage(page: Json) -> [string] =
+  let slugErr = checkStringField(page, "slug", "Page missing slug") in
+  let titleErr = checkStringField(page, "title", "Page missing title") in
+  let sectionsErr = checkArrayField(page, "sections", "Page has no sections") in
+  concat(slugErr, concat(titleErr, sectionsErr))
+
+-- Helper: check one palette colour field
+pure func checkPaletteField(palette: Json, field: string) -> [string] =
+  checkStringField(palette, field, "Palette missing field: " ++ field)
+
+-- Helper: validate palette has all 5 required colour fields
+pure func validatePalette(brief: Json) -> [string] =
+  match getObject(brief, "palette") {
+    Some(palette) =>
+      let fields = ["primary", "secondary", "accent", "background", "text"] in
+      flatMap(\field. checkPaletteField(palette, field), fields),
+    None => ["Design brief missing palette"]
+  }
+
+-- Helper: validate typography has heading and body fonts
+pure func validateTypography(brief: Json) -> [string] =
+  match getObject(brief, "typography") {
+    Some(typo) =>
+      let hErr = checkStringField(typo, "headingFont", "Missing headingFont") in
+      let bErr = checkStringField(typo, "bodyFont", "Missing bodyFont") in
+      concat(hErr, bErr),
+    None => ["Design brief missing typography"]
+  }
+
+-- Helper: check if any page has a given slug
+pure func hasPageWithSlug(pages: [Json], slug: string) -> bool =
+  any(\page. match getString(page, "slug") {
+    Some(s) => s == slug,
+    None => false
+  }, pages)
+
+-- Validate site structure has required top-level elements
+export func validateSiteStructure(siteJson: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  match decode(siteJson) {
+    Ok(json) => {
+      let titleErrors = checkStringField(json, "title", "Site must have a non-empty title");
+      let pagesErrors = checkArrayField(json, "pages", "Site must have at least one page");
+      let designErrors = checkObjectField(json, "designBrief", "Site must have a designBrief");
+      let allErrors = concat(titleErrors, concat(pagesErrors, designErrors));
+      {valid: listLength(allErrors) == 0, errors: allErrors}
+    },
+    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+  }
+}
+
+-- Validate that each page has slug, title, and sections
+export func validatePages(siteJson: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  match decode(siteJson) {
+    Ok(json) => {
+      match getArray(json, "pages") {
+        Some(pages) => {
+          let errors = flatMap(validateOnePage, pages);
+          {valid: listLength(errors) == 0, errors: errors}
+        },
+        None => {valid: false, errors: ["No pages array found"]}
+      }
+    },
+    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+  }
+}
+
+-- Validate design brief has palette with all required colours and typography
+export func validateDesignBrief(siteJson: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  match decode(siteJson) {
+    Ok(json) => {
+      match getObject(json, "designBrief") {
+        Some(brief) => {
+          let allErrors = concat(validatePalette(brief), validateTypography(brief));
+          {valid: listLength(allErrors) == 0, errors: allErrors}
+        },
+        None => {valid: false, errors: ["No designBrief found"]}
+      }
+    },
+    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+  }
+}
+
+-- Check that a home page exists (slug: "home")
+export func validateHasHomePage(siteJson: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  match decode(siteJson) {
+    Ok(json) => {
+      match getArray(json, "pages") {
+        Some(pages) =>
+          if hasPageWithSlug(pages, "home") then {valid: true, errors: []}
+          else {valid: false, errors: ["Site must have a home page (slug: home)"]},
+        None => {valid: false, errors: ["No pages array"]}
+      }
+    },
+    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+  }
+}
+
+-- Validate generated HTML is well-formed (basic structural checks)
+export pure func validateHtml(html: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  let hasDoctype = find(html, "<!DOCTYPE html>") >= 0 || find(html, "<!doctype html>") >= 0;
+  let hasHead = find(html, "<head") >= 0;
+  let hasBody = find(html, "<body") >= 0;
+  let hasClosingHtml = find(html, "</html>") >= 0;
+  let checks = [
+    if hasDoctype then [] else ["Missing <!DOCTYPE html>"],
+    if hasHead then [] else ["Missing <head>"],
+    if hasBody then [] else ["Missing <body>"],
+    if hasClosingHtml then [] else ["Missing </html>"]
+  ];
+  let allErrors = foldl(\acc errs. concat(acc, errs), [], checks);
+  {valid: listLength(allErrors) == 0, errors: allErrors}
+}
+
+-- Validate generated JavaScript is safe for publishing.
+-- Checks for dangerous patterns that could enable XSS, data exfiltration, etc.
+export pure func validateJavaScript(jsCode: string) -> {safe: bool, violations: [string]}
+  ensures { result.safe == (listLength(result.violations) == 0) }
+{
+  let dangerousPatterns = [
+    {pattern: "eval(", label: "eval() -- code injection risk"},
+    {pattern: "Function(", label: "Function() constructor -- code injection risk"},
+    {pattern: "document.write", label: "document.write -- page hijacking risk"},
+    {pattern: "document.cookie", label: "document.cookie -- cookie theft risk"},
+    {pattern: ".innerHTML", label: "innerHTML -- potential XSS"},
+    {pattern: "XMLHttpRequest", label: "XMLHttpRequest -- network access"},
+    {pattern: "importScripts", label: "importScripts -- external code loading"},
+    {pattern: "crypto.subtle", label: "crypto API -- potential mining"},
+    {pattern: "navigator.sendBeacon", label: "sendBeacon -- data exfiltration"}
+  ];
+  let violations = flatMap(
+    \p. if find(jsCode, p.pattern) >= 0 then [p.label] else [],
+    dangerousPatterns
+  );
+  {safe: listLength(violations) == 0, violations: violations}
+}
+
+-- Run all site validators and aggregate errors
+export func validateAll(siteJson: string) -> {valid: bool, errors: [string]}
+  ensures { result.valid == (listLength(result.errors) == 0) }
+{
+  let r1 = validateSiteStructure(siteJson);
+  let r2 = validatePages(siteJson);
+  let r3 = validateDesignBrief(siteJson);
+  let r4 = validateHasHomePage(siteJson);
+  let allErrors = concat(r1.errors, concat(r2.errors, concat(r3.errors, r4.errors)));
+  {valid: listLength(allErrors) == 0, errors: allErrors}
+}

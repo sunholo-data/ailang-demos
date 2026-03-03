@@ -1,0 +1,38 @@
+[
+  {
+    "id": "warm",
+    "label": "Warm & Friendly",
+    "description": "Soft earth tones, rounded corners, welcoming. Feels like a cosy shop you want to spend time in.",
+    "prompt": "Warm and friendly — soft earth tones, rounded corners, generous spacing, inviting feel"
+  },
+  {
+    "id": "clean",
+    "label": "Clean & Modern",
+    "description": "Lots of white space, sharp lines, minimal. Professional without being cold.",
+    "prompt": "Clean and modern — lots of white space, sharp geometric lines, minimal decoration, crisp and professional"
+  },
+  {
+    "id": "bold",
+    "label": "Bold & Vibrant",
+    "description": "Strong colours, large typography, energetic. Makes an immediate impression.",
+    "prompt": "Bold and vibrant — strong saturated colours, large impactful typography, energetic layout with visual punch"
+  },
+  {
+    "id": "elegant",
+    "label": "Elegant & Refined",
+    "description": "Muted palette, serif fonts, sophisticated. Feels premium and tasteful.",
+    "prompt": "Elegant and refined — muted palette, serif headings, sophisticated spacing, premium feel with subtle details"
+  },
+  {
+    "id": "fun",
+    "label": "Fun & Playful",
+    "description": "Bright colours, friendly shapes, casual. Cheerful and approachable.",
+    "prompt": "Fun and playful — bright cheerful colours, rounded friendly shapes, casual tone, playful layout with personality"
+  },
+  {
+    "id": "auto",
+    "label": "You Decide!",
+    "description": "Let AI analyse your content and pick the best style. You can always steer it afterwards.",
+    "prompt": "Analyse the uploaded content — the type of business, the tone of the text, the style of the images — and choose the most appropriate design direction. Explain your choice."
+  }
+]

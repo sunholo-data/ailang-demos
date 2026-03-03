@@ -1,0 +1,108 @@
+module website_builder/services/html_generator
+
+-- AI-powered HTML/CSS generation from structured site content + design brief.
+-- The design brief gives creative direction, not rigid constraints.
+
+import std/ai (callJsonSimple)
+import std/string (length, find, substring)
+import std/json (decode, getString, getArray, jo, kv, js, encode)
+import std/list (length as listLength, map, flatMap)
+import std/result (Ok, Err)
+import std/option (Some, None)
+
+-- Strip markdown code fences from AI output if present.
+-- Handles ```html...``` and ```css...``` and plain ``` ... ```
+pure func stripFences(raw: string) -> string {
+  let startHtml = find(raw, "```html\n");
+  let startCss = find(raw, "```css\n");
+  let startPlain = find(raw, "```\n");
+  let endFence = find(raw, "\n```");
+  if startHtml >= 0 && endFence > startHtml then
+    substring(raw, startHtml + 7, endFence)
+  else if startCss >= 0 && endFence > startCss then
+    substring(raw, startCss + 6, endFence)
+  else if startPlain >= 0 && endFence > startPlain then
+    substring(raw, startPlain + 4, endFence)
+  else raw
+}
+
+-- Generate a complete HTML page for a given slug.
+-- Asks AI to return {"html":"..."} JSON so we can extract reliably.
+export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI}
+  ensures { length(result) > 50 }
+{
+  let prompt = "Generate a complete, mobile-responsive HTML page.\n\n" ++
+    "Site structure and design brief:\n" ++ siteJson ++ "\n\n" ++
+    "Render the page with slug: " ++ pageSlug ++ "\n\n" ++
+    "Use the designBrief for colours, fonts, and layout — but apply creative judgement " ++
+    "to make it beautiful. The brief is direction, not rigid constraint.\n\n" ++
+    "Requirements:\n" ++
+    "- Single HTML file with inline <style> block (all CSS embedded)\n" ++
+    "- Link Google Fonts in <head> per the designBrief typography\n" ++
+    "- Mobile-first responsive design (must look great on a phone)\n" ++
+    "- Navigation bar linking all pages (CSS :checked hamburger on mobile)\n" ++
+    "- Image placeholders: <img data-ref='filename.jpg' alt='description'>\n" ++
+    "- Clean semantic HTML5, proper heading hierarchy\n" ++
+    "- Accessible: alt text, aria labels, lang attribute, viewport meta\n" ++
+    "- Minimal JS only for hamburger toggle if needed\n\n" ++
+    "Return JSON: {\"html\":\"complete html page\"}";
+  let response = callJsonSimple(prompt);
+  match decode(response) {
+    Ok(json) => match getString(json, "html") {
+      Some(html) => html,
+      None => stripFences(response)
+    },
+    Err(_) => stripFences(response)
+  }
+}
+
+-- Generate shared CSS for the whole site.
+-- Asks AI to return {"css":"..."} JSON so we can extract reliably.
+export func generateSiteCss(siteJson: string) -> string ! {AI}
+  ensures { length(result) > 50 }
+{
+  let prompt = "Generate mobile-first CSS for a multi-page website.\n\n" ++
+    "Site structure and design brief:\n" ++ siteJson ++ "\n\n" ++
+    "Requirements:\n" ++
+    "- Mobile-first: base styles for phones, @media for tablet (768px+) and desktop (1024px+)\n" ++
+    "- CSS custom properties for palette colours (--primary, --secondary, etc)\n" ++
+    "- Responsive navigation (hamburger on mobile, horizontal on desktop)\n" ++
+    "- Hero sections with full-width imagery\n" ++
+    "- Gallery grid: 1 col mobile, 2 tablet, 3 desktop\n" ++
+    "- Smooth transitions and subtle hover states\n" ++
+    "- Print basics\n\n" ++
+    "Return JSON: {\"css\":\"complete css\"}";
+  let response = callJsonSimple(prompt);
+  match decode(response) {
+    Ok(json) => match getString(json, "css") {
+      Some(css) => css,
+      None => stripFences(response)
+    },
+    Err(_) => stripFences(response)
+  }
+}
+
+-- Extract page slugs from site JSON
+export func extractPageSlugs(siteJson: string) -> [string] {
+  match decode(siteJson) {
+    Ok(json) => match getArray(json, "pages") {
+      Some(pages) => flatMap(\page. match getString(page, "slug") {
+        Some(s) => [s],
+        None => []
+      }, pages),
+      None => []
+    },
+    Err(_) => []
+  }
+}
+
+-- Extract the site title from site JSON
+export func extractSiteTitle(siteJson: string) -> string {
+  match decode(siteJson) {
+    Ok(json) => match getString(json, "title") {
+      Some(t) => t,
+      None => "My Website"
+    },
+    Err(_) => "My Website"
+  }
+}

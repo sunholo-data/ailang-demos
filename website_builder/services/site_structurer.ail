@@ -1,0 +1,60 @@
+module website_builder/services/site_structurer
+
+-- Core AI module: takes uploaded content + description + style direction
+-- and produces a structured website plan with design brief.
+
+import std/ai (callJsonSimple)
+import std/string (length)
+
+-- Structure a website from uploaded content, description, and style direction.
+-- Returns JSON with: title, description, designBrief (palette, typography, layout),
+-- and pages (each with slug, title, and sections).
+export func structureSite(contentJson: string, description: string, styleDirection: string) -> string ! {AI}
+  ensures { length(result) > 10 }
+{
+  let prompt = "You are a talented website designer helping a non-technical person.\n\n" ++
+    "The user wants a website for: " ++ description ++ "\n\n" ++
+    "Style direction (starting point, you have creative freedom): " ++ styleDirection ++ "\n\n" ++
+    "They uploaded this content:\n" ++ contentJson ++ "\n\n" ++
+    "Create a complete website with MULTIPLE PAGES (minimum 4: home, about, services/gallery, contact).\n\n" ++
+    "Return compact JSON (no whitespace) with this structure:\n" ++
+    "{\"title\":\"...\",\"description\":\"...\",\"designBrief\":{" ++
+    "\"mood\":\"...\",\"palette\":{\"primary\":\"#hex\",\"secondary\":\"#hex\"," ++
+    "\"accent\":\"#hex\",\"background\":\"#hex\",\"text\":\"#hex\"}," ++
+    "\"typography\":{\"headingFont\":\"Google Font name\",\"bodyFont\":\"Google Font name\"}," ++
+    "\"layout\":{\"style\":\"...\",\"headerStyle\":\"...\",\"imageStyle\":\"...\"}," ++
+    "\"personality\":\"one sentence describing how the website should feel\"}," ++
+    "\"pages\":[" ++
+    "{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[...]}," ++
+    "{\"slug\":\"about\",\"title\":\"About\",\"sections\":[...]}," ++
+    "{\"slug\":\"gallery\",\"title\":\"Gallery\",\"sections\":[...]}," ++
+    "{\"slug\":\"contact\",\"title\":\"Contact\",\"sections\":[...]}" ++
+    "]}";
+  callJsonSimple(prompt)
+}
+
+-- Suggest pages based on description alone (lightweight AI call).
+export func suggestPages(description: string) -> string ! {AI}
+  ensures { length(result) > 5 }
+{
+  let prompt = "A user wants a website for: " ++ description ++ "\n\n" ++
+    "Suggest 3-5 pages that would work well. " ++
+    "Return compact JSON array: [{\"slug\":\"home\",\"title\":\"Home\",\"purpose\":\"...\"},...]";
+  callJsonSimple(prompt)
+}
+
+-- Refine site structure and/or design based on user feedback.
+-- The AI decides whether the feedback is about content, design, or both.
+export func refineSite(currentStructure: string, feedback: string) -> string ! {AI}
+  ensures { length(result) > 10 }
+{
+  let prompt = "You are refining a website based on user feedback.\n\n" ++
+    "Current website (structure + design brief):\n" ++ currentStructure ++ "\n\n" ++
+    "User says: \"" ++ feedback ++ "\"\n\n" ++
+    "The user is not technical. Interpret their feedback generously.\n" ++
+    "Examples: 'more purple' = change palette, 'bigger photos' = change layout, " ++
+    "'add my phone number' = change content.\n\n" ++
+    "Apply the requested changes and return the COMPLETE updated structure " ++
+    "(including designBrief) as compact JSON. Keep everything they did not mention.";
+  callJsonSimple(prompt)
+}

@@ -1,0 +1,125 @@
+module website_builder/main
+
+-- Website Builder: Content Pipeline + HTML Generation CLI
+--
+-- Run (structure only):
+--   GOOGLE_API_KEY="" ailang run --entry main --caps IO,AI,Env --ai gemini-2.5-flash \
+--     website_builder/main.ail "My flower arranging business"
+--
+-- Run (structure + HTML generation):
+--   GENERATE=true GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,AI,Env \
+--     --ai gemini-2.5-flash website_builder/main.ail "My flower arranging business"
+--
+-- Custom style direction:
+--   STYLE="Bold and vibrant" GENERATE=true GOOGLE_API_KEY="" ailang run --entry main \
+--     --caps IO,FS,AI,Env --ai gemini-2.5-flash website_builder/main.ail "My tech startup"
+
+-- Stdlib imports (including transitive deps used by sub-modules)
+import std/io (println)
+import std/env (getArgs, getEnvOr, hasEnv)
+import std/fs (writeFile)
+import std/string (length, join, find)
+import std/list (length as listLength, forEachE, map, flatMap)
+import std/json (encode, decode, jo, kv, js, ja, jnum, getString, getArray, getObject)
+import std/result (Ok, Err)
+import std/option (Some, None)
+import std/math (intToFloat)
+import std/ai (callJsonSimple)
+
+-- Local imports
+import website_builder/types/content (UploadedItem, TextContent, ImageContent, DocumentContent,
+  isText, isImage, isDocument, itemLabel, countItems, filterImages, filterDocuments, filterText)
+import website_builder/services/content_extractor (wrapDocumentContent, wrapImageContent,
+  wrapTextContent, bundleContent, testFlowerShopContent)
+import website_builder/services/site_structurer (structureSite, suggestPages, refineSite)
+import website_builder/services/validator (validateSiteStructure, validatePages,
+  validateDesignBrief, validateHasHomePage, validateAll, validateHtml, validateJavaScript)
+import website_builder/services/html_generator (generatePageHtml, generateSiteCss,
+  extractPageSlugs, extractSiteTitle)
+
+export func main() -> () ! {IO @limit=200, FS @limit=50, AI @limit=50, Env} {
+  println("=== Website Builder ===");
+  println("");
+
+  -- Get description from CLI args
+  let args = getArgs();
+  let description = if listLength(args) > 0 then join(" ", args)
+    else "My flower arranging business";
+
+  -- Get style direction and generation flag from env
+  let styleDirection = getEnvOr("STYLE", "Warm and friendly");
+  let doGenerate = hasEnv("GENERATE");
+
+  println("Description:     " ++ description);
+  println("Style direction: " ++ styleDirection);
+  println("Generate HTML:   " ++ if doGenerate then "yes" else "no (set GENERATE=true to enable)");
+  println("");
+
+  -- Step 1: Bundle test content
+  println("[1/5] Preparing content...");
+  let contentJson = testFlowerShopContent();
+  println("  Content prepared (test data: flower shop, 3 text + 3 images)");
+  println("");
+
+  -- Step 2: Suggest pages
+  println("[2/5] Suggesting pages...");
+  let pageSuggestions = suggestPages(description);
+  println("  Suggested pages:");
+  println(pageSuggestions);
+  println("");
+
+  -- Step 3: Structure the full site with AI
+  println("[3/5] Structuring site with AI...");
+  let siteJson = structureSite(contentJson, description, styleDirection);
+  let siteTitle = extractSiteTitle(siteJson);
+  let slugs = extractPageSlugs(siteJson);
+  println("  Site: " ++ siteTitle);
+  println("  Pages: " ++ join(", ", slugs));
+  println("  JSON size: " ++ show(length(siteJson)) ++ " chars");
+  println("");
+
+  -- Step 4: Validate with contracts
+  println("[4/5] Validating structure...");
+  let validation = validateAll(siteJson);
+  if validation.valid then
+    println("  [PASS] All validations passed")
+  else {
+    println("  [WARN] Validation issues:");
+    forEachE(\e. println("    - " ++ e), validation.errors)
+  };
+  println("");
+
+  -- Step 5: Generate HTML (if GENERATE=true)
+  if doGenerate then {
+    println("[5/5] Generating HTML...");
+    forEachE(\slug. {
+      println("  Generating " ++ slug ++ ".html...");
+      let html = generatePageHtml(siteJson, slug);
+      -- Validate the generated HTML
+      let htmlCheck = validateHtml(html);
+      if htmlCheck.valid then
+        println("    [PASS] HTML valid")
+      else
+        forEachE(\e. println("    [WARN] " ++ e), htmlCheck.errors);
+      -- Write to file
+      let filename = "website_builder/output/" ++ slug ++ ".html";
+      writeFile(filename, html);
+      println("    Wrote " ++ filename ++ " (" ++ show(length(html)) ++ " chars)")
+    }, slugs);
+
+    -- Generate shared CSS
+    println("  Generating style.css...");
+    let css = generateSiteCss(siteJson);
+    writeFile("website_builder/output/style.css", css);
+    println("    Wrote website_builder/output/style.css (" ++ show(length(css)) ++ " chars)");
+    println("")
+  }
+  else
+    println("[5/5] Skipping HTML generation (set GENERATE=true to enable)");
+
+  println("");
+  println("=== Structured Site JSON ===");
+  println(siteJson);
+  println("");
+  println("=== Website Builder Complete ===")
+}

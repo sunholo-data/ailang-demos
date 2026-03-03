@@ -1,0 +1,77 @@
+module website_builder/types/content
+
+-- Content types for the Website Builder demo.
+-- Represents what users upload and what AI produces.
+
+import std/string (length)
+import std/list (filter, length as listLength)
+
+-- What the user uploads (text, images, or parsed documents)
+export type UploadedItem
+  = TextContent({text: string, label: string})
+  | ImageContent({base64: string, mimeType: string, filename: string, description: string})
+  | DocumentContent({blocksJson: string, filename: string, format: string})
+
+-- Section types the AI can produce for a page
+export type SectionType
+  = HeroSection({heading: string, subheading: string, imageRef: string})
+  | TextSection({heading: string, body: string})
+  | GallerySection({heading: string, imageRefs: [string]})
+  | ContactSection({heading: string, details: string})
+  | ListSection({heading: string, items: [string]})
+
+-- Type predicates
+
+export pure func isText(item: UploadedItem) -> bool =
+  match item {
+    TextContent(_) => true,
+    _ => false
+  }
+
+export pure func isImage(item: UploadedItem) -> bool =
+  match item {
+    ImageContent(_) => true,
+    _ => false
+  }
+
+export pure func isDocument(item: UploadedItem) -> bool =
+  match item {
+    DocumentContent(_) => true,
+    _ => false
+  }
+
+-- Get a human-readable label for an uploaded item
+export pure func itemLabel(item: UploadedItem) -> string =
+  match item {
+    TextContent(t) => t.label,
+    ImageContent(i) => i.filename,
+    DocumentContent(d) => d.filename
+  }
+
+-- Count uploaded items
+export pure func countItems(items: [UploadedItem]) -> int
+  ensures { result >= 0 }
+{
+  listLength(items)
+}
+
+-- Filter to images only (contract: result never bigger than input)
+export pure func filterImages(items: [UploadedItem]) -> [UploadedItem]
+  ensures { listLength(result) <= listLength(items) }
+{
+  filter(isImage, items)
+}
+
+-- Filter to documents only
+export pure func filterDocuments(items: [UploadedItem]) -> [UploadedItem]
+  ensures { listLength(result) <= listLength(items) }
+{
+  filter(isDocument, items)
+}
+
+-- Filter to text only
+export pure func filterText(items: [UploadedItem]) -> [UploadedItem]
+  ensures { listLength(result) <= listLength(items) }
+{
+  filter(isText, items)
+}

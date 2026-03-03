@@ -9,6 +9,7 @@ import { renderBlocks, renderMarkdown, renderJson, blockToMarkdown } from './doc
 import { GeminiClient, loadApiKey, saveApiKey, clearApiKey } from './gemini-client.js';
 import { loadDocParseModules, DOCPARSE_MODULE, DOCPARSE_MODULES } from './docparse-loader.js';
 import { renderDocxPreview, renderXlsxPreview, renderPptxPreview, renderPdfPreview, renderImagePreview, renderTextPreview } from './office-preview.js';
+import { parseDocumentFile } from './docparse-utils.js';
 
 // ── State ───────────────────────────────────────────────────────
 let engine = null;
@@ -94,358 +95,57 @@ async function handleFile(file) {
   if (!moduleLoaded) return;
 
   clearOutput();
-  const filename = file.name;
-  updateStatus('Processing ' + filename + '...', 'processing');
-  updateFileInfo(filename, file.size);
+  updateStatus('Processing ' + file.name + '...', 'processing');
+  updateFileInfo(file.name, file.size);
 
   try {
-    // Step 1: Get format info from AILANG
-    const formatResult = engine.callFunction(DOCPARSE_MODULE, 'getFormatInfo', filename);
-    if (!formatResult.success) throw new Error('Format detection failed: ' + formatResult.error);
+    // callFn bridge: wraps engine.callFunction to match parseDocumentFile interface
+    const callFn = (funcName, ...args) => engine.callFunction(DOCPARSE_MODULE, funcName, ...args);
 
-    const formatInfo = JSON.parse(formatResult.result);
-    updatePipeline('format', formatInfo);
+    const { blocks, metadata } = await parseDocumentFile(file, {
+      callFn,
+      apiKey: loadApiKey(),
+      onProgress: (msg) => updatePipeline('parse', msg),
+      JSZip,       // global from CDN in index.html
+    });
 
-    // Step 2: Parse based on format
-    if (formatInfo.format === 'zip-office') {
-      await parseOfficeDocument(file, formatInfo);
-    } else if (formatInfo.needsAI) {
-      await parseWithAI(file, formatInfo);
-    } else if (formatInfo.format === 'text') {
-      await parseTextDocument(file, formatInfo);
-    } else {
-      showUnsupported(formatInfo);
+    // Capture file buffer for preview panel
+    if (file.size > 0) {
+      lastFileBuffer = await file.arrayBuffer();
+      const fmtResult = callFn('getFormatInfo', file.name);
+      const formatInfo = fmtResult.success ? JSON.parse(fmtResult.result) : {};
+      lastFileInfo = { name: file.name, mimeType: file.type, officeType: formatInfo.officeType, format: formatInfo.format };
     }
+
+    const fmtResult = callFn('getFormatInfo', file.name);
+    const formatInfo = fmtResult.success ? JSON.parse(fmtResult.result) : { extension: file.name.split('.').pop(), officeType: 'unknown' };
+
+    renderOutput({
+      filename: file.name,
+      format: formatInfo.extension || file.name.split('.').pop(),
+      officeType: formatInfo.officeType || 'unknown',
+      metadata,
+      blocks,
+      entryCount: 0
+    });
 
     updateStatus('Done', 'ready');
   } catch (err) {
-    updateStatus('Error: ' + err.message, 'error');
-    console.error('Parse error:', err);
-    showError(err.message);
-  }
-}
-
-async function parseOfficeDocument(file, formatInfo) {
-  updatePipeline('extract', 'Extracting ZIP entries...');
-
-  // Read file as ArrayBuffer
-  const buffer = await file.arrayBuffer();
-  lastFileBuffer = buffer;
-  lastFileInfo = { name: file.name, mimeType: file.type, officeType: formatInfo.officeType, format: formatInfo.format };
-
-  // Extract XML using JSZip
-  const zip = await JSZip.loadAsync(buffer);
-  const entries = Object.keys(zip.files);
-
-  updatePipeline('extract', `Found ${entries.length} entries`);
-
-  const allBlocks = [];
-  let metadata = null;
-
-  // Extract and parse metadata (shared across all Office formats)
-  const coreXml = await readZipEntry(zip, 'docProps/core.xml');
-  if (coreXml) {
-    updatePipeline('parse', 'Parsing metadata...');
-    const metaResult = engine.callFunction(DOCPARSE_MODULE, 'parseMetadataXml', coreXml);
-    if (metaResult.success) {
-      metadata = JSON.parse(metaResult.result);
-    }
-  }
-
-  // Format-specific parsing
-  const officeType = formatInfo.officeType;
-  if (officeType === 'word') {
-    await parseDocx(zip, entries, allBlocks);
-  } else if (officeType === 'powerpoint') {
-    await parsePptx(zip, entries, allBlocks);
-  } else if (officeType === 'excel') {
-    await parseXlsx(zip, entries, allBlocks);
-  }
-
-  // Extract embedded images and inject into blocks
-  await injectMediaFromZip(zip, entries, allBlocks, officeType);
-
-  // Describe images with AI if API key is available
-  await describeImagesWithAI(allBlocks);
-
-  // Render output
-  const output = {
-    filename: file.name,
-    format: formatInfo.extension,
-    officeType: officeType,
-    metadata: metadata || { title: '', author: '', created: '', modified: '', pageCount: 0 },
-    blocks: allBlocks,
-    entryCount: entries.length
-  };
-
-  renderOutput(output);
-}
-
-async function parseDocx(zip, entries, allBlocks) {
-  // 1. Parse comments first so we can interleave them with body blocks
-  const commentsXml = await readZipEntry(zip, 'word/comments.xml');
-  const commentBlocksById = {};
-  if (commentsXml) {
-    updatePipeline('parse', 'Parsing DOCX comments...');
-    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxComments', commentsXml);
-    if (result.success) {
-      const commentBlocks = JSON.parse(result.result);
-      // Parse comments.xml with DOMParser to map each block to its w:id
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(commentsXml, 'text/xml');
-        const commentEls = doc.querySelectorAll('comment');
-        commentEls.forEach((el, i) => {
-          const id = el.getAttribute('w:id');
-          if (id && commentBlocks[i]) commentBlocksById[id] = commentBlocks[i];
-        });
-      } catch (_) {}
-    }
-  }
-
-  // 2. Parse body, then interleave comments at the paragraphs that reference them
-  const bodyXml = await readZipEntry(zip, 'word/document.xml');
-  if (bodyXml) {
-    updatePipeline('parse', 'Parsing DOCX body...');
-    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxBody', bodyXml);
-    if (result.success) {
-      const bodyBlocks = JSON.parse(result.result);
-
-      if (Object.keys(commentBlocksById).length > 0) {
-        // Find which paragraph index references which comment IDs
-        try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(bodyXml, 'text/xml');
-          const body = doc.querySelector('body');
-          if (body) {
-            // Walk top-level children (w:p and w:tbl) to match AILANG block order
-            const topNodes = Array.from(body.children);
-            let blockIdx = 0;
-            const insertions = []; // {afterIdx, commentBlock}
-            for (const node of topNodes) {
-              // Count how many blocks this node produces:
-              // w:p -> 1 block + text boxes, w:tbl -> 1 block
-              const tag = node.localName;
-              if (tag === 'p') {
-                // Check for w:commentReference in this paragraph
-                const refs = node.querySelectorAll('commentReference');
-                // A paragraph produces 1 block + any text boxes
-                const txbxCount = node.querySelectorAll('txbxContent').length;
-                blockIdx += 1 + txbxCount;
-                // Insert comment blocks after this paragraph's blocks
-                refs.forEach(ref => {
-                  const id = ref.getAttribute('w:id');
-                  if (id && commentBlocksById[id]) {
-                    insertions.push({ afterIdx: blockIdx - 1, block: commentBlocksById[id] });
-                    delete commentBlocksById[id];
-                  }
-                });
-              } else if (tag === 'tbl') {
-                blockIdx += 1;
-              }
-            }
-            // Insert in reverse order so indices stay valid
-            insertions.sort((a, b) => b.afterIdx - a.afterIdx);
-            for (const ins of insertions) {
-              bodyBlocks.splice(ins.afterIdx + 1, 0, ins.block);
-            }
-          }
-        } catch (_) {}
-        // Append any remaining unmatched comments at the end
-        for (const block of Object.values(commentBlocksById)) {
-          bodyBlocks.push(block);
-        }
-      }
-
-      allBlocks.push(...bodyBlocks);
-    }
-  }
-
-  // 3. Headers, footers, footnotes, endnotes
-  for (const entry of entries.filter(e => e.startsWith('word/header') && e.endsWith('.xml'))) {
-    const xml = await readZipEntry(zip, entry);
-    if (xml) {
-      const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', xml, 'header');
-      if (result.success) allBlocks.push(...JSON.parse(result.result));
-    }
-  }
-
-  for (const entry of entries.filter(e => e.startsWith('word/footer') && e.endsWith('.xml'))) {
-    const xml = await readZipEntry(zip, entry);
-    if (xml) {
-      const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', xml, 'footer');
-      if (result.success) allBlocks.push(...JSON.parse(result.result));
-    }
-  }
-
-  const footnoteXml = await readZipEntry(zip, 'word/footnotes.xml');
-  if (footnoteXml) {
-    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', footnoteXml, 'footnote');
-    if (result.success) allBlocks.push(...JSON.parse(result.result));
-  }
-
-  const endnoteXml = await readZipEntry(zip, 'word/endnotes.xml');
-  if (endnoteXml) {
-    const result = engine.callFunction(DOCPARSE_MODULE, 'parseDocxSection', endnoteXml, 'endnote');
-    if (result.success) allBlocks.push(...JSON.parse(result.result));
-  }
-
-  updatePipeline('parse', `Parsed ${allBlocks.length} blocks from DOCX`);
-}
-
-async function parsePptx(zip, entries, allBlocks) {
-  const slideEntries = entries
-    .filter(e => e.startsWith('ppt/slides/slide') && e.endsWith('.xml') && !e.includes('_rels'))
-    .sort();
-
-  for (let i = 0; i < slideEntries.length; i++) {
-    updatePipeline('parse', `Parsing slide ${i + 1}/${slideEntries.length}...`);
-    const xml = await readZipEntry(zip, slideEntries[i]);
-    if (xml) {
-      const result = engine.callFunction(DOCPARSE_MODULE, 'parsePptxSlide', xml);
-      if (result.success) allBlocks.push(...JSON.parse(result.result));
-    }
-  }
-
-  updatePipeline('parse', `Parsed ${slideEntries.length} slides, ${allBlocks.length} blocks`);
-}
-
-async function parseXlsx(zip, entries, allBlocks) {
-  const sharedStringsXml = await readZipEntry(zip, 'xl/sharedStrings.xml') || '';
-  const sheetEntries = entries
-    .filter(e => e.startsWith('xl/worksheets/sheet') && e.endsWith('.xml'))
-    .sort();
-
-  for (let i = 0; i < sheetEntries.length; i++) {
-    updatePipeline('parse', `Parsing sheet ${i + 1}/${sheetEntries.length}...`);
-    const xml = await readZipEntry(zip, sheetEntries[i]);
-    if (xml) {
-      const result = engine.callFunction(DOCPARSE_MODULE, 'parseXlsxSheet', xml, sharedStringsXml, sheetEntries[i]);
-      if (result.success) allBlocks.push(...JSON.parse(result.result));
-    }
-  }
-
-  updatePipeline('parse', `Parsed ${sheetEntries.length} sheets, ${allBlocks.length} blocks`);
-}
-
-async function parseTextDocument(file, formatInfo) {
-  const text = await file.text();
-  lastFileBuffer = null;
-  lastFileInfo = { name: file.name, mimeType: 'text/plain', officeType: 'text', format: 'text', text };
-  renderOutput({
-    filename: file.name,
-    format: formatInfo.extension,
-    officeType: 'text',
-    metadata: { title: '', author: '', created: '', modified: '', pageCount: 0 },
-    blocks: [{ type: 'text', text: text, style: 'Normal', level: 0 }],
-    entryCount: 0
-  });
-}
-
-// ── AI Parsing (PDF, images, audio, video) ──────────────────────
-
-async function parseWithAI(file, formatInfo) {
-  const apiKey = loadApiKey();
-  if (!apiKey) {
-    showAIRequired(formatInfo);
-    return;
-  }
-
-  updatePipeline('ai', `Sending ${formatInfo.extension.toUpperCase()} to Gemini for extraction...`);
-
-  const gemini = new GeminiClient(apiKey);
-  const buffer = await file.arrayBuffer();
-  lastFileBuffer = buffer;
-  lastFileInfo = { name: file.name, mimeType: getMimeType(file.name), officeType: 'ai', format: formatInfo.format };
-  const base64 = arrayBufferToBase64(buffer);
-  const mimeType = getMimeType(file.name);
-
-  const prompt = `Parse this document and extract all content as structured JSON.
-Return a JSON object with:
-- "blocks": array of content blocks, each with:
-  - "type": one of "heading", "text", "table", "list", "image"
-  - For heading: { "type": "heading", "text": "...", "level": 1-6 }
-  - For text: { "type": "text", "text": "...", "style": "Normal", "level": 0 }
-  - For table: { "type": "table", "headers": ["col1",...], "rows": [["cell1",...]] }
-  - For list: { "type": "list", "items": ["item1",...], "ordered": false }
-  - For image: { "type": "image", "description": "what you see", "mime": "image/png" }
-- "metadata": { "title": "", "author": "" }
-
-Extract ALL text content, tables, lists. For images, describe what you see.`;
-
-  try {
-    const response = await fetch(
-      `${gemini.baseUrl}/models/${gemini.model}:generateContent?key=${gemini.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType, data: base64 } }
-            ]
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.1
-          }
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Gemini API error (${response.status}): ${body.substring(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('No content in Gemini response');
-
-    const parsed = JSON.parse(text);
-    updatePipeline('ai', `AI extracted ${(parsed.blocks || []).length} blocks`);
-
-    const output = {
-      filename: file.name,
-      format: formatInfo.extension,
-      officeType: 'ai',
-      metadata: parsed.metadata || { title: '', author: '', created: '', modified: '', pageCount: 0 },
-      blocks: parsed.blocks || [],
-      entryCount: 0
-    };
-
-    // For image files, include the image itself as a displayable block
-    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(formatInfo.extension)) {
-      output.blocks.unshift({
-        type: 'image',
-        description: 'Uploaded image',
-        mime: mimeType,
-        dataUrl: `data:${mimeType};base64,${base64}`
-      });
-    }
-
-    renderOutput(output);
-  } catch (err) {
-    if (err.message.includes('API error (40')) {
-      showError('Gemini API key error: ' + err.message);
+    // PDF/AI-required case: show hint rather than error
+    if (err.message.includes('Gemini API key')) {
+      const fmtResult = engine.callFunction(DOCPARSE_MODULE, 'getFormatInfo', file.name);
+      const formatInfo = fmtResult.success ? JSON.parse(fmtResult.result) : { extension: 'file', strategy: 'AI' };
+      showAIRequired(formatInfo);
     } else {
-      showError('AI parsing failed: ' + err.message);
+      updateStatus('Error: ' + err.message, 'error');
+      console.error('Parse error:', err);
+      showError(err.message);
     }
   }
-}
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 function getMimeType(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
+  const ext = (filename.split('.').pop() || '').toLowerCase();
   const mimes = {
     pdf: 'application/pdf',
     png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
@@ -454,151 +154,6 @@ function getMimeType(filename) {
     mp4: 'video/mp4', webm: 'video/webm',
   };
   return mimes[ext] || 'application/octet-stream';
-}
-
-// ── Embedded Image Extraction ───────────────────────────────────
-
-async function injectMediaFromZip(zip, entries, allBlocks, officeType) {
-  const mediaPrefix = officeType === 'word' ? 'word/media/'
-    : officeType === 'powerpoint' ? 'ppt/media/'
-    : officeType === 'excel' ? 'xl/media/'
-    : null;
-
-  if (!mediaPrefix) return;
-
-  const mediaEntries = entries.filter(e => e.startsWith(mediaPrefix) && !zip.files[e].dir);
-  if (mediaEntries.length === 0) return;
-
-  updatePipeline('media', `Extracting ${mediaEntries.length} embedded media files...`);
-
-  // Extract all media files as base64
-  const mediaList = [];
-  for (const entry of mediaEntries) {
-    try {
-      const data = await zip.files[entry].async('base64');
-      const filename = entry.split('/').pop();
-      const mime = getMimeType(filename);
-      mediaList.push({
-        dataUrl: `data:${mime};base64,${data}`,
-        mime,
-        filename
-      });
-    } catch (e) {
-      console.warn('Failed to extract media:', entry, e);
-    }
-  }
-
-  // Match image blocks to extracted media (by order)
-  let mediaIdx = 0;
-  function injectIntoBlocks(blocks) {
-    for (const block of blocks) {
-      if (block.type === 'image' && !block.dataUrl && mediaIdx < mediaList.length) {
-        const media = mediaList[mediaIdx++];
-        block.dataUrl = media.dataUrl;
-        block.mime = media.mime;
-      }
-      if (block.type === 'section' && block.blocks) {
-        injectIntoBlocks(block.blocks);
-      }
-    }
-  }
-  injectIntoBlocks(allBlocks);
-
-  // Add remaining unmatched media as new image blocks
-  for (let i = mediaIdx; i < mediaList.length; i++) {
-    const media = mediaList[i];
-    if (media.mime.startsWith('image/')) {
-      allBlocks.push({
-        type: 'image',
-        description: media.filename,
-        mime: media.mime,
-        dataUrl: media.dataUrl,
-        dataLength: 0
-      });
-    }
-  }
-
-  updatePipeline('media', `${mediaList.length} media files, ${mediaIdx} matched to blocks`);
-}
-
-// ── AI Image Description ────────────────────────────────────────
-
-async function describeImagesWithAI(allBlocks) {
-  const apiKey = loadApiKey();
-  if (!apiKey) return;
-
-  const imageBlocks = collectImageBlocks(allBlocks);
-  if (imageBlocks.length === 0) return;
-
-  updatePipeline('ai', `Describing ${imageBlocks.length} images with AI...`);
-
-  const gemini = new GeminiClient(apiKey);
-  let described = 0;
-
-  for (let i = 0; i < imageBlocks.length; i++) {
-    const block = imageBlocks[i];
-    if (!block.dataUrl) continue;
-
-    updatePipeline('ai', `Describing image ${i + 1}/${imageBlocks.length}...`);
-
-    try {
-      const [header, base64] = block.dataUrl.split(',');
-      const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/png';
-
-      const response = await fetch(
-        `${gemini.baseUrl}/models/${gemini.model}:generateContent?key=${gemini.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: 'Describe this image concisely in 1-2 sentences. Focus on the key content and purpose of the image.' },
-                { inlineData: { mimeType, data: base64 } }
-              ]
-            }],
-            generationConfig: { temperature: 0.1 }
-          })
-        }
-      );
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        block.description = text.trim();
-        described++;
-      }
-    } catch (e) {
-      console.warn('Failed to describe image:', e);
-    }
-  }
-
-  updatePipeline('ai', `Described ${described}/${imageBlocks.length} images`);
-}
-
-function collectImageBlocks(blocks) {
-  const result = [];
-  for (const block of blocks) {
-    if (block.type === 'image' && block.dataUrl) result.push(block);
-    if (block.type === 'section' && block.blocks) {
-      result.push(...collectImageBlocks(block.blocks));
-    }
-  }
-  return result;
-}
-
-// ── ZIP Helpers ─────────────────────────────────────────────────
-
-async function readZipEntry(zip, path) {
-  const file = zip.file(path);
-  if (!file) return null;
-  try {
-    return await file.async('string');
-  } catch {
-    return null;
-  }
 }
 
 // ── UI Updates ──────────────────────────────────────────────────
