@@ -41,7 +41,7 @@ export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI
     "- Link Google Fonts in <head> per the designBrief typography\n" ++
     "- Mobile-first responsive design (must look great on a phone)\n" ++
     "- Navigation bar linking all pages (CSS :checked hamburger on mobile)\n" ++
-    "- Image placeholders: <img data-ref='filename.jpg' alt='description'>\n" ++
+    "- Images: use <img src='filename.jpg' alt='description'> using the exact filenames from each section's 'images' array\n" ++
     "- Clean semantic HTML5, proper heading hierarchy\n" ++
     "- Accessible: alt text, aria labels, lang attribute, viewport meta\n" ++
     "- Minimal JS only for hamburger toggle if needed\n\n" ++

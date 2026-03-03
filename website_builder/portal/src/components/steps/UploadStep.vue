@@ -1,7 +1,7 @@
 <template>
   <div class="step">
     <h1>Add your content</h1>
-    <p class="subtitle">Upload photos, or type some text. The more you share, the better your website will be.</p>
+    <p class="subtitle">Upload photos, documents, or type some text. The more you share, the better your website will be.</p>
 
     <!-- Upload buttons -->
     <div class="upload-buttons">
@@ -10,12 +10,8 @@
         <span>Take a photo</span>
       </button>
       <button class="upload-btn" @click="triggerFileUpload">
-        <span class="upload-icon">🖼️</span>
-        <span>Upload images</span>
-      </button>
-      <button class="upload-btn" @click="triggerDocUpload">
-        <span class="upload-icon">📄</span>
-        <span>Upload document</span>
+        <span class="upload-icon">📁</span>
+        <span>Upload files</span>
       </button>
       <button class="upload-btn" @click="showTextInput = !showTextInput">
         <span class="upload-icon">✏️</span>
@@ -24,9 +20,8 @@
     </div>
 
     <!-- Hidden file inputs -->
-    <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handleImages" />
-    <input ref="fileInput" type="file" accept="image/*" multiple style="display:none" @change="handleImages" />
-    <input ref="docInput" type="file" accept=".docx,.pptx,.xlsx,.doc,.pdf" multiple style="display:none" @change="handleDocs" />
+    <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handleFiles" />
+    <input ref="fileInput" type="file" accept="image/*,.docx,.pptx,.xlsx,.doc,.pdf" multiple style="display:none" @change="handleFiles" />
 
     <!-- Text input area -->
     <div v-if="showTextInput" class="text-input-area">
@@ -58,12 +53,22 @@
           <span class="item-name">{{ item.filename || 'Text note' }}</span>
           <span class="item-type">{{ item.formatLabel || item.type }}</span>
         </div>
+        <!-- Image use toggle — only for images -->
+        <button
+          v-if="item.type === 'image'"
+          class="use-toggle"
+          :class="{ 'content-only': item.useOnSite === false }"
+          :title="item.useOnSite === false ? 'Click to show this image on the website' : 'Click to use for content only (no image shown on site)'"
+          @click="toggleUseOnSite(i)"
+        >
+          {{ item.useOnSite === false ? '📝 Content only' : '🖼️ On site' }}
+        </button>
         <button class="remove-btn" @click="removeItem(i)">✕</button>
       </div>
     </div>
 
     <div v-else class="empty-hint">
-      <p>Add at least one photo or text note to get started.</p>
+      <p>Add at least one photo, document, or text note to get started.</p>
     </div>
 
     <div class="nav-btns">
@@ -88,29 +93,11 @@ defineEmits(['next', 'back']);
 const items = ref([...props.items]);
 const cameraInput = ref(null);
 const fileInput = ref(null);
-const docInput = ref(null);
 const showTextInput = ref(false);
 const textDraft = ref('');
 
 function triggerCamera() { cameraInput.value?.click(); }
 function triggerFileUpload() { fileInput.value?.click(); }
-function triggerDocUpload() { docInput.value?.click(); }
-
-async function handleImages(e) {
-  const files = Array.from(e.target.files || []);
-  for (const file of files) {
-    const base64 = await fileToBase64(file);
-    items.value.push({
-      type: 'image',
-      filename: file.name,
-      mimeType: file.type,
-      base64: base64.split(',')[1], // strip data URL prefix
-      preview: base64,
-      description: '' // filled in by AI during build step
-    });
-  }
-  e.target.value = ''; // reset so same file can be re-added
-}
 
 const DOC_FORMATS = {
   docx: 'Word document',
@@ -125,19 +112,29 @@ function getDocFormat(filename) {
   return ext in DOC_FORMATS ? ext : 'docx';
 }
 
-async function handleDocs(e) {
+async function handleFiles(e) {
   const files = Array.from(e.target.files || []);
   for (const file of files) {
     const base64Full = await fileToBase64(file);
-    const base64 = base64Full.split(',')[1];
-    const format = getDocFormat(file.name);
-    items.value.push({
-      type: 'document',
-      filename: file.name,
-      format,
-      formatLabel: DOC_FORMATS[format] || 'Document',
-      base64,
-    });
+    if (file.type.startsWith('image/')) {
+      items.value.push({
+        type: 'image',
+        filename: file.name,
+        mimeType: file.type,
+        base64: base64Full.split(',')[1],
+        preview: base64Full,
+        useOnSite: true,
+      });
+    } else {
+      const format = getDocFormat(file.name);
+      items.value.push({
+        type: 'document',
+        filename: file.name,
+        format,
+        formatLabel: DOC_FORMATS[format] || 'Document',
+        base64: base64Full.split(',')[1],
+      });
+    }
   }
   e.target.value = '';
 }
@@ -152,6 +149,13 @@ function addText() {
   });
   textDraft.value = '';
   showTextInput.value = false;
+}
+
+function toggleUseOnSite(i) {
+  const item = items.value[i];
+  if (item.type === 'image') {
+    item.useOnSite = item.useOnSite === false;
+  }
 }
 
 function removeItem(i) {
@@ -171,12 +175,9 @@ function fileToBase64(file) {
 <style scoped>
 .upload-buttons {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
   margin-bottom: 1.25rem;
-}
-@media (min-width: 400px) {
-  .upload-buttons { grid-template-columns: repeat(4, 1fr); }
 }
 
 .upload-btn {
@@ -243,6 +244,27 @@ function fileToBase64(file) {
 .item-info { flex: 1; min-width: 0; }
 .item-name { display: block; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-type { font-size: 0.75rem; color: var(--text-muted); text-transform: capitalize; }
+
+.use-toggle {
+  flex-shrink: 0;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.use-toggle:hover { background: var(--primary-light); }
+.use-toggle.content-only {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+}
+.use-toggle.content-only:hover { border-color: var(--primary); color: var(--primary); }
+
 .remove-btn {
   background: none;
   border: none;
@@ -250,6 +272,7 @@ function fileToBase64(file) {
   cursor: pointer;
   font-size: 1rem;
   padding: 0.25rem;
+  flex-shrink: 0;
 }
 .remove-btn:hover { color: #CC0000; }
 

@@ -17,6 +17,13 @@ export func structureSite(contentJson: string, description: string, styleDirecti
     "Style direction (starting point, you have creative freedom): " ++ styleDirection ++ "\n\n" ++
     "They uploaded this content:\n" ++ contentJson ++ "\n\n" ++
     "Create a complete website with MULTIPLE PAGES (minimum 4: home, about, services/gallery, contact).\n\n" ++
+    "IMAGES — the uploaded content includes image items with a 'filename' field.\n" ++
+    "Distribute image filenames across relevant sections. Any section showing images\n" ++
+    "must include an 'images' array with the exact filenames.\n\n" ++
+    "SECTIONS — be creative. Invent section types that suit the business and style.\n" ++
+    "Examples: hero, story, split-image-text, masonry-gallery, team-grid,\n" ++
+    "testimonials, stats-bar, features-grid, timeline, cta-banner, contact-form.\n" ++
+    "Do not limit yourself to these — choose layouts that make this site distinctive.\n\n" ++
     "Return compact JSON (no whitespace) with this structure:\n" ++
     "{\"title\":\"...\",\"description\":\"...\",\"designBrief\":{" ++
     "\"mood\":\"...\",\"palette\":{\"primary\":\"#hex\",\"secondary\":\"#hex\"," ++
@@ -25,9 +32,9 @@ export func structureSite(contentJson: string, description: string, styleDirecti
     "\"layout\":{\"style\":\"...\",\"headerStyle\":\"...\",\"imageStyle\":\"...\"}," ++
     "\"personality\":\"one sentence describing how the website should feel\"}," ++
     "\"pages\":[" ++
-    "{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[...]}," ++
+    "{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[{\"type\":\"hero\",\"title\":\"...\",\"images\":[\"filename.jpg\"],\"content\":\"...\"},{\"type\":\"features-grid\",\"title\":\"...\",\"content\":\"...\"}]}," ++
     "{\"slug\":\"about\",\"title\":\"About\",\"sections\":[...]}," ++
-    "{\"slug\":\"gallery\",\"title\":\"Gallery\",\"sections\":[...]}," ++
+    "{\"slug\":\"gallery\",\"title\":\"Gallery\",\"sections\":[{\"type\":\"masonry-gallery\",\"title\":\"...\",\"images\":[\"file1.jpg\",\"file2.jpg\"]}]}," ++
     "{\"slug\":\"contact\",\"title\":\"Contact\",\"sections\":[...]}" ++
     "]}";
   callJsonSimple(prompt)
@@ -54,6 +61,9 @@ export func refineSite(currentStructure: string, feedback: string) -> string ! {
     "The user is not technical. Interpret their feedback generously.\n" ++
     "Examples: 'more purple' = change palette, 'bigger photos' = change layout, " ++
     "'add my phone number' = change content.\n\n" ++
+    "REMOVAL: If asked to remove an image or section, do it immediately and completely.\n" ++
+    "Remove the filename from the section's 'images' array (or the whole section if empty).\n" ++
+    "Do not keep something the user explicitly wants gone.\n\n" ++
     "Apply the requested changes and return the COMPLETE updated structure " ++
     "(including designBrief) as compact JSON. Keep everything they did not mention.";
   callJsonSimple(prompt)

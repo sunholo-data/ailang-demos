@@ -30,7 +30,7 @@ const DOCPARSE_MODULES = [
   { name: 'docparse/services/docparse_browser', path: 'ailang/docparse/services/docparse_browser.ail' },
 ];
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 
 let engine = null;
 let ready = false;
@@ -122,6 +122,41 @@ export function callPureModule(module, funcName, ...args) {
   const result = engine.repl.call(module, funcName, ...args);
   if (!result.success) throw new Error(`${module}.${funcName} failed: ${result.error}`);
   return parseResult(result.result);
+}
+
+/**
+ * Extract text content from a document using Gemini Vision API.
+ * Supports PDF and any format Gemini can read via inlineData.
+ * @param {string} base64 - Raw base64 data (no data URL prefix)
+ * @param {string} mimeType - e.g. 'application/pdf'
+ * @param {string} filename - Original filename for context in the prompt
+ * @returns {Promise<string>} Extracted text content
+ */
+export async function extractDocumentContent(base64, mimeType, filename) {
+  const apiKey = localStorage.getItem('gemini-api-key');
+  if (!apiKey) throw new Error('Gemini API key not set — open Settings to add it');
+
+  const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inlineData: { mimeType, data: base64 } },
+          { text: `Extract all the text content from "${filename}". Return as plain text, preserving structure with headings and paragraphs. Be comprehensive and include all important information.` }
+        ]
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Gemini error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 /**

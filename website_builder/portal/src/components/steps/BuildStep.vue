@@ -85,6 +85,8 @@ async function startBuild() {
     setStep('describe', 'active', 'Describing your images...');
     const wrappedItems = await wrapItems(props.data.items);
     const contentJson = JSON.stringify(wrappedItems);
+    console.log('[WB] Items wrapped:', wrappedItems.length, 'items');
+    console.log('[WB] contentJson (first 800):', contentJson.substring(0, 800));
     setStep('describe', 'done', 'Content prepared');
 
     // 3. Get style direction
@@ -122,10 +124,16 @@ async function startBuild() {
     }
 
     // 6. Generate HTML for each page (parallel — each is an independent AI call)
-    setStep('pages', 'active', `Writing ${slugs.length} pages in parallel...`);
-    statusMessage.value = `Writing ${slugs.length} pages...`;
+    let pagesWritten = 0;
+    setStep('pages', 'active', `Writing ${slugs.length} pages...`);
     const pageEntries = await Promise.all(
-      slugs.map(slug => callAI('renderPage', siteJson, slug).then(html => [slug, html]))
+      slugs.map(slug =>
+        callAI('renderPage', siteJson, slug).then(html => {
+          pagesWritten++;
+          setStep('pages', 'active', `Writing pages... ${pagesWritten}/${slugs.length} done`);
+          return [slug, html];
+        })
+      )
     );
     const pages = Object.fromEntries(pageEntries);
     console.log('[WB] Pages generated:', Object.keys(pages), Object.fromEntries(Object.entries(pages).map(([k, v]) => [k, (v || '').length + ' chars'])));
@@ -160,9 +168,15 @@ async function wrapItems(items) {
   for (const item of imageItems) {
     statusMessage.value = `Describing ${item.filename || 'image'}...`;
     const description = await describeImageWithGemini(item.base64, item.mimeType);
-    // Pass empty base64 — only the description is needed for site planning
-    const wrappedJson = callPure('parseAndWrapImage', '', item.mimeType, item.filename || 'image.jpg', description);
-    wrapped.push(JSON.parse(wrappedJson));
+    if (item.useOnSite === false) {
+      // Content-only: pass as text — AI reads the content but won't place an <img> on the site
+      const wrappedJson = callPure('parseAndWrapText', description, `Photo: ${item.filename || 'image'}`);
+      wrapped.push(JSON.parse(wrappedJson));
+    } else {
+      // Site image: keep filename so AI places an <img data-ref="filename"> placeholder
+      const wrappedJson = callPure('parseAndWrapImage', '', item.mimeType, item.filename || 'image.jpg', description);
+      wrapped.push(JSON.parse(wrappedJson));
+    }
   }
 
   // Parse documents via JSZip + AILANG DocParse (full: DOCX/PPTX/XLSX/PDF + embedded images)

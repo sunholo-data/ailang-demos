@@ -8,13 +8,18 @@ import std/string (length)
 import std/list (map, flatMap, length as listLength)
 import std/result (Ok, Err)
 
--- Wrap a parsed document as a JSON content item
+-- Wrap a parsed document as a JSON content item.
+-- blocksJson is decoded into a real JSON array so the AI can read the content directly.
 export pure func wrapDocumentContent(blocksJson: string, filename: string, format: string) -> string
   ensures { length(result) > 0 }
 {
+  let blocksValue = match decode(blocksJson) {
+    Ok(json) => json,
+    Err(_) => ja([])
+  };
   encode(jo([
     kv("type", js("document")),
-    kv("blocksJson", js(blocksJson)),
+    kv("blocks", blocksValue),
     kv("filename", js(filename)),
     kv("format", js(format))
   ]))
