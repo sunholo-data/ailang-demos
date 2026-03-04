@@ -1,0 +1,81 @@
+module website_builder/scripts/validate
+
+-- CLI entry point for validating generated HTML files.
+-- Reads an HTML file from disk, runs validateHtml + validateJavaScript,
+-- prints results as JSON.
+--
+-- Usage:
+--   ailang run --entry main --caps IO,Env website_builder/scripts/validate.ail path/to/file.html
+
+import std/io (println)
+import std/env (getArgs)
+import std/fs (readFile)
+import std/json (encode, decode, jo, kv, js, ja, jb)
+import std/string (length, split, join, find, substring)
+import std/list (map, flatMap, concat, length as listLength)
+import std/option (Some, None)
+import std/result (Ok, Err)
+import std/math (intToFloat)
+import website_builder/services/validator (validateHtml, validateJavaScript)
+
+-- Check one script block and return its violations (empty if safe)
+pure func checkScript(s: string) -> [string] {
+  let r = validateJavaScript(s);
+  if r.safe then [] else r.violations
+}
+
+-- Extract JavaScript from <script> tags in HTML
+pure func extractScripts(html: string) -> [string] {
+  extractScriptsHelper(html, 0)
+}
+
+pure func extractScriptsHelper(html: string, pos: int) -> [string] {
+  match find(html, "<script") {
+    None => [],
+    Some(start) => {
+      let afterTag = find(substring(html, start, length(html)), ">");
+      match afterTag {
+        None => [],
+        Some(tagEnd) => {
+          let contentStart = start + tagEnd + 1;
+          let rest = substring(html, contentStart, length(html));
+          match find(rest, "</script>") {
+            None => [],
+            Some(endPos) => {
+              let script = substring(rest, 0, endPos);
+              let remaining = substring(rest, endPos + 9, length(rest));
+              if length(script) > 0
+              then script :: extractScriptsHelper(remaining, 0)
+              else extractScriptsHelper(remaining, 0)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+func main() -> string ! {IO, Env} {
+  let args = getArgs();
+  match args {
+    [] => {
+      println("Usage: validate.ail <path/to/file.html>");
+      encode(jo([kv("valid", jb(false)), kv("errors", ja([js("No file path provided")]))]))
+    },
+    filePath :: _ => {
+      let html = readFile(filePath);
+      let htmlResult = validateHtml(html);
+      let scripts = extractScripts(html);
+      let jsErrors = flatMap(checkScript, scripts);
+      let allErrors = concat(htmlResult.errors, jsErrors);
+      let valid = listLength(allErrors) == 0;
+      let result = encode(jo([
+        kv("valid", jb(valid)),
+        kv("errors", ja(map(js, allErrors))),
+        kv("file", js(filePath))
+      ]));
+      println(result);
+      result
+    }
+  }
+}

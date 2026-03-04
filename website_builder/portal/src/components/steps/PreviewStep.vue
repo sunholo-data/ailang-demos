@@ -172,7 +172,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
+import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 
 const props = defineProps({
   generated: { type: Object, required: true },
@@ -182,7 +182,15 @@ const props = defineProps({
 });
 const emit = defineEmits(['publish', 'rebuild', 'update-generated']);
 
-const slugs = computed(() => props.generated?.slugs || []);
+const slugs = computed(() => {
+  const raw = props.generated?.slugs || [];
+  // Always show index/home first, then alphabetical
+  return [...raw].sort((a, b) => {
+    if (a === 'index' || a === 'home') return -1;
+    if (b === 'index' || b === 'home') return 1;
+    return a.localeCompare(b);
+  });
+});
 const currentSlug = ref(slugs.value[0] || 'home');
 
 console.log('[Preview] generated:', {
@@ -263,7 +271,8 @@ const imageMap = computed(() => {
 const SELECTION_SCRIPT = `<style>
 [data-wb-h]{outline:2px dashed rgba(124,92,191,0.35)!important;outline-offset:3px!important;cursor:crosshair!important}
 [data-wb-s]{outline:2px solid rgba(124,92,191,0.85)!important;outline-offset:3px!important;box-shadow:0 0 0 4px rgba(124,92,191,0.1)!important}
-</style><script>(function(){
+</style><script>
+function _wbInit(){
 // Link interception (capture phase — fires before any inline onclick or other listeners)
 document.addEventListener('click',function(e){
   var a=e.target.closest('a[href]');
@@ -295,7 +304,9 @@ document.addEventListener('click',function(e){
   var c=ctx(sel);
   try{parent.postMessage({type:'wb-selected',area:c.area,text:c.text},'*');}catch(err){}
 });
-})()\x3c/script>`;
+}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_wbInit)}else{_wbInit()}
+\x3c/script>`;
 
 // Resolve image filenames → data URIs in any HTML string
 function resolveImages(html) {
@@ -497,86 +508,247 @@ async function sendFeedback() {
   const msg = parts.join('\n\n');
   feedback.value = '';
 
-  // Is this a targeted single-page change (element selected, no new content to add)?
   const isTargeted = !!selectedElement.value && pendingItems.value.length === 0;
-  console.log('[sendFeedback] isTargeted:', isTargeted, '| selectedElement:', selectedElement.value, '| pendingItems:', pendingItems.value.length);
+  const msgPreview = msg.length > 80 ? msg.substring(0, 80) + '…' : msg;
+
+  // Route through Claude Code (sidecar) or WASM fallback
+  const useSidecar = !!(props.generated?.userId && props.generated?.siteSlug);
 
   try {
-    // 1. Refine site structure
-    refineStatus.value = 'Applying your changes...';
-    const updatedSiteJson = await callAI('refineStructure', props.generated.siteJson, msg);
-
-    let newPages, newCss, newSlugs;
-
-    if (isTargeted) {
-      // Targeted change: only re-render the current page, keep everything else
-      refineStatus.value = `Updating ${currentSlug.value} page...`;
-      const updatedHtml = await callAI('renderPage', updatedSiteJson, currentSlug.value);
-      newSlugs = props.generated.slugs;
-      newPages = { ...props.generated.pages, [currentSlug.value]: updatedHtml };
-      newCss = props.generated.css; // keep existing CSS
+    if (useSidecar) {
+      await sendFeedbackViaSidecar(msg, isTargeted, msgPreview);
     } else {
-      // Global change: regenerate all pages and CSS
-      const slugsJson = callPure('getPageSlugs', updatedSiteJson);
-      newSlugs = JSON.parse(slugsJson);
-
-      let done = 0;
-      refineStatus.value = `Writing ${newSlugs.length} pages...`;
-      const pageEntries = await Promise.all(
-        newSlugs.map(slug =>
-          callAI('renderPage', updatedSiteJson, slug).then(html => {
-            done++;
-            refineStatus.value = `Writing pages... ${done}/${newSlugs.length} done`;
-            return [slug, html];
-          })
-        )
-      );
-      newPages = Object.fromEntries(pageEntries);
-
-      refineStatus.value = 'Finalising design...';
-      newCss = await callAI('renderCss', updatedSiteJson);
+      await sendFeedbackViaWasm(msg, isTargeted, msgPreview);
     }
-
-    // Log to history — attach any newly added images so they're viewable
-    const scope = isTargeted
-      ? `Updated ${currentSlug.value} page`
-      : `Updated all ${newSlugs.length} pages`;
-    const msgPreview = msg.length > 80 ? msg.substring(0, 80) + '…' : msg;
-    const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
-    pushHistory('✏️', `"${msgPreview}"`, scope, addedItems.length > 0 ? addedItems : null);
-
-    // Persist on-site images so they stay in imageMap after pendingItems is cleared
-    for (const item of pendingItems.value) {
-      if (item.type === 'image' && item.useOnSite !== false) {
-        persistedImages.value.push({ label: item.label, base64: item.base64, mimeType: item.mimeType });
-      }
-    }
-
-    // Prune persistedImages: drop any image no longer referenced in the updated siteJson
-    // (so images the AI was asked to remove don't linger in imageMap)
-    try {
-      const siteStr = JSON.stringify(JSON.parse(updatedSiteJson));
-      persistedImages.value = persistedImages.value.filter(img => siteStr.includes(img.label));
-    } catch { /* ignore parse errors — keep all */ }
-
-    // Clear pending items; keep selectedElement for targeted refines so the user
-    // can keep iterating on the same element without re-selecting it each time.
-    // For global refines, clear selection since the page structure may have changed.
-    pendingItems.value = [];
-    if (!isTargeted) selectedElement.value = null;
-
-    emit('update-generated', {
-      siteJson: updatedSiteJson,
-      pages: newPages,
-      css: newCss,
-      slugs: newSlugs
-    });
   } catch (err) {
     refineError.value = err.message;
   } finally {
     refining.value = false;
     refineStatus.value = '';
   }
+}
+
+// --- Claude Code path: send feedback → coordinator → Claude Code edits files → reload ---
+
+async function sendFeedbackViaSidecar(msg, isTargeted, msgPreview) {
+  const { userId, siteSlug } = props.generated;
+
+  // 1. Describe any pending images via Gemini before sending (WASM still used for content extraction)
+  if (pendingItems.value.some(i => i.type === 'image' && !i.description)) {
+    refineStatus.value = 'Describing new images...';
+    for (const item of pendingItems.value) {
+      if (item.type === 'image' && !item.description && item.base64) {
+        item.description = await describeImageWithGemini(item.base64, item.mimeType);
+      }
+    }
+  }
+
+  // 2. POST feedback to sidecar
+  refineStatus.value = 'Sending changes to Claude Code...';
+  const feedbackBody = {
+    user: userId,
+    siteName: siteSlug,
+    feedback: msg,
+    targetPage: isTargeted ? currentSlug.value : null,
+    targetElement: selectedElement.value || null,
+    addedContent: pendingItems.value.map(item => ({
+      type: item.type,
+      filename: item.label,
+      description: item.description || item.text || '',
+      base64: item.base64 || undefined,
+      mimeType: item.mimeType || undefined,
+      useOnSite: item.useOnSite,
+    })),
+    outputDir: `sites/${userId}/${siteSlug}`
+  };
+
+  const res = await fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedback: JSON.stringify(feedbackBody) })
+  });
+  if (!res.ok) throw new Error(`Failed to send feedback: HTTP ${res.status}`);
+
+  // 3. Poll for completion (check for response message from Claude Code)
+  refineStatus.value = 'Claude Code is editing your website...';
+  const startTime = Date.now();
+  const TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  const POLL_INTERVAL = 3000;
+
+  let complete = false;
+  while (!complete && (Date.now() - startTime) < TIMEOUT) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    refineStatus.value = `Claude Code is editing your website... (${elapsed}s)`;
+
+    try {
+      const statusRes = await fetch('/api/status');
+      if (statusRes.ok) {
+        const { messages } = await statusRes.json();
+        // Look for a response about this site
+        const response = messages.find(m => {
+          try {
+            const body = JSON.parse(m.body || '{}');
+            return body.status === 'complete' || body.type === 'feedback-complete';
+          } catch { return false; }
+        });
+        if (response) complete = true;
+      }
+    } catch {}
+  }
+
+  if (!complete) {
+    throw new Error('Timed out waiting for Claude Code to finish. Check the coordinator status.');
+  }
+
+  // 4. Re-fetch updated pages from sidecar
+  refineStatus.value = 'Loading updated pages...';
+  const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
+
+  // Get file list first (pages may have changed)
+  const filesRes = await fetch(`/api/files/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`);
+  const { files } = await filesRes.json();
+  const htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+
+  // Fetch all pages
+  const pageEntries = await Promise.all(
+    htmlFiles.map(async (page) => {
+      const r = await fetch(`${base}/${page}.html?raw=true`);
+      if (!r.ok) return null;
+      return [page, await r.text()];
+    })
+  );
+
+  // Fetch CSS
+  const cssCache = {};
+  const validPages = pageEntries.filter(Boolean);
+
+  // Inline local CSS (same logic as MySites)
+  const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
+  const allHrefs = new Set();
+  for (const [, html] of validPages) {
+    let m;
+    while ((m = localCssPattern.exec(html)) !== null) {
+      const href = m[1];
+      if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
+        allHrefs.add(href);
+      }
+    }
+  }
+  await Promise.all([...allHrefs].map(async (href) => {
+    try {
+      const r = await fetch(`${base}/${href}`);
+      if (r.ok) cssCache[href] = await r.text();
+    } catch {}
+  }));
+
+  const newPages = {};
+  for (const [page, html] of validPages) {
+    newPages[page] = html.replace(
+      /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
+      (match, before, href) => {
+        if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
+        const content = cssCache[href];
+        return content ? `<style>/* ${href} */\n${content}</style>` : match;
+      }
+    );
+  }
+
+  const newSlugs = [...htmlFiles].sort((a, b) => {
+    if (a === 'index' || a === 'home') return -1;
+    if (b === 'index' || b === 'home') return 1;
+    return a.localeCompare(b);
+  });
+
+  const combinedCss = Object.values(cssCache).join('\n');
+
+  // Log to history
+  const scope = isTargeted ? `Updated ${currentSlug.value} page` : `Updated ${newSlugs.length} pages`;
+  const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
+  pushHistory('✏️', `"${msgPreview}"`, scope, addedItems.length > 0 ? addedItems : null);
+
+  pendingItems.value = [];
+  if (!isTargeted) selectedElement.value = null;
+
+  emit('update-generated', {
+    siteJson: props.generated.siteJson,
+    pages: newPages,
+    css: combinedCss,
+    slugs: newSlugs,
+    userId,
+    siteSlug
+  });
+}
+
+// --- WASM fallback: in-browser refinement via AILANG WASM + Gemini ---
+
+async function sendFeedbackViaWasm(msg, isTargeted, msgPreview) {
+  // Lazy-init AILANG WASM if not already loaded
+  if (!isReady()) {
+    refineStatus.value = 'Loading AI engine...';
+    await initAilang((step, m) => { refineStatus.value = m; });
+  }
+
+  // 1. Refine site structure
+  refineStatus.value = 'Applying your changes...';
+  const updatedSiteJson = await callAI('refineStructure', props.generated.siteJson, msg);
+
+  let newPages, newCss, newSlugs;
+
+  if (isTargeted) {
+    refineStatus.value = `Updating ${currentSlug.value} page...`;
+    const updatedHtml = await callAI('renderPage', updatedSiteJson, currentSlug.value);
+    newSlugs = props.generated.slugs;
+    newPages = { ...props.generated.pages, [currentSlug.value]: updatedHtml };
+    newCss = props.generated.css;
+  } else {
+    const slugsJson = callPure('getPageSlugs', updatedSiteJson);
+    newSlugs = JSON.parse(slugsJson);
+
+    let done = 0;
+    refineStatus.value = `Writing ${newSlugs.length} pages...`;
+    const pageEntries = await Promise.all(
+      newSlugs.map(slug =>
+        callAI('renderPage', updatedSiteJson, slug).then(html => {
+          done++;
+          refineStatus.value = `Writing pages... ${done}/${newSlugs.length} done`;
+          return [slug, html];
+        })
+      )
+    );
+    newPages = Object.fromEntries(pageEntries);
+
+    refineStatus.value = 'Finalising design...';
+    newCss = await callAI('renderCss', updatedSiteJson);
+  }
+
+  // Log to history
+  const scope = isTargeted ? `Updated ${currentSlug.value} page` : `Updated all ${newSlugs.length} pages`;
+  const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
+  pushHistory('✏️', `"${msgPreview}"`, scope, addedItems.length > 0 ? addedItems : null);
+
+  // Persist on-site images
+  for (const item of pendingItems.value) {
+    if (item.type === 'image' && item.useOnSite !== false) {
+      persistedImages.value.push({ label: item.label, base64: item.base64, mimeType: item.mimeType });
+    }
+  }
+
+  // Prune persistedImages
+  try {
+    const siteStr = JSON.stringify(JSON.parse(updatedSiteJson));
+    persistedImages.value = persistedImages.value.filter(img => siteStr.includes(img.label));
+  } catch {}
+
+  pendingItems.value = [];
+  if (!isTargeted) selectedElement.value = null;
+
+  emit('update-generated', {
+    siteJson: updatedSiteJson,
+    pages: newPages,
+    css: newCss,
+    slugs: newSlugs
+  });
 }
 </script>
 

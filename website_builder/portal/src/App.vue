@@ -26,7 +26,15 @@
     </div>
 
     <!-- Auth gate -->
-    <AuthGate v-if="!authed" @signed-in="handleSignIn" @skip="authed = true" />
+    <AuthGate v-if="!authed" @signed-in="handleSignIn" @skip="handleSkipAuth" />
+
+    <!-- Dashboard: show existing sites (if any) before wizard -->
+    <MySites
+      v-else-if="showDashboard"
+      :user-id="userId"
+      @new-site="showDashboard = false"
+      @view-site="handleViewSite"
+    />
 
     <!-- Main wizard (shown after auth) -->
     <div v-else class="wizard">
@@ -97,8 +105,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import AuthGate from './components/AuthGate.vue';
+import MySites from './components/MySites.vue';
 import DescribeStep from './components/steps/DescribeStep.vue';
 import UploadStep from './components/steps/UploadStep.vue';
 import StyleStep from './components/steps/StyleStep.vue';
@@ -110,9 +119,13 @@ import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
 
 const authed = ref(false);
 const user = ref(null);
+const showDashboard = ref(true); // show MySites first, then wizard
 const currentStep = ref(0);
 const showSettings = ref(false);
 const apiKeyInput = ref('');
+
+// User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
+const userId = computed(() => user.value?.uid || 'default');
 
 const steps = ['Describe', 'Upload', 'Style', 'Build', 'Preview', 'Publish'];
 
@@ -140,6 +153,12 @@ onMounted(() => {
 function handleSignIn(u) {
   user.value = u;
   authed.value = true;
+  showDashboard.value = true;
+}
+
+function handleSkipAuth() {
+  authed.value = true;
+  showDashboard.value = true;
 }
 
 async function handleSignOut() {
@@ -161,8 +180,15 @@ function clearKey() {
   apiKeyInput.value = '';
 }
 
+function handleViewSite(generated) {
+  data.value.generated = generated;
+  showDashboard.value = false;
+  currentStep.value = 4; // jump straight to PreviewStep
+}
+
 function restart() {
   currentStep.value = 0;
+  showDashboard.value = true;
   data.value = {
     description: '',
     items: [],

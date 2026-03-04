@@ -6,6 +6,9 @@ export default defineConfig({
   base: './', // relative paths for GitHub Pages deployment
   server: {
     port: 5174, // avoid colliding with other Vite instances on 5173
+    proxy: {
+      '/api': 'http://localhost:3456'
+    }
   },
   optimizeDeps: {
     exclude: ['firebase'] // firebase uses dynamic imports
