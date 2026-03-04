@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap');
+      text { font-family: 'Montserrat', system-ui, sans-serif; }
+    </style>
+
+    <!-- Subtle card shadow -->
+    <filter id="cardShadow" x="-3%" y="-3%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#314352" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- ===== BACKGROUND ===== -->
+  <rect width="960" height="520" rx="10" fill="#f6f8fa"/>
+
+  <!-- ===== TITLE ===== -->
+  <text x="480" y="38" text-anchor="middle" font-size="20" font-weight="800" fill="#2c3e50">The Software Engineering Stack</text>
+  <text x="480" y="58" text-anchor="middle" font-size="11" font-weight="500" fill="#7f8c9a">Every layer automated with mechanical guarantees — except one</text>
+
+  <!-- ===== ZONE 1: CONSULTANCY (left) ===== -->
+  <g filter="url(#cardShadow)">
+    <rect x="28" y="82" width="240" height="340" rx="8" fill="#ffffff" stroke="#c0cdd8" stroke-width="1"/>
+    <!-- Header bar -->
+    <rect x="28" y="82" width="240" height="44" rx="8" fill="#314352"/>
+    <rect x="28" y="104" width="240" height="22" fill="#314352"/>
+    <text x="148" y="110" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Consultancy</text>
+    <!-- Subtitle -->
+    <text x="148" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#7f8c9a" letter-spacing="0.1em" text-transform="uppercase">HUMAN JUDGMENT</text>
+
+    <!-- Layer: Understand Requirements -->
+    <rect x="44" y="170" width="208" height="64" rx="6" fill="#eef2f6" stroke="#d0d8e0" stroke-width="0.8"/>
+    <text x="56" y="195" font-size="12" font-weight="700" fill="#2c3e50">Understand Requirements</text>
+    <text x="56" y="215" font-size="10" font-weight="400" fill="#7f8c9a">Business goals, user stories, scope</text>
+    <rect x="210" y="181" width="30" height="16" rx="8" fill="#e8edf2"/>
+    <text x="225" y="193" text-anchor="middle" font-size="8" font-weight="600" fill="#7f8c9a">2000</text>
+
+    <!-- Layer: Design Architecture -->
+    <rect x="44" y="248" width="208" height="64" rx="6" fill="#eef2f6" stroke="#d0d8e0" stroke-width="0.8"/>
+    <text x="56" y="273" font-size="12" font-weight="700" fill="#2c3e50">Design Architecture</text>
+    <text x="56" y="293" font-size="10" font-weight="400" fill="#7f8c9a">Frameworks, patterns, decisions</text>
+    <rect x="210" y="259" width="30" height="16" rx="8" fill="#e8edf2"/>
+    <text x="225" y="271" text-anchor="middle" font-size="8" font-weight="600" fill="#7f8c9a">2005</text>
+
+    <!-- Zone label at bottom -->
+    <text x="148" y="395" text-anchor="middle" font-size="10" font-weight="600" fill="#314352" opacity="0.7">AI Engineering Services</text>
+  </g>
+
+  <!-- ===== ARROW 1: Consultancy → Multivac ===== -->
+  <g>
+    <line x1="278" y1="252" x2="306" y2="252" stroke="#c0cdd8" stroke-width="1.5"/>
+    <polygon points="306,247 316,252 306,257" fill="#c0cdd8"/>
+  </g>
+
+  <!-- ===== ZONE 2: MULTIVAC (center) ===== -->
+  <g filter="url(#cardShadow)">
+    <rect x="324" y="82" width="258" height="340" rx="8" fill="#ffffff" stroke="#2a9d8f" stroke-width="1.5"/>
+    <!-- Header bar -->
+    <rect x="324" y="82" width="258" height="44" rx="8" fill="#2a9d8f"/>
+    <rect x="324" y="104" width="258" height="22" fill="#2a9d8f"/>
+    <text x="453" y="110" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Multivac</text>
+    <!-- Subtitle -->
+    <text x="453" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#1a7a6e" letter-spacing="0.1em">MECHANICAL GUARANTEES</text>
+
+    <!-- Layer: Ensure Correctness -->
+    <rect x="340" y="168" width="226" height="50" rx="5" fill="#e8f6f3" stroke="#b8e0d8" stroke-width="0.8"/>
+    <text x="352" y="189" font-size="11" font-weight="700" fill="#1a5c52">Ensure Correctness</text>
+    <text x="352" y="205" font-size="9" font-weight="400" fill="#4a8a80">Unit tests, type checkers</text>
+    <!-- Checkmark -->
+    <circle cx="544" cy="193" r="7" fill="none" stroke="#2a9d8f" stroke-width="1.2"/>
+    <path d="M 540,193 L 543,196 L 549,189" fill="none" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer: Manage Dependencies -->
+    <rect x="340" y="226" width="226" height="50" rx="5" fill="#e8f6f3" stroke="#b8e0d8" stroke-width="0.8"/>
+    <text x="352" y="247" font-size="11" font-weight="700" fill="#1a5c52">Manage Dependencies</text>
+    <text x="352" y="263" font-size="9" font-weight="400" fill="#4a8a80">Package managers, scanners</text>
+    <circle cx="544" cy="251" r="7" fill="none" stroke="#2a9d8f" stroke-width="1.2"/>
+    <path d="M 540,251 L 543,254 L 549,247" fill="none" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer: Deploy -->
+    <rect x="340" y="284" width="226" height="50" rx="5" fill="#e8f6f3" stroke="#b8e0d8" stroke-width="0.8"/>
+    <text x="352" y="305" font-size="11" font-weight="700" fill="#1a5c52">Deploy</text>
+    <text x="352" y="321" font-size="9" font-weight="400" fill="#4a8a80">CI/CD, GitOps, IaC</text>
+    <circle cx="544" cy="309" r="7" fill="none" stroke="#2a9d8f" stroke-width="1.2"/>
+    <path d="M 540,309 L 543,312 L 549,305" fill="none" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Layer: Operate & Debug -->
+    <rect x="340" y="342" width="226" height="50" rx="5" fill="#e8f6f3" stroke="#b8e0d8" stroke-width="0.8"/>
+    <text x="352" y="363" font-size="11" font-weight="700" fill="#1a5c52">Operate &amp; Debug</text>
+    <text x="352" y="379" font-size="9" font-weight="400" fill="#4a8a80">Auto-scaling, observability</text>
+    <circle cx="544" cy="367" r="7" fill="none" stroke="#2a9d8f" stroke-width="1.2"/>
+    <path d="M 540,367 L 543,370 L 549,363" fill="none" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Zone label at bottom -->
+    <text x="453" y="410" text-anchor="middle" font-size="10" font-weight="600" fill="#2a9d8f" opacity="0.8">Config-driven, automated</text>
+  </g>
+
+  <!-- ===== ARROW 2: Multivac → Write Code (with trust inversion) ===== -->
+  <g>
+    <!-- Dashed line indicates the break -->
+    <line x1="592" y1="252" x2="626" y2="252" stroke="#d4a017" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <polygon points="626,247 636,252 626,257" fill="#d4a017"/>
+    <!-- Trust inversion label -->
+    <rect x="593" y="223" width="42" height="30" rx="3" fill="#fff8e6" stroke="#d4a017" stroke-width="0.8"/>
+    <text x="614" y="236" text-anchor="middle" font-size="7" font-weight="700" fill="#b8860b">TRUST</text>
+    <text x="614" y="247" text-anchor="middle" font-size="7" font-weight="700" fill="#b8860b">GAP</text>
+  </g>
+
+  <!-- ===== ZONE 3: WRITE CODE (right) ===== -->
+  <g filter="url(#cardShadow)">
+    <rect x="644" y="82" width="288" height="340" rx="8" fill="#ffffff" stroke="#e73c17" stroke-width="1.5"/>
+    <!-- Header bar -->
+    <rect x="644" y="82" width="288" height="44" rx="8" fill="#e73c17"/>
+    <rect x="644" y="104" width="288" height="22" fill="#e73c17"/>
+    <text x="788" y="110" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Write Code</text>
+    <!-- Subtitle -->
+    <text x="788" y="150" text-anchor="middle" font-size="9" font-weight="600" fill="#c53030" letter-spacing="0.1em">THE LAYER AI AUTOMATED</text>
+
+    <!-- Sub-section: AI Engineering -->
+    <rect x="660" y="168" width="256" height="108" rx="6" fill="#fef5f3" stroke="#f0c8c0" stroke-width="0.8"/>
+    <rect x="660" y="168" width="256" height="26" rx="6" fill="#fde8e4"/>
+    <rect x="660" y="186" width="256" height="8" fill="#fde8e4"/>
+    <text x="672" y="186" font-size="10" font-weight="700" fill="#c53030">AI Engineering</text>
+    <text x="672" y="212" font-size="10" font-weight="500" fill="#555555">AI frameworks, ADK, custom models,</text>
+    <text x="672" y="226" font-size="10" font-weight="500" fill="#555555">production deployments, agents</text>
+    <!-- Current practice badge -->
+    <rect x="850" y="249" width="56" height="16" rx="8" fill="#e73c17" opacity="0.12"/>
+    <text x="878" y="260" text-anchor="middle" font-size="8" font-weight="600" fill="#c53030">Current</text>
+
+    <!-- Divider: + -->
+    <text x="788" y="298" text-anchor="middle" font-size="12" font-weight="600" fill="#b8860b">+</text>
+
+    <!-- Sub-section: AILANG -->
+    <rect x="660" y="308" width="256" height="90" rx="6" fill="#fef9ec" stroke="#e8d5a0" stroke-width="0.8"/>
+    <rect x="660" y="308" width="256" height="26" rx="6" fill="#fdf3d8"/>
+    <rect x="660" y="326" width="256" height="8" fill="#fdf3d8"/>
+    <text x="672" y="326" font-size="10" font-weight="700" fill="#8a6d10">AILANG</text>
+    <text x="672" y="350" font-size="10" font-weight="500" fill="#555555">Type system, effect system, SMT</text>
+    <text x="672" y="364" font-size="10" font-weight="500" fill="#555555">verification for AI-authored code</text>
+    <!-- Lock icon -->
+    <rect x="893" y="334" width="10" height="8" rx="1.5" fill="none" stroke="#b8860b" stroke-width="1.2"/>
+    <path d="M 895,334 L 895,331 C 895,328.5 896.5,327 898,327 C 899.5,327 901,328.5 901,331 L 901,334" fill="none" stroke="#b8860b" stroke-width="1.2"/>
+
+    <!-- Zone label at bottom -->
+    <text x="788" y="416" text-anchor="middle" font-size="9" font-weight="600" fill="#e73c17" opacity="0.7">Restoring mechanical guarantees to code</text>
+  </g>
+
+  <!-- ===== TIMELINE BAR (bottom) ===== -->
+  <g>
+    <line x1="50" y1="460" x2="910" y2="460" stroke="#d0d8e0" stroke-width="1"/>
+    <!-- Ticks and labels -->
+    <line x1="100" y1="456" x2="100" y2="464" stroke="#aab5c0" stroke-width="1"/>
+    <text x="100" y="478" text-anchor="middle" font-size="9" font-weight="500" fill="#7f8c9a">~2000</text>
+    <line x1="200" y1="456" x2="200" y2="464" stroke="#aab5c0" stroke-width="1"/>
+    <text x="200" y="478" text-anchor="middle" font-size="9" font-weight="500" fill="#7f8c9a">~2005</text>
+    <line x1="400" y1="456" x2="400" y2="464" stroke="#aab5c0" stroke-width="1"/>
+    <text x="400" y="478" text-anchor="middle" font-size="9" font-weight="500" fill="#7f8c9a">~2012</text>
+    <line x1="520" y1="456" x2="520" y2="464" stroke="#aab5c0" stroke-width="1"/>
+    <text x="520" y="478" text-anchor="middle" font-size="9" font-weight="500" fill="#7f8c9a">~2015</text>
+    <line x1="620" y1="456" x2="620" y2="464" stroke="#aab5c0" stroke-width="1"/>
+    <text x="620" y="478" text-anchor="middle" font-size="9" font-weight="500" fill="#7f8c9a">~2018</text>
+    <!-- NOW marker -->
+    <line x1="830" y1="453" x2="830" y2="467" stroke="#e73c17" stroke-width="1.5"/>
+    <rect x="812" y="472" width="36" height="16" rx="8" fill="#e73c17"/>
+    <text x="830" y="484" text-anchor="middle" font-size="8" font-weight="700" fill="#ffffff">NOW</text>
+
+    <!-- Timeline label -->
+    <text x="480" y="505" text-anchor="middle" font-size="9" font-weight="500" fill="#aab5c0">Each layer was automated with guarantees added — until AI wrote the code</text>
+  </g>
+
+  <!-- ===== FOOTER ===== -->
+  <g>
+    <line x1="405" y1="515" x2="435" y2="515" stroke="#d0d8e0" stroke-width="0.8"/>
+    <text x="480" y="518" text-anchor="middle" font-size="9" font-weight="500" fill="#aab5c0">sunholo.com</text>
+    <line x1="525" y1="515" x2="555" y2="515" stroke="#d0d8e0" stroke-width="0.8"/>
+  </g>
+</svg>

@@ -11,6 +11,22 @@
 
 <p align="center">
   <a href="https://www.sunholo.com/ailang-demos/"><strong>Live Demo Hub &rarr;</strong></a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <a href="https://www.sunholo.com/"><strong>sunholo.com</strong></a>
+</p>
+
+---
+
+## 10,000% AI-Coded
+
+AILANG itself is **100% AI-coded** — the language, compiler, type checker, effect system, Z3 verification backend, WASM runtime, and standard library were all written by AI. These demos are **100% AI-coded using AILANG** — every `.ail` module, every contract, every streaming protocol integration.
+
+That's 100% &times; 100% = **10,000% AI-coded.**
+
+This isn't AI generating boilerplate. AILANG's type system, algebraic effects, and `requires`/`ensures` contracts mean the AI has to produce code that is **provably correct** — the compiler rejects anything that doesn't type-check, the contract verifier rejects anything that violates invariants, and capability budgets enforce hard resource limits. The result: AI writes the code, and the code proves itself safe.
+
+<p align="center">
+  <img src="vision-stack.svg" alt="The Software Engineering Stack — AILANG restores mechanical guarantees to AI-generated code" width="720">
 </p>
 
 ---
@@ -18,6 +34,12 @@
 ## Demos
 
 ### Document Intelligence
+
+<p align="center">
+  <img src="demo-document-intelligence.svg" alt="Document Intelligence — scanning, parsing, and structured extraction" width="520">
+</p>
+
+Parse, extract, and validate documents with formal safety guarantees. Every extraction result is validated by AILANG contracts — deterministic verification of stochastic AI output.
 
 | Demo | Live Link | Description |
 |------|-----------|-------------|
@@ -28,6 +50,12 @@
 
 ### Streaming & Voice
 
+<p align="center">
+  <img src="demo-streaming-voice.svg" alt="Streaming & Voice — real-time audio waveforms and bidirectional WebSocket" width="520">
+</p>
+
+Real-time streaming protocols — SSE, WebSocket bidirectional audio, and hybrid REST+SSE — all exercising AILANG's `std/stream` effect system. The CLI modules (`.ail`) are the canonical integration tests; browser UIs run the same AILANG code via WebAssembly.
+
 | Demo | Live Link | Protocol | Description |
 |------|-----------|----------|-------------|
 | **Voice DocParse** | [Try it](https://www.sunholo.com/ailang-demos/streaming/voice_docparse/) | WebSocket bidi | Talk to your documents via Gemini Live voice — upload DOCX, PPTX, XLSX, PDF, or images and discuss them |
@@ -36,6 +64,12 @@
 | **Safe Agent** | [Try it](https://www.sunholo.com/ailang-demos/streaming/safe_agent/) | WebSocket bidi | Contract-verified AI tool calling with safety guarantees |
 
 ### Data & Analytics
+
+<p align="center">
+  <img src="demo-contract-verified.svg" alt="Contract-Verified AI — code flowing through verification shield with proof tree" width="520">
+</p>
+
+BigQuery integration with contract-verified SQL generation. AILANG contracts guarantee that AI-generated queries are SELECT-only — no mutations, no injection, enforced at the language level.
 
 | Demo | Description |
 |------|-------------|
@@ -47,7 +81,7 @@
 
 ### Document Extractor
 
-Upload any document — text, image, or PDF — define a schema (or let AI detect one), and get validated, type-safe extraction results. **100% local, 100% AI-coded.** Nothing leaves your browser except the API call to the AI provider — and the provider is swappable via AILANG's `! {AI}` effect system.
+Upload any document — text, image, or PDF — define a schema (or let AI detect one), and get validated, type-safe extraction results. Nothing leaves your browser except the API call to the AI provider — and the provider is swappable via AILANG's `! {AI}` effect system. The extractor validates every AI response against AILANG contracts before returning results, catching malformed or out-of-spec output at the language boundary.
 
 **[Try it live &rarr;](https://www.sunholo.com/ailang-demos/extractor.html)**
 
@@ -57,7 +91,7 @@ Upload any document — text, image, or PDF — define a schema (or let AI detec
 
 ### DocParse
 
-Drop a DOCX, PPTX, XLSX, PDF, or image and get structured output — headings, tables (with merged cells), images, text boxes, track changes, comments, and more. 8 AILANG modules parse Office XML directly in WebAssembly via `std/xml`. No server, no heavy dependencies. 28 contracts, 17 real-world test files, all pure functions.
+Drop a DOCX, PPTX, XLSX, PDF, or image and get structured output — headings, tables (with merged cells), images, text boxes, track changes, comments, and more. 10 AILANG modules parse Office XML directly in WebAssembly via `std/xml` and `std/zip`. No server, no heavy dependencies — the entire parser is pure AILANG functions running in your browser. 28 contracts enforce structural invariants: filter bounds, 1:1 mapper preservation, size guarantees. 17 real-world test files.
 
 **[Try DocParse &rarr;](https://www.sunholo.com/ailang-demos/docparse.html)**
 
@@ -67,7 +101,7 @@ Drop a DOCX, PPTX, XLSX, PDF, or image and get structured output — headings, t
 
 ### Voice DocParse
 
-Upload a document and talk to it. Gemini Live bidirectional audio streaming lets you ask questions about your documents conversationally. Supports DOCX, PPTX, XLSX, PDF, and images — documents are parsed via AILANG WASM modules (the same ones powering DocParse), with embedded images described by AI. The extracted content is injected into the Gemini Live session context so the model can answer questions about it.
+Upload a document and talk to it. Gemini Live bidirectional audio streaming lets you ask questions about your documents conversationally. Documents are parsed by the same AILANG WASM modules that power DocParse — embedded images are described by AI via the `std/ai` effect — and the extracted content is injected into the Gemini Live session context so the model can answer questions about your data in real time.
 
 **[Try Voice DocParse &rarr;](https://www.sunholo.com/ailang-demos/streaming/voice_docparse/)**
 
@@ -75,15 +109,17 @@ Upload a document and talk to it. Gemini Live bidirectional audio streaming lets
 
 ### Safe Agent
 
-Contract-verified AI tool calling. The agent has access to tools (calculator, file reader, command runner) but every tool is wrapped in AILANG contracts that enforce safety invariants. If the AI tries to call a tool with invalid arguments, the contract blocks it before execution.
+Contract-verified AI tool calling. The agent has access to tools (calculator, file reader, SQL query runner) but every tool is wrapped in AILANG `requires`/`ensures` contracts that enforce safety invariants at the language level. If the AI tries to call a tool with invalid arguments — a negative subtotal, a path traversal attack, a mutating SQL query — the contract blocks it *before execution*. The contracts are also statically verifiable via Z3: `ailang verify` can prove at compile time that the calculator never overflows and file reads never escape the sandbox.
 
 **[Try Safe Agent &rarr;](https://www.sunholo.com/ailang-demos/streaming/safe_agent/)**
+
+![AILANG Safe Agent — Contract Verification](ailang-speak-contract.png)
 
 **Features:** Gemini Live WebSocket for voice interaction, AILANG contract-verified tools loaded via WASM, business tools (calculator, formatter, validator), real-time tool call visualization, safety violation display.
 
 ### Static Verification (Z3)
 
-Prove contracts correct at compile time — no tests needed, no runtime overhead. **42 contracts verified, 4 bugs caught** across 4 modules covering cloud billing, access control, resource scheduling, and arithmetic. Z3 catches bugs invisible to traditional testing.
+Prove contracts correct at compile time — no tests needed, no runtime overhead. **42 contracts verified, 4 bugs caught** across 4 modules covering cloud billing, access control, resource scheduling, and arithmetic. Z3 catches bugs that are invisible to traditional testing — like a credit-apply function that silently allows negative totals when `subtotal=0, credits=1`.
 
 **[Try Z3 Verify &rarr;](https://www.sunholo.com/ailang-demos/verify.html)**
 
@@ -103,7 +139,7 @@ $ ailang verify verify_demo/billing.ail
 
 ### Streaming — CLI Demos
 
-All streaming demos have CLI modules (`.ail`) alongside their browser UIs. The CLI modules are the canonical integration tests for AILANG's `std/stream` effect.
+All streaming demos have CLI modules (`.ail`) alongside their browser UIs. The CLI modules are the canonical integration tests for AILANG's `std/stream` effect — SSE via `ssePost`/`sseConnect`, WebSocket via `connect`/`transmit`/`onEvent`. Each demo exercises a different streaming pattern so we can verify the full protocol surface.
 
 | Demo | Protocol | CLI Status | What it does |
 |------|----------|-----------|-------------|
@@ -127,13 +163,43 @@ speak -v Orus "Explain algebraic effects"
 speak --tools "What's the git status?"    # with tool calling
 ```
 
+### Website Builder
+
+Give it a text description of a business, and it generates a complete multi-page website — site structure, navigation, HTML per page, shared CSS — all via AILANG's `std/ai` effect calling Gemini. The AI output is validated by AILANG contracts (structure has a home page, pages have valid slugs, HTML passes syntax checks) before being written to disk. Style is configurable via 6 preset directions or freeform text.
+
+```bash
+GENERATE=true GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,AI,Env \
+  --ai gemini-2.5-flash website_builder/main.ail "My flower arranging business"
+```
+
 ### Ecommerce
 
-Six working demos covering AI integration, data pipelines, capability budgets, BigQuery analytics, design-by-contract verification, and a REST API with React UI.
+Six working demos covering AI integration, data pipelines, capability budgets, BigQuery analytics, design-by-contract verification, and a REST API with React UI. The ecommerce vertical demonstrates AILANG's shared services pattern — modules like `gcp_auth`, `bigquery`, and `ai_service` are reused across streaming, analytics, and safe agent demos.
 
 ![Ecommerce Dashboard UI](ecommerce/img/ecommerce-dashboard-ui.png)
 
 **Features:** Contract verification forms, live BigQuery analytics with charts, AI-powered product recommendations, server status monitoring, and zero-code API generation from AILANG modules.
+
+---
+
+## What is AILANG?
+
+<p align="center">
+  <img src="vision-hero.svg" alt="AILANG — Restoring mechanical guarantees to AI-generated code" width="200">
+</p>
+
+AILANG is a pure functional language designed for AI-native applications. It's **100% AI-coded** — the compiler, type system, and standard library were all written by AI — and it's designed so that AI can write provably correct programs in it.
+
+The core idea: every layer of the software engineering stack has mechanical guarantees (CI/CD, type checkers, package managers, IaC) — except the one layer AI just automated: *writing code*. AILANG closes that gap with a language-level contract system backed by Z3, an effect system that enforces capability budgets, and Hindley-Milner type inference that catches errors before runtime.
+
+- **Hindley-Milner type inference** — types are inferred, not annotated
+- **Algebraic effects** — controlled side effects via capabilities (`IO`, `FS`, `Net`, `AI`)
+- **Capability budgets** — hard limits on resource usage with `@limit=N`
+- **Pattern matching** — on lists, `Option`, `Result`, and custom ADTs
+- **First-class AI** — `std/ai` effect for calling any AI provider
+- **Contracts** — `requires`/`ensures` preconditions and postconditions
+- **Static verification** — `ailang verify` proves contracts via Z3 SMT solver
+- **WebAssembly** — run AILANG in the browser with full stdlib support
 
 ---
 
@@ -160,24 +226,14 @@ gemini extensions install https://github.com/sunholo-data/ailang_bootstrap.git
 
 See [ailang.sunholo.com](https://ailang.sunholo.com/) for full docs.
 
-## What is AILANG?
-
-AILANG is a pure functional language designed for AI-native applications:
-
-- **Hindley-Milner type inference** — types are inferred, not annotated
-- **Algebraic effects** — controlled side effects via capabilities (`IO`, `FS`, `Net`, `AI`)
-- **Capability budgets** — hard limits on resource usage with `@limit=N`
-- **Pattern matching** — on lists, `Option`, `Result`, and custom ADTs
-- **First-class AI** — `std/ai` effect for calling any AI provider
-- **Contracts** — `requires`/`ensures` preconditions and postconditions
-- **Static verification** — `ailang verify` proves contracts via Z3 SMT solver
-- **WebAssembly** — run AILANG in the browser with full stdlib support
-
 ## Repository Structure
 
 ```
 demos/
 ├── ailang-logo.svg              # AILANG logo (hexagon + lambda)
+├── vision-stack.svg             # Software engineering stack diagram
+├── vision-hero.svg              # Trust inversion animated diagram
+├── ai-engineer.svg              # AI engineering neural pattern
 ├── site/
 │   └── index.html               # Demo hub page (sunholo.com/ailang-demos/)
 ├── docparse/                    # DocParse AILANG source (10 modules)
@@ -197,6 +253,11 @@ demos/
 │   ├── transcription/           # Deepgram STT
 │   ├── voice_analytics/         # Voice + BigQuery
 │   └── voice_pipeline/          # STT + LLM + TTS
+├── website_builder/             # AI website generation pipeline
+│   ├── main.ail                 # Content → structure → HTML via Gemini
+│   ├── types/                   # Content ADTs
+│   ├── services/                # Extractor, structurer, validator, generator
+│   └── output/                  # Generated HTML + CSS
 ├── ecommerce/                   # Ecommerce vertical demo
 │   ├── main.ail                 # AI product recommendations
 │   └── services/                # Shared services (auth, BigQuery, AI)
@@ -205,6 +266,7 @@ demos/
 │   ├── access_policy.ail        # RBAC: 48 permission paths
 │   ├── scheduling.ail           # Booking: capacity bounds
 │   └── main.ail                 # Runtime demo
+├── scripts/                     # Claude Code hooks (voice debrief, waiting alert)
 ├── invoice_processor_wasm/      # WASM runtime + browser demos
 │   ├── index.html               # Document Extractor
 │   ├── docparse.html            # DocParse browser
