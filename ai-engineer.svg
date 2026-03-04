@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <!-- Background Circle -->
+  <circle cx="120" cy="120" r="120" fill="#f6f8fa" />
+  
+  <!-- Outer Ring - Pulse Animation with seamless rotation -->
+  <circle cx="120" cy="120" r="110" fill="none" stroke="#e73c17" stroke-width="2" stroke-dasharray="8 8">
+    <animate 
+      attributeName="stroke-dashoffset" 
+      values="0;16" 
+      dur="3s"
+      keyTimes="0;1"
+      calcMode="linear"
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="opacity" 
+      values="0.7;1;0.7" 
+      dur="3s"
+      keyTimes="0;0.5;1"
+      keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+      calcMode="spline" 
+      repeatCount="indefinite" />
+  </circle>
+  
+  <!-- Core Circle - Primary Color with Subtle Pulse -->
+  <circle cx="120" cy="120" r="90" fill="#314352">
+    <animate 
+      attributeName="r" 
+      values="90;92;90" 
+      dur="4s"
+      keyTimes="0;0.5;1"
+      keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+      calcMode="spline" 
+      repeatCount="indefinite" />
+  </circle>
+  
+  <!-- Central Thinking Element - Abstract Neural Pattern -->
+  <g fill="#ffffff" opacity="0.92">
+    <!-- Center Node with Pulse -->
+    <circle cx="120" cy="120" r="15">
+      <animate 
+        attributeName="r" 
+        values="15;16;15" 
+        dur="2s"
+        keyTimes="0;0.5;1"
+        keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+        calcMode="spline" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="opacity" 
+        values="0.92;1;0.92" 
+        dur="2s"
+        keyTimes="0;0.5;1"
+        keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+        calcMode="spline" 
+        repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Connected Nodes - First Layer with Subtle Movement -->
+    <circle cx="90" cy="110" r="8">
+      <animate 
+        attributeName="cx" 
+        values="90;88;90" 
+        dur="3s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="110;108;110" 
+        dur="3.5s" 
+        repeatCount="indefinite" />
+    </circle>
+    <circle cx="150" cy="110" r="8">
+      <animate 
+        attributeName="cx" 
+        values="150;152;150" 
+        dur="3.2s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="110;108;110" 
+        dur="3.7s" 
+        repeatCount="indefinite" />
+    </circle>
+    <circle cx="100" cy="150" r="8">
+      <animate 
+        attributeName="cx" 
+        values="100;98;100" 
+        dur="3.4s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="150;152;150" 
+        dur="3.9s" 
+        repeatCount="indefinite" />
+    </circle>
+    <circle cx="140" cy="150" r="8">
+      <animate 
+        attributeName="cx" 
+        values="140;142;140" 
+        dur="3.6s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="150;152;150" 
+        dur="4.1s" 
+        repeatCount="indefinite" />
+    </circle>
+    <circle cx="100" cy="90" r="8">
+      <animate 
+        attributeName="cx" 
+        values="100;98;100" 
+        dur="3.8s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="90;88;90" 
+        dur="4.3s" 
+        repeatCount="indefinite" />
+    </circle>
+    <circle cx="140" cy="90" r="8">
+      <animate 
+        attributeName="cx" 
+        values="140;142;140" 
+        dur="4s" 
+        repeatCount="indefinite" />
+      <animate 
+        attributeName="cy" 
+        values="90;88;90" 
+        dur="4.5s" 
+        repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Connected Nodes - Second Layer (Static) -->
+    <circle cx="70" cy="95" r="5" />
+    <circle cx="65" cy="130" r="5" />
+    <circle cx="90" cy="160" r="5" />
+    <circle cx="130" cy="170" r="5" />
+    <circle cx="165" cy="140" r="5" />
+    <circle cx="175" cy="105" r="5" />
+    <circle cx="155" cy="70" r="5" />
+    <circle cx="120" cy="65" r="5" />
+    <circle cx="85" cy="75" r="5" />
+  </g>
+  
+  <!-- Connection Lines that update with node movement -->
+  <line id="line1" x1="120" y1="120" x2="90" y2="110" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="90;88;90" 
+      dur="3s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="110;108;110" 
+      dur="3.5s" 
+      repeatCount="indefinite" />
+  </line>
+  <line id="line2" x1="120" y1="120" x2="150" y2="110" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="150;152;150" 
+      dur="3.2s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="110;108;110" 
+      dur="3.7s" 
+      repeatCount="indefinite" />
+  </line>
+  <line id="line3" x1="120" y1="120" x2="100" y2="150" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="100;98;100" 
+      dur="3.4s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="150;152;150" 
+      dur="3.9s" 
+      repeatCount="indefinite" />
+  </line>
+  <line id="line4" x1="120" y1="120" x2="140" y2="150" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="140;142;140" 
+      dur="3.6s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="150;152;150" 
+      dur="4.1s" 
+      repeatCount="indefinite" />
+  </line>
+  <line id="line5" x1="120" y1="120" x2="100" y2="90" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="100;98;100" 
+      dur="3.8s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="90;88;90" 
+      dur="4.3s" 
+      repeatCount="indefinite" />
+  </line>
+  <line id="line6" x1="120" y1="120" x2="140" y2="90" stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <animate 
+      attributeName="x2" 
+      values="140;142;140" 
+      dur="4s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="y2" 
+      values="90;88;90" 
+      dur="4.5s" 
+      repeatCount="indefinite" />
+  </line>
+  
+  <!-- Remaining connection lines (static) -->
+  <g stroke="#ffffff" stroke-width="1.5" opacity="0.8">
+    <line x1="90" y1="110" x2="70" y2="95" />
+    <line x1="90" y1="110" x2="65" y2="130" />
+    <line x1="100" y1="150" x2="90" y2="160" />
+    <line x1="140" y1="150" x2="130" y2="170" />
+    <line x1="150" y1="110" x2="165" y2="140" />
+    <line x1="150" y1="110" x2="175" y2="105" />
+    <line x1="140" y1="90" x2="155" y2="70" />
+    <line x1="100" y1="90" x2="85" y2="75" />
+    <line x1="100" y1="90" x2="120" y2="65" />
+  </g>
+  
+  <!-- Accent Elements - Primary Color Highlights with Opacity Animation -->
+  <circle cx="120" cy="120" r="12" fill="#e73c17" opacity="0.2">
+    <animate 
+      attributeName="opacity" 
+      values="0.2;0.3;0.2" 
+      dur="3s"
+      keyTimes="0;0.5;1"
+      keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"
+      calcMode="spline" 
+      repeatCount="indefinite" />
+  </circle>
+  <circle cx="90" cy="110" r="6" fill="#e73c17" opacity="0.15">
+    <animate 
+      attributeName="opacity" 
+      values="0.15;0.25;0.15" 
+      dur="4s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cx" 
+      values="90;88;90" 
+      dur="3s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cy" 
+      values="110;108;110" 
+      dur="3.5s" 
+      repeatCount="indefinite" />
+  </circle>
+  <circle cx="150" cy="110" r="6" fill="#e73c17" opacity="0.15">
+    <animate 
+      attributeName="opacity" 
+      values="0.15;0.25;0.15" 
+      dur="3.5s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cx" 
+      values="150;152;150" 
+      dur="3.2s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cy" 
+      values="110;108;110" 
+      dur="3.7s" 
+      repeatCount="indefinite" />
+  </circle>
+  <circle cx="100" cy="150" r="6" fill="#e73c17" opacity="0.15">
+    <animate 
+      attributeName="opacity" 
+      values="0.15;0.25;0.15" 
+      dur="4.5s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cx" 
+      values="100;98;100" 
+      dur="3.4s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cy" 
+      values="150;152;150" 
+      dur="3.9s" 
+      repeatCount="indefinite" />
+  </circle>
+  <circle cx="140" cy="150" r="6" fill="#e73c17" opacity="0.15">
+    <animate 
+      attributeName="opacity" 
+      values="0.15;0.25;0.15" 
+      dur="5s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cx" 
+      values="140;142;140" 
+      dur="3.6s" 
+      repeatCount="indefinite" />
+    <animate 
+      attributeName="cy" 
+      values="150;152;150" 
+      dur="4.1s" 
+      repeatCount="indefinite" />
+  </circle>
+  
+  <!-- Subtle Radial Gradient Overlay -->
+  <circle cx="120" cy="120" r="90" fill="url(#radialGradient)" opacity="0.3">
+    <animate 
+      attributeName="opacity" 
+      values="0.3;0.35;0.3" 
+      dur="5s" 
+      repeatCount="indefinite" />
+  </circle>
+  
+  <!-- Definitions -->
+  <defs>
+    <radialGradient id="radialGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+</svg>

@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <defs>
+    <radialGradient id="visionCore" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3d5466"/>
+      <stop offset="100%" stop-color="#283c4d"/>
+    </radialGradient>
+    <radialGradient id="visionOverlay" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="bridgeGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="120" cy="120" r="120" fill="#f6f8fa"/>
+
+  <!-- === STABLE AUTOMATION RINGS — Each layer added mechanical guarantees === -->
+
+  <!-- Ring 4: Operations — outermost stable ring -->
+  <circle cx="120" cy="120" r="86" fill="none" stroke="#314352" stroke-width="2.5" opacity="0.2">
+    <animate attributeName="opacity" values="0.2;0.28;0.2" dur="7s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Ring 3: Deployment -->
+  <circle cx="120" cy="120" r="74" fill="none" stroke="#314352" stroke-width="3.5" opacity="0.32">
+    <animate attributeName="opacity" values="0.32;0.4;0.32" dur="6s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Ring 2: Dependencies -->
+  <circle cx="120" cy="120" r="60" fill="none" stroke="#2a9d8f" stroke-width="5" opacity="0.48">
+    <animate attributeName="opacity" values="0.48;0.58;0.48" dur="5s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Ring 1: Correctness — innermost, strongest guarantee -->
+  <circle cx="120" cy="120" r="48" fill="none" stroke="#2a9d8f" stroke-width="7" opacity="0.7">
+    <animate attributeName="opacity" values="0.7;0.8;0.7" dur="4.5s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- === CORE — The Foundation === -->
+  <circle cx="120" cy="120" r="30" fill="url(#visionCore)">
+    <animate attributeName="r" values="30;31;30" dur="4s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Center anchor — stable, confident -->
+  <circle cx="120" cy="120" r="6" fill="#ffffff" opacity="0.9">
+    <animate attributeName="opacity" values="0.9;1;0.9" dur="3s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- === STABLE NODES on inner rings === -->
+  <g fill="#ffffff">
+    <!-- Ring 1 (r=48): 5 nodes, 72deg apart from top -->
+    <circle cx="120" cy="72" r="4.5" opacity="0.85"/>
+    <circle cx="165.6" cy="105" r="4.5" opacity="0.85"/>
+    <circle cx="148.2" cy="158.8" r="4.5" opacity="0.85"/>
+    <circle cx="91.8" cy="158.8" r="4.5" opacity="0.85"/>
+    <circle cx="74.4" cy="105" r="4.5" opacity="0.85"/>
+
+    <!-- Ring 2 (r=60): 6 nodes, 60deg apart, offset 30deg -->
+    <circle cx="172" cy="90" r="3.5" opacity="0.6"/>
+    <circle cx="172" cy="150" r="3.5" opacity="0.6"/>
+    <circle cx="120" cy="180" r="3.5" opacity="0.6"/>
+    <circle cx="68" cy="150" r="3.5" opacity="0.6"/>
+    <circle cx="68" cy="90" r="3.5" opacity="0.6"/>
+    <circle cx="120" cy="60" r="3.5" opacity="0.6"/>
+  </g>
+
+  <!-- === STABLE CONNECTION LINES — Core to Ring 1 === -->
+  <g stroke="#ffffff" stroke-width="1.2" opacity="0.35">
+    <line x1="120" y1="90" x2="120" y2="76"/>
+    <line x1="139" y1="110" x2="161" y2="107"/>
+    <line x1="135" y1="140" x2="145" y2="155"/>
+    <line x1="105" y1="140" x2="95" y2="155"/>
+    <line x1="101" y1="110" x2="79" y2="107"/>
+  </g>
+
+  <!-- === THE BROKEN RING — AI Code Generation: The Trust Inversion === -->
+
+  <!-- Primary fragmented ring — irregular gaps, slowly rotating -->
+  <circle cx="120" cy="120" r="102" fill="none" stroke="#e73c17" stroke-width="3" stroke-dasharray="30 18 45 18 20 18 35 18" stroke-linecap="round" opacity="0.6">
+    <animate attributeName="stroke-dashoffset" values="0;202" dur="24s" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;0.35;0.6" dur="3.5s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Outer echo — thinner, counter-rotating for depth -->
+  <circle cx="120" cy="120" r="110" fill="none" stroke="#e73c17" stroke-width="1.2" stroke-dasharray="12 28 18 28" stroke-linecap="round" opacity="0.18">
+    <animate attributeName="stroke-dashoffset" values="0;-86" dur="16s" calcMode="linear" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Inner echo -->
+  <circle cx="120" cy="120" r="95" fill="none" stroke="#e73c17" stroke-width="1" stroke-dasharray="8 35 15 35" opacity="0.12">
+    <animate attributeName="stroke-dashoffset" values="0;93" dur="20s" calcMode="linear" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- === BRIDGE ARCS — Restoration in progress === -->
+  <!-- Short bright arcs sweeping the broken ring, pulsing as they "heal" gaps -->
+  <circle cx="120" cy="120" r="102" fill="none" stroke="#e73c17" stroke-width="5" stroke-dasharray="10 631" stroke-linecap="round" filter="url(#bridgeGlow)">
+    <animate attributeName="stroke-dashoffset" values="-40;-681" dur="24s" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.2;0.85;0.2" dur="2.8s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="120" cy="120" r="102" fill="none" stroke="#e73c17" stroke-width="5" stroke-dasharray="8 633" stroke-linecap="round" filter="url(#bridgeGlow)">
+    <animate attributeName="stroke-dashoffset" values="-180;-821" dur="24s" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.15;0.7;0.15" dur="3.2s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="120" cy="120" r="102" fill="none" stroke="#e73c17" stroke-width="5" stroke-dasharray="6 635" stroke-linecap="round" filter="url(#bridgeGlow)">
+    <animate attributeName="stroke-dashoffset" values="-320;-961" dur="24s" calcMode="linear" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.1;0.65;0.1" dur="3.6s" keyTimes="0;0.5;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" calcMode="spline" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- === UNSTABLE NODES on the broken ring — flickering, uncertain === -->
+  <g fill="#e73c17">
+    <!-- 7 nodes evenly spaced on r~104 -->
+    <circle cx="120" cy="18" r="3.5">
+      <animate attributeName="opacity" values="0.6;0.12;0.6" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3.5;1.5;3.5" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="201" cy="55" r="3">
+      <animate attributeName="opacity" values="0.5;0.08;0.5" dur="2.5s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;1;3" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="222" cy="143" r="3">
+      <animate attributeName="opacity" values="0.4;0.1;0.4" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;1.5;3" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="165" cy="214" r="3.5">
+      <animate attributeName="opacity" values="0.55;0.08;0.55" dur="2.2s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3.5;1;3.5" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="75" cy="214" r="3">
+      <animate attributeName="opacity" values="0.45;0.1;0.45" dur="2.8s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;1.5;3" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="18" cy="143" r="3.5">
+      <animate attributeName="opacity" values="0.5;0.12;0.5" dur="2.3s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3.5;1;3.5" dur="2.3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="39" cy="55" r="3">
+      <animate attributeName="opacity" values="0.6;0.08;0.6" dur="2.6s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;1.5;3" dur="2.6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- === UNSTABLE CONNECTIONS — dashed lines from stable to unstable === -->
+  <g stroke="#e73c17" stroke-width="0.8" stroke-dasharray="3 4" opacity="0.15">
+    <line x1="120" y1="60" x2="120" y2="18"/>
+    <line x1="172" y1="90" x2="201" y2="55"/>
+    <line x1="172" y1="150" x2="222" y2="143"/>
+    <line x1="120" y1="180" x2="165" y2="214"/>
+    <line x1="120" y1="180" x2="75" y2="214"/>
+    <line x1="68" y1="150" x2="18" y2="143"/>
+    <line x1="68" y1="90" x2="39" y2="55"/>
+  </g>
+
+  <!-- Radial gradient overlay for depth -->
+  <circle cx="120" cy="120" r="86" fill="url(#visionOverlay)" opacity="0.12"/>
+</svg>
