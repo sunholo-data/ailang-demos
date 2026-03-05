@@ -80,10 +80,10 @@ async function viewSite(site) {
   try {
     const base = `/api/sites/${encodeURIComponent(props.userId)}/${encodeURIComponent(site.slug)}`;
 
-    // Fetch all pages HTML (raw — PreviewStep injects its own selection script)
+    // Fetch all pages HTML
     const pageEntries = await Promise.all(
       site.pages.map(async (page) => {
-        const res = await fetch(`${base}/${page}.html?raw=true`);
+        const res = await fetch(`${base}/${page}.html`);
         if (!res.ok) throw new Error(`Failed to fetch ${page}.html`);
         const html = await res.text();
         return [page, html];
@@ -164,7 +164,7 @@ async function viewSite(site) {
 }
 
 function openFullScreen(site) {
-  const url = `/api/sites/${encodeURIComponent(props.userId)}/${encodeURIComponent(site.slug)}/index.html?raw=true`;
+  const url = `/api/sites/${encodeURIComponent(props.userId)}/${encodeURIComponent(site.slug)}/index.html`;
   window.open(url, '_blank');
 }
 

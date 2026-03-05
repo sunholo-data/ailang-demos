@@ -2,6 +2,9 @@
   <div class="preview-step" :class="{ 'is-fullscreen': isFullscreen }">
     <!-- Page tabs -->
     <div class="page-tabs">
+      <button class="tab-back" title="Back to My Websites" @click="$emit('dashboard')">
+        &larr;
+      </button>
       <button
         v-for="slug in slugs"
         :key="slug"
@@ -180,7 +183,7 @@ const props = defineProps({
   siteJson: { type: String, default: '' },
   items: { type: Array, default: () => [] },
 });
-const emit = defineEmits(['publish', 'rebuild', 'update-generated']);
+const emit = defineEmits(['publish', 'rebuild', 'update-generated', 'dashboard']);
 
 const slugs = computed(() => {
   const raw = props.generated?.slugs || [];
@@ -327,9 +330,28 @@ function resolveImages(html) {
     });
 }
 
+// When loaded from sidecar (MySites), rewrite relative asset paths to sidecar URLs
+// so they resolve inside srcdoc (which has no base URL).
+function rewriteRelativePaths(html) {
+  const { userId, siteSlug } = props.generated || {};
+  if (!userId || !siteSlug) return html;
+  const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
+  // Rewrite src="images/foo.png" and src="./images/foo.png" (but not http/https/data/# URLs)
+  return html
+    .replace(/(src=["'])(?!https?:\/\/|data:|\/\/|#)([^"']+)(["'])/gi, (m, pre, path, post) => {
+      const clean = path.replace(/^\.\//, '');
+      return `${pre}${base}/${clean}${post}`;
+    })
+    .replace(/(url\(["']?)(?!https?:\/\/|data:|\/\/|#)([^"')]+)(["']?\))/gi, (m, pre, path, post) => {
+      const clean = path.replace(/^\.\//, '');
+      return `${pre}${base}/${clean}${post}`;
+    });
+}
+
 const htmlWithImages = computed(() => {
-  const html = resolveImages(currentHtml.value);
+  let html = resolveImages(currentHtml.value);
   if (!html) return html;
+  html = rewriteRelativePaths(html);
   // Inject element selection + nav interception script before </body>
   const insertAt = html.lastIndexOf('</body>');
   return insertAt >= 0
@@ -368,6 +390,7 @@ onMounted(() => {
 onUnmounted(() => window.removeEventListener('message', onIframeMessage));
 
 function slugLabel(slug) {
+  if (slug === 'index') return 'Home';
   return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
 
@@ -511,14 +534,18 @@ async function sendFeedback() {
   const isTargeted = !!selectedElement.value && pendingItems.value.length === 0;
   const msgPreview = msg.length > 80 ? msg.substring(0, 80) + '…' : msg;
 
+  // Log to history immediately so the user sees it right away
+  const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
+  pushHistory('✏️', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
+
   // Route through Claude Code (sidecar) or WASM fallback
   const useSidecar = !!(props.generated?.userId && props.generated?.siteSlug);
 
   try {
     if (useSidecar) {
-      await sendFeedbackViaSidecar(msg, isTargeted, msgPreview);
+      await sendFeedbackViaSidecar(msg, isTargeted);
     } else {
-      await sendFeedbackViaWasm(msg, isTargeted, msgPreview);
+      await sendFeedbackViaWasm(msg, isTargeted);
     }
   } catch (err) {
     refineError.value = err.message;
@@ -530,7 +557,7 @@ async function sendFeedback() {
 
 // --- Claude Code path: send feedback → coordinator → Claude Code edits files → reload ---
 
-async function sendFeedbackViaSidecar(msg, isTargeted, msgPreview) {
+async function sendFeedbackViaSidecar(msg, isTargeted) {
   const { userId, siteSlug } = props.generated;
 
   // 1. Describe any pending images via Gemini before sending (WASM still used for content extraction)
@@ -613,7 +640,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted, msgPreview) {
   // Fetch all pages
   const pageEntries = await Promise.all(
     htmlFiles.map(async (page) => {
-      const r = await fetch(`${base}/${page}.html?raw=true`);
+      const r = await fetch(`${base}/${page}.html`);
       if (!r.ok) return null;
       return [page, await r.text()];
     })
@@ -662,11 +689,6 @@ async function sendFeedbackViaSidecar(msg, isTargeted, msgPreview) {
 
   const combinedCss = Object.values(cssCache).join('\n');
 
-  // Log to history
-  const scope = isTargeted ? `Updated ${currentSlug.value} page` : `Updated ${newSlugs.length} pages`;
-  const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
-  pushHistory('✏️', `"${msgPreview}"`, scope, addedItems.length > 0 ? addedItems : null);
-
   pendingItems.value = [];
   if (!isTargeted) selectedElement.value = null;
 
@@ -682,7 +704,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted, msgPreview) {
 
 // --- WASM fallback: in-browser refinement via AILANG WASM + Gemini ---
 
-async function sendFeedbackViaWasm(msg, isTargeted, msgPreview) {
+async function sendFeedbackViaWasm(msg, isTargeted) {
   // Lazy-init AILANG WASM if not already loaded
   if (!isReady()) {
     refineStatus.value = 'Loading AI engine...';
@@ -721,11 +743,6 @@ async function sendFeedbackViaWasm(msg, isTargeted, msgPreview) {
     refineStatus.value = 'Finalising design...';
     newCss = await callAI('renderCss', updatedSiteJson);
   }
-
-  // Log to history
-  const scope = isTargeted ? `Updated ${currentSlug.value} page` : `Updated all ${newSlugs.length} pages`;
-  const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
-  pushHistory('✏️', `"${msgPreview}"`, scope, addedItems.length > 0 ? addedItems : null);
 
   // Persist on-site images
   for (const item of pendingItems.value) {
@@ -782,6 +799,21 @@ async function sendFeedbackViaWasm(msg, isTargeted, msgPreview) {
   align-items: center;
 }
 .page-tabs::-webkit-scrollbar { display: none; }
+
+.tab-back {
+  flex-shrink: 0;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  margin-right: 0.25rem;
+}
+.tab-back:hover { border-color: var(--primary); color: var(--primary); }
 
 .tab-spacer { flex: 1; min-width: 0.5rem; }
 

@@ -92,6 +92,7 @@
           @publish="currentStep = 5"
           @rebuild="currentStep = 3"
           @update-generated="(g) => data.generated = g"
+          @dashboard="showDashboard = true"
         />
         <PublishStep
           v-else-if="currentStep === 5"
