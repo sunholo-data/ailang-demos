@@ -267,12 +267,16 @@ jobs:
           mkdir -p _site/website_builder/wasm
           cp -r website_builder/portal/dist/* _site/website_builder/
           cp wasm/wasm_exec.js wasm/ailang-repl.js wasm/ailang.wasm _site/website_builder/wasm/
-          # AILANG modules for website builder WASM
-          mkdir -p _site/website_builder/wasm/ailang/website_builder/types
-          mkdir -p _site/website_builder/wasm/ailang/website_builder/services
-          cp website_builder/types/*.ail _site/website_builder/wasm/ailang/website_builder/types/
-          cp website_builder/services/*.ail _site/website_builder/wasm/ailang/website_builder/services/
-          [ -f website_builder/main.ail ] && cp website_builder/main.ail _site/website_builder/wasm/ailang/website_builder/
+          # AILANG modules fetched at runtime from ailang/ (relative to portal root)
+          mkdir -p _site/website_builder/ailang/website_builder/types
+          mkdir -p _site/website_builder/ailang/website_builder/services
+          cp website_builder/types/*.ail _site/website_builder/ailang/website_builder/types/
+          cp website_builder/services/*.ail _site/website_builder/ailang/website_builder/services/
+          # DocParse modules (used by website builder for document parsing)
+          mkdir -p _site/website_builder/ailang/docparse/types
+          mkdir -p _site/website_builder/ailang/docparse/services
+          cp docparse/types/*.ail _site/website_builder/ailang/docparse/types/
+          cp docparse/services/*.ail _site/website_builder/ailang/docparse/services/
 
           echo "::group::Site contents"
           find _site -type f | head -60

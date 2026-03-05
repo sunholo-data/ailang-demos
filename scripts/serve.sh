@@ -73,11 +73,16 @@ if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
   ln -sf "$REPO_ROOT/wasm/wasm_exec.js" "$SITE/website_builder/wasm/"
   ln -sf "$REPO_ROOT/wasm/ailang-repl.js" "$SITE/website_builder/wasm/"
   ln -sf "$REPO_ROOT/wasm/ailang.wasm" "$SITE/website_builder/wasm/"
-  # AILANG modules for website builder WASM
-  mkdir -p "$SITE/website_builder/wasm/ailang/website_builder"
-  for ail in "$REPO_ROOT"/website_builder/*.ail "$REPO_ROOT"/website_builder/**/*.ail; do
-    [ -f "$ail" ] && ln -sf "$ail" "$SITE/website_builder/wasm/ailang/website_builder/"
-  done
+  # AILANG modules fetched at runtime from ailang/ (relative to portal root)
+  mkdir -p "$SITE/website_builder/ailang/website_builder/types"
+  mkdir -p "$SITE/website_builder/ailang/website_builder/services"
+  ln -sf "$REPO_ROOT/website_builder/types/"*.ail "$SITE/website_builder/ailang/website_builder/types/"
+  ln -sf "$REPO_ROOT/website_builder/services/"*.ail "$SITE/website_builder/ailang/website_builder/services/"
+  # DocParse modules (used by website builder for document parsing)
+  mkdir -p "$SITE/website_builder/ailang/docparse/types"
+  mkdir -p "$SITE/website_builder/ailang/docparse/services"
+  ln -sf "$REPO_ROOT/docparse/types/"*.ail "$SITE/website_builder/ailang/docparse/types/"
+  ln -sf "$REPO_ROOT/docparse/services/"*.ail "$SITE/website_builder/ailang/docparse/services/"
 fi
 
 # Streaming AILANG modules (for WASM demos)
