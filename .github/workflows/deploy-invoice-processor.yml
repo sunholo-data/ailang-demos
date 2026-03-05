@@ -11,6 +11,7 @@ on:
       - 'verify_demo/**'
       - 'streaming/**'
       - 'site/**'
+      - 'website_builder/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -210,6 +211,14 @@ jobs:
           cp docparse/data/test_files/track_changes_move.docx invoice_processor_wasm/assets/
           echo "Copied $(ls invoice_processor_wasm/assets/*.docx invoice_processor_wasm/assets/*.pptx invoice_processor_wasm/assets/*.xlsx 2>/dev/null | wc -l) demo Office files to assets/"
 
+      - name: Build Website Builder portal
+        run: |
+          cd website_builder/portal
+          npm ci
+          npm run build
+          echo "Built website_builder/portal/dist:"
+          ls -lh dist/
+
       - name: Assemble site
         run: |
           set -euo pipefail
@@ -226,9 +235,9 @@ jobs:
           rsync -a --exclude='wasm/' invoice_processor_wasm/ _site/
           mv _site/index.html _site/extractor.html
 
-          # Hub page (AFTER rsync+rename so it doesn't get overwritten)
+          # Hub page + SVGs (AFTER rsync+rename so it doesn't get overwritten)
           cp site/index.html _site/
-          cp site/ailang-logo.svg _site/
+          cp site/*.svg _site/
 
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
@@ -253,6 +262,17 @@ jobs:
 
           # Streaming AILANG modules already copied via rsync from
           # invoice_processor_wasm/ailang/streaming/ (cleaned in earlier step)
+
+          # Website Builder portal (Vue SPA + WASM)
+          mkdir -p _site/website_builder/wasm
+          cp -r website_builder/portal/dist/* _site/website_builder/
+          cp wasm/wasm_exec.js wasm/ailang-repl.js wasm/ailang.wasm _site/website_builder/wasm/
+          # AILANG modules for website builder WASM
+          mkdir -p _site/website_builder/wasm/ailang/website_builder/types
+          mkdir -p _site/website_builder/wasm/ailang/website_builder/services
+          cp website_builder/types/*.ail _site/website_builder/wasm/ailang/website_builder/types/
+          cp website_builder/services/*.ail _site/website_builder/wasm/ailang/website_builder/services/
+          [ -f website_builder/main.ail ] && cp website_builder/main.ail _site/website_builder/wasm/ailang/website_builder/
 
           echo "::group::Site contents"
           find _site -type f | head -60
