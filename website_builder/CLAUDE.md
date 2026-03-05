@@ -41,20 +41,18 @@ website_builder/
 ├── styles/
 │   └── directions.json                   # 6 style directions
 ├── output/                               # Generated HTML/CSS (CLI output)
-├── portal/                               # Vue 3 + Vite browser portal (Phase 3)
+├── scripts/
+│   └── deploy.sh                         # Cloud Run deployment (repeatable)
+├── portal/                               # Vue 3 + Vite browser portal
+│   ├── Dockerfile                        # Sidecar container (Node 20 Alpine)
+│   ├── .dockerignore
+│   ├── server.js                         # Express sidecar API
 │   ├── src/
 │   │   ├── ailang.js                     # WASM module loader + Gemini AI handler
+│   │   ├── api.js                        # Sidecar API client (save, build, status)
 │   │   ├── firebase.js                   # Firebase Auth (Google sign-in)
 │   │   ├── App.vue                       # Root: auth gate + 6-step wizard
-│   │   └── components/
-│   │       ├── AuthGate.vue              # Google sign-in
-│   │       └── steps/                   # Wizard steps
-│   │           ├── DescribeStep.vue      # Step 1: describe website
-│   │           ├── UploadStep.vue        # Step 2: photos + text
-│   │           ├── StyleStep.vue         # Step 3: vibe picker
-│   │           ├── BuildStep.vue         # Step 4: AILANG WASM generation
-│   │           ├── PreviewStep.vue       # Step 5: iframe + feedback chat
-│   │           └── PublishStep.vue       # Step 6: GitHub Pages (Phase 4)
+│   │   └── components/steps/             # Wizard steps (Describe → Upload → Style → Build → Preview → Publish)
 │   └── public/
 │       ├── wasm/ -> invoice_processor_wasm/wasm/  # symlink to AILANG WASM
 │       └── ailang/website_builder/               # symlinks to .ail source files
@@ -62,23 +60,199 @@ website_builder/
 └── CLAUDE.md                             # This file
 ```
 
-## Phase 3: Portal (Current)
+## Architecture
 
-```bash
-# Install dependencies
-cd website_builder/portal && npm install
-
-# Dev server (port 5174)
-cd website_builder/portal && npm run dev
-# Open http://localhost:5174
-
-# Build for production
-cd website_builder/portal && npm run build
-# Note: WASM files NOT copied to dist/ (too large). For deploy, copy public/ alongside dist/.
+```
+┌─────────────────────────────────────────┐     ┌──────────────────────────────────┐
+│  Vue SPA (GitHub Pages)                 │     │  Express Sidecar (Cloud Run)     │
+│                                         │     │                                  │
+│  AILANG WASM + Gemini generates         │     │  POST /api/save                  │
+│  HTML/CSS in the browser                │────→│    ↓ write to /tmp               │
+│                                         │     │    ↓ GitHub Git Data API          │
+│  User previews + refines with chat      │     │    ↓ commit to sunholo-websites  │
+└─────────────────────────────────────────┘     └──────────────────────────────────┘
+                                                             │
+                                                             ▼
+                                                ┌──────────────────────────────────┐
+                                                │  GitHub Pages                     │
+                                                │  sunholo-websites repo            │
+                                                │  serves generated sites at:       │
+                                                │  /{org}.github.io/.../sites/...   │
+                                                └──────────────────────────────────┘
 ```
 
-Portal needs a Gemini API key — enter it in Settings (⚙️) after opening.
-Firebase config is a placeholder — fill in `src/firebase.js` with the ailang-dev project config.
+Two build paths:
+
+1. **WASM path** (working now) — AILANG runs in the browser via WASM, calls Gemini directly. Sites are generated client-side, then saved via the sidecar API to GitHub.
+2. **Sidecar/ailang messages path** (Phase B) — Portal sends a brief to Claude Code via `ailang messages`. Claude Code builds the site with full tool access. Status via Firestore real-time.
+
+Both paths converge at `POST /api/save` → GitHub commit → GitHub Pages.
+
+## Local Development
+
+```bash
+# 1. Install portal dependencies
+cd website_builder/portal && npm install
+
+# 2. Start the Vue dev server (port 5174)
+npm run dev
+
+# 3. In another terminal, start the Express sidecar (port 3456)
+node server.js
+
+# 4. Open http://localhost:5174
+#    Enter a Gemini API key in Settings (⚙️)
+```
+
+The local sidecar uses `~/dev/sunholo/sunholo-websites` as the git repo for persistence. Generated sites are committed locally via `git add + commit`.
+
+## Cloud Deployment
+
+The sidecar runs on Cloud Run. Generated sites are committed to GitHub via API and served by GitHub Pages.
+
+### Prerequisites
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `gcloud` | GCP CLI (Cloud Run, Cloud Build, Artifact Registry) | [cloud.google.com/sdk](https://cloud.google.com/sdk/docs/install) |
+| `gh` | GitHub CLI (provides GITHUB_TOKEN) | `brew install gh` |
+
+Authenticate both:
+```bash
+gcloud auth login
+gcloud config set project ailang-dev
+gh auth login
+```
+
+### Deploy
+
+```bash
+# From repo root — one command does everything:
+GCP_PROJECT=ailang-dev ./website_builder/scripts/deploy.sh
+```
+
+This script is fully idempotent. It:
+1. Enables required GCP APIs (Cloud Run, Artifact Registry, Cloud Build)
+2. Creates the Artifact Registry Docker repo if missing
+3. Builds the container image via Cloud Build
+4. Deploys to Cloud Run with env vars (GitHub token, CORS origins, etc.)
+5. Prints the service URL
+
+### What the deploy script sets up
+
+| Resource | Details |
+|----------|---------|
+| **Cloud Run service** | `website-builder-api` in `us-central1` |
+| **Container** | Node 20 Alpine, `server.js` only (no SPA, no WASM) |
+| **Artifact Registry** | `cloud-run-source-deploy` repo for Docker images |
+| **Memory / CPU** | 512Mi / 1 vCPU, 0–3 instances (scales to zero) |
+| **Timeout** | 300s (GitHub API commits can be slow) |
+
+### Environment variables
+
+Set automatically by `deploy.sh`. Override with env vars before running:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GCP_PROJECT` | `ailang-dev` | GCP project ID |
+| `GCP_REGION` | `us-central1` | Cloud Run region |
+| `SERVICE_NAME` | `website-builder-api` | Cloud Run service name |
+| `GITHUB_TOKEN` | `gh auth token` | GitHub PAT for repo commits |
+| `GITHUB_OWNER` | `sunholo-voight-kampff` | GitHub org/user that owns the sites repo |
+| `GITHUB_REPO` | `sunholo-websites` | Repo where generated sites are committed |
+| `GITHUB_BRANCH` | `main` | Branch to commit to |
+| `CORS_ORIGINS` | `https://www.sunholo.com,...` | Allowed CORS origins (comma-separated) |
+| `WEBSITES_REPO` | `/tmp/websites` (Cloud Run) | Local path for temp file writes |
+
+### After deploying
+
+The deploy script prints the service URL. Update the SPA build to point at it:
+
+```bash
+# Rebuild the SPA with the Cloud Run API URL
+cd website_builder/portal
+VITE_API_URL=https://YOUR-SERVICE-URL.run.app/api npm run build
+```
+
+The CI workflow (`.github/workflows/deploy-invoice-processor.yml`) already has `VITE_API_URL` set for the production build, so pushing to `main` automatically rebuilds the SPA with the correct API URL.
+
+### Verify
+
+```bash
+# Test the Cloud Run sidecar
+curl -s https://YOUR-SERVICE-URL.run.app/api/sites/default | python3 -m json.tool
+
+# Test save → GitHub commit
+curl -s -X POST https://YOUR-SERVICE-URL.run.app/api/save \
+  -H "Content-Type: application/json" \
+  -d '{"user":"default","siteName":"test","pages":{"index":"<html><body>Hello</body></html>"},"css":"body{}"}' \
+  | python3 -m json.tool
+
+# Check the commit appeared on GitHub
+gh api repos/sunholo-voight-kampff/sunholo-websites/commits --jq '.[0].commit.message'
+
+# Check GitHub Pages serves it (may take ~30s after commit)
+curl -s https://sunholo-voight-kampff.github.io/sunholo-websites/sites/default/test/index.html
+```
+
+### Current live URLs
+
+| What | URL |
+|------|-----|
+| Portal (SPA) | https://www.sunholo.com/ailang-demos/website_builder/ |
+| Sidecar API | https://website-builder-api-tb6m6slywa-uc.a.run.app |
+| Generated sites | https://sunholo-voight-kampff.github.io/sunholo-websites/sites/{user}/{site}/ |
+| Sites repo | https://github.com/sunholo-voight-kampff/sunholo-websites |
+
+### GitHub Pages setup (one-time)
+
+GitHub Pages was enabled on the `sunholo-websites` repo to serve generated sites:
+
+```bash
+# Enable Pages (deploy from main branch, root path)
+gh api repos/sunholo-voight-kampff/sunholo-websites/pages -X POST --input - <<'EOF'
+{"source":{"branch":"main","path":"/"}}
+EOF
+
+# Verify
+gh api repos/sunholo-voight-kampff/sunholo-websites/pages --jq '.html_url'
+```
+
+## Sidecar API Reference
+
+The Express sidecar (`server.js`) exposes these endpoints:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/save` | Persist WASM-generated site to disk + GitHub |
+| `POST` | `/api/build` | Send build brief to Claude Code via ailang messages |
+| `POST` | `/api/upload` | Upload media files to staging |
+| `POST` | `/api/feedback` | Send feedback to Claude Code |
+| `GET` | `/api/status` | Poll for response messages |
+| `GET` | `/api/sites/:user` | List all sites for a user |
+| `GET` | `/api/sites/:user/:site/*` | Serve generated site files |
+| `GET` | `/api/files/:user/:site` | List files in a site directory |
+| `GET` | `/api/staging/:user/:site/media/:file` | Serve staged media |
+
+### POST /api/save
+
+Saves a WASM-generated site and commits to GitHub (when `GITHUB_TOKEN` is set).
+
+```json
+{
+  "user": "default",
+  "siteName": "my-site",
+  "pages": { "index": "<html>...</html>", "about": "<html>...</html>" },
+  "css": "body { ... }",
+  "images": [{ "filename": "photo.jpg", "base64": "..." }],
+  "siteJson": "{...}",
+  "description": "My flower shop website"
+}
+```
+
+Returns: `{ "userId": "default", "siteSlug": "my-site", "files": ["sites/default/my-site/index.html", ...] }`
+
+The GitHub commit flow uses the Git Data API (create blobs → tree → commit → update ref) for atomic multi-file commits. Binary files (images, fonts, etc.) are base64-encoded.
 
 ## Phase 1: Content Pipeline (Complete)
 
@@ -100,6 +274,8 @@ GOOGLE_API_KEY="" ailang run ...
 # Or use API key directly
 GOOGLE_API_KEY=your-key ailang run ...
 ```
+
+Portal needs a Gemini API key — enter it in Settings after opening.
 
 ## Known AILANG Issues Hit During Development
 
