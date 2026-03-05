@@ -212,6 +212,8 @@ jobs:
           echo "Copied $(ls invoice_processor_wasm/assets/*.docx invoice_processor_wasm/assets/*.pptx invoice_processor_wasm/assets/*.xlsx 2>/dev/null | wc -l) demo Office files to assets/"
 
       - name: Build Website Builder portal
+        env:
+          VITE_API_URL: https://website-builder-api-tb6m6slywa-uc.a.run.app/api
         run: |
           cd website_builder/portal
           npm ci

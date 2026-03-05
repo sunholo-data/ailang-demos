@@ -4,7 +4,8 @@
  * and polls for responses via ailang messages.
  */
 
-const API_BASE = '/api';
+// Vite injects VITE_API_URL at build time. Falls back to relative /api for local sidecar.
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * POST /api/build — Send a build brief to Claude Code.
