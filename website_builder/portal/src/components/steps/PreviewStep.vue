@@ -31,10 +31,8 @@
         title="Website preview"
       />
       <div v-else class="preview-placeholder">
-        <p>Generating preview...</p>
-        <div class="debug-info">
-          <p><strong>Debug:</strong> slugs={{ slugs.join(', ') || '(none)' }}, currentSlug={{ currentSlug }}, pageKeys={{ Object.keys(props.generated?.pages || {}).join(', ') || '(none)' }}</p>
-        </div>
+        <p v-if="loadingFromSidecar">Loading your website...</p>
+        <p v-else>Generating preview...</p>
       </div>
     </div>
 
@@ -177,6 +175,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
+import { saveSite } from '../../api.js';
 
 const props = defineProps({
   generated: { type: Object, required: true },
@@ -399,7 +398,9 @@ function onIframeMessage(e) {
     if (slugs.value.includes(slug)) currentSlug.value = slug;
   }
 }
-onMounted(() => {
+const loadingFromSidecar = ref(false);
+
+onMounted(async () => {
   window.addEventListener('message', onIframeMessage);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -407,15 +408,93 @@ onMounted(() => {
       else isFullscreen.value = false;
     }
   });
+
+  // If we have sidecar info but no pages in memory, load from sidecar
+  if (props.generated?.userId && props.generated?.siteSlug && !props.generated?.pages) {
+    await loadSiteFromSidecar(props.generated.userId, props.generated.siteSlug);
+  }
+
   // Log initial build
   let siteTitle = 'Website';
-  try { siteTitle = JSON.parse(props.generated.siteJson)?.title || 'Website'; } catch {}
-  const pageList = (props.generated.slugs || []).map(s => slugLabel(s)).join(', ');
+  try { siteTitle = JSON.parse(props.generated?.siteJson || '{}')?.title || 'Website'; } catch {}
+  const pageList = (props.generated?.slugs || []).map(s => slugLabel(s)).join(', ');
   pushHistory('🏗️', `Built "${siteTitle}"`,
-    `${(props.generated.slugs || []).length} pages (${pageList}) · ${props.items.length} item${props.items.length !== 1 ? 's' : ''}`,
+    `${(props.generated?.slugs || []).length} pages (${pageList}) · ${props.items.length} item${props.items.length !== 1 ? 's' : ''}`,
     props.items
   );
 });
+
+// Load a site's pages from the sidecar API (same logic as MySites.viewSite)
+async function loadSiteFromSidecar(userId, siteSlug) {
+  loadingFromSidecar.value = true;
+  try {
+    const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
+    const filesRes = await fetch(`/api/files/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`);
+    const { files } = await filesRes.json();
+    const htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+
+    // Fetch all pages
+    const pageEntries = await Promise.all(
+      htmlFiles.map(async (page) => {
+        const r = await fetch(`${base}/${page}.html`);
+        if (!r.ok) return null;
+        return [page, await r.text()];
+      })
+    );
+    const validPages = pageEntries.filter(Boolean);
+
+    // Inline local CSS
+    const cssCache = {};
+    const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
+    const allHrefs = new Set();
+    for (const [, html] of validPages) {
+      let m;
+      while ((m = localCssPattern.exec(html)) !== null) {
+        const href = m[1];
+        if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
+          allHrefs.add(href);
+        }
+      }
+    }
+    await Promise.all([...allHrefs].map(async (href) => {
+      try {
+        const r = await fetch(`${base}/${href}`);
+        if (r.ok) cssCache[href] = await r.text();
+      } catch {}
+    }));
+
+    const newPages = {};
+    for (const [page, html] of validPages) {
+      newPages[page] = html.replace(
+        /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
+        (match, before, href) => {
+          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
+          const content = cssCache[href];
+          return content ? `<style>/* ${href} */\n${content}</style>` : match;
+        }
+      );
+    }
+
+    const newSlugs = [...htmlFiles].sort((a, b) => {
+      if (a === 'index' || a === 'home') return -1;
+      if (b === 'index' || b === 'home') return 1;
+      return a.localeCompare(b);
+    });
+
+    emit('update-generated', {
+      siteJson: props.generated?.siteJson || '{}',
+      pages: newPages,
+      css: Object.values(cssCache).join('\n'),
+      slugs: newSlugs,
+      userId,
+      siteSlug,
+    });
+  } catch (err) {
+    console.error('[Preview] Failed to load from sidecar:', err);
+  } finally {
+    loadingFromSidecar.value = false;
+  }
+}
 onUnmounted(() => {
   window.removeEventListener('message', onIframeMessage);
   // Clean up Object URLs to prevent memory leaks
@@ -796,12 +875,34 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   pendingItems.value = [];
   if (!isTargeted) selectedElement.value = null;
 
-  emit('update-generated', {
+  const updated = {
     siteJson: updatedSiteJson,
     pages: newPages,
     css: newCss,
-    slugs: newSlugs
-  });
+    slugs: newSlugs,
+    // Preserve sidecar info if we have it
+    userId: props.generated?.userId,
+    siteSlug: props.generated?.siteSlug,
+  };
+
+  emit('update-generated', updated);
+
+  // Auto-save to sidecar (silent, best-effort)
+  if (updated.userId && updated.siteSlug) {
+    try {
+      await saveSite({
+        user: updated.userId,
+        siteName: updated.siteSlug,
+        pages: newPages,
+        css: newCss,
+        siteJson: updatedSiteJson,
+        description: props.description,
+      });
+      console.log('[Preview] Auto-saved after refinement');
+    } catch (err) {
+      console.warn('[Preview] Auto-save failed:', err.message);
+    }
+  }
 }
 </script>
 

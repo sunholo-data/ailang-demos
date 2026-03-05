@@ -75,6 +75,26 @@ export async function listSiteFiles(user, site) {
 }
 
 /**
+ * POST /api/save — Persist WASM-generated site to disk + git.
+ * @param {Object} site - { user, siteName, pages, css, images, siteJson, description }
+ * @returns {Promise<{userId: string, siteSlug: string, files: string[]}>}
+ */
+export async function saveSite(site) {
+  const res = await fetch(`${API_BASE}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(site),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Save failed (${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
  * Build the preview URL for a site file served by the sidecar.
  * @param {string} user
  * @param {string} site

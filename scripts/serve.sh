@@ -19,18 +19,25 @@ echo "Assembling site in $SITE ..."
 rm -rf "$SITE"
 mkdir -p "$SITE"
 
-# Hub page
+# Hub page + assets
 cp "$REPO_ROOT/site/index.html" "$SITE/"
+for svg in "$REPO_ROOT"/site/*.svg; do
+  [ -f "$svg" ] && cp "$svg" "$SITE/"
+done
 
 # Shared WASM runtime (top-level, used by all demos)
 ln -s "$REPO_ROOT/wasm" "$SITE/wasm"
 
 # WASM demos (rename index.html → extractor.html)
 # Use symlinks for css/, js/, ailang/, assets/ so edits are live
-for item in css js ailang assets sunholo-logo.svg; do
+for item in css js ailang assets; do
   [ -e "$REPO_ROOT/invoice_processor_wasm/$item" ] && \
     ln -s "$REPO_ROOT/invoice_processor_wasm/$item" "$SITE/$item"
 done
+# sunholo-logo.svg may already exist from site/ copy — use -sf
+[ -e "$REPO_ROOT/invoice_processor_wasm/sunholo-logo.svg" ] && \
+  [ ! -e "$SITE/sunholo-logo.svg" ] && \
+  ln -s "$REPO_ROOT/invoice_processor_wasm/sunholo-logo.svg" "$SITE/sunholo-logo.svg"
 # Demo-specific AILANG module alongside WASM runtime
 [ -f "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" ] && \
   ln -sf "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" "$SITE/wasm/"
@@ -55,6 +62,23 @@ done
 mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
+
+# Website Builder portal (Vue SPA — must be pre-built with `npm run build`)
+mkdir -p "$SITE/website_builder"
+if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
+  # Copy built SPA assets
+  cp -r "$REPO_ROOT/website_builder/portal/dist/"* "$SITE/website_builder/"
+  # WASM runtime needed by the portal
+  mkdir -p "$SITE/website_builder/wasm"
+  ln -sf "$REPO_ROOT/wasm/wasm_exec.js" "$SITE/website_builder/wasm/"
+  ln -sf "$REPO_ROOT/wasm/ailang-repl.js" "$SITE/website_builder/wasm/"
+  ln -sf "$REPO_ROOT/wasm/ailang.wasm" "$SITE/website_builder/wasm/"
+  # AILANG modules for website builder WASM
+  mkdir -p "$SITE/website_builder/wasm/ailang/website_builder"
+  for ail in "$REPO_ROOT"/website_builder/*.ail "$REPO_ROOT"/website_builder/**/*.ail; do
+    [ -f "$ail" ] && ln -sf "$ail" "$SITE/website_builder/wasm/ailang/website_builder/"
+  done
+fi
 
 # Streaming AILANG modules (for WASM demos)
 mkdir -p "$SITE/ailang/streaming/gemini_live"
@@ -91,6 +115,7 @@ echo "  Hub:       http://localhost:$PORT/"
 echo "  Extractor: http://localhost:$PORT/extractor.html"
 echo "  DocParse:  http://localhost:$PORT/docparse.html"
 echo "  Ecommerce: http://localhost:$PORT/ecommerce/"
+echo "  Website:   http://localhost:$PORT/website_builder/"
 echo "  Streaming: http://localhost:$PORT/streaming/"
 echo ""
 echo "Press Ctrl+C to stop."

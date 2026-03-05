@@ -3,6 +3,7 @@
  * Bridges the Vue frontend to Claude Code via ailang messages.
  *
  * Endpoints:
+ *   POST /api/save      — Persist WASM-generated site to disk + git
  *   POST /api/build     — Save files + brief, send build message
  *   POST /api/upload    — Multipart file upload to staging
  *   POST /api/feedback   — Send feedback message
@@ -14,7 +15,7 @@
 import express from 'express';
 import multer from 'multer';
 import { execSync } from 'child_process';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync } from 'fs';
 import { join, resolve, extname, basename } from 'path';
 import { homedir } from 'os';
 
@@ -45,7 +46,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
-// Multer for media uploads — larger limits (videos up to 200MB)
+// Multer for media uploads — videos up to 50MB (GitHub-friendly)
 const mediaStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const user = req.query.user || 'default';
@@ -62,7 +63,7 @@ const mediaStorage = multer.diskStorage({
 });
 const mediaUpload = multer({
   storage: mediaStorage,
-  limits: { fileSize: 200 * 1024 * 1024 }
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 /**
@@ -101,6 +102,108 @@ app.get('/api/staging/:user/:site/media/:filename', (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
   res.sendFile(filePath);
+});
+
+/**
+ * Commit files to the sunholo-websites repo.
+ * Local: execSync git add + commit.
+ * Production (GITHUB_TOKEN set): placeholder for GitHub API.
+ * Best-effort — failure is logged but doesn't block the caller.
+ */
+function commitToRepo(filePaths, message) {
+  try {
+    if (process.env.GITHUB_TOKEN) {
+      // TODO Phase B: GitHub Contents API via @octokit/rest
+      console.log(`[sidecar] GitHub API commit not yet implemented. Files written to disk.`);
+      return;
+    }
+    // Local: git add + commit (only site files — staging/ is gitignored)
+    const sitePaths = filePaths.filter(p => p.startsWith('sites/'));
+    if (sitePaths.length === 0) return;
+    const addPaths = sitePaths.map(p => `"${p}"`).join(' ');
+    execSync(`git add ${addPaths}`, { cwd: WEBSITES_REPO, timeout: 10000 });
+    execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd: WEBSITES_REPO, timeout: 10000 });
+    console.log(`[sidecar] Committed: ${message}`);
+  } catch (err) {
+    // Best-effort — files are on disk even if git fails
+    console.warn(`[sidecar] Git commit failed (files still saved): ${err.message}`);
+  }
+}
+
+/**
+ * POST /api/save — Persist WASM-generated website to disk + git.
+ * Body (JSON): { user, siteName, pages, css, images, siteJson, description }
+ */
+app.post('/api/save', (req, res) => {
+  try {
+    const { user = 'default', siteName, pages, css, images, siteJson, description } = req.body;
+    if (!siteName || !pages) {
+      return res.status(400).json({ error: 'siteName and pages are required' });
+    }
+
+    const slug = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) || 'site';
+    const siteDir = join(SITES_DIR, user, slug);
+    mkdirSync(siteDir, { recursive: true });
+
+    const writtenFiles = [];
+
+    // Write HTML pages
+    for (const [pageSlug, html] of Object.entries(pages)) {
+      const filePath = join(siteDir, `${pageSlug}.html`);
+      writeFileSync(filePath, html, 'utf-8');
+      writtenFiles.push(`sites/${user}/${slug}/${pageSlug}.html`);
+    }
+
+    // Write CSS
+    if (css) {
+      const cssPath = join(siteDir, 'style.css');
+      writeFileSync(cssPath, css, 'utf-8');
+      writtenFiles.push(`sites/${user}/${slug}/style.css`);
+    }
+
+    // Write images — from base64 or copy from staging
+    if (images && Array.isArray(images)) {
+      const imagesDir = join(siteDir, 'images');
+      mkdirSync(imagesDir, { recursive: true });
+      for (const img of images) {
+        if (img.stagingPath) {
+          // Copy from staging
+          const src = resolve(WEBSITES_REPO, img.stagingPath);
+          if (existsSync(src)) {
+            const dest = join(imagesDir, img.filename);
+            copyFileSync(src, dest);
+            writtenFiles.push(`sites/${user}/${slug}/images/${img.filename}`);
+          }
+        } else if (img.base64) {
+          const dest = join(imagesDir, img.filename);
+          writeFileSync(dest, Buffer.from(img.base64, 'base64'));
+          writtenFiles.push(`sites/${user}/${slug}/images/${img.filename}`);
+        }
+      }
+    }
+
+    // Write brief.json to staging for MySites metadata
+    const briefDir = join(STAGING_DIR, user, slug);
+    mkdirSync(briefDir, { recursive: true });
+    const briefPath = join(briefDir, 'brief.json');
+    writeFileSync(briefPath, JSON.stringify({
+      siteName: siteName,
+      description: description || '',
+      siteJson: siteJson || '',
+      savedAt: new Date().toISOString(),
+      source: 'wasm'
+    }, null, 2));
+    writtenFiles.push(`staging/${user}/${slug}/brief.json`);
+
+    // Git commit (best-effort)
+    commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`);
+
+    console.log(`[sidecar] Saved site: ${user}/${slug} (${writtenFiles.length} files)`);
+    res.json({ userId: user, siteSlug: slug, files: writtenFiles });
+  } catch (err) {
+    console.error('Save error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**

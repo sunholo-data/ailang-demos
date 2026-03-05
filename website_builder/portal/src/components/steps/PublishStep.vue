@@ -1,101 +1,118 @@
 <template>
   <div class="step">
-    <h1>Publish your website</h1>
-    <p class="subtitle">Your website will be published to GitHub Pages — free hosting with your own URL.</p>
+    <h1>Your website is ready!</h1>
+    <p class="subtitle" v-if="saving">Saving your website...</p>
+    <p class="subtitle" v-else-if="saved">Your website has been saved and is ready to share.</p>
+    <p class="subtitle" v-else>Download your website files or view the live preview.</p>
 
-    <div v-if="published" class="success-card">
+    <!-- Saved confirmation with live link -->
+    <div v-if="saved" class="success-card">
       <div class="success-icon">🎉</div>
-      <h2>Your website is live!</h2>
-      <a :href="publishedUrl" target="_blank" class="live-url">{{ publishedUrl }}</a>
-      <p class="live-note">It may take a minute for GitHub Pages to activate. Refresh the link if it's not ready yet.</p>
-      <div class="btn-row">
-        <button class="btn-secondary" @click="copyUrl">{{ copied ? 'Copied!' : '📋 Copy link' }}</button>
-        <button class="btn-primary" @click="$emit('restart')">Make another site</button>
-      </div>
+      <h2>Website saved!</h2>
+      <p class="success-pages">{{ pageCount }} page{{ pageCount !== 1 ? 's' : '' }} saved</p>
+      <a v-if="previewUrl" :href="previewUrl" target="_blank" class="live-url">View live preview</a>
+      <p v-if="previewUrl" class="live-note">This link works while the local server is running.</p>
     </div>
 
-    <div v-else>
-      <!-- GitHub token setup -->
-      <div class="card">
-        <h3>GitHub Personal Access Token</h3>
-        <p class="card-desc">
-          We need a token to create a GitHub repository and publish your files.
-          <a href="https://github.com/settings/tokens/new?scopes=repo&description=Website+Builder" target="_blank">
-            Create one here
-          </a>
-          (needs <code>repo</code> scope).
-        </p>
-        <input
-          v-model="githubToken"
-          type="password"
-          class="token-input"
-          placeholder="ghp_..."
-        />
-      </div>
+    <!-- Save error (non-blocking) -->
+    <div v-if="saveError" class="error-box">
+      Save failed: {{ saveError }}. Your files are still available to download below.
+    </div>
 
-      <!-- Repo name -->
-      <div class="card">
-        <h3>Repository name</h3>
-        <p class="card-desc">Your site will be at <code>username.github.io/<strong>{{ repoName || 'my-website' }}</strong></code></p>
-        <input
-          v-model="repoName"
-          type="text"
-          class="token-input"
-          placeholder="my-website"
-        />
-      </div>
+    <!-- Actions -->
+    <div class="actions-card">
+      <button class="btn-primary download-btn" @click="downloadFiles">
+        ⬇️ Download website files
+      </button>
+      <button v-if="previewUrl" class="btn-secondary download-btn" @click="openPreview">
+        ↗ Open in new tab
+      </button>
+    </div>
 
-      <!-- Error -->
-      <div v-if="deployError" class="error-box">{{ deployError }}</div>
+    <!-- Coming soon -->
+    <div class="coming-soon">
+      <p>GitHub Pages deployment is coming soon. For now, download the files or use the preview link above.</p>
+    </div>
 
-      <!-- Coming soon note for MVP -->
-      <div class="coming-soon">
-        <p>📦 GitHub deployment is coming in Phase 4. For now, your generated files are ready to download.</p>
-        <button class="btn-primary download-btn" @click="downloadFiles">
-          ⬇️ Download website files
-        </button>
-      </div>
-
-      <div class="nav-btns">
-        <button class="btn-secondary" @click="$emit('back')">← Back to preview</button>
-      </div>
+    <div class="nav-btns">
+      <button class="btn-secondary" @click="$emit('back')">← Back to preview</button>
+      <button class="btn-primary" @click="$emit('restart')">Make another site</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { saveSite } from '../../api.js';
 
 const props = defineProps({
   generated: { type: Object, required: true }
 });
 defineEmits(['back', 'restart']);
 
-const githubToken = ref('');
-const repoName = ref('my-website');
-const published = ref(false);
-const publishedUrl = ref('');
-const deployError = ref('');
-const copied = ref(false);
+const saving = ref(false);
+const saved = ref(false);
+const saveError = ref('');
 
-function copyUrl() {
-  navigator.clipboard.writeText(publishedUrl.value);
-  copied.value = true;
-  setTimeout(() => { copied.value = false; }, 2000);
+const pageCount = computed(() => Object.keys(props.generated?.pages || {}).length);
+
+const previewUrl = computed(() => {
+  const { userId, siteSlug } = props.generated || {};
+  if (!userId || !siteSlug) return '';
+  return `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}/index.html`;
+});
+
+onMounted(async () => {
+  // If already saved (has userId/siteSlug), mark as saved
+  if (props.generated?.userId && props.generated?.siteSlug) {
+    saved.value = true;
+    return;
+  }
+
+  // Otherwise try to save now
+  if (props.generated?.pages) {
+    saving.value = true;
+    try {
+      const siteName = extractSiteName();
+      await saveSite({
+        user: 'default',
+        siteName,
+        pages: props.generated.pages,
+        css: props.generated.css,
+        siteJson: props.generated.siteJson,
+        description: siteName,
+      });
+      saved.value = true;
+    } catch (err) {
+      saveError.value = err.message;
+    } finally {
+      saving.value = false;
+    }
+  }
+});
+
+function extractSiteName() {
+  try {
+    const site = JSON.parse(props.generated?.siteJson || '{}');
+    return site.title || 'my-website';
+  } catch {
+    return 'my-website';
+  }
+}
+
+function openPreview() {
+  if (previewUrl.value) window.open(previewUrl.value, '_blank');
 }
 
 function downloadFiles() {
   if (!props.generated) return;
-
   const { pages, css, slugs } = props.generated;
 
-  // Download each HTML page
-  for (const slug of (slugs || [])) {
+  for (const slug of (slugs || Object.keys(pages || {}))) {
     const html = pages?.[slug];
     if (html) downloadString(`${slug}.html`, html, 'text/html');
   }
 
-  // Download CSS
   if (css) downloadString('style.css', css, 'text/css');
 }
 
@@ -120,39 +137,25 @@ function downloadString(filename, content, type) {
   margin-bottom: 1.5rem;
 }
 .success-icon { font-size: 3rem; margin-bottom: 0.75rem; }
-.success-card h2 { margin-bottom: 0.75rem; }
+.success-card h2 { margin-bottom: 0.5rem; }
+.success-pages { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.75rem; }
 .live-url {
   display: block;
   color: var(--primary);
   font-size: 1.1rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   word-break: break-all;
 }
-.live-note { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+.live-note { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
 
-.card {
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+.actions-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
-.card h3 { margin-bottom: 0.5rem; }
-.card-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5; }
-.card-desc a { color: var(--primary); }
-.card-desc code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85rem; }
-
-.token-input {
-  width: 100%;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 0.7rem;
-  font-size: 0.95rem;
-  outline: none;
-  font-family: monospace;
-}
-.token-input:focus { border-color: var(--primary); }
+.download-btn { width: 100%; }
 
 .coming-soon {
   background: #EFF8FF;
@@ -161,8 +164,7 @@ function downloadString(filename, content, type) {
   padding: 1.25rem;
   margin-bottom: 1rem;
 }
-.coming-soon p { font-size: 0.9rem; color: #1A5276; margin-bottom: 1rem; }
-.download-btn { width: 100%; }
+.coming-soon p { font-size: 0.9rem; color: #1A5276; margin: 0; }
 
 .error-box {
   background: #FFF0F0;

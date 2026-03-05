@@ -43,6 +43,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
+import { saveSite } from '../../api.js';
 
 const props = defineProps({
   data: { type: Object, required: true }
@@ -60,6 +61,7 @@ const buildSteps = ref([
   { id: 'structure', label: 'Planning your website',   status: 'pending' },
   { id: 'pages',     label: 'Writing page content',    status: 'pending' },
   { id: 'css',       label: 'Designing the look',      status: 'pending' },
+  { id: 'save',      label: 'Saving your website',     status: 'pending' },
 ]);
 
 function setStep(id, status, message) {
@@ -316,10 +318,48 @@ async function startBuild() {
     const css = await callAI('renderCss', siteJson);
     setStep('css', 'done', 'Design complete!');
 
+    // 10. Auto-save to sidecar (silent, best-effort)
+    let saveResult = null;
+    setStep('save', 'active', 'Saving your website...');
+    try {
+      const imagePayload = [];
+      for (const item of imageItems) {
+        const uploaded = uploadMap.get(item.filename);
+        if (uploaded) {
+          imagePayload.push({ filename: item.filename, stagingPath: uploaded.stagingPath });
+        } else if (item.file) {
+          // No sidecar upload — send as base64
+          const b64 = await blobToBase64Raw(item.file);
+          imagePayload.push({ filename: item.filename, base64: b64 });
+        }
+      }
+      saveResult = await saveSite({
+        user: 'default', // TODO: pass from auth
+        siteName: slugify(props.data.description),
+        pages,
+        css,
+        images: imagePayload.length > 0 ? imagePayload : undefined,
+        siteJson,
+        description: props.data.description,
+      });
+      setStep('save', 'done', 'Saved!');
+      console.log('[WB] Site saved:', saveResult);
+    } catch (saveErr) {
+      // Save failure is non-blocking — site works in memory
+      console.warn('[WB] Auto-save failed (site works in memory):', saveErr.message);
+      setStep('save', 'done', 'Save skipped');
+    }
+
     statusMessage.value = 'Your website is ready! 🎉';
     building.value = false;
 
-    emit('done', { siteJson, pages, css, slugs });
+    // Include save info in generated data so PreviewStep knows the site is persisted
+    const generated = { siteJson, pages, css, slugs };
+    if (saveResult) {
+      generated.userId = saveResult.userId;
+      generated.siteSlug = saveResult.siteSlug;
+    }
+    emit('done', generated);
 
   } catch (err) {
     error.value = err.message;
