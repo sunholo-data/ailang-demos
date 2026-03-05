@@ -647,7 +647,7 @@ async function sendFeedback() {
   feedback.value = '';
 
   const isTargeted = !!selectedElement.value && pendingItems.value.length === 0;
-  const msgPreview = msg.length > 80 ? msg.substring(0, 80) + '…' : msg;
+  const msgPreview = msg.length > 300 ? msg.substring(0, 300) + '…' : msg;
 
   // Log to history immediately so the user sees it right away
   const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
