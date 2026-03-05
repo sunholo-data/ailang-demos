@@ -4,8 +4,10 @@
  *
  * Endpoints:
  *   POST /api/build     — Save files + brief, send build message
+ *   POST /api/upload    — Multipart file upload to staging
  *   POST /api/feedback   — Send feedback message
  *   GET  /api/status     — Poll for response messages
+ *   GET  /api/staging/*  — Serve staged media files
  *   GET  /api/sites/*    — Serve generated website files
  */
 
@@ -30,7 +32,7 @@ mkdirSync(SITES_DIR, { recursive: true });
 
 app.use(express.json({ limit: '50mb' }));
 
-// Multer for file uploads
+// Multer for brief file uploads (existing endpoints)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const user = req.body?.user || 'default';
@@ -42,6 +44,64 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, file.originalname)
 });
 const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Multer for media uploads — larger limits (videos up to 200MB)
+const mediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const user = req.query.user || 'default';
+    const site = req.query.site || 'site';
+    const dir = join(STAGING_DIR, user, site, 'media');
+    mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Timestamp prefix for uniqueness, sanitised original name
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}-${safe}`);
+  }
+});
+const mediaUpload = multer({
+  storage: mediaStorage,
+  limits: { fileSize: 200 * 1024 * 1024 }
+});
+
+/**
+ * POST /api/upload?user=X&site=Y — Upload media files to staging.
+ * Multipart form data, field name: "files". Batches of up to 10 files.
+ * Returns array of { originalName, storedName, stagingPath, size, mimeType }.
+ */
+app.post('/api/upload', mediaUpload.array('files', 10), (req, res) => {
+  try {
+    const user = req.query.user || 'default';
+    const site = req.query.site || 'site';
+    const results = (req.files || []).map(f => ({
+      originalName: f.originalname,
+      storedName: f.filename,
+      stagingPath: `staging/${user}/${site}/media/${f.filename}`,
+      size: f.size,
+      mimeType: f.mimetype
+    }));
+    console.log(`[sidecar] Uploaded ${results.length} files for ${user}/${site}`);
+    res.json(results);
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/staging/:user/:site/media/:filename — Serve a staged media file.
+ */
+app.get('/api/staging/:user/:site/media/:filename', (req, res) => {
+  const filePath = resolve(STAGING_DIR, req.params.user, req.params.site, 'media', req.params.filename);
+  if (!filePath.startsWith(resolve(STAGING_DIR))) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  res.sendFile(filePath);
+});
 
 /**
  * POST /api/build — Start a new website build.

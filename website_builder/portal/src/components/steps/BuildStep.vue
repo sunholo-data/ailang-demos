@@ -42,6 +42,7 @@ import { ref, onMounted } from 'vue';
 import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
+import { createThumbnail } from '../../media.js';
 
 const props = defineProps({
   data: { type: Object, required: true }
@@ -54,6 +55,7 @@ const building = ref(false);
 
 const buildSteps = ref([
   { id: 'init',      label: 'Loading AI engine',      status: 'pending' },
+  { id: 'upload',    label: 'Uploading media files',   status: 'pending' },
   { id: 'describe',  label: 'Describing images',       status: 'pending' },
   { id: 'structure', label: 'Planning your website',   status: 'pending' },
   { id: 'pages',     label: 'Writing page content',    status: 'pending' },
@@ -68,6 +70,69 @@ function setStep(id, status, message) {
 
 onMounted(() => startBuild());
 
+// Sidecar upload: POST files in batches via multipart FormData
+const SIDECAR_BASE = '/api';
+const UPLOAD_BATCH_SIZE = 5;
+
+async function uploadFilesToSidecar(mediaItems, user, site) {
+  const results = [];
+  for (let i = 0; i < mediaItems.length; i += UPLOAD_BATCH_SIZE) {
+    const batch = mediaItems.slice(i, i + UPLOAD_BATCH_SIZE);
+    const form = new FormData();
+    for (const item of batch) {
+      form.append('files', item.file, item.filename);
+    }
+    const resp = await fetch(
+      `${SIDECAR_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
+      { method: 'POST', body: form }
+    );
+    if (!resp.ok) throw new Error(`Upload failed (${resp.status}): ${await resp.text()}`);
+    const batchResults = await resp.json();
+    results.push(...batchResults);
+    setStep('upload', 'active', `Uploading files... ${Math.min(i + UPLOAD_BATCH_SIZE, mediaItems.length)}/${mediaItems.length}`);
+  }
+  return results;
+}
+
+// Parallel Gemini image descriptions with concurrency limit
+async function describeImagesParallel(imageItems, concurrency = 3) {
+  const descriptions = new Map();
+  let completed = 0;
+
+  async function describeOne(item) {
+    // Read the resized file as base64 for Gemini (small after resize: ~100-300KB)
+    const base64 = await blobToBase64Raw(item.file);
+    const mimeType = item.mimeType || 'image/jpeg';
+    const desc = await describeImageWithGemini(base64, mimeType);
+    completed++;
+    setStep('describe', 'active', `Describing images... ${completed}/${imageItems.length}`);
+    descriptions.set(item.filename, desc);
+  }
+
+  // Worker pool: run up to `concurrency` at a time
+  const queue = [...imageItems];
+  const workers = [];
+  for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
+    workers.push((async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        await describeOne(item);
+      }
+    })());
+  }
+  await Promise.all(workers);
+  return descriptions;
+}
+
+// Describe a video by its poster thumbnail
+async function describeVideoThumbnail(item) {
+  // item.preview is a data URL of the poster frame
+  if (!item.preview) return 'A video uploaded by the user.';
+  const base64 = item.preview.split(',')[1];
+  if (!base64) return 'A video uploaded by the user.';
+  return describeImageWithGemini(base64, 'image/jpeg');
+}
+
 async function startBuild() {
   error.value = '';
   building.value = true;
@@ -81,39 +146,147 @@ async function startBuild() {
     }
     setStep('init', 'done', 'AI engine ready');
 
-    // 2. Prepare content — describe images + parse documents, then wrap for AILANG
+    // Categorise items
+    const imageItems = props.data.items.filter(i => i.type === 'image' && i.file);
+    const videoItems = props.data.items.filter(i => i.type === 'video' && i.file);
+    const docItems = props.data.items.filter(i => i.type === 'document');
+    const textItems = props.data.items.filter(i => i.type === 'text');
+    const mediaItems = [...imageItems, ...videoItems];
+
+    // 2. Upload media files to sidecar (if sidecar is available)
+    let uploadResults = [];
+    const hasSidecar = await checkSidecar();
+    if (hasSidecar && mediaItems.length > 0) {
+      setStep('upload', 'active', `Uploading ${mediaItems.length} files...`);
+      const user = 'default'; // TODO: pass from auth
+      const site = slugify(props.data.description);
+      uploadResults = await uploadFilesToSidecar(mediaItems, user, site);
+      setStep('upload', 'done', `${mediaItems.length} files uploaded`);
+    } else if (mediaItems.length > 0) {
+      // No sidecar — skip upload, will use base64 fallback for images
+      setStep('upload', 'done', 'Skipped (no sidecar)');
+    } else {
+      setStep('upload', 'done', 'No media files');
+    }
+
+    // Build a lookup: originalName → uploadResult
+    const uploadMap = new Map();
+    for (const r of uploadResults) {
+      uploadMap.set(r.originalName, r);
+    }
+
+    // 3. Describe images (parallel) + videos (poster thumbnails)
     setStep('describe', 'active', 'Describing your images...');
-    const wrappedItems = await wrapItems(props.data.items);
+    const imageDescriptions = await describeImagesParallel(imageItems);
+
+    // Describe videos by their poster thumbnails
+    const videoDescriptions = new Map();
+    for (const item of videoItems) {
+      statusMessage.value = `Describing ${item.filename}...`;
+      const desc = await describeVideoThumbnail(item);
+      videoDescriptions.set(item.filename, desc);
+    }
+    setStep('describe', 'done', 'Content described');
+
+    // 4. Wrap items for AILANG — use file paths (not base64) when available
+    const wrappedItems = [];
+
+    for (const item of imageItems) {
+      const desc = imageDescriptions.get(item.filename) || 'An uploaded image.';
+      const uploaded = uploadMap.get(item.filename);
+
+      if (item.useOnSite === false) {
+        const wrappedJson = callPure('parseAndWrapText', desc, `Photo: ${item.filename}`);
+        wrappedItems.push(JSON.parse(wrappedJson));
+      } else {
+        const wrappedJson = callPure('parseAndWrapImage', '', item.mimeType, item.filename, desc);
+        const wrapped = JSON.parse(wrappedJson);
+        if (uploaded) wrapped.stagingPath = uploaded.stagingPath;
+        wrappedItems.push(wrapped);
+      }
+    }
+
+    for (const item of videoItems) {
+      const desc = videoDescriptions.get(item.filename) || 'A video.';
+      const uploaded = uploadMap.get(item.filename);
+
+      // Videos: include as a content item with video metadata
+      // Claude Code decides how to embed (poster, <video>, link, etc.)
+      const videoMeta = {
+        type: 'video',
+        filename: item.filename,
+        mimeType: item.mimeType,
+        description: desc,
+        duration: item.duration,
+        width: item.width,
+        height: item.height,
+        useOnSite: item.useOnSite !== false,
+      };
+      if (uploaded) videoMeta.stagingPath = uploaded.stagingPath;
+
+      // Save poster thumbnail to staging too
+      if (uploaded && item.preview) {
+        const posterName = item.filename.replace(/\.[^.]+$/, '-poster.jpg');
+        videoMeta.posterFilename = posterName;
+        // Upload poster as a separate small file
+        try {
+          const posterBlob = dataURLToBlob(item.preview);
+          const posterForm = new FormData();
+          posterForm.append('files', posterBlob, posterName);
+          const user = 'default';
+          const site = slugify(props.data.description);
+          const resp = await fetch(
+            `${SIDECAR_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
+            { method: 'POST', body: posterForm }
+          );
+          if (resp.ok) {
+            const [posterResult] = await resp.json();
+            videoMeta.posterStagingPath = posterResult.stagingPath;
+          }
+        } catch (e) {
+          console.warn('Failed to upload video poster:', e);
+        }
+      }
+
+      wrappedItems.push(videoMeta);
+    }
+
+    // Parse documents via JSZip + AILANG DocParse
+    for (const item of docItems) {
+      statusMessage.value = `Reading ${item.filename}...`;
+      const blocksJson = await parseDocumentItem(item);
+      const wrappedJson = callPure('parseAndWrapDocument', blocksJson, item.filename, item.format || 'docx');
+      wrappedItems.push(JSON.parse(wrappedJson));
+    }
+
+    // Wrap text items
+    for (const item of textItems) {
+      const wrappedJson = callPure('parseAndWrapText', item.text, item.label || 'User note');
+      wrappedItems.push(JSON.parse(wrappedJson));
+    }
+
     const contentJson = JSON.stringify(wrappedItems);
     console.log('[WB] Items wrapped:', wrappedItems.length, 'items');
-    console.log('[WB] contentJson (first 800):', contentJson.substring(0, 800));
-    setStep('describe', 'done', 'Content prepared');
 
-    // 3. Get style direction
+    // 5. Get style direction
     const stylePrompt = getStylePrompt(props.data.styleId, props.data.customNotes);
 
-    // 4. Structure the site
+    // 6. Structure the site
     setStep('structure', 'active', 'Planning your website structure...');
     const siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
     setStep('structure', 'done', 'Structure planned');
 
-    // 5. Get page slugs
+    // 7. Get page slugs
     console.log('[WB] siteJson type:', typeof siteJson, 'length:', String(siteJson).length);
-    console.log('[WB] siteJson (first 600):', String(siteJson).substring(0, 600));
-
-    // Primary: AILANG pure extraction (exercises AILANG code path)
     const slugsJson = callPure('getPageSlugs', siteJson);
-    console.log('[WB] slugsJson from AILANG:', slugsJson, '| type:', typeof slugsJson);
     let slugs = JSON.parse(slugsJson);
-    console.log('[WB] Page slugs (AILANG):', slugs);
 
-    // Fallback: JS extraction if AILANG returned empty (catches format mismatches)
+    // Fallback: JS extraction if AILANG returned empty
     if (!slugs || slugs.length === 0) {
       console.warn('[WB] AILANG getPageSlugs returned empty — trying JS fallback');
       try {
         const site = JSON.parse(String(siteJson));
         slugs = (site.pages || []).map(p => p.slug).filter(Boolean);
-        console.log('[WB] Page slugs (JS fallback):', slugs);
       } catch (jsErr) {
         console.error('[WB] JS slug fallback failed:', jsErr.message);
       }
@@ -123,7 +296,7 @@ async function startBuild() {
       throw new Error('No pages found in site structure — check console logs for siteJson content.');
     }
 
-    // 6. Generate HTML for each page (parallel — each is an independent AI call)
+    // 8. Generate HTML for each page (parallel)
     let pagesWritten = 0;
     setStep('pages', 'active', `Writing ${slugs.length} pages...`);
     const pageEntries = await Promise.all(
@@ -136,10 +309,9 @@ async function startBuild() {
       )
     );
     const pages = Object.fromEntries(pageEntries);
-    console.log('[WB] Pages generated:', Object.keys(pages), Object.fromEntries(Object.entries(pages).map(([k, v]) => [k, (v || '').length + ' chars'])));
     setStep('pages', 'done', 'Pages written');
 
-    // 7. Generate CSS
+    // 9. Generate CSS
     setStep('css', 'active', 'Designing the look...');
     const css = await callAI('renderCss', siteJson);
     setStep('css', 'done', 'Design complete!');
@@ -147,64 +319,22 @@ async function startBuild() {
     statusMessage.value = 'Your website is ready! 🎉';
     building.value = false;
 
-    console.log('[WB] Emitting done:', { slugs, pageKeys: Object.keys(pages), cssLength: css?.length });
     emit('done', { siteJson, pages, css, slugs });
 
   } catch (err) {
     error.value = err.message;
     building.value = false;
-    // Mark current active step as failed
     buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
   }
 }
 
-async function wrapItems(items) {
-  const wrapped = [];
-  const imageItems = items.filter(i => i.type === 'image');
-  const docItems = items.filter(i => i.type === 'document');
-  const textItems = items.filter(i => i.type === 'text');
-
-  // Describe images via Gemini Vision (avoids passing large base64 into AILANG WASM)
-  for (const item of imageItems) {
-    statusMessage.value = `Describing ${item.filename || 'image'}...`;
-    const description = await describeImageWithGemini(item.base64, item.mimeType);
-    if (item.useOnSite === false) {
-      // Content-only: pass as text — AI reads the content but won't place an <img> on the site
-      const wrappedJson = callPure('parseAndWrapText', description, `Photo: ${item.filename || 'image'}`);
-      wrapped.push(JSON.parse(wrappedJson));
-    } else {
-      // Site image: keep filename so AI places an <img data-ref="filename"> placeholder
-      const wrappedJson = callPure('parseAndWrapImage', '', item.mimeType, item.filename || 'image.jpg', description);
-      wrapped.push(JSON.parse(wrappedJson));
-    }
-  }
-
-  // Parse documents via JSZip + AILANG DocParse (full: DOCX/PPTX/XLSX/PDF + embedded images)
-  for (const item of docItems) {
-    statusMessage.value = `Reading ${item.filename}...`;
-    const blocksJson = await parseDocumentItem(item);
-    const wrappedJson = callPure('parseAndWrapDocument', blocksJson, item.filename, item.format || 'docx');
-    wrapped.push(JSON.parse(wrappedJson));
-  }
-
-  // Wrap text items
-  for (const item of textItems) {
-    const wrappedJson = callPure('parseAndWrapText', item.text, item.label || 'User note');
-    wrapped.push(JSON.parse(wrappedJson));
-  }
-
-  return wrapped;
-}
-
 async function parseDocumentItem(item) {
-  // Convert base64 back to a File object so parseDocumentFile can use it
   const bytes = atob(item.base64);
   const array = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i);
   const blob = new Blob([array], { type: item.mimeType || 'application/octet-stream' });
   const file = new File([blob], item.filename, { type: blob.type });
 
-  // callFn bridge: matches engine.callFunction interface expected by parseDocumentFile
   const callFn = (funcName, ...args) => {
     try {
       const result = callPureModule(DOCPARSE_MODULE, funcName, ...args);
@@ -236,6 +366,40 @@ const STYLE_PROMPTS = {
 function getStylePrompt(id, notes) {
   const base = STYLE_PROMPTS[id] || STYLE_PROMPTS.warm;
   return notes ? `${base}. Additional direction: ${notes}` : base;
+}
+
+async function checkSidecar() {
+  try {
+    const resp = await fetch(`${SIDECAR_BASE}/status`, { signal: AbortSignal.timeout(2000) });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+function slugify(text) {
+  return (text || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) || 'site';
+}
+
+function blobToBase64Raw(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      resolve(dataUrl.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataURLToBlob(dataURL) {
+  const [header, data] = dataURL.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const array = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i);
+  return new Blob([array], { type: mime });
 }
 </script>
 

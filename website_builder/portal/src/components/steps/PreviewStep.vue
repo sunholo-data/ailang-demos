@@ -123,11 +123,12 @@
               <div v-if="entry.expanded && entry.items?.length" class="history-files">
                 <div v-for="(item, j) in entry.items" :key="j" class="history-file" @click="openHistoryItem(item)" title="Click to view">
                   <img
-                    v-if="item.type === 'image' && (item.preview || item.base64)"
+                    v-if="(item.type === 'image' || item.type === 'video') && (item.preview || item.base64)"
                     :src="item.preview || `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`"
                     class="history-thumb"
                     :alt="item.filename || item.label"
                   />
+                  <div v-else-if="item.type === 'video'" class="history-file-icon">🎬</div>
                   <div v-else-if="item.type === 'document'" class="history-file-icon">📄</div>
                   <div v-else class="history-file-icon">📝</div>
                   <span class="history-file-name">{{ item.filename || item.label || 'Text note' }}</span>
@@ -248,12 +249,33 @@ const currentHtml = computed(() => {
   return props.generated?.pages?.[currentSlug.value] || '';
 });
 
-// Build filename→dataURI map from original uploaded items + pending + persisted post-build additions
+// Object URLs created from File objects — tracked for cleanup
+const objectURLs = ref([]);
+
+function createObjectURLTracked(blob) {
+  const url = URL.createObjectURL(blob);
+  objectURLs.value.push(url);
+  return url;
+}
+
+// Build filename→URI map from original uploaded items + pending + persisted post-build additions
 const imageMap = computed(() => {
   const map = {};
   for (const item of props.items) {
-    if (item.type === 'image' && item.base64 && item.filename) {
-      map[item.filename] = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+    if (item.type === 'image' && item.filename) {
+      if (item.base64) {
+        map[item.filename] = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+      } else if (item.file) {
+        map[item.filename] = createObjectURLTracked(item.file);
+      } else if (item.preview) {
+        map[item.filename] = item.preview;
+      }
+    }
+    // Video poster thumbnails
+    if (item.type === 'video' && item.filename && item.preview) {
+      const posterName = item.filename.replace(/\.[^.]+$/, '-poster.jpg');
+      map[posterName] = item.preview;
+      map[item.filename] = item.preview; // fallback: reference by video filename → poster
     }
   }
   for (const item of persistedImages.value) {
@@ -262,8 +284,12 @@ const imageMap = computed(() => {
     }
   }
   for (const item of pendingItems.value) {
-    if (item.type === 'image' && item.base64 && item.label) {
-      map[item.label] = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+    if (item.type === 'image' && item.label) {
+      if (item.base64) {
+        map[item.label] = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+      } else if (item.file) {
+        map[item.label] = createObjectURLTracked(item.file);
+      }
     }
   }
   return map;
@@ -324,6 +350,10 @@ function resolveImages(html) {
       const uri = resolve(src);
       return uri ? `src="${uri}"` : match;
     })
+    .replace(/poster=["']([^"']+)["']/g, (match, poster) => {
+      const uri = resolve(poster);
+      return uri ? `poster="${uri}"` : match;
+    })
     .replace(/data-ref=["']([^"']+)["']/g, (match, ref) => {
       const uri = resolve(ref);
       return uri ? `${match} src="${uri}"` : match;
@@ -336,16 +366,15 @@ function rewriteRelativePaths(html) {
   const { userId, siteSlug } = props.generated || {};
   if (!userId || !siteSlug) return html;
   const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
-  // Rewrite src="images/foo.png" and src="./images/foo.png" (but not http/https/data/# URLs)
+  // Rewrite src=, poster=, and CSS url() with relative paths to sidecar URLs
+  const rewriteAttr = (m, pre, path, post) => {
+    const clean = path.replace(/^\.\//, '');
+    return `${pre}${base}/${clean}${post}`;
+  };
   return html
-    .replace(/(src=["'])(?!https?:\/\/|data:|\/\/|#)([^"']+)(["'])/gi, (m, pre, path, post) => {
-      const clean = path.replace(/^\.\//, '');
-      return `${pre}${base}/${clean}${post}`;
-    })
-    .replace(/(url\(["']?)(?!https?:\/\/|data:|\/\/|#)([^"')]+)(["']?\))/gi, (m, pre, path, post) => {
-      const clean = path.replace(/^\.\//, '');
-      return `${pre}${base}/${clean}${post}`;
-    });
+    .replace(/(src=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
+    .replace(/(poster=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
+    .replace(/(url\(["']?)(?!https?:\/\/|data:|blob:|\/\/|#)([^"')]+)(["']?\))/gi, rewriteAttr);
 }
 
 const htmlWithImages = computed(() => {
@@ -387,7 +416,14 @@ onMounted(() => {
     props.items
   );
 });
-onUnmounted(() => window.removeEventListener('message', onIframeMessage));
+onUnmounted(() => {
+  window.removeEventListener('message', onIframeMessage);
+  // Clean up Object URLs to prevent memory leaks
+  for (const url of objectURLs.value) {
+    URL.revokeObjectURL(url);
+  }
+  objectURLs.value = [];
+});
 
 function slugLabel(slug) {
   if (slug === 'index') return 'Home';
