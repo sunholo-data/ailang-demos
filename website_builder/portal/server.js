@@ -1,6 +1,7 @@
 /**
  * Express sidecar for Website Builder portal.
  * Bridges the Vue frontend to Claude Code via ailang messages.
+ * Persists sites locally (git) or to GitHub (GITHUB_TOKEN env var).
  *
  * Endpoints:
  *   POST /api/save      — Persist WASM-generated site to disk + git
@@ -105,18 +106,97 @@ app.get('/api/staging/:user/:site/media/:filename', (req, res) => {
 });
 
 /**
+ * GitHub REST API helper — uses native fetch (Node 18+).
+ */
+async function githubApi(method, path, body) {
+  const token = process.env.GITHUB_TOKEN;
+  const resp = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`GitHub API ${method} ${path}: ${resp.status} ${text.substring(0, 300)}`);
+  }
+  return resp.json();
+}
+
+// File extensions treated as binary for GitHub blob encoding
+const BINARY_EXTS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico', '.bmp', '.tiff',
+  '.svg', '.pdf', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.ogg',
+  '.woff', '.woff2', '.ttf', '.otf', '.zip', '.gz'
+]);
+
+/**
  * Commit files to the sunholo-websites repo.
  * Local: execSync git add + commit.
- * Production (GITHUB_TOKEN set): placeholder for GitHub API.
+ * Production (GITHUB_TOKEN set): GitHub Git Data API (blobs → tree → commit → ref).
  * Best-effort — failure is logged but doesn't block the caller.
  */
-function commitToRepo(filePaths, message) {
+async function commitToRepo(filePaths, message) {
   try {
     if (process.env.GITHUB_TOKEN) {
-      // TODO Phase B: GitHub Contents API via @octokit/rest
-      console.log(`[sidecar] GitHub API commit not yet implemented. Files written to disk.`);
+      const owner = process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+      const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+      const branch = process.env.GITHUB_BRANCH || 'main';
+
+      // 1. Get current branch HEAD
+      const ref = await githubApi('GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
+      const headSha = ref.object.sha;
+
+      // 2. Get tree SHA from HEAD commit
+      const headCommit = await githubApi('GET', `/repos/${owner}/${repo}/git/commits/${headSha}`);
+      const baseTreeSha = headCommit.tree.sha;
+
+      // 3. Create blobs for each file
+      const treeItems = [];
+      for (const filePath of filePaths) {
+        const absPath = join(WEBSITES_REPO, filePath);
+        if (!existsSync(absPath)) continue;
+
+        const ext = extname(filePath).toLowerCase();
+        const isBinary = BINARY_EXTS.has(ext);
+
+        const content = isBinary
+          ? readFileSync(absPath).toString('base64')
+          : readFileSync(absPath, 'utf-8');
+        const encoding = isBinary ? 'base64' : 'utf-8';
+
+        const blob = await githubApi('POST', `/repos/${owner}/${repo}/git/blobs`, { content, encoding });
+        treeItems.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.sha });
+      }
+
+      if (treeItems.length === 0) return;
+
+      // 4. Create new tree
+      const newTree = await githubApi('POST', `/repos/${owner}/${repo}/git/trees`, {
+        base_tree: baseTreeSha,
+        tree: treeItems
+      });
+
+      // 5. Create commit
+      const newCommit = await githubApi('POST', `/repos/${owner}/${repo}/git/commits`, {
+        message,
+        tree: newTree.sha,
+        parents: [headSha]
+      });
+
+      // 6. Update branch ref
+      await githubApi('PATCH', `/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+        sha: newCommit.sha
+      });
+
+      console.log(`[sidecar] GitHub commit: ${newCommit.sha.substring(0, 7)} — ${message} (${treeItems.length} files)`);
       return;
     }
+
     // Local: git add + commit (only site files — staging/ is gitignored)
     const sitePaths = filePaths.filter(p => p.startsWith('sites/'));
     if (sitePaths.length === 0) return;
@@ -134,7 +214,7 @@ function commitToRepo(filePaths, message) {
  * POST /api/save — Persist WASM-generated website to disk + git.
  * Body (JSON): { user, siteName, pages, css, images, siteJson, description }
  */
-app.post('/api/save', (req, res) => {
+app.post('/api/save', async (req, res) => {
   try {
     const { user = 'default', siteName, pages, css, images, siteJson, description } = req.body;
     if (!siteName || !pages) {
@@ -195,8 +275,8 @@ app.post('/api/save', (req, res) => {
     }, null, 2));
     writtenFiles.push(`staging/${user}/${slug}/brief.json`);
 
-    // Git commit (best-effort)
-    commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`);
+    // Git commit (best-effort, async)
+    await commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`);
 
     console.log(`[sidecar] Saved site: ${user}/${slug} (${writtenFiles.length} files)`);
     res.json({ userId: user, siteSlug: slug, files: writtenFiles });
