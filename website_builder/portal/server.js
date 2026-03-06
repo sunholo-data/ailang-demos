@@ -241,11 +241,12 @@ app.post('/api/save', async (req, res) => {
 
     const writtenFiles = [];
 
-    // Write HTML pages
+    // Write HTML pages — rename "home" to "index" for GitHub Pages
     for (const [pageSlug, html] of Object.entries(pages)) {
-      const filePath = join(siteDir, `${pageSlug}.html`);
+      const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
+      const filePath = join(siteDir, `${fileSlug}.html`);
       writeFileSync(filePath, html, 'utf-8');
-      writtenFiles.push(`sites/${user}/${slug}/${pageSlug}.html`);
+      writtenFiles.push(`sites/${user}/${slug}/${fileSlug}.html`);
     }
 
     // Write CSS

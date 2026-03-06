@@ -152,15 +152,26 @@ export async function getSiteFile(user, site, file) {
 
 const REPO_CONFIG_KEY = 'wb-repo-config';
 
+const DEFAULT_REPO_CONFIG = {
+  owner: 'sunholo-voight-kampff',
+  repo: 'sunholo-websites',
+  branch: 'main',
+};
+
 /**
  * Get the user's GitHub repo config.
- * @returns {{ owner?: string, repo?: string, branch?: string } | null}
+ * Falls back to project defaults so GitHub Pages links work out of the box.
+ * @returns {{ owner: string, repo: string, branch: string }}
  */
 export function getRepoConfig() {
   try {
     const raw = localStorage.getItem(REPO_CONFIG_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_REPO_CONFIG, ...parsed };
+    }
+  } catch { /* fall through */ }
+  return { ...DEFAULT_REPO_CONFIG };
 }
 
 /**

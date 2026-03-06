@@ -322,23 +322,29 @@ async function startBuild() {
     let saveResult = null;
     setStep('save', 'active', 'Saving your website...');
     try {
-      const imagePayload = [];
-      for (const item of imageItems) {
+      const mediaPayload = [];
+      for (const item of [...imageItems, ...videoItems]) {
         const uploaded = uploadMap.get(item.filename);
         if (uploaded) {
-          imagePayload.push({ filename: item.filename, stagingPath: uploaded.stagingPath });
+          mediaPayload.push({ filename: item.filename, stagingPath: uploaded.stagingPath });
         } else if (item.file) {
           // No sidecar upload — send as base64
           const b64 = await blobToBase64Raw(item.file);
-          imagePayload.push({ filename: item.filename, base64: b64 });
+          mediaPayload.push({ filename: item.filename, base64: b64 });
         }
       }
+      // Use the AI-generated title so each build gets a unique slug
+      let siteName = slugify(props.data.description);
+      try {
+        const parsed = JSON.parse(String(siteJson));
+        if (parsed.title) siteName = parsed.title;
+      } catch {}
       saveResult = await saveSite({
         user: 'default', // TODO: pass from auth
-        siteName: slugify(props.data.description),
+        siteName,
         pages,
         css,
-        images: imagePayload.length > 0 ? imagePayload : undefined,
+        images: mediaPayload.length > 0 ? mediaPayload : undefined,
         siteJson,
         description: props.data.description,
         repoConfig: getRepoConfig(),

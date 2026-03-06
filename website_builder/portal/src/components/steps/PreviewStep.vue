@@ -893,6 +893,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
     // Preserve sidecar info if we have it
     userId: props.generated?.userId,
     siteSlug: props.generated?.siteSlug,
+    liveUrl: props.generated?.liveUrl || '',
   };
 
   emit('update-generated', updated);

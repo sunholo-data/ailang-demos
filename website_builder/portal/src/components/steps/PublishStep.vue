@@ -102,6 +102,12 @@ onMounted(async () => {
       });
       saved.value = true;
       liveUrl.value = result.liveUrl || '';
+      // Propagate save info back so it's available if user goes back/forward
+      if (props.generated) {
+        props.generated.userId = result.userId;
+        props.generated.siteSlug = result.siteSlug;
+        props.generated.liveUrl = result.liveUrl || '';
+      }
     } catch (err) {
       saveError.value = err.message;
     } finally {
