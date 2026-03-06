@@ -270,11 +270,19 @@ const imageMap = computed(() => {
         map[item.filename] = item.preview;
       }
     }
-    // Video poster thumbnails
-    if (item.type === 'video' && item.filename && item.preview) {
-      const posterName = item.filename.replace(/\.[^.]+$/, '-poster.jpg');
-      map[posterName] = item.preview;
-      map[item.filename] = item.preview; // fallback: reference by video filename → poster
+    // Video files: use blob URL for the actual video, poster thumbnail for poster image
+    if (item.type === 'video' && item.filename) {
+      if (item.file) {
+        map[item.filename] = createObjectURLTracked(item.file);
+      } else if (item.stagingPath) {
+        // Staged on sidecar — serve from staging URL
+        map[item.filename] = `/api/staging/${item.stagingPath.replace(/^staging\//, '')}`;
+      }
+      // Poster thumbnail (separate filename)
+      if (item.preview) {
+        const posterName = item.filename.replace(/\.[^.]+$/, '-poster.jpg');
+        map[posterName] = item.preview;
+      }
     }
   }
   for (const item of persistedImages.value) {

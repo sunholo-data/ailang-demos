@@ -255,39 +255,34 @@ app.post('/api/save', async (req, res) => {
       writtenFiles.push(`sites/${user}/${slug}/style.css`);
     }
 
-    // Write images — from base64 or copy from staging
+    // Write images — to site root (AI references by bare filename)
     if (images && Array.isArray(images)) {
-      const imagesDir = join(siteDir, 'images');
-      mkdirSync(imagesDir, { recursive: true });
       for (const img of images) {
         if (img.stagingPath) {
-          // Copy from staging
           const src = resolve(WEBSITES_REPO, img.stagingPath);
           if (existsSync(src)) {
-            const dest = join(imagesDir, img.filename);
+            const dest = join(siteDir, img.filename);
             copyFileSync(src, dest);
-            writtenFiles.push(`sites/${user}/${slug}/images/${img.filename}`);
+            writtenFiles.push(`sites/${user}/${slug}/${img.filename}`);
           }
         } else if (img.base64) {
-          const dest = join(imagesDir, img.filename);
+          const dest = join(siteDir, img.filename);
           writeFileSync(dest, Buffer.from(img.base64, 'base64'));
-          writtenFiles.push(`sites/${user}/${slug}/images/${img.filename}`);
+          writtenFiles.push(`sites/${user}/${slug}/${img.filename}`);
         }
       }
     }
 
-    // Copy any staged media files (videos, etc.) to site directory
+    // Copy staged media files (videos, posters, etc.) to site root
     const mediaStagingDir = join(STAGING_DIR, user, slug, 'media');
     if (existsSync(mediaStagingDir)) {
-      const mediaDir = join(siteDir, 'media');
-      mkdirSync(mediaDir, { recursive: true });
       for (const f of readdirSync(mediaStagingDir)) {
         if (f.startsWith('.')) continue;
         const src = join(mediaStagingDir, f);
-        const dest = join(mediaDir, f);
+        const dest = join(siteDir, f);
         if (!existsSync(dest)) {
           copyFileSync(src, dest);
-          writtenFiles.push(`sites/${user}/${slug}/media/${f}`);
+          writtenFiles.push(`sites/${user}/${slug}/${f}`);
         }
       }
     }
