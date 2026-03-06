@@ -2,16 +2,24 @@
   <div class="step">
     <h1>Your website is ready!</h1>
     <p class="subtitle" v-if="saving">Saving your website...</p>
+    <p class="subtitle" v-else-if="deploying">Deploying to GitHub Pages...</p>
     <p class="subtitle" v-else-if="saved">Your website has been saved and is ready to share.</p>
     <p class="subtitle" v-else>Download your website files or view the live preview.</p>
 
+    <!-- Deploying spinner -->
+    <div v-if="deploying" class="deploy-card">
+      <div class="spinner"></div>
+      <h2>Publishing to GitHub Pages</h2>
+      <p class="deploy-note">This usually takes 15–30 seconds...</p>
+    </div>
+
     <!-- Saved confirmation with live link -->
-    <div v-if="saved" class="success-card">
+    <div v-if="saved && !deploying" class="success-card">
       <div class="success-icon">🎉</div>
       <h2>Website published!</h2>
       <p class="success-pages">{{ pageCount }} page{{ pageCount !== 1 ? 's' : '' }} saved</p>
       <a v-if="previewUrl" :href="previewUrl" target="_blank" class="live-url">{{ previewUrl }}</a>
-      <p v-if="isLive" class="live-note">Your site is live on GitHub Pages. It may take up to 30 seconds for changes to appear.</p>
+      <p v-if="isLive" class="live-note">Your site is live on GitHub Pages.</p>
       <p v-else-if="previewUrl" class="live-note">Preview link (works while the local server is running).</p>
     </div>
 
@@ -25,13 +33,13 @@
       <button class="btn-primary download-btn" @click="downloadFiles">
         ⬇️ Download website files
       </button>
-      <button v-if="previewUrl" class="btn-secondary download-btn" @click="openPreview">
+      <button v-if="previewUrl && !deploying" class="btn-secondary download-btn" @click="openPreview">
         ↗ Open in new tab
       </button>
     </div>
 
     <!-- Tip for custom domain -->
-    <div v-if="isLive" class="info-box">
+    <div v-if="isLive && !deploying" class="info-box">
       <p>To use a custom domain, configure it in your GitHub repository's Pages settings.</p>
     </div>
 
@@ -43,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
@@ -53,22 +61,21 @@ defineEmits(['back', 'restart']);
 
 const saving = ref(false);
 const saved = ref(false);
+const deploying = ref(false);
 const saveError = ref('');
 const liveUrl = ref('');
+let pollTimer = null;
 
 const pageCount = computed(() => Object.keys(props.generated?.pages || {}).length);
 
 const previewUrl = computed(() => {
-  // Prefer the live GitHub Pages URL
   if (liveUrl.value) return liveUrl.value;
   if (props.generated?.liveUrl) return props.generated.liveUrl;
-  // Try to construct GitHub Pages URL from repo config
   const rc = getRepoConfig();
   const { userId, siteSlug } = props.generated || {};
   if (rc?.owner && rc?.repo && userId && siteSlug) {
     return `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}/`;
   }
-  // Fallback to sidecar preview (uses API_BASE so works with Cloud Run)
   if (!userId || !siteSlug) return '';
   return siteFileUrl(userId, siteSlug, 'index.html');
 });
@@ -78,11 +85,42 @@ const isLive = computed(() => {
   return !!(liveUrl.value || props.generated?.liveUrl || (rc?.owner && rc?.repo));
 });
 
+onUnmounted(() => {
+  if (pollTimer) clearTimeout(pollTimer);
+});
+
+/**
+ * Poll a URL until it returns 200 or we time out.
+ * GitHub Pages sets access-control-allow-origin: * so fetch works from browser.
+ */
+async function waitForLive(url, maxWaitMs = 120000, intervalMs = 5000) {
+  deploying.value = true;
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (resp.ok) {
+        deploying.value = false;
+        return true;
+      }
+    } catch { /* network error, keep trying */ }
+    await new Promise(r => { pollTimer = setTimeout(r, intervalMs); });
+  }
+  deploying.value = false;
+  return false;
+}
+
 onMounted(async () => {
   // If already saved (has userId/siteSlug), mark as saved
   if (props.generated?.userId && props.generated?.siteSlug) {
     saved.value = true;
     liveUrl.value = props.generated.liveUrl || '';
+    // If we have a GitHub Pages URL, wait for it to be live
+    const ghUrl = buildGitHubPagesUrl();
+    if (ghUrl) {
+      await waitForLive(ghUrl);
+      liveUrl.value = ghUrl;
+    }
     return;
   }
 
@@ -101,20 +139,37 @@ onMounted(async () => {
         repoConfig: getRepoConfig(),
       });
       saved.value = true;
-      liveUrl.value = result.liveUrl || '';
-      // Propagate save info back so it's available if user goes back/forward
+      saving.value = false;
+      // Propagate save info back
       if (props.generated) {
         props.generated.userId = result.userId;
         props.generated.siteSlug = result.siteSlug;
         props.generated.liveUrl = result.liveUrl || '';
       }
+      // Wait for GitHub Pages to deploy
+      const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
+      if (ghUrl) {
+        await waitForLive(ghUrl);
+        liveUrl.value = ghUrl;
+      } else {
+        liveUrl.value = result.liveUrl || '';
+      }
     } catch (err) {
       saveError.value = err.message;
-    } finally {
       saving.value = false;
     }
   }
 });
+
+function buildGitHubPagesUrl(userId, siteSlug) {
+  const rc = getRepoConfig();
+  const uid = userId || props.generated?.userId;
+  const slug = siteSlug || props.generated?.siteSlug;
+  if (rc?.owner && rc?.repo && uid && slug) {
+    return `https://${rc.owner}.github.io/${rc.repo}/sites/${uid}/${slug}/`;
+  }
+  return '';
+}
 
 function extractSiteName() {
   try {
@@ -153,6 +208,26 @@ function downloadString(filename, content, type) {
 </script>
 
 <style scoped>
+.deploy-card {
+  text-align: center;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.deploy-card h2 { margin-bottom: 0.5rem; }
+.deploy-note { font-size: 0.9rem; color: var(--text-muted); }
+.spinner {
+  width: 40px; height: 40px;
+  margin: 0 auto 1rem;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .success-card {
   text-align: center;
   background: var(--surface);

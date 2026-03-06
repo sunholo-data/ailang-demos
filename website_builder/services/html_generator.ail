@@ -40,7 +40,8 @@ export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI
     "- Single HTML file with inline <style> block (all CSS embedded)\n" ++
     "- Link Google Fonts in <head> per the designBrief typography\n" ++
     "- Mobile-first responsive design (must look great on a phone)\n" ++
-    "- Navigation bar linking all pages (CSS :checked hamburger on mobile)\n" ++
+    "- Navigation bar linking all pages using RELATIVE href format: about.html, gallery.html, contact.html, index.html (for home). NEVER use # anchors or absolute paths like /about for page links.\n" ++
+    "- CSS :checked hamburger toggle on mobile (no JS needed for menu)\n" ++
     "- Images: use <img src='filename.jpg' alt='description'> using the exact filenames from each section's 'images' array\n" ++
     "- Clean semantic HTML5, proper heading hierarchy\n" ++
     "- Accessible: alt text, aria labels, lang attribute, viewport meta\n" ++

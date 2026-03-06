@@ -176,6 +176,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 import { saveSite, getRepoConfig } from '../../api.js';
+import { normalizeNavLinks, buildSelfContainedHtml } from '../../nav-utils.js';
 
 const props = defineProps({
   generated: { type: Object, required: true },
@@ -304,6 +305,8 @@ const imageMap = computed(() => {
 
 // Script injected into preview iframe for link interception + element hover/selection.
 // Uses capture phase for nav so preventDefault fires before any other handler.
+// Links are normalized to slug.html format by normalizeNavLinks() before injection,
+// but the script also handles #slug and /slug as a safety net.
 const SELECTION_SCRIPT = `<style>
 [data-wb-h]{outline:2px dashed rgba(124,92,191,0.35)!important;outline-offset:3px!important;cursor:crosshair!important}
 [data-wb-s]{outline:2px solid rgba(124,92,191,0.85)!important;outline-offset:3px!important;box-shadow:0 0 0 4px rgba(124,92,191,0.1)!important}
@@ -314,11 +317,13 @@ document.addEventListener('click',function(e){
   var a=e.target.closest('a[href]');
   if(!a)return;
   var href=a.getAttribute('href')||'';
-  if(href==='#'||href==='')return;
+  // Skip external links, bare #, and empty hrefs
+  if(!href||href==='#'||/^(https?:|mailto:|tel:|javascript:|data:)/i.test(href))return;
   e.preventDefault();
   e.stopPropagation();
-  // Map #slug anchors to page navigation (AI often generates #about instead of about.html)
+  // Normalize any remaining non-standard formats (safety net)
   if(href.startsWith('#')){href=href.substring(1)+'.html';}
+  else if(href.startsWith('/')&&!href.startsWith('//')){href=href.substring(1);if(!href.endsWith('.html'))href+='.html';}
   try{parent.postMessage({type:'wb-navigate',href:href},'*');}catch(err){}
 },true);
 // Element selection (bubble phase — only for non-link clicks)
@@ -524,10 +529,20 @@ function toggleFullscreen() {
 }
 
 function openInTab() {
-  // Use the clean image-resolved HTML without the selection/nav injection script
-  const html = resolveImages(currentHtml.value);
-  if (!html) return;
-  const blob = new Blob([html], { type: 'text/html' });
+  const { userId, siteSlug } = props.generated || {};
+  if (userId && siteSlug) {
+    // Saved site: open sidecar URL where relative slug.html links work natively
+    const page = currentSlug.value === 'home' ? 'index' : currentSlug.value;
+    window.open(`/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}/${page}.html`, '_blank');
+    return;
+  }
+  // Unsaved: build self-contained HTML with embedded multi-page navigation
+  const allPages = {};
+  for (const slug of slugs.value) {
+    allPages[slug] = resolveImages(props.generated?.pages?.[slug] || '');
+  }
+  const wrapper = buildSelfContainedHtml(allPages, currentSlug.value);
+  const blob = new Blob([wrapper], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -846,7 +861,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
     refineStatus.value = `Updating ${currentSlug.value} page...`;
     const updatedHtml = await callAI('renderPage', updatedSiteJson, currentSlug.value);
     newSlugs = props.generated.slugs;
-    newPages = { ...props.generated.pages, [currentSlug.value]: updatedHtml };
+    newPages = { ...props.generated.pages, [currentSlug.value]: normalizeNavLinks(updatedHtml, newSlugs) };
     newCss = props.generated.css;
   } else {
     const slugsJson = callPure('getPageSlugs', updatedSiteJson);
@@ -859,7 +874,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
         callAI('renderPage', updatedSiteJson, slug).then(html => {
           done++;
           refineStatus.value = `Writing pages... ${done}/${newSlugs.length} done`;
-          return [slug, html];
+          return [slug, normalizeNavLinks(html, newSlugs)];
         })
       )
     );

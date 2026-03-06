@@ -44,6 +44,7 @@ import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, 
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
 import { saveSite, getRepoConfig } from '../../api.js';
+import { normalizeNavLinks } from '../../nav-utils.js';
 
 const props = defineProps({
   data: { type: Object, required: true }
@@ -306,7 +307,7 @@ async function startBuild() {
         callAI('renderPage', siteJson, slug).then(html => {
           pagesWritten++;
           setStep('pages', 'active', `Writing pages... ${pagesWritten}/${slugs.length} done`);
-          return [slug, html];
+          return [slug, normalizeNavLinks(html, slugs)];
         })
       )
     );

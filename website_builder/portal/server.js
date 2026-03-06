@@ -28,6 +28,29 @@ const WEBSITES_REPO = process.env.WEBSITES_REPO || join(homedir(), 'dev/sunholo/
 const STAGING_DIR = join(WEBSITES_REPO, 'staging');
 const SITES_DIR = join(WEBSITES_REPO, 'sites');
 
+/**
+ * Normalize internal navigation links to relative slug.html format.
+ * Ensures links work on GitHub Pages, sidecar, and downloaded files.
+ */
+function normalizeNavLinksServer(html, slugs) {
+  if (!html || !slugs || slugs.length === 0) return html;
+  const slugSet = new Set(slugs.map(s => s.toLowerCase()));
+  slugSet.add('home');
+  slugSet.add('index');
+  return html.replace(/<a\s([^>]*?)href=["']([^"']*?)["']/gi, (match, pre, href) => {
+    if (/^(https?:|mailto:|tel:|javascript:|data:)/i.test(href)) return match;
+    let slug = href
+      .replace(/^[./]+/, '').replace(/\.html$/i, '').replace(/^#/, '')
+      .replace(/\/$/, '').split('?')[0].split('#')[0].toLowerCase();
+    if (!slug) return match;
+    if (slugSet.has(slug)) {
+      const target = (slug === 'home') ? 'index.html' : `${slug}.html`;
+      return `<a ${pre}href="${target}"`;
+    }
+    return match;
+  });
+}
+
 // Ensure directories exist
 mkdirSync(STAGING_DIR, { recursive: true });
 mkdirSync(SITES_DIR, { recursive: true });
@@ -241,10 +264,13 @@ app.post('/api/save', async (req, res) => {
 
     const writtenFiles = [];
 
-    // Write HTML pages — rename "home" to "index" for GitHub Pages
-    for (const [pageSlug, html] of Object.entries(pages)) {
+    // Normalize navigation links in all pages before writing to disk.
+    // Ensures links work on GitHub Pages, sidecar, and downloaded files.
+    const allSlugs = Object.keys(pages);
+    for (const [pageSlug, rawHtml] of Object.entries(pages)) {
       const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
       const filePath = join(siteDir, `${fileSlug}.html`);
+      const html = normalizeNavLinksServer(rawHtml, allSlugs);
       writeFileSync(filePath, html, 'utf-8');
       writtenFiles.push(`sites/${user}/${slug}/${fileSlug}.html`);
     }
