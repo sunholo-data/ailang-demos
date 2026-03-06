@@ -44,7 +44,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { saveSite, getRepoConfig } from '../../api.js';
+import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
   generated: { type: Object, required: true }
@@ -62,13 +62,21 @@ const previewUrl = computed(() => {
   // Prefer the live GitHub Pages URL
   if (liveUrl.value) return liveUrl.value;
   if (props.generated?.liveUrl) return props.generated.liveUrl;
-  // Fallback to sidecar preview
+  // Try to construct GitHub Pages URL from repo config
+  const rc = getRepoConfig();
   const { userId, siteSlug } = props.generated || {};
+  if (rc?.owner && rc?.repo && userId && siteSlug) {
+    return `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}/`;
+  }
+  // Fallback to sidecar preview (uses API_BASE so works with Cloud Run)
   if (!userId || !siteSlug) return '';
-  return `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}/index.html`;
+  return siteFileUrl(userId, siteSlug, 'index.html');
 });
 
-const isLive = computed(() => !!(liveUrl.value || props.generated?.liveUrl));
+const isLive = computed(() => {
+  const rc = getRepoConfig();
+  return !!(liveUrl.value || props.generated?.liveUrl || (rc?.owner && rc?.repo));
+});
 
 onMounted(async () => {
   // If already saved (has userId/siteSlug), mark as saved

@@ -314,9 +314,11 @@ document.addEventListener('click',function(e){
   var a=e.target.closest('a[href]');
   if(!a)return;
   var href=a.getAttribute('href')||'';
-  if(href.startsWith('#'))return;
+  if(href==='#'||href==='')return;
   e.preventDefault();
   e.stopPropagation();
+  // Map #slug anchors to page navigation (AI often generates #about instead of about.html)
+  if(href.startsWith('#')){href=href.substring(1)+'.html';}
   try{parent.postMessage({type:'wb-navigate',href:href},'*');}catch(err){}
 },true);
 // Element selection (bubble phase — only for non-link clicks)
