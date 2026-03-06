@@ -714,8 +714,9 @@ async function sendFeedback() {
   const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
   pushHistory('✏️', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
 
-  // Route through Claude Code (sidecar) or WASM fallback
-  const useSidecar = !!(props.generated?.userId && props.generated?.siteSlug);
+  // Route through Claude Code (local sidecar only) or WASM
+  // Cloud Run has no ailang CLI, so always use WASM when API is remote
+  const useSidecar = !import.meta.env.VITE_API_URL && !!(props.generated?.userId && props.generated?.siteSlug);
 
   try {
     if (useSidecar) {
