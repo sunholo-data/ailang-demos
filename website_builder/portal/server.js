@@ -16,7 +16,7 @@
 import express from 'express';
 import multer from 'multer';
 import { execSync } from 'child_process';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'fs';
 import { join, resolve, extname, basename } from 'path';
 import { homedir } from 'os';
 
@@ -506,6 +506,69 @@ app.get('/api/sites/:user', (req, res) => {
     res.json({ sites });
   } catch {
     res.json({ sites: [] });
+  }
+});
+
+/**
+ * DELETE /api/sites/:user/:site — Delete a saved site.
+ */
+app.delete('/api/sites/:user/:site', async (req, res) => {
+  const { user, site } = req.params;
+  const siteDir = resolve(SITES_DIR, user, site);
+  const stagingDir = resolve(STAGING_DIR, user, site);
+
+  // Security: ensure paths are within expected directories
+  if (!siteDir.startsWith(resolve(SITES_DIR))) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+
+  try {
+    // Delete from GitHub repo if configured
+    if (process.env.GITHUB_TOKEN) {
+      const owner = process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+      const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+      const branch = process.env.GITHUB_BRANCH || 'main';
+      const prefix = `sites/${user}/${site}`;
+
+      try {
+        // Get the tree for this site to find all files
+        const ref = await githubApi('GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
+        const headSha = ref.object.sha;
+        const headCommit = await githubApi('GET', `/repos/${owner}/${repo}/git/commits/${headSha}`);
+        const baseTreeSha = headCommit.tree.sha;
+
+        // Get recursive tree to find files under this prefix
+        const fullTree = await githubApi('GET', `/repos/${owner}/${repo}/git/trees/${baseTreeSha}?recursive=1`);
+        const filesToDelete = (fullTree.tree || [])
+          .filter(item => item.path.startsWith(prefix + '/') && item.type === 'blob');
+
+        if (filesToDelete.length > 0) {
+          // Create a tree that removes these files (sha: null deletes)
+          const treeItems = filesToDelete.map(f => ({
+            path: f.path, mode: '100644', type: 'blob', sha: null
+          }));
+          const newTree = await githubApi('POST', `/repos/${owner}/${repo}/git/trees`, {
+            base_tree: baseTreeSha, tree: treeItems
+          });
+          const newCommit = await githubApi('POST', `/repos/${owner}/${repo}/git/commits`, {
+            message: `Delete site: ${site}`, tree: newTree.sha, parents: [headSha]
+          });
+          await githubApi('PATCH', `/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+            sha: newCommit.sha
+          });
+        }
+      } catch (err) {
+        console.warn(`[sidecar] GitHub delete failed (continuing local): ${err.message}`);
+      }
+    }
+
+    // Delete local directories
+    if (existsSync(siteDir)) rmSync(siteDir, { recursive: true });
+    if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true });
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -25,6 +25,9 @@
         <div class="site-pages">
           <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
         </div>
+        <a v-if="liveBaseUrl" :href="liveBaseUrl + site.slug + '/'" target="_blank" class="live-link">
+          {{ liveBaseUrl + site.slug + '/' }}
+        </a>
         <div class="site-meta">
           Updated {{ formatDate(site.updatedAt) }}
         </div>
@@ -35,6 +38,23 @@
           <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
             &#x2197;
           </button>
+          <button
+            class="btn-danger btn-sm"
+            @click="confirmDelete(site)"
+            :disabled="deleting === site.slug"
+            title="Delete site"
+          >
+            {{ deleting === site.slug ? '...' : '&#x1F5D1;' }}
+          </button>
+        </div>
+
+        <!-- Delete confirmation -->
+        <div v-if="deleteConfirm === site.slug" class="delete-confirm">
+          <span>Delete "{{ site.title }}"? This cannot be undone.</span>
+          <div class="delete-confirm-btns">
+            <button class="btn-danger btn-sm" @click="doDelete(site)">Delete</button>
+            <button class="btn-secondary btn-sm" @click="deleteConfirm = ''">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -49,7 +69,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { listSites, deleteSite, getSiteFile, siteFileUrl, getRepoConfig } from '../api.js';
 
 const props = defineProps({
   userId: { type: String, required: true }
@@ -60,13 +81,18 @@ const sites = ref([]);
 const loading = ref(true);
 const loadingSite = ref('');
 const error = ref('');
+const deleteConfirm = ref('');
+const deleting = ref('');
+
+const liveBaseUrl = computed(() => {
+  const rc = getRepoConfig();
+  if (!rc?.owner || !rc?.repo) return '';
+  return `https://${rc.owner}.github.io/${rc.repo}/sites/${props.userId}/`;
+});
 
 onMounted(async () => {
   try {
-    const res = await fetch(`/api/sites/${encodeURIComponent(props.userId)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    sites.value = data.sites || [];
+    sites.value = await listSites(props.userId);
   } catch (err) {
     console.warn('[MySites] Could not fetch sites:', err.message);
     error.value = err.message;
@@ -78,25 +104,21 @@ onMounted(async () => {
 async function viewSite(site) {
   loadingSite.value = site.title;
   try {
-    const base = `/api/sites/${encodeURIComponent(props.userId)}/${encodeURIComponent(site.slug)}`;
-
-    // Fetch all pages HTML
+    // Fetch all pages HTML in parallel
     const pageEntries = await Promise.all(
       site.pages.map(async (page) => {
-        const res = await fetch(`${base}/${page}.html`);
-        if (!res.ok) throw new Error(`Failed to fetch ${page}.html`);
-        const html = await res.text();
+        const html = await getSiteFile(props.userId, site.slug, `${page}.html`);
         return [page, html];
       })
     );
+
     // Fetch all local CSS files referenced in any page, then inline them.
     // srcdoc has no base URL so relative <link href="...css"> won't resolve.
     const cssCache = {};
     async function fetchCss(href) {
       if (cssCache[href]) return cssCache[href];
       try {
-        const r = await fetch(`${base}/${href}`);
-        if (r.ok) cssCache[href] = await r.text();
+        cssCache[href] = await getSiteFile(props.userId, site.slug, href);
       } catch {}
       return cssCache[href] || '';
     }
@@ -108,13 +130,11 @@ async function viewSite(site) {
       let m;
       while ((m = localCssPattern.exec(html)) !== null) {
         const href = m[1];
-        // Skip external URLs (Google Fonts etc.)
         if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
           allHrefs.add(href);
         }
       }
     }
-    // Pre-fetch all CSS files in parallel
     await Promise.all([...allHrefs].map(fetchCss));
 
     // Inline each local <link rel="stylesheet"> with fetched content
@@ -125,7 +145,7 @@ async function viewSite(site) {
         /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
         (match, before, href, after) => {
           if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
-            return match; // keep external links (Google Fonts etc.)
+            return match;
           }
           const content = cssCache[href];
           return content ? `<style>/* ${href} */\n${content}</style>` : match;
@@ -140,7 +160,6 @@ async function viewSite(site) {
       return a.localeCompare(b);
     });
 
-    // Build a minimal siteJson for PreviewStep
     const siteJson = JSON.stringify({
       title: site.title,
       description: site.description,
@@ -164,8 +183,25 @@ async function viewSite(site) {
 }
 
 function openFullScreen(site) {
-  const url = `/api/sites/${encodeURIComponent(props.userId)}/${encodeURIComponent(site.slug)}/index.html`;
+  const url = siteFileUrl(props.userId, site.slug, 'index.html');
   window.open(url, '_blank');
+}
+
+function confirmDelete(site) {
+  deleteConfirm.value = deleteConfirm.value === site.slug ? '' : site.slug;
+}
+
+async function doDelete(site) {
+  deleting.value = site.slug;
+  deleteConfirm.value = '';
+  try {
+    await deleteSite(props.userId, site.slug);
+    sites.value = sites.value.filter(s => s.slug !== site.slug);
+  } catch (err) {
+    error.value = `Delete failed: ${err.message}`;
+  } finally {
+    deleting.value = '';
+  }
 }
 
 function formatDate(iso) {
@@ -266,6 +302,14 @@ function formatDate(iso) {
   color: var(--text-muted);
 }
 
+.live-link {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--primary);
+  margin-bottom: 0.4rem;
+  word-break: break-all;
+}
+
 .site-meta {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -280,6 +324,32 @@ function formatDate(iso) {
 .btn-sm {
   padding: 0.45rem 1rem;
   font-size: 0.85rem;
+}
+
+.btn-danger {
+  background: transparent;
+  color: #CC0000;
+  border: 1.5px solid #CC0000;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.btn-danger:hover { background: #FFF0F0; }
+
+.delete-confirm {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #FFF0F0;
+  border: 1px solid #FFB3B3;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #CC0000;
+}
+.delete-confirm-btns {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .new-site-section {

@@ -106,6 +106,48 @@ export function siteFileUrl(user, site, file = 'index.html') {
   return `${API_BASE}/sites/${encodeURIComponent(user)}/${encodeURIComponent(site)}/${file}`;
 }
 
+/**
+ * GET /api/sites/:user — List all saved sites for a user.
+ * @param {string} user
+ * @returns {Promise<Array>} Array of site objects
+ */
+export async function listSites(user) {
+  const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(user)}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.sites || [];
+}
+
+/**
+ * DELETE /api/sites/:user/:site — Delete a saved site.
+ * @param {string} user
+ * @param {string} site
+ * @returns {Promise<{ok: boolean}>}
+ */
+export async function deleteSite(user, site) {
+  const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(user)}/${encodeURIComponent(site)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Delete failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/**
+ * Fetch a single file from a saved site (HTML, CSS, etc.).
+ * @param {string} user
+ * @param {string} site
+ * @param {string} file - e.g. 'index.html', 'style.css'
+ * @returns {Promise<string>} File contents as text
+ */
+export async function getSiteFile(user, site, file) {
+  const res = await fetch(siteFileUrl(user, site, file));
+  if (!res.ok) throw new Error(`Failed to fetch ${file} (${res.status})`);
+  return res.text();
+}
+
 // ── GitHub repo config (per-user, stored in localStorage) ──
 
 const REPO_CONFIG_KEY = 'wb-repo-config';
