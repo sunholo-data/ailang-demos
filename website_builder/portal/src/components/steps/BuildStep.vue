@@ -43,7 +43,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite } from '../../api.js';
+import { saveSite, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
   data: { type: Object, required: true }
@@ -341,6 +341,7 @@ async function startBuild() {
         images: imagePayload.length > 0 ? imagePayload : undefined,
         siteJson,
         description: props.data.description,
+        repoConfig: getRepoConfig(),
       });
       setStep('save', 'done', 'Saved!');
       console.log('[WB] Site saved:', saveResult);

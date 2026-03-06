@@ -8,10 +8,11 @@
     <!-- Saved confirmation with live link -->
     <div v-if="saved" class="success-card">
       <div class="success-icon">🎉</div>
-      <h2>Website saved!</h2>
+      <h2>Website published!</h2>
       <p class="success-pages">{{ pageCount }} page{{ pageCount !== 1 ? 's' : '' }} saved</p>
-      <a v-if="previewUrl" :href="previewUrl" target="_blank" class="live-url">View live preview</a>
-      <p v-if="previewUrl" class="live-note">This link works while the local server is running.</p>
+      <a v-if="previewUrl" :href="previewUrl" target="_blank" class="live-url">{{ previewUrl }}</a>
+      <p v-if="isLive" class="live-note">Your site is live on GitHub Pages. It may take up to 30 seconds for changes to appear.</p>
+      <p v-else-if="previewUrl" class="live-note">Preview link (works while the local server is running).</p>
     </div>
 
     <!-- Save error (non-blocking) -->
@@ -29,9 +30,9 @@
       </button>
     </div>
 
-    <!-- Coming soon -->
-    <div class="coming-soon">
-      <p>GitHub Pages deployment is coming soon. For now, download the files or use the preview link above.</p>
+    <!-- Tip for custom domain -->
+    <div v-if="isLive" class="info-box">
+      <p>To use a custom domain, configure it in your GitHub repository's Pages settings.</p>
     </div>
 
     <div class="nav-btns">
@@ -43,7 +44,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { saveSite } from '../../api.js';
+import { saveSite, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
   generated: { type: Object, required: true }
@@ -53,19 +54,27 @@ defineEmits(['back', 'restart']);
 const saving = ref(false);
 const saved = ref(false);
 const saveError = ref('');
+const liveUrl = ref('');
 
 const pageCount = computed(() => Object.keys(props.generated?.pages || {}).length);
 
 const previewUrl = computed(() => {
+  // Prefer the live GitHub Pages URL
+  if (liveUrl.value) return liveUrl.value;
+  if (props.generated?.liveUrl) return props.generated.liveUrl;
+  // Fallback to sidecar preview
   const { userId, siteSlug } = props.generated || {};
   if (!userId || !siteSlug) return '';
   return `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}/index.html`;
 });
 
+const isLive = computed(() => !!(liveUrl.value || props.generated?.liveUrl));
+
 onMounted(async () => {
   // If already saved (has userId/siteSlug), mark as saved
   if (props.generated?.userId && props.generated?.siteSlug) {
     saved.value = true;
+    liveUrl.value = props.generated.liveUrl || '';
     return;
   }
 
@@ -74,15 +83,17 @@ onMounted(async () => {
     saving.value = true;
     try {
       const siteName = extractSiteName();
-      await saveSite({
+      const result = await saveSite({
         user: 'default',
         siteName,
         pages: props.generated.pages,
         css: props.generated.css,
         siteJson: props.generated.siteJson,
         description: siteName,
+        repoConfig: getRepoConfig(),
       });
       saved.value = true;
+      liveUrl.value = result.liveUrl || '';
     } catch (err) {
       saveError.value = err.message;
     } finally {
@@ -157,14 +168,14 @@ function downloadString(filename, content, type) {
 }
 .download-btn { width: 100%; }
 
-.coming-soon {
+.info-box {
   background: #EFF8FF;
   border: 1px solid #B3D7FF;
   border-radius: var(--radius);
   padding: 1.25rem;
   margin-bottom: 1rem;
 }
-.coming-soon p { font-size: 0.9rem; color: #1A5276; margin: 0; }
+.info-box p { font-size: 0.9rem; color: #1A5276; margin: 0; }
 
 .error-box {
   background: #FFF0F0;

@@ -153,12 +153,13 @@ const BINARY_EXTS = new Set([
  * Production (GITHUB_TOKEN set): GitHub Git Data API (blobs → tree → commit → ref).
  * Best-effort — failure is logged but doesn't block the caller.
  */
-async function commitToRepo(filePaths, message) {
+async function commitToRepo(filePaths, message, repoConfig = {}) {
   try {
     if (process.env.GITHUB_TOKEN) {
-      const owner = process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
-      const repo = process.env.GITHUB_REPO || 'sunholo-websites';
-      const branch = process.env.GITHUB_BRANCH || 'main';
+      // Per-request overrides (from user settings) fall back to env vars
+      const owner = repoConfig.owner || process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+      const repo = repoConfig.repo || process.env.GITHUB_REPO || 'sunholo-websites';
+      const branch = repoConfig.branch || process.env.GITHUB_BRANCH || 'main';
 
       // 1. Get current branch HEAD
       const ref = await githubApi('GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
@@ -229,7 +230,7 @@ async function commitToRepo(filePaths, message) {
  */
 app.post('/api/save', async (req, res) => {
   try {
-    const { user = 'default', siteName, pages, css, images, siteJson, description } = req.body;
+    const { user = 'default', siteName, pages, css, images, siteJson, description, repoConfig } = req.body;
     if (!siteName || !pages) {
       return res.status(400).json({ error: 'siteName and pages are required' });
     }
@@ -289,10 +290,17 @@ app.post('/api/save', async (req, res) => {
     writtenFiles.push(`staging/${user}/${slug}/brief.json`);
 
     // Git commit (best-effort, async)
-    await commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`);
+    await commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`, repoConfig);
+
+    // Build the GitHub Pages URL for the response
+    const ghOwner = repoConfig?.owner || process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+    const ghRepo = repoConfig?.repo || process.env.GITHUB_REPO || 'sunholo-websites';
+    const liveUrl = process.env.GITHUB_TOKEN
+      ? `https://${ghOwner}.github.io/${ghRepo}/sites/${user}/${slug}/`
+      : null;
 
     console.log(`[sidecar] Saved site: ${user}/${slug} (${writtenFiles.length} files)`);
-    res.json({ userId: user, siteSlug: slug, files: writtenFiles });
+    res.json({ userId: user, siteSlug: slug, files: writtenFiles, liveUrl });
   } catch (err) {
     console.error('Save error:', err);
     res.status(500).json({ error: err.message });

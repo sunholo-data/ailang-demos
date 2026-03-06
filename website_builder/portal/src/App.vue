@@ -18,6 +18,24 @@
           @keydown.enter="saveKey"
         />
         <p class="hint">Get a free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></p>
+
+        <hr class="settings-divider" />
+        <h3>GitHub Repository</h3>
+        <p class="hint" style="margin-top:0.25rem">Optional. Set a custom GitHub repo for your published sites. Leave blank to use the default.</p>
+        <label>GitHub Owner / Org</label>
+        <input
+          v-model="repoOwner"
+          type="text"
+          placeholder="e.g. my-github-username"
+        />
+        <label style="margin-top:0.5rem">Repository Name</label>
+        <input
+          v-model="repoName"
+          type="text"
+          placeholder="e.g. my-websites"
+        />
+        <p class="hint">Sites will be published to <code>https://&lt;owner&gt;.github.io/&lt;repo&gt;/</code></p>
+
         <div class="btn-row">
           <button class="btn-secondary" @click="clearKey">Clear</button>
           <button class="btn-primary" @click="saveKey">Save</button>
@@ -117,6 +135,7 @@ import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
 import { onAuthChange, signOutUser } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
+import { getRepoConfig, saveRepoConfig, clearRepoConfig } from './api.js';
 
 const authed = ref(false);
 const user = ref(null);
@@ -124,6 +143,8 @@ const showDashboard = ref(true); // show MySites first, then wizard
 const currentStep = ref(0);
 const showSettings = ref(false);
 const apiKeyInput = ref('');
+const repoOwner = ref('');
+const repoName = ref('');
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
@@ -144,6 +165,11 @@ const showApiKeyBanner = computed(() => {
 
 onMounted(() => {
   apiKeyInput.value = getApiKey();
+  const rc = getRepoConfig();
+  if (rc) {
+    repoOwner.value = rc.owner || '';
+    repoName.value = rc.repo || '';
+  }
   // Listen for auth changes
   onAuthChange((u) => {
     user.value = u;
@@ -172,6 +198,15 @@ async function handleSignOut() {
 function saveKey() {
   if (apiKeyInput.value.trim()) {
     saveApiKey(apiKeyInput.value);
+  }
+  // Save repo config if either field is set
+  if (repoOwner.value.trim() || repoName.value.trim()) {
+    saveRepoConfig({
+      owner: repoOwner.value.trim() || undefined,
+      repo: repoName.value.trim() || undefined,
+    });
+  } else {
+    clearRepoConfig();
   }
   showSettings.value = false;
 }
@@ -282,6 +317,9 @@ body {
 .settings-panel input:focus { border-color: var(--primary); }
 .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; }
 .hint a { color: var(--primary); }
+.hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+.settings-divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+.settings-panel h3 { font-size: 1rem; margin-bottom: 0.5rem; }
 
 /* Wizard */
 .wizard {

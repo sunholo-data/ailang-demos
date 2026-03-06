@@ -105,3 +105,30 @@ export async function saveSite(site) {
 export function siteFileUrl(user, site, file = 'index.html') {
   return `${API_BASE}/sites/${encodeURIComponent(user)}/${encodeURIComponent(site)}/${file}`;
 }
+
+// ── GitHub repo config (per-user, stored in localStorage) ──
+
+const REPO_CONFIG_KEY = 'wb-repo-config';
+
+/**
+ * Get the user's GitHub repo config.
+ * @returns {{ owner?: string, repo?: string, branch?: string } | null}
+ */
+export function getRepoConfig() {
+  try {
+    const raw = localStorage.getItem(REPO_CONFIG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+/**
+ * Save the user's GitHub repo config.
+ * @param {{ owner?: string, repo?: string, branch?: string }} config
+ */
+export function saveRepoConfig(config) {
+  localStorage.setItem(REPO_CONFIG_KEY, JSON.stringify(config));
+}
+
+export function clearRepoConfig() {
+  localStorage.removeItem(REPO_CONFIG_KEY);
+}

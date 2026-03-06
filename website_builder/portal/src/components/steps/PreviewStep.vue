@@ -175,7 +175,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
-import { saveSite } from '../../api.js';
+import { saveSite, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
   generated: { type: Object, required: true },
@@ -897,6 +897,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
         css: newCss,
         siteJson: updatedSiteJson,
         description: props.description,
+        repoConfig: getRepoConfig(),
       });
       console.log('[Preview] Auto-saved after refinement');
     } catch (err) {
