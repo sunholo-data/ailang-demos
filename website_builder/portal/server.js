@@ -8,6 +8,7 @@
  *   POST /api/build     — Save files + brief, send build message
  *   POST /api/upload    — Multipart file upload to staging
  *   POST /api/feedback   — Send feedback message
+ *   POST /api/form-submit — Contact form submission → Google Sheets
  *   GET  /api/status     — Poll for response messages
  *   GET  /api/staging/*  — Serve staged media files
  *   GET  /api/sites/*    — Serve generated website files
@@ -19,6 +20,7 @@ import { execSync } from 'child_process';
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'fs';
 import { join, resolve, extname, basename } from 'path';
 import { homedir } from 'os';
+import { google } from 'googleapis';
 
 const app = express();
 const PORT = process.env.SIDECAR_PORT || 3456;
@@ -27,6 +29,16 @@ const PORT = process.env.SIDECAR_PORT || 3456;
 const WEBSITES_REPO = process.env.WEBSITES_REPO || join(homedir(), 'dev/sunholo/sunholo-websites');
 const STAGING_DIR = join(WEBSITES_REPO, 'staging');
 const SITES_DIR = join(WEBSITES_REPO, 'sites');
+
+// Form submission config
+const FORMS_JSON_PATH = join(WEBSITES_REPO, 'forms.json');
+const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://website-builder-api-blqtqfexwa-uc.a.run.app';
+const FORM_ENDPOINT_ABS = `${CLOUD_RUN_URL}/api/form-submit`;
+
+// In-memory rate limiting: IP → { count, resetAt }
+const rateLimitMap = new Map();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
 
 /**
  * Normalize internal navigation links to relative slug.html format.
@@ -49,6 +61,150 @@ function normalizeNavLinksServer(html, slugs) {
     }
     return match;
   });
+}
+
+// ── Google Sheets helpers ──
+
+function loadFormsConfig() {
+  try {
+    if (existsSync(FORMS_JSON_PATH)) {
+      return JSON.parse(readFileSync(FORMS_JSON_PATH, 'utf-8'));
+    }
+  } catch (err) {
+    console.warn('[sidecar] Could not read forms.json:', err.message);
+  }
+  return {};
+}
+
+function saveFormsConfig(config) {
+  mkdirSync(WEBSITES_REPO, { recursive: true });
+  writeFileSync(FORMS_JSON_PATH, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+async function getOrCreateSheet(siteSlug) {
+  const auth = new google.auth.GoogleAuth({
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
+  });
+
+  const config = loadFormsConfig();
+  if (config[siteSlug]) {
+    return { spreadsheetId: config[siteSlug], auth };
+  }
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  const response = await sheets.spreadsheets.create({
+    requestBody: {
+      properties: { title: `Form Submissions - ${siteSlug}` },
+      sheets: [{
+        properties: { title: 'Submissions' },
+        data: [{
+          startRow: 0, startColumn: 0,
+          rowData: [{
+            values: ['Timestamp', 'Page', 'Name', 'Email', 'Phone', 'Subject', 'Message', 'Other Fields']
+              .map(v => ({ userEnteredValue: { stringValue: v } })),
+          }],
+        }],
+      }],
+    },
+  });
+
+  const spreadsheetId = response.data.spreadsheetId;
+  console.log(`[sidecar] Created spreadsheet for ${siteSlug}: ${spreadsheetId}`);
+
+  config[siteSlug] = spreadsheetId;
+  saveFormsConfig(config);
+
+  // Commit forms.json to GitHub (best-effort)
+  commitToRepo(['forms.json'], `Add form sheet for ${siteSlug}`).catch(() => {});
+
+  return { spreadsheetId, auth };
+}
+
+async function appendFormRow(spreadsheetId, auth, page, fields, submittedAt) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const known = ['name', 'email', 'phone', 'subject', 'message'];
+  const knownValues = known.map(k => fields[k] || '');
+  const otherFields = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (!known.includes(k) && k !== '_hp') otherFields[k] = v;
+  }
+  const otherJson = Object.keys(otherFields).length > 0 ? JSON.stringify(otherFields) : '';
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: 'Submissions!A:H',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[submittedAt || new Date().toISOString(), page, ...knownValues, otherJson]] },
+  });
+}
+
+async function sendWebhookNotification(site, page, fields) {
+  const webhookUrl = process.env.FORM_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  const name = fields.name || 'Anonymous';
+  const email = fields.email || '';
+  const message = (fields.message || '').substring(0, 200);
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: `New form submission on *${site}* (${page})\nFrom: ${name}${email ? ` <${email}>` : ''}\n${message || '(no message)'}`,
+      }),
+    });
+  } catch (err) {
+    console.warn(`[sidecar] Webhook failed: ${err.message}`);
+  }
+}
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  return true;
+}
+
+// ── Form handler script (injected into saved/served HTML) ──
+
+function buildFormScriptServer(endpoint, siteSlug) {
+  return `<meta name="wb-site" content="${siteSlug}"><script data-wb-form>
+(function(){var EP='${endpoint}';if(!EP)return;
+document.addEventListener('submit',function(e){
+var f=e.target;if(!f||f.tagName!=='FORM')return;e.preventDefault();
+var fd=new FormData(f),fields={};fd.forEach(function(v,k){fields[k]=v;});
+var hp=f.querySelector('input[name="_hp"]');if(hp&&hp.value){fields._hp=hp.value;}
+var page='unknown';try{var p=location.pathname.split('/').pop().replace('.html','');if(p)page=p;if(page==='index')page='home';}catch(x){}
+var site='${siteSlug}';
+var btn=f.querySelector('[type="submit"]'),orig=btn?btn.textContent:'';
+if(btn){btn.disabled=true;btn.textContent='Sending...';}
+var prev=f.querySelector('.wb-form-status');if(prev)prev.remove();
+fetch(EP,{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({site:site,page:page,fields:fields,submittedAt:new Date().toISOString()})
+}).then(function(r){return r.json()}).then(function(d){
+var el=document.createElement('div');el.className='wb-form-status';
+el.style.cssText='padding:1rem;margin-top:1rem;border-radius:8px;text-align:center;font-weight:600;';
+if(d.ok){el.style.background='#E8F5E9';el.style.color='#2E7D32';el.style.border='1px solid #A5D6A7';
+el.textContent=d.message||'Thank you!';f.reset();}
+else{el.style.background='#FFF3E0';el.style.color='#E65100';el.style.border='1px solid #FFCC80';
+el.textContent=d.message||'Something went wrong.';}
+f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}
+}).catch(function(){
+var el=document.createElement('div');el.className='wb-form-status';
+el.style.cssText='padding:1rem;margin-top:1rem;border-radius:8px;text-align:center;font-weight:600;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;';
+el.textContent=location.protocol==='file:'?'Form submission requires hosting.':'Could not submit form. Please try again later.';
+f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}});
+},true);})();
+<\/script>`;
 }
 
 // Ensure directories exist
@@ -264,13 +420,18 @@ app.post('/api/save', async (req, res) => {
 
     const writtenFiles = [];
 
-    // Normalize navigation links in all pages before writing to disk.
-    // Ensures links work on GitHub Pages, sidecar, and downloaded files.
+    // Normalize navigation links + inject form handler script before writing to disk.
     const allSlugs = Object.keys(pages);
+    const formScript = buildFormScriptServer(FORM_ENDPOINT_ABS, slug);
     for (const [pageSlug, rawHtml] of Object.entries(pages)) {
       const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
       const filePath = join(siteDir, `${fileSlug}.html`);
-      const html = normalizeNavLinksServer(rawHtml, allSlugs);
+      let html = normalizeNavLinksServer(rawHtml, allSlugs);
+      // Inject form handler script (for GitHub Pages / standalone)
+      if (!html.includes('data-wb-form')) {
+        const bodyClose = html.lastIndexOf('</body>');
+        if (bodyClose >= 0) html = html.slice(0, bodyClose) + formScript + html.slice(bodyClose);
+      }
       writeFileSync(filePath, html, 'utf-8');
       writtenFiles.push(`sites/${user}/${slug}/${fileSlug}.html`);
     }
@@ -459,6 +620,48 @@ app.post('/api/feedback', upload.array('files', 10), (req, res) => {
 });
 
 /**
+ * POST /api/form-submit — Receive a contact form submission.
+ * Stores in Google Sheets (per-site spreadsheet), sends optional webhook.
+ */
+app.post('/api/form-submit', async (req, res) => {
+  try {
+    const { site, page, fields, submittedAt } = req.body;
+
+    if (!site || typeof site !== 'string') {
+      return res.status(400).json({ ok: false, message: 'Missing site identifier.' });
+    }
+    if (!fields || typeof fields !== 'object' || Object.keys(fields).length === 0) {
+      return res.status(400).json({ ok: false, message: 'No form data received.' });
+    }
+
+    // Honeypot: if _hp field is filled, silently accept (bot)
+    if (fields._hp) {
+      console.log(`[sidecar] Honeypot triggered for ${site}/${page}`);
+      return res.json({ ok: true, message: 'Thank you! Your message has been received.' });
+    }
+
+    // Rate limit
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    if (!checkRateLimit(ip)) {
+      return res.status(429).json({ ok: false, message: 'Too many submissions. Please try again in a minute.' });
+    }
+
+    // Store in Google Sheets
+    const { spreadsheetId, auth } = await getOrCreateSheet(site);
+    await appendFormRow(spreadsheetId, auth, page || 'unknown', fields, submittedAt);
+    console.log(`[sidecar] Form submission stored for ${site}/${page}`);
+
+    // Webhook (async, don't block response)
+    sendWebhookNotification(site, page, fields).catch(() => {});
+
+    res.json({ ok: true, message: 'Thank you! Your message has been received.' });
+  } catch (err) {
+    console.error('[sidecar] Form submission error:', err);
+    res.status(500).json({ ok: false, message: 'Something went wrong. Please try again later.' });
+  }
+});
+
+/**
  * GET /api/status — Poll for response messages from Claude Code.
  */
 app.get('/api/status', (req, res) => {
@@ -493,10 +696,14 @@ app.get('/api/sites/:user/:site/*path', (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  // Serve HTML files with correct content type (no script injection —
-  // PreviewStep handles selection script client-side for edit mode)
+  // Serve HTML files — inject form handler script if not already present
   if (extname(filePath) === '.html') {
-    const html = readFileSync(filePath, 'utf-8');
+    let html = readFileSync(filePath, 'utf-8');
+    if (!html.includes('data-wb-form')) {
+      const formScript = buildFormScriptServer('/api/form-submit', req.params.site);
+      const bodyClose = html.lastIndexOf('</body>');
+      if (bodyClose >= 0) html = html.slice(0, bodyClose) + formScript + html.slice(bodyClose);
+    }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } else {

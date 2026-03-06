@@ -45,6 +45,7 @@ export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI
     "- Images: use <img src='filename.jpg' alt='description'> using the exact filenames from each section's 'images' array\n" ++
     "- Clean semantic HTML5, proper heading hierarchy\n" ++
     "- Accessible: alt text, aria labels, lang attribute, viewport meta\n" ++
+    "- For contact/enquiry forms: set action='#' method='POST'. Include a hidden honeypot field as the first form field: <input type='text' name='_hp' style='display:none' tabindex='-1' autocomplete='off'>. Do NOT add any form submission JavaScript.\n" ++
     "- Minimal JS only for hamburger toggle if needed\n\n" ++
     "Return JSON: {\"html\":\"complete html page\"}";
   let response = callJsonSimple(prompt);

@@ -55,6 +55,8 @@ gcloud services enable \
   run.googleapis.com \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
+  sheets.googleapis.com \
+  drive.googleapis.com \
   --project="$GCP_PROJECT" --quiet
 
 # 2. Create Artifact Registry repo if it doesn't exist
@@ -82,7 +84,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --project "$GCP_PROJECT" \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "^||^GITHUB_TOKEN=$GITHUB_TOKEN||GITHUB_OWNER=$GITHUB_OWNER||GITHUB_REPO=$GITHUB_REPO||WEBSITES_REPO=/tmp/websites||CORS_ORIGINS=https://www.sunholo.com,https://sunholo-voight-kampff.github.io,http://localhost:5174" \
+  --set-env-vars "^||^GITHUB_TOKEN=$GITHUB_TOKEN||GITHUB_OWNER=$GITHUB_OWNER||GITHUB_REPO=$GITHUB_REPO||WEBSITES_REPO=/tmp/websites||CORS_ORIGINS=https://www.sunholo.com,https://sunholo-voight-kampff.github.io,http://localhost:5174||FORM_WEBHOOK_URL=${FORM_WEBHOOK_URL:-}" \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 0 \
@@ -94,6 +96,14 @@ gcloud run deploy "$SERVICE_NAME" \
 SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
   --region="$GCP_REGION" --project="$GCP_PROJECT" \
   --format="value(status.url)")
+
+# 6. Update CLOUD_RUN_URL env var (needed for form script injection)
+echo "[deploy] Setting CLOUD_RUN_URL=$SERVICE_URL..."
+gcloud run services update "$SERVICE_NAME" \
+  --region "$GCP_REGION" \
+  --project "$GCP_PROJECT" \
+  --update-env-vars "CLOUD_RUN_URL=$SERVICE_URL" \
+  --quiet 2>/dev/null || true
 
 echo ""
 echo "=========================================="
@@ -107,3 +117,6 @@ echo "  VITE_API_URL=$SERVICE_URL/api"
 echo ""
 echo "To test:"
 echo "  curl -s $SERVICE_URL/api/sites/default | python3 -m json.tool"
+echo ""
+echo "To enable form webhook notifications:"
+echo "  FORM_WEBHOOK_URL=https://hooks.slack.com/... ./website_builder/scripts/deploy.sh"

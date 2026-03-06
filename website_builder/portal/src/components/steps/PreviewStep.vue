@@ -391,15 +391,51 @@ function rewriteRelativePaths(html) {
     .replace(/(url\(["']?)(?!https?:\/\/|data:|blob:|\/\/|#)([^"')]+)(["']?\))/gi, rewriteAttr);
 }
 
+// Form handler script — injected into preview iframe so contact forms work.
+// Uses relative /api/form-submit (hits local sidecar via Vite proxy or same-origin).
+function buildFormScript(endpoint, siteSlug) {
+  return `<meta name="wb-site" content="${siteSlug || 'preview'}"><script data-wb-form>
+(function(){var EP='${endpoint}';if(!EP)return;
+document.addEventListener('submit',function(e){
+var f=e.target;if(!f||f.tagName!=='FORM')return;e.preventDefault();
+var fd=new FormData(f),fields={};fd.forEach(function(v,k){fields[k]=v;});
+var hp=f.querySelector('input[name="_hp"]');if(hp&&hp.value){fields._hp=hp.value;}
+var page='unknown';try{var p=location.pathname.split('/').pop().replace('.html','');if(p)page=p;if(page==='index')page='home';}catch(x){}
+var site='${siteSlug || 'preview'}';
+var btn=f.querySelector('[type="submit"]'),orig=btn?btn.textContent:'';
+if(btn){btn.disabled=true;btn.textContent='Sending...';}
+var prev=f.querySelector('.wb-form-status');if(prev)prev.remove();
+fetch(EP,{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({site:site,page:page,fields:fields,submittedAt:new Date().toISOString()})
+}).then(function(r){return r.json()}).then(function(d){
+var el=document.createElement('div');el.className='wb-form-status';
+el.style.cssText='padding:1rem;margin-top:1rem;border-radius:8px;text-align:center;font-weight:600;';
+if(d.ok){el.style.background='#E8F5E9';el.style.color='#2E7D32';el.style.border='1px solid #A5D6A7';
+el.textContent=d.message||'Thank you!';f.reset();}
+else{el.style.background='#FFF3E0';el.style.color='#E65100';el.style.border='1px solid #FFCC80';
+el.textContent=d.message||'Something went wrong.';}
+f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}
+}).catch(function(){
+var el=document.createElement('div');el.className='wb-form-status';
+el.style.cssText='padding:1rem;margin-top:1rem;border-radius:8px;text-align:center;font-weight:600;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;';
+el.textContent='Could not submit form. Is the server running?';
+f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}});
+},true);})();
+\\x3c/script>`;
+}
+
 const htmlWithImages = computed(() => {
   let html = resolveImages(currentHtml.value);
   if (!html) return html;
   html = rewriteRelativePaths(html);
-  // Inject element selection + nav interception script before </body>
+  // Inject element selection + nav interception + form handler scripts before </body>
+  const siteSlug = props.generated?.siteSlug || 'preview';
+  const formScript = buildFormScript('/api/form-submit', siteSlug);
+  const combined = SELECTION_SCRIPT + formScript;
   const insertAt = html.lastIndexOf('</body>');
   return insertAt >= 0
-    ? html.slice(0, insertAt) + SELECTION_SCRIPT + html.slice(insertAt)
-    : html + SELECTION_SCRIPT;
+    ? html.slice(0, insertAt) + combined + html.slice(insertAt)
+    : html + combined;
 });
 
 // Listen for messages from iframe (element selection + link navigation)
