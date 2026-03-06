@@ -16,7 +16,10 @@ export func structureSite(contentJson: string, description: string, styleDirecti
     "The user wants a website for: " ++ description ++ "\n\n" ++
     "Style direction (starting point, you have creative freedom): " ++ styleDirection ++ "\n\n" ++
     "They uploaded this content:\n" ++ contentJson ++ "\n\n" ++
-    "Create a complete website with MULTIPLE PAGES (minimum 4: home, about, services/gallery, contact).\n\n" ++
+    "Create a complete website with MULTIPLE PAGES. Choose the right number of pages\n" ++
+    "for this type of site (typically 3-7). Always include a home page.\n" ++
+    "Pick pages that suit the business — e.g. portfolio, menu, services, testimonials,\n" ++
+    "pricing, team, FAQ, blog, events, gallery, contact. Be creative.\n\n" ++
     "IMAGES — the uploaded content includes image items with a 'filename' field.\n" ++
     "Distribute image filenames across relevant sections. Any section showing images\n" ++
     "must include an 'images' array with the exact filenames.\n\n" ++
@@ -34,8 +37,7 @@ export func structureSite(contentJson: string, description: string, styleDirecti
     "\"pages\":[" ++
     "{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[{\"type\":\"hero\",\"title\":\"...\",\"images\":[\"filename.jpg\"],\"content\":\"...\"},{\"type\":\"features-grid\",\"title\":\"...\",\"content\":\"...\"}]}," ++
     "{\"slug\":\"about\",\"title\":\"About\",\"sections\":[...]}," ++
-    "{\"slug\":\"gallery\",\"title\":\"Gallery\",\"sections\":[{\"type\":\"masonry-gallery\",\"title\":\"...\",\"images\":[\"file1.jpg\",\"file2.jpg\"]}]}," ++
-    "{\"slug\":\"contact\",\"title\":\"Contact\",\"sections\":[...]}" ++
+    "... more pages as appropriate for this business ..." ++
     "]}";
   callJsonSimple(prompt)
 }
