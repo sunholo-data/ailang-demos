@@ -2,7 +2,8 @@
 # Website Builder Portal — local dev server
 #
 # Usage:
-#   ./website_builder/portal/serve
+#   ./website_builder/portal/serve           # local sidecar (default)
+#   ./website_builder/portal/serve --cloud   # use Cloud Run API
 #
 # Symlink to ~/.local/bin for convenience:
 #   ln -s $(pwd)/website_builder/portal/serve ~/.local/bin/website-builder
@@ -13,8 +14,20 @@ cd "$(dirname "$0")"   # run from portal/
 PORT=5174
 SIDECAR_PORT=3456
 URL="http://localhost:${PORT}"
+MODE="local"
+CLOUD_API_URL="https://website-builder-api-tb6m6slywa-uc.a.run.app/api"
 
-echo "🌐 Starting Website Builder at http://localhost:${PORT}"
+# Parse args
+for arg in "$@"; do
+  case "$arg" in
+    --cloud)  MODE="cloud" ;;
+    --local)  MODE="local" ;;
+    *)        echo "Unknown option: $arg"; echo "Usage: serve [--local|--cloud]"; exit 1 ;;
+  esac
+done
+
+echo "🌐 Starting Website Builder at ${URL}"
+echo "   Mode: ${MODE}"
 echo ""
 
 # Install deps if needed
@@ -23,10 +36,20 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 
-# Start Express sidecar (serves API + generated sites)
-echo "🔌 Starting sidecar API on port ${SIDECAR_PORT}..."
-node server.js &
-SIDECAR_PID=$!
+SIDECAR_PID=""
+
+if [ "$MODE" = "local" ]; then
+  # Start Express sidecar (serves API + generated sites)
+  echo "🔌 Starting sidecar API on port ${SIDECAR_PORT}..."
+  node server.js &
+  SIDECAR_PID=$!
+  echo "   API: http://localhost:${SIDECAR_PORT}/api"
+else
+  echo "☁️  Using Cloud Run API: ${CLOUD_API_URL}"
+  export VITE_API_URL="$CLOUD_API_URL"
+fi
+
+echo ""
 
 # Start Vite in background
 npx vite --port "$PORT" &
@@ -35,7 +58,7 @@ VITE_PID=$!
 # Cleanup on exit
 cleanup() {
   kill "$VITE_PID" 2>/dev/null
-  kill "$SIDECAR_PID" 2>/dev/null
+  [ -n "$SIDECAR_PID" ] && kill "$SIDECAR_PID" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
 
@@ -51,5 +74,5 @@ done
 open "$URL" 2>/dev/null || echo "Open $URL in your browser"
 
 echo ""
-echo "Press Ctrl+C to stop both servers"
+echo "Press Ctrl+C to stop"
 wait "$VITE_PID"

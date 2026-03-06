@@ -82,7 +82,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --project "$GCP_PROJECT" \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "^||^GITHUB_TOKEN=$GITHUB_TOKEN||GITHUB_OWNER=$GITHUB_OWNER||GITHUB_REPO=$GITHUB_REPO||WEBSITES_REPO=/tmp/websites||CORS_ORIGINS=https://www.sunholo.com,https://sunholo-voight-kampff.github.io" \
+  --set-env-vars "^||^GITHUB_TOKEN=$GITHUB_TOKEN||GITHUB_OWNER=$GITHUB_OWNER||GITHUB_REPO=$GITHUB_REPO||WEBSITES_REPO=/tmp/websites||CORS_ORIGINS=https://www.sunholo.com,https://sunholo-voight-kampff.github.io,http://localhost:5174" \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 0 \

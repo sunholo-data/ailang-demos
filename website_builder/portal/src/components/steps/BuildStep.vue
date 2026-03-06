@@ -354,11 +354,12 @@ async function startBuild() {
     statusMessage.value = 'Your website is ready! 🎉';
     building.value = false;
 
-    // Include save info in generated data so PreviewStep knows the site is persisted
+    // Include save info in generated data so PreviewStep/PublishStep know the site is persisted
     const generated = { siteJson, pages, css, slugs };
     if (saveResult) {
       generated.userId = saveResult.userId;
       generated.siteSlug = saveResult.siteSlug;
+      generated.liveUrl = saveResult.liveUrl || '';
     }
     emit('done', generated);
 

@@ -17,27 +17,39 @@ All AI processing runs client-side via AILANG WASM + the Gemini API. No server n
 
 ## Running Locally
 
-### Portal (browser UI)
+### Quick start (recommended)
+
+```bash
+# Local mode — runs Vite + local Express sidecar together
+./website_builder/portal/serve
+
+# Cloud mode — runs Vite locally, API calls go to Cloud Run
+./website_builder/portal/serve --cloud
+```
+
+Open http://localhost:5174 and enter your [Gemini API key](https://aistudio.google.com/apikey) in Settings.
+
+**Local mode** starts both the Vite dev server and the Express sidecar. Sites are saved to a local git repo.
+
+**Cloud mode** starts only Vite. All API calls (save, list, delete) go to the deployed Cloud Run service, which commits to GitHub via API. Use this to test the production flow locally.
+
+Symlink for convenience:
+```bash
+ln -s $(pwd)/website_builder/portal/serve ~/.local/bin/website-builder
+# Then: website-builder --cloud
+```
+
+### Manual setup
 
 ```bash
 cd website_builder/portal
 npm install
 
-# Start the Vue dev server (http://localhost:5174)
+# Start Vite dev server only (no saving)
 npm run dev
-```
 
-Open http://localhost:5174 and enter your [Gemini API key](https://aistudio.google.com/apikey) in Settings.
-
-### Sidecar (optional — enables saving)
-
-The Express sidecar persists generated sites to a git repo. Without it, sites still generate and preview fine — they just aren't saved.
-
-```bash
-# In a second terminal:
-cd website_builder/portal
-node server.js
-# → http://localhost:3456
+# Or start the sidecar separately:
+node server.js  # → http://localhost:3456
 ```
 
 Sites are saved to `~/dev/sunholo/sunholo-websites/sites/`. Override with `WEBSITES_REPO` env var.
@@ -109,9 +121,16 @@ Example with overrides:
 GCP_PROJECT=my-project GITHUB_OWNER=my-org ./website_builder/scripts/deploy.sh
 ```
 
-### Connecting the portal to Cloud Run
+### Testing against Cloud Run locally
 
-After deploying, rebuild the portal SPA with the Cloud Run URL:
+```bash
+# Easiest way — serve script handles everything:
+./website_builder/portal/serve --cloud
+```
+
+This starts the Vite dev server pointing at the deployed Cloud Run API. No local sidecar needed.
+
+### Building the SPA for production
 
 ```bash
 cd website_builder/portal
@@ -171,6 +190,7 @@ User previews + refines                        │
 | `/api/save` | POST | Save generated site → GitHub commit |
 | `/api/sites/:user` | GET | List saved sites |
 | `/api/sites/:user/:site/*` | GET | Serve site files |
+| `/api/sites/:user/:site` | DELETE | Delete a site (local + GitHub) |
 | `/api/upload` | POST | Upload media to staging |
 | `/api/files/:user/:site` | GET | List files in a site |
 

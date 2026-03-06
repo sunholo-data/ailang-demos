@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin || '*');
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -272,6 +272,22 @@ app.post('/api/save', async (req, res) => {
           const dest = join(imagesDir, img.filename);
           writeFileSync(dest, Buffer.from(img.base64, 'base64'));
           writtenFiles.push(`sites/${user}/${slug}/images/${img.filename}`);
+        }
+      }
+    }
+
+    // Copy any staged media files (videos, etc.) to site directory
+    const mediaStagingDir = join(STAGING_DIR, user, slug, 'media');
+    if (existsSync(mediaStagingDir)) {
+      const mediaDir = join(siteDir, 'media');
+      mkdirSync(mediaDir, { recursive: true });
+      for (const f of readdirSync(mediaStagingDir)) {
+        if (f.startsWith('.')) continue;
+        const src = join(mediaStagingDir, f);
+        const dest = join(mediaDir, f);
+        if (!existsSync(dest)) {
+          copyFileSync(src, dest);
+          writtenFiles.push(`sites/${user}/${slug}/media/${f}`);
         }
       }
     }
