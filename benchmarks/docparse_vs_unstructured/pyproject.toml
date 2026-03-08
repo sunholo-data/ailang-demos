@@ -1,0 +1,13 @@
+[project]
+name = "docparse-benchmark"
+version = "0.1.0"
+description = "Benchmark: AILANG DocParse vs Python Unstructured for document parsing"
+requires-python = ">=3.10"
+dependencies = [
+    "reportlab>=4.4.10",
+    "unstructured[docx,pptx,xlsx,pdf]",
+    "rapidfuzz",
+    "tiktoken",
+    "beautifulsoup4",
+    "apted>=1.0.3",
+]

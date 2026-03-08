@@ -1,0 +1,76 @@
+[
+  {
+    "type": "Title",
+    "element_id": "2ca2285c4436417da9a04f1f892610e3",
+    "text": "JOINT CYBERSECURITY ADVISORY",
+    "metadata": {
+      "category_depth": 0
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "12a9794691dd4a75bb33a4b8b379750d",
+    "text": "TLP:WHITE",
+    "metadata": {}
+  },
+  {
+    "type": "Title",
+    "element_id": "d1c7b89946cd40629a8554bed1255bac",
+    "text": "MITIGATIONS",
+    "metadata": {
+      "category_depth": 1
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "b57abffe72da43649a800381ce4e98a4",
+    "text": "CISA and FBI strongly encourages critical infrastructure organizations and other organizations that are either SATCOM network providers or customers to review and implement the following mitigations:",
+    "metadata": {}
+  },
+  {
+    "type": "Title",
+    "element_id": "06c827e3f71745eca40c32a807cf8a6e",
+    "text": "Mitigations for SATCOM Network Providers",
+    "metadata": {
+      "category_depth": 2
+    }
+  },
+  {
+    "type": "ListItem",
+    "element_id": "dd104161785a4ba4a54db2bb8931f69e",
+    "text": "Put in place additional monitoring at ingress and egress points to SATCOM equipment to look for anomalous traffic, such as:\n\tThe presence of insecure remote access tools\u2014such as Teletype Network Protocol (Telnet), File Transfer Protocol (FTP), Secure Shell Protocol (SSH), Secure Copy Protocol (SCP), and Virtual Network Computing (VNC)\u2014facilitating communications to and from SATCOM terminals.\n\tNetwork traffic from SATCOM networks to other unexpected network segments.\n\tUnauthorized use of local or backup accounts within SATCOM networks.\n\tUnexpected SATCOM terminal to SATCOM terminal traffic.\n\tNetwork traffic from the internet to closed group SATCOM networks.\n\tBrute force login attempts over SATCOM network segments.",
+    "metadata": {}
+  },
+  {
+    "type": "ListItem",
+    "element_id": "15f7113680c34eda8c432c4145f3f338",
+    "text": "See the Office of the Director of National Intelligence (ODNI) Annual Threat Assessment of the U.S. Intelligence Community, February 2022 for specific state-sponsored cyber threat activity relating to SATCOM networks.",
+    "metadata": {}
+  },
+  {
+    "type": "Title",
+    "element_id": "fe4dafd603ca46e78d9b6cf98280f791",
+    "text": "Mitigations for SATCOM Network Providers and Customers",
+    "metadata": {
+      "category_depth": 2
+    }
+  },
+  {
+    "type": "ListItem",
+    "element_id": "64d3ecabf73041e399617d1817bbccb8",
+    "text": "Use secure methods for authentication, including multifactor authentication where possible, for all accounts used to access, manage, and/or administer SATCOM networks.\n\tUse and enforce strong, complex passwords: Review password policies to ensure they align with the latest NIST guidelines.\n\tDo not use default credentials or weak passwords.\n\tAudit accounts and credentials: remove terminated or unnecessary accounts; change expired credentials.",
+    "metadata": {}
+  },
+  {
+    "type": "ListItem",
+    "element_id": "6fb3135e6906474d8798aa0ce3b6a7f2",
+    "text": "Enforce principle of least privilege through authorization policies. Minimize unnecessary privileges for identities. Consider privileges assigned to individual personnel accounts, as well as those assigned to non-personnel accounts (e.g., those assigned to software or systems). Account privileges should be clearly defined, narrowly scoped, and regularly audited against usage patterns.",
+    "metadata": {}
+  },
+  {
+    "type": "ListItem",
+    "element_id": "c12338a6487649e9b255fe7f1b6434bb",
+    "text": "Review trust relationships. Review existing trust relationships with IT service providers. Threat actors are known to exploit trust relationships between providers and their customers to gain access to customer networks and data.\n\tRemove unnecessary trust relationships.\n\tReview contractual relationships with all service providers. Ensure contracts include appropriate provisions addressing security, such as those listed below, and that these provisions are appropriately leveraged:\n\t\tSecurity controls the customer deems appropriate.",
+    "metadata": {}
+  }
+]

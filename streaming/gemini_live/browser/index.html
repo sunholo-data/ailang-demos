@@ -670,8 +670,23 @@
         <option value="Sadaltager">Sadaltager (Knowledgeable)</option>
       </select>
     </div>
+    <div class="config-row" style="margin-top:8px;gap:16px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
+        <input type="checkbox" id="chkProactive" onchange="saveConfig()"> Proactive
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
+        <input type="checkbox" id="chkAffective" onchange="saveConfig()"> Affective
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;min-width:120px">
+        Thinking:
+        <input type="number" id="thinkingBudget" min="-1" max="24576" value="-1"
+               style="width:60px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:11px"
+               onchange="saveConfig()">
+      </label>
+    </div>
     <div class="config-warn">
       API calls go directly from your browser to Google's API. Key is stored in localStorage.
+      Proactive: only responds when addressed. Affective: emotion-aware tone. Thinking: -1=off, 0+=budget.
     </div>
   </div>
 
@@ -762,6 +777,7 @@ function cacheDom() {
     'micBtn', 'scopeFrame', 'scopeIdle',
     'fState', 'fFrames', 'fBytes', 'fDuration', 'fLatency',
     'vuFill', 'vuDb',
+    'chkProactive', 'chkAffective', 'thinkingBudget',
   ]) {
     $[id] = document.getElementById(id);
   }
@@ -889,6 +905,19 @@ function handleAILANGEvent(event) {
     case 'toolCall':
       addLog('warn', 'Tool call: <span class="val">' + JSON.stringify(event.calls || []).substring(0, 120) + '</span>');
       break;
+    case 'interrupted':
+      core.clearAudioQueue();
+      addLog('warn', '<span class="hl">Interrupted</span> — generation canceled');
+      break;
+    case 'toolCallCancellation':
+      addLog('warn', 'Tool calls canceled: <span class="val">' + (event.ids || []).length + '</span>');
+      break;
+    case 'goAway':
+      addLog('warn', '<span class="hl">GoAway</span> — server closing in <span class="val">' + (event.timeLeft || 0) + 'ms</span>');
+      break;
+    case 'sessionResumption':
+      addLog('ok', 'Session handle saved (resumable)');
+      break;
     case 'opened':
       setState('connected');
       addLog('ok', 'WebSocket connected (AILANG Stream effect)');
@@ -950,12 +979,22 @@ async function reconnect() {
   await core.initAudio();
 
   const voice = $.voiceSelect.value;
+  const proactive = $.chkProactive?.checked || false;
+  const affective = $.chkAffective?.checked || false;
+  const thinkBudget = parseInt($.thinkingBudget?.value || '-1', 10);
+  const useFeatures = proactive || affective || thinkBudget >= 0;
+
+  // Build system instruction with proactive guidance
+  let instruction = SYSTEM_INSTRUCTION;
+  if (proactive) instruction += ' You are in proactive mode. Only respond when the user addresses you directly by name. Stay silent for conversations not directed at you.';
+
   core.sessionPrompt = INITIAL_PROMPT;
   core.deactivateFallbackMode();
-  addLog('info', 'Starting AILANG streaming session (std/stream effects)...');
+  const featureLabels = [proactive && 'Proactive', affective && 'Affective', thinkBudget >= 0 && `Thinking:${thinkBudget}`].filter(Boolean).join(', ');
+  addLog('info', 'Starting AILANG streaming session' + (featureLabels ? ` (${featureLabels})` : '') + '...');
 
   try {
-    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startSession', key, voice, SYSTEM_INSTRUCTION, INITIAL_PROMPT);
+    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startSession', key, voice, instruction, INITIAL_PROMPT);
     if (!result.success) {
       logError('AILANG session: ' + (result.error || 'unknown'));
     } else {

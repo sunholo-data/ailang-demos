@@ -55,7 +55,7 @@ export func parsePptx(filepath: string) -> [Block] ! {FS} {
 export func parsePptxMetadata(filepath: string) -> DocMetadata ! {FS} {
   let coreXml = readCoreProperties(filepath);
   match parse(coreXml) {
-    Ok(root) => extractMetadata(root),
+    Ok(root) => extractPptxMeta(root),
     Err(_) => emptyMetadata()
   }
 }
@@ -74,7 +74,7 @@ func parseSlides(filepath: string, entries: [string]) -> [Block] ! {FS} =
       let xml = readZipEntry(filepath, entry);
       let blocks = parseSlideXml(xml);
       let moreBlocks = parseSlides(filepath, rest);
-      if hasContent(blocks)
+      if pptxHasContent(blocks)
       then {
         let section = SectionBlock({kind: "slide", blocks: blocks});
         section :: moreBlocks
@@ -229,19 +229,19 @@ pure func extractPptxCellText(tc: XmlNode) -> string {
   match findFirst(tc, "a:txBody") {
     Some(txBody) => {
       let paragraphs = findAll(txBody, "a:p");
-      joinParagraphTexts(paragraphs)
+      joinPptxParagraphTexts(paragraphs)
     },
     None => ""
   }
 }
 
-pure func joinParagraphTexts(ps: [XmlNode]) -> string =
+pure func joinPptxParagraphTexts(ps: [XmlNode]) -> string =
   join("\n", map(extractDrawingMLText, ps))
 
 pure func getPptxGridSpan(tc: XmlNode) -> int
   ensures { result >= 1 }
 {
-  getOrElse(optMap(\val. parseIntOrDefault(val, 1), getAttr(tc, "gridSpan")), 1)
+  getOrElse(optMap(\val. pptxParseIntOrDefault(val, 1), getAttr(tc, "gridSpan")), 1)
 }
 
 pure func getPptxHMerge(tc: XmlNode) -> bool =
@@ -272,15 +272,15 @@ pure func parseGroupShape(grpSp: XmlNode) -> [Block] {
 }
 
 -- Extract metadata from core.xml (shared format across Office)
-pure func extractMetadata(root: XmlNode) -> DocMetadata {
-  let title = getMetaField(root, "dc:title");
-  let author = getMetaField(root, "dc:creator");
-  let created = getMetaField(root, "dcterms:created");
-  let modified = getMetaField(root, "dcterms:modified");
+pure func extractPptxMeta(root: XmlNode) -> DocMetadata {
+  let title = getPptxMetaField(root, "dc:title");
+  let author = getPptxMetaField(root, "dc:creator");
+  let created = getPptxMetaField(root, "dcterms:created");
+  let modified = getPptxMetaField(root, "dcterms:modified");
   { title: title, author: author, created: created, modified: modified, pageCount: 0 }
 }
 
-pure func getMetaField(root: XmlNode, tagName: string) -> string =
+pure func getPptxMetaField(root: XmlNode, tagName: string) -> string =
   getOrElse(optMap(getText, findFirst(root, tagName)), "")
 
 -- Extract images from media entries
@@ -297,18 +297,18 @@ func extractPptxImages(filepath: string, entries: [string]) -> [Block] ! {FS} =
   }
 
 -- Check if a block list has content
-pure func hasContent(blocks: [Block]) -> bool =
-  any(blockHasContent, blocks)
+pure func pptxHasContent(blocks: [Block]) -> bool =
+  any(pptxBlockHasContent, blocks)
 
-pure func blockHasContent(b: Block) -> bool =
+pure func pptxBlockHasContent(b: Block) -> bool =
   match b {
     TextBlock(t) => length(trim(t.text)) > 0,
     HeadingBlock(h) => length(trim(h.text)) > 0,
     TableBlock(_) => true,
     ListBlock(_) => true,
     ImageBlock(_) => true,
-    SectionBlock(s) => hasContent(s.blocks)
+    SectionBlock(s) => pptxHasContent(s.blocks)
   }
 
-pure func parseIntOrDefault(s: string, default: int) -> int =
+pure func pptxParseIntOrDefault(s: string, default: int) -> int =
   getOrElse(stringToInt(s), default)

@@ -2,10 +2,10 @@ module docparse/services/direct_ai_parser
 
 import std/ai (call, callJson, callJsonSimple)
 import std/fs (readFileBytes)
-import std/string (length, substring, trim, find, startsWith)
+import std/string (length, substring, trim, find, startsWith, intToStr, stringToInt)
 import std/json (decode, encode, jo, kv, js, jnum, ja, getString, getInt, getBool, getArray, asString, asArray)
 import std/option (Some, None, getOrElse)
-import std/list (map, flatMap)
+import std/list (map, flatMap, concat, any)
 import std/result (Ok, Err)
 import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, TableCell, DocMetadata, emptyMetadata, simpleCell)
 
@@ -22,30 +22,123 @@ import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, List
 pure func pdfMimeType() -> string = "application/pdf"
 
 -- Parse a PDF file using AI multimodal extraction
+-- Uses page-by-page parsing to avoid output token truncation on multi-page documents.
+-- Each page is extracted separately, then results are concatenated.
 export func parsePdf(filepath: string) -> [Block] ! {FS, AI} {
   match readFileBytes(filepath) {
     Err(_) => [],
     Ok(base64Data) =>
       if length(base64Data) == 0 then []
       else {
-        let request = encode(jo([
-          kv("mode", js("multimodal")),
-          kv("mimeType", js(pdfMimeType())),
-          kv("data", js(base64Data)),
-          kv("fileName", js(filepath)),
-          kv("prompt", js(
-            "Extract content from this PDF as a compact JSON array of blocks. " ++
-            "Block types: {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, " ++
-            "{\"type\":\"text\",\"text\":\"...\"}, " ++
-            "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, " ++
-            "{\"type\":\"list\",\"items\":[...],\"ordered\":bool}. " ++
-            "Merge adjacent text into single blocks. Use compact JSON (no whitespace). Return ONLY the JSON array."
-          ))
-        ]));
-        let response = callJsonSimple(request);
-        parseBlocksFromJson(response)
+        let pageCount = aiGetPageCount(base64Data, filepath);
+        if pageCount <= 5
+        then aiExtractWithRetry(base64Data, filepath, true, 1)
+        else parsePdfAllPages(base64Data, filepath, 1, pageCount)
       }
   }
+}
+
+-- Validate-and-retry: extract PDF content, retry once if output looks bad.
+-- Checks: non-empty result, no ai-raw fallbacks, no empty list items.
+-- At most 1 retry (2 total calls) to stay within AI budget.
+func aiExtractWithRetry(base64Data: string, filepath: string, singlePage: bool, retriesLeft: int) -> [Block] ! {AI} {
+  let blocks = parsePdfOnePage(base64Data, filepath, 1, singlePage);
+  if aiIsValidExtraction(blocks) then blocks
+  else if retriesLeft <= 0 then blocks
+  else aiExtractWithRetry(base64Data, filepath, singlePage, retriesLeft - 1)
+}
+
+-- Validation: did the AI produce usable structured output?
+pure func aiIsValidExtraction(blocks: [Block]) -> bool =
+  match blocks {
+    [] => false,
+    _ => if any(aiIsRawBlock, blocks) then false
+         else if any(aiIsEmptyList, blocks) then false
+         else true
+  }
+
+-- Block fell through to raw text fallback (JSON parse failed or unrecognized type)
+pure func aiIsRawBlock(b: Block) -> bool =
+  match b {
+    TextBlock(t) => t.style == "ai-raw",
+    _ => false
+  }
+
+-- List block with zero items (AI returned structure but omitted content)
+pure func aiIsEmptyList(b: Block) -> bool =
+  match b {
+    ListBlock(l) => match l.items { [] => true, _ => false },
+    _ => false
+  }
+
+-- Get page count from PDF via lightweight AI call
+func aiGetPageCount(base64Data: string, filepath: string) -> int ! {AI} {
+  let request = encode(jo([
+    kv("mode", js("multimodal")),
+    kv("mimeType", js(pdfMimeType())),
+    kv("data", js(base64Data)),
+    kv("fileName", js(filepath)),
+    kv("prompt", js("How many pages does this PDF have? Return ONLY the integer."))
+  ]));
+  let response = trim(call(request));
+  match decode(response) {
+    Ok(json) => match getInt(json, "pageCount") {
+      Some(n) => if n > 0 then n else 1,
+      None => aiParsePageCountFromText(response)
+    },
+    Err(_) => aiParsePageCountFromText(response)
+  }
+}
+
+-- Parse page count from plain text AI response (e.g. "4" or "This PDF has 4 pages")
+func aiParsePageCountFromText(response: string) -> int {
+  match stringToInt(trim(response)) {
+    Some(n) => if n > 0 then n else 1,
+    None => 1
+  }
+}
+
+-- Recursively parse all pages, concatenating blocks
+func parsePdfAllPages(base64Data: string, filepath: string, page: int, totalPages: int) -> [Block] ! {AI} {
+  if page > totalPages then []
+  else {
+    let pageBlocks = parsePdfOnePage(base64Data, filepath, page, false);
+    let rest = parsePdfAllPages(base64Data, filepath, page + 1, totalPages);
+    concat(pageBlocks, rest)
+  }
+}
+
+-- Parse a single page of a PDF
+func parsePdfOnePage(base64Data: string, filepath: string, page: int, singlePage: bool) -> [Block] ! {AI} {
+  let pageInstruction = if singlePage
+    then "Extract ALL content from this entire PDF"
+    else "This is a multi-page PDF. Extract ALL content that appears on page " ++ intToStr(page) ++ " only. " ++
+         "You CAN see all pages — focus your extraction on page " ++ intToStr(page) ++ " and skip content from other pages.";
+  let request = encode(jo([
+    kv("mode", js("multimodal")),
+    kv("mimeType", js(pdfMimeType())),
+    kv("data", js(base64Data)),
+    kv("fileName", js(filepath)),
+    kv("prompt", js(
+      pageInstruction ++ " Return a JSON array of blocks. " ++
+      "Block types: {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, " ++
+      "{\"type\":\"text\",\"text\":\"...\"}, " ++
+      "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, " ++
+      "{\"type\":\"list\",\"items\":[\"full item text here\",...],\"ordered\":bool}. " ++
+      "CRITICAL RULES: " ++
+      "1. Create a SEPARATE text block for EACH paragraph or visual text section. Do NOT merge paragraphs. " ++
+      "2. Include the COMPLETE text of every list item and paragraph — do NOT omit or truncate. " ++
+      "3. Use heading blocks for titles, section headers, and any text that serves as a header (with appropriate level 1-6). " ++
+      "4. For tables, include ALL rows and ALL cell content. " ++
+      "For tables with multi-row headers (e.g. 'Three Months Ended' spanning columns), " ++
+      "use separate header rows: first row for group headers, second for sub-headers. " ++
+      "5. Preserve the document's reading order. " ++
+      "Use compact JSON. Return ONLY the JSON array." ++
+      " If the page has no content, return []."
+    ))
+  ]));
+  let response = callJsonSimple(request);
+  parseBlocksFromJson(response)
 }
 
 -- Parse an image file using AI vision
@@ -222,12 +315,13 @@ pure func parseOneBlock(json: Json) -> Option[Block] {
     Some("table") => {
       let headers = getOrElse(getArray(json, "headers"), []);
       let rows = getOrElse(getArray(json, "rows"), []);
-      Some(TableBlock({headers: stringsToSimpleCells(extractStrings(headers)), rows: parseTableRows(rows)}))
+      let flatHeaders = aiFlattenHeaders(headers);
+      Some(TableBlock({headers: aiStringsToSimpleCells(flatHeaders), rows: parseAiTableRows(rows)}))
     },
     Some("list") => {
       let items = getOrElse(getArray(json, "items"), []);
       let ordered = getOrElse(getBool(json, "ordered"), false);
-      Some(ListBlock({items: extractStrings(items), ordered: ordered}))
+      Some(ListBlock({items: aiExtractStrings(items), ordered: ordered}))
     },
     Some("image") => match getString(json, "description") {
       Some(desc) => Some(ImageBlock({data: "", description: desc, mime: "image/unknown"})),
@@ -253,19 +347,44 @@ pure func parseMetadataFromJson(response: string) -> DocMetadata {
 }
 
 -- Parse table rows from JSON array of arrays
-pure func parseTableRows(rowJsons: [Json]) -> [[TableCell]] =
+pure func parseAiTableRows(rowJsons: [Json]) -> [[TableCell]] =
   flatMap(\rj. match asArray(rj) {
-    Some(cells) => [stringsToSimpleCells(extractStrings(cells))],
+    Some(cells) => [aiStringsToSimpleCells(aiExtractStrings(cells))],
     None => []
   }, rowJsons)
 
-pure func stringsToSimpleCells(strs: [string]) -> [TableCell] =
+pure func aiStringsToSimpleCells(strs: [string]) -> [TableCell] =
   map(simpleCell, strs)
 
-pure func extractStrings(jsons: [Json]) -> [string] =
+-- Flatten table headers: handles both ["h1","h2"] and [["row1h1","row1h2"],["row2h1","row2h2"]]
+-- AI sometimes returns multi-row headers as nested arrays
+pure func aiFlattenHeaders(jsons: [Json]) -> [string] =
   flatMap(\j. match asString(j) {
     Some(s) => [s],
-    None => []
+    None => match asArray(j) {
+      Some(inner) => aiExtractStrings(inner),
+      None => match getString(j, "text") {
+        Some(s) => [s],
+        None => match getString(j, "header") {
+          Some(s) => [s],
+          None => []
+        }
+      }
+    }
+  }, jsons)
+
+-- Extract strings from JSON array, handling both plain strings and objects with
+-- text/header fields (AI sometimes returns {"header":"text","colspan":N} for table headers)
+pure func aiExtractStrings(jsons: [Json]) -> [string] =
+  flatMap(\j. match asString(j) {
+    Some(s) => [s],
+    None => match getString(j, "text") {
+      Some(s) => [s],
+      None => match getString(j, "header") {
+        Some(s) => [s],
+        None => []
+      }
+    }
   }, jsons)
 
 -- Parse audio AI response into blocks

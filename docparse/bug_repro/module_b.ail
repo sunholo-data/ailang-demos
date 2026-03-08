@@ -1,0 +1,11 @@
+module docparse/bug_repro/module_b
+
+-- Module B: defines internal helper `format` and exported function `greetB`
+-- `format` is NOT exported — it's an internal helper with the same name as module_a's
+
+export pure func greetB(name: string) -> string =
+  format(name)
+
+-- Internal helper — should only be used by this module
+pure func format(name: string) -> string =
+  "Hello from B: " ++ name

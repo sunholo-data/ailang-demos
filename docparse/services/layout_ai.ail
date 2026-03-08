@@ -133,7 +133,7 @@ pure func tableNeedsAI(headers: [TableCell], rows: [[TableCell]]) -> bool {
   let totalHeaders = countCellsLen(headers);
   let emptyRows = countEmptyRows(rows);
   let totalRows = countRows(rows);
-  let mergedCount = countMergedCells(headers) + countMergedInRows(rows);
+  let mergedCount = aiCountMergedCells(headers) + aiCountMergedInRows(rows);
   -- Trigger AI if: all headers empty, or >50% rows empty, or many merged cells
   (totalHeaders > 0 && emptyHeaders == totalHeaders) ||
   (totalRows > 0 && emptyRows * 2 > totalRows) ||
@@ -151,11 +151,11 @@ pure func countEmptyRows(rows: [[TableCell]]) -> int =
 pure func isRowEmpty(cells: [TableCell]) -> bool =
   foldl(\acc c. acc && length(cellText(c)) == 0, true, cells)
 
-pure func countMergedCells(cells: [TableCell]) -> int =
+pure func aiCountMergedCells(cells: [TableCell]) -> int =
   foldl(\acc c. if c.merged then acc + 1 else acc, 0, cells)
 
-pure func countMergedInRows(rows: [[TableCell]]) -> int =
-  foldl(\acc row. acc + countMergedCells(row), 0, rows)
+pure func aiCountMergedInRows(rows: [[TableCell]]) -> int =
+  foldl(\acc row. acc + aiCountMergedCells(row), 0, rows)
 
 -- Format a table for AI analysis
 pure func formatTableForAI(headers: [TableCell], rows: [[TableCell]]) -> string {
@@ -187,15 +187,15 @@ pure func blockSummary(b: Block) -> string =
     TextBlock(t) => "[text] " ++ truncateStr(t.text, 60),
     HeadingBlock(h) => "[h" ++ show(h.level) ++ "] " ++ h.text,
     TableBlock(t) => "[table] " ++ show(countRows(t.rows)) ++ " rows",
-    ListBlock(l) => "[list] " ++ show(countItems(l.items)) ++ " items",
+    ListBlock(l) => "[list] " ++ show(aiCountItems(l.items)) ++ " items",
     ImageBlock(i) => "[image] " ++ i.mime,
     AudioBlock(a) => "[audio] " ++ a.mime,
     VideoBlock(v) => "[video] " ++ v.mime,
-    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(countItems2(s.blocks)) ++ " blocks",
+    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(aiCountItems2(s.blocks)) ++ " blocks",
     ChangeBlock(c) => "[" ++ c.changeType ++ "] " ++ truncateStr(c.text, 60)
   }
 
-pure func countItems2(blocks: [Block]) -> int = listLength(blocks)
+pure func aiCountItems2(blocks: [Block]) -> int = listLength(blocks)
 
 pure func truncateStr(s: string, maxLen: int) -> string {
   if length(s) <= maxLen then s
@@ -204,7 +204,7 @@ pure func truncateStr(s: string, maxLen: int) -> string {
 
 pure func countRows(rows: [[TableCell]]) -> int = listLength(rows)
 
-pure func countItems(items: [string]) -> int = listLength(items)
+pure func aiCountItems(items: [string]) -> int = listLength(items)
 
 -- Collect all text from blocks
 pure func collectBlockTexts(blocks: [Block]) -> string =
@@ -215,7 +215,7 @@ pure func parseTableResponse(response: string) -> Option[Block] {
   match decode(response) {
     Ok(json) =>
       optFlatMap(\headerJsons.
-        let headers = stringsToSimpleCells(extractStrings(headerJsons)) in
+        let headers = aiStringsToSimpleCells2(aiExtractStrings2(headerJsons)) in
         optFlatMap(\rowJsons.
           let rows = stringRowsToSimpleCells(extractStringArrays(rowJsons)) in
           Some(TableBlock({rows: rows, headers: headers})),
@@ -226,11 +226,11 @@ pure func parseTableResponse(response: string) -> Option[Block] {
 }
 
 -- Convert string lists to simple TableCell lists (for AI-reconstructed tables)
-pure func stringsToSimpleCells(strs: [string]) -> [TableCell] =
+pure func aiStringsToSimpleCells2(strs: [string]) -> [TableCell] =
   map(simpleCell, strs)
 
 pure func stringRowsToSimpleCells(rows: [[string]]) -> [[TableCell]] =
-  map(stringsToSimpleCells, rows)
+  map(aiStringsToSimpleCells2, rows)
 
 -- Parse AI response for reading order
 -- Expects a JSON array of integers (block indices)
@@ -239,7 +239,7 @@ pure func parseOrderResponse(response: string, blocks: [Block]) -> Option[[Block
     Ok(json) => match asArray(json) {
       Some(indices) => {
         let reordered = reorderByIndices(extractInts(indices), blocks);
-        if countItems2(reordered) > 0 then Some(reordered)
+        if aiCountItems2(reordered) > 0 then Some(reordered)
         else None
       },
       None => None
@@ -263,7 +263,7 @@ pure func reorderByIndices(indices: [int], blocks: [Block]) -> [Block] =
   }, indices)
 
 -- Extract strings from JSON array
-pure func extractStrings(jsons: [Json]) -> [string] =
+pure func aiExtractStrings2(jsons: [Json]) -> [string] =
   flatMap(\j. match asString(j) {
     Some(s) => [s],
     None => []
@@ -272,6 +272,6 @@ pure func extractStrings(jsons: [Json]) -> [string] =
 -- Extract arrays of strings from JSON array of arrays
 pure func extractStringArrays(jsons: [Json]) -> [[string]] =
   map(\j. match getArray(j, "") {
-    Some(arr) => extractStrings(arr),
+    Some(arr) => aiExtractStrings2(arr),
     None => []
   }, jsons)

@@ -24,8 +24,10 @@ import std/io (println)
 import std/json (encode, decode, jo, kv, js, jb, ja, jnum,
                  get, has, asString, asBool, asArray, getString, getObject, getArray, getBool)
 import std/string (length)
+import std/list (concat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
+import std/math (intToFloat)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration
@@ -141,6 +143,14 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string) -> bool ! {
   if has(json, "setupComplete") then handleSetupComplete(conn, prompt)
   else if has(json, "serverContent") then handleServerContent(json)
   else if has(json, "toolCall") then handleToolCallEvent(json)
+  else if has(json, "toolCallCancellation") then {
+    println(encode(jo([kv("type", js("toolCallCancellation"))])));
+    true
+  }
+  else if has(json, "goAway") then {
+    println(encode(jo([kv("type", js("goAway"))])));
+    true
+  }
   else true
 
 func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {Stream, IO} {
@@ -165,14 +175,20 @@ func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {Stream, IO
 
 func handleServerContent(json: Json) -> bool ! {IO} {
   let sc = getOrElse(get(json, "serverContent"), jo([]));
-  match getBool(sc, "turnComplete") {
+  match getBool(sc, "interrupted") {
     Some(true) => {
-      println(encode(jo([kv("type", js("turnComplete"))])));
+      println(encode(jo([kv("type", js("interrupted"))])));
       true
     },
-    _ => {
-      emitTranscriptions(sc);
-      emitModelTurn(sc)
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => {
+        println(encode(jo([kv("type", js("turnComplete"))])));
+        true
+      },
+      _ => {
+        emitTranscriptions(sc);
+        emitModelTurn(sc)
+      }
     }
   }
 }
@@ -243,6 +259,48 @@ export pure func buildSetup(model: string, voice: string, instruction: string) -
       kv("inputAudioTranscription", jo([]))
     ]))
   ]))
+
+-- Build WebSocket setup message with Gemini Live v2 features.
+-- AI Studio uses v1alpha for proactive/affective, camelCase field names.
+-- thinkingBudget: -1 = skip, 0+ = set budget. proactive/affective: true to enable.
+export pure func buildSetupWithFeatures(model: string, voice: string, instruction: string,
+    proactive: bool, affective: bool, thinkingBudget: int) -> string {
+  let baseKvs = [
+    kv("model", js(model)),
+    kv("generationConfig", jo([
+      kv("responseModalities", ja([js("AUDIO")])),
+      kv("speechConfig", jo([
+        kv("voiceConfig", jo([
+          kv("prebuiltVoiceConfig", jo([
+            kv("voiceName", js(voice))
+          ]))
+        ]))
+      ]))
+    ])),
+    kv("systemInstruction", jo([
+      kv("parts", ja([jo([kv("text", js(instruction))])]))
+    ])),
+    kv("outputAudioTranscription", jo([])),
+    kv("inputAudioTranscription", jo([]))
+  ];
+  let proactiveKvs = if proactive then
+    [kv("proactivity", jo([kv("proactiveAudio", jb(true))]))]
+  else [];
+  let affectiveKvs = if affective then
+    [kv("enableAffectiveDialog", jb(true))]
+  else [];
+  let thinkingKvs = if thinkingBudget >= 0 then
+    [kv("thinkingConfig", jo([kv("thinkingBudget", jnum(intToFloat(thinkingBudget)))]))]
+  else [];
+  let allKvs = concat(concat(concat(baseKvs, proactiveKvs), affectiveKvs), thinkingKvs);
+  encode(jo([kv("setup", jo(allKvs))]))
+}
+
+-- AI Studio URL for v1alpha (needed for proactive/affective features)
+export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
+  let version = if useAlpha then "v1alpha" else "v1beta";
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ version ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
+}
 
 -- Build WebSocket setup message with tools (for tool-calling demos)
 -- toolsJson is a JSON string: [{"functionDeclarations": [...]}]
@@ -371,6 +429,16 @@ pure func parseToolCall(json: Json) -> string {
 
 pure func parseServerContent(json: Json) -> string {
   let sc = getOrElse(get(json, "serverContent"), jo([]));
+  match get(sc, "interrupted") {
+    Some(i) => match asBool(i) {
+      Some(true) => encode(jo([kv("type", js("interrupted"))])),
+      _ => parseServerContentInner(sc)
+    },
+    None => parseServerContentInner(sc)
+  }
+}
+
+pure func parseServerContentInner(sc: Json) -> string {
   match get(sc, "turnComplete") {
     Some(tc) => match asBool(tc) {
       Some(true) => encode(jo([kv("type", js("turnComplete"))])),

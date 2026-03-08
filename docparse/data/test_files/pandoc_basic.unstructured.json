@@ -1,0 +1,468 @@
+[
+  {
+    "type": "Title",
+    "element_id": "307689edeae34ccc84b9f69a48ebc53a",
+    "text": "LLMs",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "0ad5324b31792e674616065a7956c4cd",
+    "text": "Provider \uf0e0 Available LLMs \u2013 who manages? How?",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "307689edeae34ccc84b9f69a48ebc53a"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "e20c855a1c34000c597c51b76892aa57",
+    "text": "EW maintained list of \u201capproved\u201d LLMs for Universal workers",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "307689edeae34ccc84b9f69a48ebc53a"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "ca3871f7d5f4ecb1c616b0c7eee9ddbe",
+    "text": "Rebuilding of UWs to the \u201cNewgen\u201d thing completely",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "307689edeae34ccc84b9f69a48ebc53a"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "ea8788c1fa70c7391114501a47c2e107",
+    "text": "Streaming support",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "307689edeae34ccc84b9f69a48ebc53a"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "02d3ae76042fa58f3b268973109124b2",
+    "text": "Multimodal (voice streaming) models?",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "307689edeae34ccc84b9f69a48ebc53a"
+    }
+  },
+  {
+    "type": "PageBreak",
+    "element_id": "30cc809a9e34a412ff7e3612945085f1",
+    "text": "",
+    "metadata": {
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 1,
+      "languages": [
+        "eng"
+      ],
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "8bcfcbe82aae8f3ec8b873a69e699e74",
+    "text": "Everworker venn \u000bdiagram",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "5ddb3bf0e0823c5db4ee497b04a1c979",
+    "text": "BRAINS",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "0202383f32a98429a44f0fe6e96d9ba5",
+    "text": "Universal Workers / AI Agents:",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "UncategorizedText",
+    "element_id": "2d97718b88d02bcc9b4cecbe901200b4",
+    "text": "openai, anthropic,",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "0202383f32a98429a44f0fe6e96d9ba5"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "7b22c0136f35b8407cfc67764ba2d3ee",
+    "text": "Crew AI, other ",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "ae921fd88a1f438744ce67b22d4799fa",
+    "text": "\u201cAI natives\u201d",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "7b22c0136f35b8407cfc67764ba2d3ee"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "be37b2fa8bcae9e2b23dde619c4a3e71",
+    "text": "SKILLS",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "24a85600d0c24e9b8a30354dbe980959",
+    "text": "Specialized Workers / Workflows:",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "8f86ebde09251535fb82e43c1506e895",
+    "text": "n8n, UI Path, ",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "84c37ab0bd259283c8f8804f1cec0861",
+    "text": "other RPA",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "137f4c8881ab4b78ec93557769365149",
+    "text": "EW",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "5848e3d362f23fe402145642321e0622",
+    "text": "KNOWLEDGE ",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "d805ec34584f2fc812de12f0f23099bc",
+    "text": "Data / ",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "6a4a2a5add7b165f70baa75533b33df2",
+    "text": "RAG Pipelines",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "NarrativeText",
+    "element_id": "927c4a611f5bd1bdcde72faed35777a9",
+    "text": "Vector DBs, specialized data prep vendors, \u2026",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "6a4a2a5add7b165f70baa75533b33df2"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "cbcd24cd07a9f2e88ffaa45938358032",
+    "text": "glean",
+    "metadata": {
+      "category_depth": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "8bcfcbe82aae8f3ec8b873a69e699e74"
+    }
+  },
+  {
+    "type": "PageBreak",
+    "element_id": "129610d7d50981e55d9a0d0aa23bea5b",
+    "text": "",
+    "metadata": {
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 2,
+      "languages": [
+        "eng"
+      ],
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "b1a75e4cfa92f4d9ea24adcd387aa7ac",
+    "text": "Table",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 3,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "Table",
+    "element_id": "e5480e2f4004f6be6844b4c8fe076b3b",
+    "text": "Col1 Col2 Col3 Name Anton Antich Age 23 years",
+    "metadata": {
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 3,
+      "text_as_html": "<table><tr><td>Col1</td><td>Col2</td><td>Col3</td></tr><tr><td>Name</td><td>Anton</td><td>Antich</td></tr><tr><td>Age</td><td>23</td><td>years</td></tr></table>",
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "parent_id": "b1a75e4cfa92f4d9ea24adcd387aa7ac"
+    }
+  },
+  {
+    "type": "PageBreak",
+    "element_id": "4d2cce5b6c93c2b706536d60a8096df8",
+    "text": "",
+    "metadata": {
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 3,
+      "languages": [
+        "eng"
+      ],
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "Title",
+    "element_id": "7ea6f31241accb92cba37576d3729ee7",
+    "text": "Smart Art",
+    "metadata": {
+      "category_depth": 0,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "pandoc_basic.pptx",
+      "last_modified": "2026-02-08T19:32:29",
+      "page_number": 4,
+      "languages": [
+        "eng"
+      ],
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  }
+]

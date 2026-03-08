@@ -1,0 +1,17 @@
+# Benchmark results (regenerated on each run)
+results/benchmark_report.json
+results/benchmark_report.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated test PDFs (reproducible via create_test_pdfs.py)
+test_files/*.pdf
+
+# uv lock file
+uv.lock
+
+# Unstructured inspection outputs
+*.unstructured.json

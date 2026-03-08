@@ -3,7 +3,7 @@ module docparse/services/xlsx_parser
 import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
 import std/option (Some, None, flatMap as optFlatMap, map as optMap, getOrElse)
 import std/result (Ok, Err)
-import std/string (contains, length, trim, stringToInt, join)
+import std/string (contains, length, trim, stringToInt, join, startsWith, substring)
 import std/list (map, flatMap, nth, length as listLength, concat)
 import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, DocMetadata, emptyMetadata, simpleCell)
 import docparse/services/zip_extract (readCoreProperties, findSheetEntries, readZipEntry)
@@ -29,16 +29,18 @@ import docparse/services/zip_extract (readCoreProperties, findSheetEntries, read
 export func parseXlsx(filepath: string) -> [Block] ! {FS} {
   -- Load shared strings table
   let sharedStrings = loadSharedStrings(filepath);
+  -- Get real sheet names from workbook.xml
+  let sheetNames = readWorkbookSheetNames(filepath);
   -- Find and parse each sheet
   let sheetEntries = findSheetEntries(filepath);
-  parseSheets(filepath, sheetEntries, sharedStrings)
+  parseSheetsWithNames(filepath, sheetEntries, sharedStrings, sheetNames, 0)
 }
 
 -- Parse metadata from XLSX (same core.xml format)
 export func parseXlsxMetadata(filepath: string) -> DocMetadata ! {FS} {
   let coreXml = readCoreProperties(filepath);
   match parse(coreXml) {
-    Ok(root) => extractMetadata(root),
+    Ok(root) => extractXlsxMeta(root),
     Err(_) => emptyMetadata()
   }
 }
@@ -81,35 +83,99 @@ pure func extractSiText(si: XmlNode) -> string {
 pure func extractRichText(runs: [XmlNode]) -> string =
   join("", map(\r. getOrElse(optMap(getText, findFirst(r, "t")), ""), runs))
 
--- Parse each sheet entry into blocks
-func parseSheets(filepath: string, entries: [string], sharedStrings: [string]) -> [Block] ! {FS} =
+-- Read real sheet names from xl/workbook.xml
+-- Returns ordered list of sheet names (e.g. ["Main", "Secondary"])
+func readWorkbookSheetNames(filepath: string) -> [string] ! {FS} {
+  let xml = readZipEntry(filepath, "xl/workbook.xml");
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let sheets = findAll(root, "sheet");
+      map(\s. getOrElse(getAttr(s, "name"), ""), sheets)
+    },
+    Err(_) => []
+  }
+}
+
+-- Get sheet name by index, falling back to cleaned entry path
+pure func xlsxGetSheetName(names: [string], idx: int, entry: string) -> string =
+  match nth(names, idx) {
+    Some(name) => if length(name) > 0 then name else xlsxCleanSheetName(entry),
+    None => xlsxCleanSheetName(entry)
+  }
+
+-- Parse each sheet entry into blocks, using real sheet names
+func parseSheetsWithNames(filepath: string, entries: [string], sharedStrings: [string], names: [string], idx: int) -> [Block] ! {FS} =
   match entries {
     [] => [],
     entry :: rest => {
       let xml = readZipEntry(filepath, entry);
-      let blocks = parseSheetXml(xml, sharedStrings, entry);
-      let moreBlocks = parseSheets(filepath, rest, sharedStrings);
+      let sheetName = xlsxGetSheetName(names, idx, entry);
+      let blocks = parseSheetXml(xml, sharedStrings, sheetName);
+      let moreBlocks = parseSheetsWithNames(filepath, rest, sharedStrings, names, idx + 1);
       concat(blocks, moreBlocks)
     }
   }
 
 -- Parse a single worksheet's XML into blocks
+-- Emits a HeadingBlock with the sheet name followed by the table data.
 export pure func parseSheetXml(xml: string, sharedStrings: [string], sheetName: string) -> [Block] {
   if length(xml) == 0 then []
   else match parse(xml) {
     Ok(root) => {
       let parsedRows = extractSheetRows(root, sharedStrings);
+      let heading = HeadingBlock({text: xlsxCleanSheetName(sheetName), level: 1});
       match parsedRows {
-        [] => [],
+        [] => [heading],
         firstRow :: dataRows => {
           let tableBlock = TableBlock({rows: dataRows, headers: firstRow});
-          let section = SectionBlock({kind: "sheet", blocks: [tableBlock]});
+          let section = SectionBlock({kind: "sheet", blocks: [heading, tableBlock]});
           [section]
         }
       }
     },
     Err(_) => []
   }
+}
+
+-- Clean sheet entry path to a human-readable sheet name
+-- Input: "xl/worksheets/sheet1.xml" -> "Sheet 1"
+pure func xlsxCleanSheetName(entry: string) -> string {
+  -- Strip path prefix and .xml suffix to get e.g. "sheet1"
+  let stripped = xlsxStripPrefix(entry);
+  let name = xlsxStripSuffix(stripped);
+  xlsxFormatSheetName(name)
+}
+
+-- Strip "xl/worksheets/" prefix
+pure func xlsxStripPrefix(s: string) -> string {
+  let prefix = "xl/worksheets/";
+  if startsWith(s, prefix)
+  then substring(s, length(prefix), length(s))
+  else s
+}
+
+-- Strip ".xml" suffix
+pure func xlsxStripSuffix(s: string) -> string {
+  let suffix = ".xml";
+  let sLen = length(s);
+  let suffixLen = length(suffix);
+  if sLen > suffixLen then {
+    let ending = substring(s, sLen - suffixLen, sLen);
+    if ending == suffix
+    then substring(s, 0, sLen - suffixLen)
+    else s
+  }
+  else s
+}
+
+-- Format "sheet1" -> "Sheet 1", "sheet12" -> "Sheet 12"
+pure func xlsxFormatSheetName(name: string) -> string {
+  if startsWith(name, "sheet") then {
+    let numPart = substring(name, 5, length(name));
+    "Sheet " ++ numPart
+  }
+  else name
 }
 
 -- Extract all rows from sheetData
@@ -189,13 +255,13 @@ pure func getNumericValue(c: XmlNode) -> string =
   getOrElse(optMap(getText, findFirst(c, "v")), "")
 
 -- Extract metadata from core.xml
-pure func extractMetadata(root: XmlNode) -> DocMetadata {
-  let title = getMetaField(root, "dc:title");
-  let author = getMetaField(root, "dc:creator");
-  let created = getMetaField(root, "dcterms:created");
-  let modified = getMetaField(root, "dcterms:modified");
+pure func extractXlsxMeta(root: XmlNode) -> DocMetadata {
+  let title = getXlsxMetaField(root, "dc:title");
+  let author = getXlsxMetaField(root, "dc:creator");
+  let created = getXlsxMetaField(root, "dcterms:created");
+  let modified = getXlsxMetaField(root, "dcterms:modified");
   { title: title, author: author, created: created, modified: modified, pageCount: 0 }
 }
 
-pure func getMetaField(root: XmlNode, tagName: string) -> string =
+pure func getXlsxMetaField(root: XmlNode, tagName: string) -> string =
   getOrElse(optMap(getText, findFirst(root, tagName)), "")

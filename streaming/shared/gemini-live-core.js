@@ -843,6 +843,11 @@ class GeminiLiveCore {
 
       if (json.serverContent) {
         const sc = json.serverContent;
+        if (sc.interrupted) {
+          this.clearAudioQueue();
+          this.config.onEvent({ type: 'interrupted' });
+          return true;
+        }
         if (sc.turnComplete) {
           this.config.onEvent({ type: 'turnComplete' });
           return true;
@@ -859,6 +864,21 @@ class GeminiLiveCore {
       if (json.toolCall) {
         const calls = json.toolCall.functionCalls || [];
         this.config.onEvent({ type: 'toolCall', calls });
+        return true;
+      }
+
+      if (json.toolCallCancellation) {
+        this.config.onEvent({ type: 'toolCallCancellation', ids: json.toolCallCancellation.ids || [] });
+        return true;
+      }
+
+      if (json.goAway) {
+        this.config.onEvent({ type: 'goAway', timeLeft: json.goAway.timeLeft || 0 });
+        return true;
+      }
+
+      if (json.sessionResumptionUpdate) {
+        this.config.onEvent({ type: 'sessionResumption', handle: json.sessionResumptionUpdate.newHandle });
         return true;
       }
 

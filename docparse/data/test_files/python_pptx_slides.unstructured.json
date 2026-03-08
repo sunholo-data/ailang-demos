@@ -1,0 +1,26 @@
+[
+  {
+    "type": "PageBreak",
+    "element_id": "7c3c724139ee9c03553fa8449e0aa30b",
+    "text": "",
+    "metadata": {
+      "last_modified": "2026-02-08T19:32:50",
+      "page_number": 1,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "python_pptx_slides.pptx",
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  },
+  {
+    "type": "PageBreak",
+    "element_id": "3c05a323f14de58c14147d82deba136f",
+    "text": "",
+    "metadata": {
+      "last_modified": "2026-02-08T19:32:50",
+      "page_number": 2,
+      "file_directory": "../../docparse/data/test_files",
+      "filename": "python_pptx_slides.pptx",
+      "filetype": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+  }
+]

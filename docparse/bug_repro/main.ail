@@ -1,0 +1,27 @@
+module docparse/bug_repro/main
+
+import std/io (println)
+import docparse/bug_repro/module_a (greetA)
+import docparse/bug_repro/module_b (greetB)
+
+-- Bug: non-exported functions with the same name and signature
+-- in different modules collide at runtime.
+--
+-- Expected output:
+--   greetA: Hello from A: World
+--   greetB: Hello from B: World
+--
+-- Actual output (BUG):
+--   greetA: Hello from B: World    <-- WRONG! Uses module_b's internal `format`
+--   greetB: Hello from B: World
+
+export func main() -> () ! {IO} {
+  let a = greetA("World");
+  let b = greetB("World");
+  println("greetA: " ++ a);
+  println("greetB: " ++ b);
+
+  if a == "Hello from A: World"
+  then println("PASS: module_a's internal function resolved correctly")
+  else println("FAIL: module_a's internal `format` was shadowed by module_b's!")
+}
