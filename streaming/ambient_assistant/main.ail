@@ -1,0 +1,971 @@
+-- Ambient AILANG Assistant — Always-Listening Voice Agent
+--
+-- An always-on voice assistant that listens passively, transcribes conversation,
+-- and only responds when addressed directly by name ("AILANG"). Uses Gemini Live
+-- proactive audio so the model decides when to respond.
+--
+-- All features pre-enabled by default:
+--   - Proactive audio (only responds when addressed)
+--   - Tool calling (extended ambient tools: context summary, notes search, reminders)
+--   - Session resumption (remembers context across invocations)
+--   - Context window compression (long sessions)
+--   - Input/output transcription
+--
+-- CLI mode: interactive multi-turn via selectEvents (stdin + WebSocket multiplexed).
+-- Browser mode: continuous mic via MediaStream API.
+--
+-- Run via wrapper:
+--   ambient "Hello AILANG"                   # interactive session (type follow-ups)
+--   ambient --voice Charon "What happened?"  # interactive with voice selection
+--   ambient --no-interactive "Quick query"   # single-prompt mode
+--   ambient --list                           # list sessions
+--
+-- Or manually:
+--   ailang run --entry main --caps IO,FS,Stream,Net,Env,Process \
+--     streaming/ambient_assistant/main.ail "Hey AILANG, what time is it?"
+--
+-- CAPABILITY BUDGETS (high for mic mode — many FS ops per audio chunk):
+--   IO @limit=5000      - Console output (transcription, audio frames)
+--   FS @limit=50000     - File ops (mic gate check per chunk ~7/sec)
+--   Stream @limit=50000 - WebSocket messages (mic audio chunks + responses)
+--   Net @limit=5        - Auth
+--   Env                 - Read environment variables
+--   Process @limit=200  - Audio playback + tool execution
+
+module streaming/ambient_assistant/main
+
+import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
+                   selectEvents, sourceOfConn, asyncReadStdinLines, asyncExecProcess,
+                   StreamConn, StreamEvent, StreamSource,
+                   Message, Binary, Opened, Closed, StreamError, Ping,
+                   SourceText, SourceBytes)
+import std/io (println)
+import std/env (getEnvOr, getArgs)
+import std/fs (readFile, readFileBytes, fileExists, writeFile, writeFileBytes,
+               appendFile, appendFileBytes)
+import std/net (httpRequest)
+import streaming/gemini_live/services/gcp_auth (getAccessToken, getDefaultProject)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, join, substring, stringToInt)
+import std/list (length as listLength, map, forEachE, concat, nth)
+import std/json (encode, decode, getString, getObject, getArray, getBool, getInt,
+                 jo, kv, js, ja, jb)
+import std/bytes (fromBase64, toBase64, length as bytesLen, concat as bytesConcat, fromInts)
+import std/process (exec, NotFound, spawnProcess, writeProcessStdin, closeProcessStdin, ProcessHandle)
+import streaming/ambient_assistant/services/ambient_tools (getAmbientToolDeclarations, dispatchAmbientTool)
+import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool,
+  isPathSafe, containsTraversal, safeCalculate, clampInput)
+import streaming/gemini_live/services/live_config (buildProactivityConfig, buildAffectiveConfig,
+  buildThinkingConfig, buildRealtimeInputConfig, buildVadConfig, buildActivityHandlingConfig)
+import std/math (intToFloat, floatToInt)
+
+-- ============================================================
+-- Entry Point
+-- ============================================================
+
+export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000, Net @limit=5, Env, Process @limit=200} {
+  let voice = getEnvOr("GEMINI_VOICE", "Sulafat");
+  -- Ambient defaults: all features ON
+  let proactiveEnabled = getEnvOr("GEMINI_PROACTIVE", "1") == "1";
+  let toolsEnabled = getEnvOr("GEMINI_TOOLS", "1") == "1";
+  let affectiveEnabled = getEnvOr("GEMINI_AFFECTIVE", "") == "1";
+  let thinkingBudget = match stringToInt(getEnvOr("GEMINI_THINKING", "")) {
+    Some(n) => n,
+    None => -1
+  };
+  let includeThoughts = getEnvOr("GEMINI_THOUGHTS", "") == "1";
+  let noInterrupt = getEnvOr("GEMINI_NO_INTERRUPT", "") == "1";
+  let interactive = getEnvOr("GEMINI_INTERACTIVE", "1") == "1";
+  let micEnabled = getEnvOr("GEMINI_MIC", "") == "1";
+  -- Auto-enable no-interrupt when mic is on (prevents continuous mic from interrupting model)
+  let noInterrupt = if micEnabled then true else noInterrupt;
+
+  println("=== AILANG Ambient Assistant ===");
+  let modeLabel = if interactive then "Interactive (type follow-ups)" else "Single prompt";
+  println("Mode: " ++ modeLabel ++ " | Only responds when addressed");
+  println("Model: gemini-live-2.5-flash-native-audio");
+  let features = "Proactive"
+    ++ (if toolsEnabled then " | Tools" else "")
+    ++ (if affectiveEnabled then " | Affective*" else "")
+    ++ (if thinkingBudget >= 0 then " | Thinking: " ++ show(thinkingBudget) else "")
+    ++ (if noInterrupt then " | NoInterrupt" else "")
+    ++ (if interactive then " | Interactive" else "")
+    ++ (if micEnabled then " | Mic" else "");
+  println("Voice: " ++ voice ++ " | Features: " ++ features);
+  if affectiveEnabled then
+    println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw Vertex AI WebSocket)")
+  else ();
+  if thinkingBudget >= 0 then
+    println("Note: Thinking requires preview model — set GEMINI_MODEL=gemini-live-2.5-flash-preview-native-audio-09-2025")
+  else ();
+  println("");
+
+  match getDefaultProject() {
+    Ok(projectId) => {
+      match getAccessToken() {
+        Ok(token) => {
+          let region = getEnvOr("GEMINI_REGION", "us-central1");
+          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+
+          let sessionDir = getEnvOr("GEMINI_SESSION_DIR", "/tmp/ailang_ambient");
+          let handlePath = sessionDir ++ "/session.handle";
+
+          let newSession = getEnvOr("GEMINI_NEW_SESSION", "");
+          let handle = if newSession == "1" then ""
+            else if fileExists(handlePath) then readFile(handlePath)
+            else "";
+          if length(handle) > 0 then
+            println("Session: Resuming | Dir: " ++ sessionDir)
+          else println("Session: New | Dir: " ++ sessionDir);
+
+          let args = getArgs();
+          let prompt = if listLength(args) > 0 then join(" ", args)
+            else "Hello AILANG! I'm here. Let me know if you hear anything interesting.";
+          startAmbientSession(token, region, projectId, prompt, voice, handle, sessionDir,
+            toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled)
+        },
+        Err(e) => {
+          println("Error: ADC authentication failed: " ++ e);
+          println("Run: gcloud auth application-default login")
+        }
+      }
+    },
+    Err(e) => println("Error: Project detection failed: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Connection Setup
+-- ============================================================
+
+func geminiLiveUrl(region: string, apiVersion: string) -> string =
+  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform." ++ apiVersion ++ ".LlmBidiService/BidiGenerateContent"
+
+func startAmbientSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool) -> () ! {IO, FS, Stream, Process, Env} {
+  let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
+  let url = geminiLiveUrl(region, apiVersion);
+  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+  let pcmPath = sessionDir ++ "/output.pcm";
+  let wavPath = sessionDir ++ "/output.wav";
+  let turnTextPath = sessionDir ++ "/turn_text.txt";
+  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
+
+  match connect(url, config) {
+    Ok(conn) => {
+      println("[Connected] " ++ url);
+
+      -- Build ambient setup
+      let modelName = getEnvOr("GEMINI_MODEL", "gemini-live-2.5-flash-native-audio");
+      let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
+                    "/publishers/google/models/" ++ modelName;
+      let sessionConfig = if length(handle) > 0 then
+        jo([kv("handle", js(handle))])
+      else jo([]);
+
+      -- Ambient system instruction: passive listener, responds only when addressed
+      let sysInstruction = "You are AILANG, an ambient voice assistant. "
+        ++ "You are always listening but should ONLY respond when directly addressed by name — "
+        ++ "'AILANG', 'hey AILANG', or similar. "
+        ++ "When not addressed, stay completely silent. "
+        ++ "When addressed, respond with full awareness of everything you've heard in the conversation. "
+        ++ "You passively build context from all audio you receive. "
+        ++ "Speak with a British English accent. Keep responses conversational and helpful. "
+        ++ "You have tools available: currentTime, calculate, readFile, listFiles, runCommand, "
+        ++ "summarizeContext, searchNotes, remindLater. "
+        ++ "Use tools proactively when the user asks about time, calculations, files, "
+        ++ "conversation history, notes, or wants to set reminders. "
+        ++ "runCommand supports: git (status/log/diff/branch/show/blame/add/commit), "
+        ++ "gh (pr/issue list/view), ailang (messages/check/docs/prompt/version), "
+        ++ "plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname.";
+
+      -- Generation config
+      let baseGenKvs = [
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ];
+      let thinkingKvs = buildThinkingConfig(thinkingBudget, includeThoughts);
+      let genConfigKvs = concat(baseGenKvs, thinkingKvs);
+
+      -- Feature configs (proactive always ON for ambient)
+      let proactivityKvs = buildProactivityConfig(proactiveEnabled);
+      let affectiveKvs = if affectiveEnabled && apiVersion == "v1alpha"
+        then buildAffectiveConfig(true) else [];
+      let activityKvs = buildActivityHandlingConfig(noInterrupt);
+      -- VAD: when mic is on, configure speech detection so Gemini fires turnComplete
+      let vadKvs = if micEnabled then
+        buildVadConfig("START_SENSITIVITY_LOW", "END_SENSITIVITY_HIGH", 20, 1000)
+      else [];
+      let realtimeKvs = buildRealtimeInputConfig(vadKvs, activityKvs);
+
+      -- Tool declarations (ambient tools = speak tools + extras)
+      let decls = getAmbientToolDeclarations();
+      let funcDecls = map(\t.
+        jo([kv("name", js(t.name)), kv("description", js(t.description)), kv("parameters", t.parameters)])
+      , decls);
+      let toolsKvs = [kv("tools", ja([jo([kv("functionDeclarations", ja(funcDecls))])]))];
+
+      -- Assemble setup
+      let baseSetupKvs = [
+        kv("model", js(modelId)),
+        kv("generationConfig", jo(genConfigKvs)),
+        kv("sessionResumption", sessionConfig),
+        kv("contextWindowCompression", jo([
+          kv("slidingWindow", jo([]))
+        ])),
+        kv("outputAudioTranscription", jo([])),
+        kv("inputAudioTranscription", jo([])),
+        kv("systemInstruction", jo([
+          kv("parts", ja([jo([kv("text", js(sysInstruction))])]))
+        ]))
+      ];
+      let allKvs = concat(concat(concat(concat(baseSetupKvs, toolsKvs), proactivityKvs), affectiveKvs), realtimeKvs);
+      let setupMsg = encode(jo([kv("setup", jo(allKvs))]));
+
+      -- Initialize per-turn temp files
+      let turnDonePath = sessionDir ++ "/turn_done.flag";
+      let setupDonePath = sessionDir ++ "/setup_done.flag";
+      writeFile(pcmPath, "");
+      writeFile(turnTextPath, "");
+      writeFile(turnUsagePath, "");
+      writeFile(turnDonePath, "");
+      writeFile(setupDonePath, "");
+
+      -- Save user prompt to transcript
+      let transcriptPath = sessionDir ++ "/transcript.jsonl";
+      appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(prompt))])) ++ "\n");
+
+      -- Register event handler and run
+      let allowedPath = getEnvOr("HOME", "/tmp");
+      match transmit(conn, setupMsg) {
+        Ok(_) => println("[Setup] Ambient mode (voice: " ++ voice ++ ", proactive: ON, tools: ON)"),
+        Err(e) => println("[Error] Setup failed: " ++ show(e))
+      };
+      println("");
+
+      if interactive then {
+        -- Interactive mode: multiplex WebSocket + stdin (+ optional mic) via selectEvents
+        let wsSrc = sourceOfConn(conn, "gemini", 10);
+        let stdinSrc = asyncReadStdinLines("stdin", 5);
+        -- Mic: spawn sox rec capturing 16kHz mono 16-bit PCM, 150ms chunks (4800 bytes)
+        let sources = if micEnabled then {
+          println("[Mic] Starting capture (rec 16kHz mono 16-bit PCM)...");
+          let micSrc = asyncExecProcess("rec",
+            ["-q", "-r", "16000", "-c", "1", "-b", "16", "-e", "signed-integer", "-t", "raw", "-"],
+            "mic", 8, 4800);
+          [wsSrc, stdinSrc, micSrc]
+        } else [wsSrc, stdinSrc];
+        -- Spawn sox for streaming audio playback (plays PCM as frames arrive)
+        let soxHandle = spawnSoxPlayback();
+        selectEvents(sources, \event.
+          handleSelectEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, pcmPath, wavPath, soxHandle));
+        -- Close sox stdin on session end (signals EOF, sox flushes and exits)
+        closeSoxPlayback(soxHandle)
+      } else {
+        -- Single-prompt mode: use onEvent + runEventLoop (exits after one turn)
+        onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath));
+        runEventLoop(conn)
+      };
+      disconnect(conn);
+
+      -- Post-session
+      reportAudioOutput(pcmPath, wavPath);
+      reportSummary(prompt, turnTextPath, turnUsagePath, transcriptPath);
+      println("")
+    },
+    Err(e) => println("[Error] Connection failed: " ++ show(e))
+  }
+}
+
+-- ============================================================
+-- Event Handling — Interactive (selectEvents: stdin + WebSocket)
+-- ============================================================
+
+-- Handle events from selectEvents multiplexer.
+-- SourceText = user typed a line in the terminal.
+-- SourceBytes("mic", ...) = mic PCM audio chunk.
+-- WebSocket events = responses from Gemini.
+func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, pcmPath: string, wavPath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process} =
+  match event {
+    SourceText(source, line) => handleStdinLine(line, conn, sessionDir, setupDonePath, pcmPath, wavPath),
+    SourceBytes(source, data) => sendMicAudio(data, conn, setupDonePath),
+    Message(msg) => match decode(msg) {
+      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle),
+      Err(_) => true
+    },
+    Binary(data) => match decode(data) {
+      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle),
+      Err(_) => true
+    },
+    Opened(_) => true,
+    Closed(code, reason) => {
+      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      false
+    },
+    StreamError(e) => {
+      println("[Error] " ++ show(e));
+      false
+    },
+    Ping(_) => true,
+    _ => true
+  }
+
+-- Handle a line typed by the user in the terminal.
+-- "exit"/"quit" stops the session. Otherwise send as new turn to Gemini.
+func handleStdinLine(line: string, conn: StreamConn, sessionDir: string, setupDonePath: string, pcmPath: string, wavPath: string) -> bool ! {IO, FS, Stream, Process} {
+  -- Gate all stdin on setup being complete (prevents race with piped input)
+  let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
+  if setupReady != "1" then reportWaiting(line)
+  else if line == "exit" then handleExitCommand(pcmPath, sessionDir)
+  else if line == "quit" then handleExitCommand(pcmPath, sessionDir)
+  else if length(line) > 0 then doSendStdinTurn(line, conn, sessionDir, pcmPath)
+  else true
+}
+
+func handleExitCommand(pcmPath: string, sessionDir: string) -> bool ! {IO, FS, Process} {
+  println("[Exiting] Interactive session ending...");
+  let wavPath2 = sessionDir ++ "/output.wav";
+  reportAudioOutput(pcmPath, wavPath2);
+  false
+}
+
+func reportWaiting(line: string) -> bool ! {IO} {
+  println("[Waiting] Session setup not complete yet — message queued: " ++ line);
+  true
+}
+
+-- Send mic PCM audio to Gemini as realtimeInput.
+-- Gated on setup being complete (same as stdin).
+func sendMicAudio(pcmData: bytes, conn: StreamConn, setupDonePath: string) -> bool ! {IO, FS, Stream} {
+  let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
+  if setupReady != "1" then true
+  else {
+    let b64 = toBase64(pcmData);
+    let audioMsg = encode(jo([
+      kv("realtimeInput", jo([
+        kv("mediaChunks", ja([jo([
+          kv("mimeType", js("audio/pcm;rate=16000")),
+          kv("data", js(b64))
+        ])]))
+      ]))
+    ]));
+    match transmit(conn, audioMsg) {
+      Ok(_) => true,
+      Err(e) => { println("[Mic Error] " ++ show(e)); true }
+    }
+  }
+}
+
+func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath: string) -> bool ! {IO, FS, Stream} {
+  println("");
+  println("[You] " ++ line);
+  -- Reset per-turn files for new response
+  writeFile(pcmPath, "");
+  writeFile(sessionDir ++ "/turn_text.txt", "");
+  writeFile(sessionDir ++ "/turn_usage.txt", "");
+  writeFile(sessionDir ++ "/turn_done.flag", "");
+  -- Save to transcript
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(line))])) ++ "\n");
+  -- Send as new turn to Gemini
+  let textMsg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(line))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
+  match transmit(conn, textMsg) {
+    Ok(_) => true,
+    Err(e) => { println("[Error] Send failed: " ++ show(e)); true }
+  }
+}
+
+-- ============================================================
+-- Event Handling — Single-prompt (onEvent + runEventLoop)
+-- ============================================================
+
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string) -> bool ! {IO, FS, Stream, Process} =
+  match event {
+    Message(msg) => match decode(msg) {
+      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath),
+      Err(_) => true
+    },
+    Binary(data) => match decode(data) {
+      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath),
+      Err(_) => {
+        println("[Audio] " ++ show(length(data)) ++ " bytes (PCM 24kHz)");
+        true
+      }
+    },
+    Opened(_) => true,
+    Closed(code, reason) => {
+      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      false
+    },
+    StreamError(e) => {
+      println("[Error] " ++ show(e));
+      false
+    },
+    Ping(_) => true
+  }
+
+-- ============================================================
+-- JSON Message Dispatch
+-- ============================================================
+
+-- Interactive mode: never disconnect on turnComplete or sessionResumption
+func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process} =
+  match getObject(json, "setupComplete") {
+    Some(_) => {
+      writeFile(setupDonePath, "1");
+      let result = handleSetupComplete(conn, prompt);
+      println("Type messages below or 'exit' to quit.");
+      println("");
+      result
+    },
+    None => match getObject(json, "sessionResumptionUpdate") {
+      Some(sr) => handleSessionResumptionInteractive(sr, sessionDir, soxHandle),
+      None => match getObject(json, "usageMetadata") {
+        Some(um) => handleUsageMetadata(um, sessionDir),
+        None => match getObject(json, "toolCall") {
+          Some(tc) => handleToolCall(tc, conn, sessionDir, allowedPath),
+          None => match getObject(json, "toolCallCancellation") {
+            Some(tcc) => handleToolCallCancellation(tcc),
+            None => match getObject(json, "goAway") {
+              Some(ga) => handleGoAway(ga),
+              None => match getObject(json, "serverContent") {
+                Some(sc) => handleServerContentInteractive(sc, sessionDir, turnDonePath, soxHandle),
+                None => {
+                  println("[MSG] " ++ encode(json));
+                  true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+-- Single-prompt mode: disconnect after turn complete
+func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string) -> bool ! {IO, FS, Stream, Process} =
+  match getObject(json, "setupComplete") {
+    Some(_) => handleSetupComplete(conn, prompt),
+    None => match getObject(json, "sessionResumptionUpdate") {
+      Some(sr) => handleSessionResumption(sr, sessionDir, turnDonePath),
+      None => match getObject(json, "usageMetadata") {
+        Some(um) => handleUsageMetadata(um, sessionDir),
+        None => match getObject(json, "toolCall") {
+          Some(tc) => handleToolCall(tc, conn, sessionDir, allowedPath),
+          None => match getObject(json, "toolCallCancellation") {
+            Some(tcc) => handleToolCallCancellation(tcc),
+            None => match getObject(json, "goAway") {
+              Some(ga) => handleGoAway(ga),
+              None => match getObject(json, "serverContent") {
+                Some(sc) => handleServerContent(sc, sessionDir, turnDonePath),
+                None => {
+                  println("[MSG] " ++ encode(json));
+                  true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+-- ============================================================
+-- Message Handlers
+-- ============================================================
+
+func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {IO, Stream} {
+  println("[Setup Complete] Ambient mode active — listening...");
+  println("[Sending] " ++ prompt);
+  println("");
+  let textMsg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(prompt))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
+  match transmit(conn, textMsg) {
+    Ok(_) => true,
+    Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
+  }
+}
+
+-- Interactive: save handle, then play any accumulated audio (mic mode workaround —
+-- turnComplete may never fire with continuous mic, so we play on session update instead)
+func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} {
+  let handlePath = sessionDir ++ "/session.handle";
+  let pcmPath = sessionDir ++ "/output.pcm";
+  let wavPath = sessionDir ++ "/output.wav";
+  let turnTextPath = sessionDir ++ "/turn_text.txt";
+  match getString(sr, "newHandle") {
+    Some(h) => {
+      writeFile(handlePath, h);
+      match getBool(sr, "resumable") {
+        Some(true) => println("[Session] Handle saved (resumable)"),
+        _ => println("[Session] Handle saved")
+      };
+      -- Play accumulated audio (skipped when streaming — already played in real-time)
+      maybePlayTurnAudio(soxHandle, pcmPath, wavPath);
+      let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
+      if length(said) > 0 then {
+        println("");
+        println("AILANG: " ++ said);
+        writeFile(turnTextPath, "")
+      } else ();
+      writeFile(pcmPath, "");
+      true
+    },
+    None => true
+  }
+}
+
+-- Single-prompt: disconnect after turn done
+func handleSessionResumption(sr: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
+  let handlePath = sessionDir ++ "/session.handle";
+  match getString(sr, "newHandle") {
+    Some(h) => {
+      writeFile(handlePath, h);
+      match getBool(sr, "resumable") {
+        Some(true) => println("[Session] Handle saved (resumable)"),
+        _ => println("[Session] Handle saved")
+      };
+      let turnDone = if fileExists(turnDonePath) then readFile(turnDonePath) else "";
+      if turnDone == "1" then false else true
+    },
+    None => true
+  }
+}
+
+func handleUsageMetadata(um: Json, sessionDir: string) -> bool ! {FS} {
+  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let pTok = getOrElse(getInt(um, "promptTokenCount"), 0);
+  let rTok = getOrElse(getInt(um, "candidatesTokenCount"), 0);
+  let tTok = getOrElse(getInt(um, "totalTokenCount"), 0);
+  let usageStr = show(pTok) ++ " prompt + " ++ show(rTok) ++ " response = " ++ show(tTok) ++ " total";
+  writeFile(turnUsagePath, usageStr);
+  appendFile(transcriptPath, encode(jo([
+    kv("type", js("usage")),
+    kv("prompt_tokens", js(show(pTok))),
+    kv("response_tokens", js(show(rTok))),
+    kv("total_tokens", js(show(tTok))),
+    kv("raw", um)
+  ])) ++ "\n");
+  true
+}
+
+-- Handle toolCall: dispatch to ambient tools (extended set)
+func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process} {
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  match getArray(tc, "functionCalls") {
+    Some(calls) => {
+      match nth(calls, 0) {
+        Some(call) => {
+          let fnName = getOrElse(getString(call, "name"), "");
+          let argsJson = match getObject(call, "args") {
+            Some(a) => encode(a),
+            None => "{}"
+          };
+          println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+          let result = match dispatchAmbientTool(fnName, argsJson, allowedPath, sessionDir) {
+            Ok(r) => r,
+            Err(e) => "Error: " ++ e
+          };
+          let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
+          println("[Tool Result] " ++ truncResult);
+          let responseMsg = buildToolResponseMsg(fnName, truncResult);
+          match transmit(conn, responseMsg) {
+            Ok(_) => (),
+            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+          };
+          appendFile(transcriptPath, encode(jo([
+            kv("type", js("tool_call")),
+            kv("name", js(fnName)),
+            kv("args", js(argsJson)),
+            kv("result", js(truncResult))
+          ])) ++ "\n");
+          true
+        },
+        None => true
+      }
+    },
+    None => true
+  }
+}
+
+func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
+  match getArray(tcc, "ids") {
+    Some(ids) => {
+      println("[Tool Canceled] " ++ show(listLength(ids)) ++ " pending call(s) canceled");
+      true
+    },
+    None => { println("[Tool Canceled]"); true }
+  }
+}
+
+func handleGoAway(ga: Json) -> bool ! {IO} {
+  let timeLeft = getOrElse(getInt(ga, "timeLeft"), 0);
+  println("[GoAway] Server closing in " ++ show(timeLeft) ++ "ms — save handle for reconnection");
+  true
+}
+
+-- Interactive: on turnComplete, play audio inline and show prompt for next input
+func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} {
+  let pcmPath = sessionDir ++ "/output.pcm";
+  let wavPath = sessionDir ++ "/output.wav";
+  let turnTextPath = sessionDir ++ "/turn_text.txt";
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  match getBool(sc, "interrupted") {
+    Some(true) => {
+      println("[Interrupted] Generation canceled — clearing audio");
+      writeFile(pcmPath, "");
+      true
+    },
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => {
+        -- Play accumulated audio (skipped when streaming — already played in real-time)
+        maybePlayTurnAudio(soxHandle, pcmPath, wavPath);
+        -- Show transcription summary
+        let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
+        if length(said) > 0 then {
+          println("");
+          println("AILANG: " ++ said)
+        } else ();
+        println("");
+        println("[Turn Complete] Type next message, speak, or 'exit' to quit");
+        -- Reset for next turn
+        writeFile(pcmPath, "");
+        writeFile(turnDonePath, "");
+        writeFile(turnTextPath, "");
+        true
+      },
+      _ => match getObject(sc, "outputTranscription") {
+        Some(ot) => handleOutputTranscription(ot, transcriptPath, turnTextPath),
+        None => match getObject(sc, "inputTranscription") {
+          Some(it) => handleInputTranscription(it),
+          None => match getObject(sc, "modelTurn") {
+            Some(turn) => handleModelTurnInteractive(turn, pcmPath, turnDonePath, soxHandle),
+            None => true
+          }
+        }
+      }
+    }
+  }
+}
+
+-- Single-prompt: set turnDone flag for disconnect
+func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
+  let pcmPath = sessionDir ++ "/output.pcm";
+  let turnTextPath = sessionDir ++ "/turn_text.txt";
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  match getBool(sc, "interrupted") {
+    Some(true) => {
+      println("[Interrupted] Generation canceled — clearing audio");
+      writeFile(pcmPath, "");
+      true
+    },
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => {
+        println("");
+        println("[Turn Complete]");
+        writeFile(turnDonePath, "1");
+        true
+      },
+      _ => match getObject(sc, "outputTranscription") {
+        Some(ot) => handleOutputTranscription(ot, transcriptPath, turnTextPath),
+        None => match getObject(sc, "inputTranscription") {
+          Some(it) => handleInputTranscription(it),
+          None => match getObject(sc, "modelTurn") {
+            Some(turn) => handleModelTurn(turn, pcmPath, turnDonePath),
+            None => true
+          }
+        }
+      }
+    }
+  }
+}
+
+func handleOutputTranscription(ot: Json, transcriptPath: string, turnTextPath: string) -> bool ! {FS} {
+  match getString(ot, "text") {
+    Some(t) => {
+      appendFile(transcriptPath, encode(jo([kv("role", js("model")), kv("text", js(t))])) ++ "\n");
+      appendFile(turnTextPath, t);
+      true
+    },
+    None => true
+  }
+}
+
+func handleInputTranscription(it: Json) -> bool ! {IO} {
+  match getString(it, "text") {
+    Some(t) => { println("[Heard] " ++ t); true },
+    None => true
+  }
+}
+
+func handleModelTurn(turn: Json, pcmPath: string, turnDonePath: string) -> bool ! {IO, FS} {
+  match getArray(turn, "parts") {
+    Some(parts) => {
+      logThoughtParts(parts);
+      accumulateAudioParts(parts, pcmPath);
+      writeFile(turnDonePath, "1");
+      true
+    },
+    None => true
+  }
+}
+
+func logThoughtParts(parts: List[Json]) -> () ! {IO} {
+  forEachE(\part.
+    match getBool(part, "thought") {
+      Some(true) => match getString(part, "text") {
+        Some(t) => println("[Thinking] " ++ t),
+        None => ()
+      },
+      _ => ()
+    }
+  , parts)
+}
+
+-- ============================================================
+-- Tool Response Builder
+-- ============================================================
+
+func buildToolResponseMsg(fnName: string, result: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("name", js(fnName)),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- ============================================================
+-- Audio Processing
+-- ============================================================
+
+-- Spawn sox play for streaming audio playback (reads raw PCM from stdin, plays in real-time)
+-- Returns Some(handle) if sox is available, None otherwise (falls back to accumulate-then-play)
+func spawnSoxPlayback() -> Option[ProcessHandle] ! {IO, Process} =
+  match exec("which", ["play"]) {
+    Ok(_) => {
+      println("[Streaming] Starting real-time audio playback (play raw 24kHz 16-bit mono)...");
+      Some(spawnProcess("play", ["-q", "-t", "raw", "-r", "24000", "-b", "16", "-c", "1", "-e", "signed-integer", "-"]))
+    },
+    Err(_) => {
+      println("[Streaming] play (sox) not found — audio will play after each turn");
+      None
+    }
+  }
+
+func closeSoxPlayback(soxHandle: Option[ProcessHandle]) -> () ! {IO, Process} =
+  match soxHandle {
+    Some(h) => {
+      closeProcessStdin(h);
+      println("[Streaming] Audio playback closed")
+    },
+    None => ()
+  }
+
+-- Play accumulated PCM audio as WAV inline (used after each turn in interactive mode)
+func playTurnAudio(pcmPath: string, wavPath: string) -> () ! {IO, FS, Process} =
+  match readFileBytes(pcmPath) {
+    Ok(b64pcm) => playFromB64(b64pcm, wavPath),
+    Err(e) => println("[Play] Failed to read PCM file: " ++ e)
+  }
+
+func playFromB64(b64pcm: string, wavPath: string) -> () ! {IO, FS, Process} {
+  let b64len = length(b64pcm);
+  if b64len == 0 then
+    println("[Play] No audio data accumulated yet")
+  else doPlayDecode(b64pcm, b64len, wavPath)
+}
+
+func doPlayDecode(b64pcm: string, b64len: int, wavPath: string) -> () ! {IO, FS, Process} =
+  match fromBase64(b64pcm) {
+    Some(pcmData) => doPlayPcm(pcmData, wavPath),
+    None => println("[Play] base64 decode failed (b64 length: " ++ show(b64len) ++ ")")
+  }
+
+func doPlayPcm(pcmData: bytes, wavPath: string) -> () ! {IO, FS, Process} {
+  let dataSize = bytesLen(pcmData);
+  if dataSize > 0 then doPlayWav(pcmData, dataSize, wavPath)
+  else println("[Play] PCM decoded but 0 bytes")
+}
+
+func doPlayWav(pcmData: bytes, dataSize: int, wavPath: string) -> () ! {IO, FS, Process} {
+  println("[Play] " ++ show(dataSize) ++ " bytes PCM -> WAV (" ++ wavPath ++ ")");
+  let header = wavHeader(dataSize);
+  let wavData = bytesConcat(header, pcmData);
+  writeFileBytes(wavPath, wavData);
+  match exec("afplay", [wavPath]) {
+    Ok(_) => println("[Play] Done"),
+    Err(NotFound(_)) => println("[Play] afplay not found"),
+    Err(e) => println("[Play] afplay error: " ++ show(e))
+  }
+}
+
+func accumulateAudioParts(parts: List[Json], pcmPath: string) -> () ! {IO, FS} {
+  forEachE(\part.
+    match getObject(part, "inlineData") {
+      Some(inlineData) => {
+        match getString(inlineData, "data") {
+          Some(b64) => {
+            match fromBase64(b64) {
+              Some(pcmData) => {
+                appendFileBytes(pcmPath, pcmData);
+                println("[Audio] Frame: " ++ show(bytesLen(pcmData)) ++ " bytes PCM")
+              },
+              None => println("[Audio] Frame: base64 decode failed")
+            }
+          },
+          None => ()
+        }
+      },
+      None => ()
+    }
+  , parts)
+}
+
+-- Accumulate audio AND stream to sox for real-time playback (interactive mode)
+func accumulateAndStreamAudio(parts: List[Json], pcmPath: string, soxHandle: Option[ProcessHandle]) -> () ! {IO, FS, Process} {
+  forEachE(\part.
+    match getObject(part, "inlineData") {
+      Some(inlineData) => {
+        match getString(inlineData, "data") {
+          Some(b64) => {
+            match fromBase64(b64) {
+              Some(pcmData) => {
+                appendFileBytes(pcmPath, pcmData);
+                println("[Audio] Frame: " ++ show(bytesLen(pcmData)) ++ " bytes PCM");
+                streamToSox(soxHandle, pcmData)
+              },
+              None => println("[Audio] Frame: base64 decode failed")
+            }
+          },
+          None => ()
+        }
+      },
+      None => ()
+    }
+  , parts)
+}
+
+func streamToSox(soxHandle: Option[ProcessHandle], pcmData: bytes) -> () ! {Process, IO} =
+  match soxHandle {
+    Some(h) => match writeProcessStdin(h, pcmData) {
+      Ok(_) => (),
+      Err(e) => println("[Stream] Write error: " ++ e)
+    },
+    None => ()
+  }
+
+-- Interactive model turn handler: accumulates + streams audio
+func handleModelTurnInteractive(turn: Json, pcmPath: string, turnDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} =
+  match getArray(turn, "parts") {
+    Some(parts) => {
+      logThoughtParts(parts);
+      accumulateAndStreamAudio(parts, pcmPath, soxHandle);
+      writeFile(turnDonePath, "1");
+      true
+    },
+    None => true
+  }
+
+-- Skip playTurnAudio when streaming is active (audio already played in real-time)
+func maybePlayTurnAudio(soxHandle: Option[ProcessHandle], pcmPath: string, wavPath: string) -> () ! {IO, FS, Process} =
+  match soxHandle {
+    Some(_) => (),
+    None => playTurnAudio(pcmPath, wavPath)
+  }
+
+pure func wavHeader(dataSize: int) -> bytes {
+  let fs = 36 + dataSize;
+  fromInts([
+    82, 73, 70, 70,
+    fs % 256, (fs / 256) % 256, (fs / 65536) % 256, (fs / 16777216) % 256,
+    87, 65, 86, 69,
+    102, 109, 116, 32,
+    16, 0, 0, 0,
+    1, 0,
+    1, 0,
+    192, 93, 0, 0,
+    128, 187, 0, 0,
+    2, 0,
+    16, 0,
+    100, 97, 116, 97,
+    dataSize % 256, (dataSize / 256) % 256, (dataSize / 65536) % 256, (dataSize / 16777216) % 256
+  ])
+}
+
+func reportAudioOutput(pcmPath: string, wavPath: string) -> () ! {IO, FS, Process} {
+  match readFileBytes(pcmPath) {
+    Ok(b64pcm) => {
+      match fromBase64(b64pcm) {
+        Some(pcmData) => {
+          let dataSize = bytesLen(pcmData);
+          if dataSize > 0 then {
+            let header = wavHeader(dataSize);
+            let wavData = bytesConcat(header, pcmData);
+            writeFileBytes(wavPath, wavData);
+            println("");
+            println("[Playing...]");
+            match exec("afplay", [wavPath]) {
+              Ok(_) => (),
+              Err(NotFound(_)) => println("Play manually: afplay " ++ wavPath),
+              Err(_) => println("Play manually: afplay " ++ wavPath)
+            }
+          } else {
+            println("[Audio] No audio data received")
+          }
+        },
+        None => println("[Audio] Failed to decode PCM data")
+      }
+    },
+    Err(e) => println("[Audio] Failed to read PCM file: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Summary
+-- ============================================================
+
+func reportSummary(prompt: string, turnTextPath: string, turnUsagePath: string, transcriptPath: string) -> () ! {IO, FS} {
+  let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
+  let usage = if fileExists(turnUsagePath) then readFile(turnUsagePath) else "";
+  println("");
+  println("--- Ambient Summary ---");
+  println("You:    " ++ prompt);
+  if length(said) > 0 then
+    println("AILANG: " ++ said)
+  else println("AILANG: (stayed silent — not addressed)");
+  if length(usage) > 0 then
+    println("Tokens: " ++ usage)
+  else ();
+  if length(said) > 0 then
+    appendFile(transcriptPath, encode(jo([
+      kv("type", js("summary")),
+      kv("user", js(prompt)),
+      kv("model", js(said)),
+      kv("usage", js(usage))
+    ])) ++ "\n")
+  else ()
+}

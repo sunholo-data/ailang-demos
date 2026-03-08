@@ -1,0 +1,172 @@
+-- Extended tool declarations for the ambient assistant.
+--
+-- Re-exports all speak_tools (currentTime, calculate, readFile, listFiles, runCommand)
+-- and adds ambient-specific tools:
+--   summarizeContext — reads transcript JSONL, returns conversation summary
+--   searchNotes     — searches user notes directory for keyword matches
+--   remindLater     — writes timestamped reminder to session reminders file
+--
+-- All tools are contract-verified with path safety.
+
+module streaming/ambient_assistant/services/ambient_tools
+
+import std/string (length, startsWith, split, join, find, substring)
+import std/list (length as listLength, map, filter, concat, nth, foldl, forEachE)
+import std/result (Ok, Err)
+import std/option (Some, None, getOrElse)
+import std/json (decode, encode, getString, getObject,
+                 jo, kv, js, ja, Json)
+import std/fs (readFile, fileExists, appendFile)
+import std/process (exec, NotFound, Timeout, NotAllowed)
+import std/bytes (toString)
+import std/env (getEnvOr)
+import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool,
+  isPathSafe, containsTraversal)
+
+-- ============================================================
+-- Tool Declarations (speak_tools + ambient extras)
+-- ============================================================
+
+export func getAmbientToolDeclarations() -> [{name: string, description: string, parameters: Json}] {
+  let baseTools = getSpeakToolDeclarations();
+  let ambientTools = [
+    { name: "summarizeContext",
+      description: "Summarize the recent conversation from the session transcript. Returns the last N turns of conversation (default 20).",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("maxTurns", jo([kv("type", js("number")), kv("description", js("Maximum number of turns to include (default 20)"))]))
+        ])),
+        kv("required", ja([]))
+      ]) },
+
+    { name: "searchNotes",
+      description: "Search the user's notes directory for files containing a keyword. Returns matching filenames and snippets.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("keyword", jo([kv("type", js("string")), kv("description", js("Keyword to search for"))]))
+        ])),
+        kv("required", ja([js("keyword")]))
+      ]) },
+
+    { name: "remindLater",
+      description: "Save a reminder for later. The reminder is timestamped and saved to the session's reminders file.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("reminder", jo([kv("type", js("string")), kv("description", js("The reminder text to save"))]))
+        ])),
+        kv("required", ja([js("reminder")]))
+      ]) }
+  ];
+  concat(baseTools, ambientTools)
+}
+
+-- ============================================================
+-- Dispatch (delegates to speak_tools for base tools)
+-- ============================================================
+
+export func dispatchAmbientTool(name: string, argsJson: string, allowedPath: string, sessionDir: string) -> Result[string, string] ! {FS, Process} {
+  match name {
+    "summarizeContext" => handleSummarizeContext(argsJson, sessionDir),
+    "searchNotes" => handleSearchNotes(argsJson, allowedPath),
+    "remindLater" => handleRemindLater(argsJson, sessionDir),
+    _ => dispatchTool(name, argsJson, allowedPath)
+  }
+}
+
+-- ============================================================
+-- Tool: Summarize Context
+-- ============================================================
+-- Reads the transcript JSONL and returns recent conversation turns.
+
+func handleSummarizeContext(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS} {
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  if not fileExists(transcriptPath) then
+    Ok("No conversation history yet.")
+  else {
+    let content = readFile(transcriptPath);
+    let lines = filter(\l. length(l) > 0, split(content, "\n"));
+    let totalLines = listLength(lines);
+    let maxTurns = match decode(argsJson) {
+      Ok(json) => match getString(json, "maxTurns") {
+        Some(_) => 20,
+        None => 20
+      },
+      Err(_) => 20
+    };
+    -- Take the last maxTurns lines
+    let startIdx = if totalLines > maxTurns then totalLines - maxTurns else 0;
+    let recentLines = takeFrom(startIdx, 0, lines);
+    let summary = join("\n", recentLines);
+    Ok("Recent conversation (" ++ show(listLength(recentLines)) ++ " of " ++ show(totalLines) ++ " entries):\n" ++ summary)
+  }
+}
+
+-- Take lines from startIdx to end of list
+pure func takeFrom(startIdx: int, currentIdx: int, lines: [string]) -> [string] =
+  match lines {
+    [] => [],
+    x :: rest => if currentIdx >= startIdx then
+      x :: takeFrom(startIdx, currentIdx + 1, rest)
+    else takeFrom(startIdx, currentIdx + 1, rest)
+  }
+
+-- ============================================================
+-- Tool: Search Notes
+-- ============================================================
+-- Searches a notes directory (default ~/Notes or configurable) for keyword matches.
+
+func handleSearchNotes(argsJson: string, allowedPath: string) -> Result[string, string] ! {FS, Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let keyword = getOrElse(getString(json, "keyword"), "");
+      if length(keyword) == 0 then Err("keyword is required")
+      else {
+        -- Search in common notes locations using grep
+        let notesDir = getEnvOr("AILANG_NOTES_DIR", allowedPath);
+        if not isPathSafe(notesDir, allowedPath) then
+          Err("Notes directory must be within allowed path: " ++ allowedPath)
+        else {
+          match exec("grep", ["-rl", "--include=*.md", "--include=*.txt", "--include=*.org", keyword, notesDir]) {
+            Ok(out) => {
+              let result = toString(out.stdout);
+              if length(result) == 0 then Ok("No notes found matching '" ++ keyword ++ "'")
+              else Ok("Files matching '" ++ keyword ++ "':\n" ++ result)
+            },
+            Err(NotFound(_)) => Err("grep command not found"),
+            Err(_) => Ok("No notes found matching '" ++ keyword ++ "'")
+          }
+        }
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Remind Later
+-- ============================================================
+-- Saves a timestamped reminder to the session's reminders file.
+
+func handleRemindLater(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS, Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let reminder = getOrElse(getString(json, "reminder"), "");
+      if length(reminder) == 0 then Err("reminder text is required")
+      else {
+        let remindersPath = sessionDir ++ "/reminders.txt";
+        -- Get current timestamp
+        let timestamp = match exec("date", ["+%Y-%m-%d %H:%M:%S"]) {
+          Ok(out) => toString(out.stdout),
+          Err(_) => "(unknown time)"
+        };
+        let entry = "[" ++ timestamp ++ "] " ++ reminder ++ "\n";
+        appendFile(remindersPath, entry);
+        Ok("Reminder saved: " ++ reminder)
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}

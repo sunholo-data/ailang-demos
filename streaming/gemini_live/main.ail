@@ -48,13 +48,15 @@ import std/net (httpRequest)
 import streaming/gemini_live/services/gcp_auth (getAccessToken, getDefaultProject)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
-import std/string (length, join, substring)
+import std/string (length, join, substring, stringToInt)
 import std/list (length as listLength, map, forEachE, concat, nth)
 import std/json (encode, decode, getString, getObject, getArray, getBool, getInt,
                  jo, kv, js, ja, jb)
 import std/bytes (fromBase64, length as bytesLen, concat as bytesConcat, fromInts)
 import std/process (exec, NotFound)
 import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool)
+import streaming/gemini_live/services/live_config (buildProactivityConfig, buildAffectiveConfig,
+  buildThinkingConfig, buildRealtimeInputConfig, buildVadConfig, buildActivityHandlingConfig)
 
 -- ============================================================
 -- Entry Point
@@ -63,11 +65,29 @@ import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dis
 export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net @limit=5, Env, Process @limit=15} {
   let voice = getEnvOr("GEMINI_VOICE", "Sulafat");
   let toolsEnabled = getEnvOr("GEMINI_TOOLS", "") == "1";
+  let proactiveEnabled = getEnvOr("GEMINI_PROACTIVE", "") == "1";
+  let affectiveEnabled = getEnvOr("GEMINI_AFFECTIVE", "") == "1";
+  let thinkingBudget = match stringToInt(getEnvOr("GEMINI_THINKING", "")) {
+    Some(n) => n,
+    None => -1
+  };
+  let includeThoughts = getEnvOr("GEMINI_THOUGHTS", "") == "1";
+  let noInterrupt = getEnvOr("GEMINI_NO_INTERRUPT", "") == "1";
   println("=== Gemini Live — Text to Audio ===");
   println("Protocol: WebSocket (bidirectional)");
   println("Model: gemini-live-2.5-flash-native-audio");
   let toolsLabel = if toolsEnabled then " | Tools: ON" else "";
-  println("Voice: " ++ voice ++ " | Input: text | Output: audio (PCM 24kHz)" ++ toolsLabel);
+  let featLabels = (if proactiveEnabled then " | Proactive" else "")
+    ++ (if affectiveEnabled then " | Affective*" else "")
+    ++ (if thinkingBudget >= 0 then " | Thinking: " ++ show(thinkingBudget) else "")
+    ++ (if noInterrupt then " | NoInterrupt" else "");
+  println("Voice: " ++ voice ++ " | Input: text | Output: audio (PCM 24kHz)" ++ toolsLabel ++ featLabels);
+  if affectiveEnabled then
+    println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw WebSocket on Vertex AI)")
+  else ();
+  if thinkingBudget >= 0 then
+    println("Note: Thinking requires preview model — set GEMINI_MODEL=gemini-live-2.5-flash-preview-native-audio-09-2025")
+  else ();
   println("");
 
   match getDefaultProject() {
@@ -94,7 +114,8 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
           let args = getArgs();
           let prompt = if listLength(args) > 0 then join(" ", args)
             else "Hello! Tell me a short joke.";
-          startLiveSession(token, region, projectId, prompt, voice, handle, sessionDir, toolsEnabled)
+          startLiveSession(token, region, projectId, prompt, voice, handle, sessionDir, toolsEnabled,
+            proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt)
         },
         Err(e) => {
           println("Error: ADC authentication failed: " ++ e);
@@ -110,11 +131,16 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
 -- Connection Setup
 -- ============================================================
 
-func geminiLiveUrl(region: string) -> string =
-  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+-- API version: v1 for GA features, v1beta1 for preview (affective, thinking)
+func geminiLiveUrl(region: string, apiVersion: string) -> string =
+  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform." ++ apiVersion ++ ".LlmBidiService/BidiGenerateContent"
 
-func startLiveSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool) -> () ! {IO, FS, Stream, Process, Env} {
-  let url = geminiLiveUrl(region);
+func startLiveSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool) -> () ! {IO, FS, Stream, Process, Env} {
+  -- v1 supports: proactivity, VAD, tools, transcription
+  -- Affective dialog and thinking require Gen AI SDK or AI Studio (not raw WebSocket)
+  -- Override with GEMINI_API_VERSION if needed
+  let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
+  let url = geminiLiveUrl(region, apiVersion);
   let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
   let pcmPath = sessionDir ++ "/output.pcm";
   let wavPath = sessionDir ++ "/output.wav";
@@ -126,27 +152,48 @@ func startLiveSession(token: string, region: string, projectId: string, prompt: 
       println("[Connected] " ++ url);
 
       -- Build setup message
+      let modelName = getEnvOr("GEMINI_MODEL", "gemini-live-2.5-flash-native-audio");
       let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
-                    "/publishers/google/models/gemini-live-2.5-flash-native-audio";
+                    "/publishers/google/models/" ++ modelName;
       let sessionConfig = if length(handle) > 0 then
         jo([kv("handle", js(handle))])
       else jo([]);
       let baseInstruction = "You are a friendly assistant called AILANG. Speak with a British English accent. Keep responses short and conversational.";
-      let sysInstruction = if toolsEnabled then
-        baseInstruction ++ " You have tools available: currentTime, calculate, readFile, listFiles, runCommand. Use them when the user asks about the time, needs calculations, wants to read files, list directories, or run commands. runCommand supports: git (read-only: status, log, diff, branch, show, blame; write: add, commit — no push/reset/force), gh (read-only: pr list/view, issue list/view — no merge/close/create), ailang (messages, check, docs, prompt, version), plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname. Destructive operations are blocked. Call tools proactively when relevant."
-      else baseInstruction;
-      let baseSetupKvs = [
-        kv("model", js(modelId)),
-        kv("generationConfig", jo([
-          kv("responseModalities", ja([js("AUDIO")])),
-          kv("speechConfig", jo([
-            kv("voiceConfig", jo([
-              kv("prebuiltVoiceConfig", jo([
-                kv("voiceName", js(voice))
-              ]))
+      let toolInstruction = if toolsEnabled then
+        " You have tools available: currentTime, calculate, readFile, listFiles, runCommand. Use them when the user asks about the time, needs calculations, wants to read files, list directories, or run commands. runCommand supports: git (read-only: status, log, diff, branch, show, blame; write: add, commit — no push/reset/force), gh (read-only: pr list/view, issue list/view — no merge/close/create), ailang (messages, check, docs, prompt, version), plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname. Destructive operations are blocked. Call tools proactively when relevant."
+      else "";
+      let proactiveInstruction = if proactiveEnabled then
+        " You are in proactive mode. Only respond when the user addresses you directly by name ('AILANG', 'hey AILANG'). Stay silent for conversations not directed at you."
+      else "";
+      let sysInstruction = baseInstruction ++ toolInstruction ++ proactiveInstruction;
+
+      -- Generation config (speech + optional thinking merged together)
+      let baseGenKvs = [
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
             ]))
           ]))
-        ])),
+        ]))
+      ];
+      let thinkingKvs = buildThinkingConfig(thinkingBudget, includeThoughts);
+      let genConfigKvs = concat(baseGenKvs, thinkingKvs);
+
+      -- Feature configs (each produces KVs at the setup level)
+      let proactivityKvs = buildProactivityConfig(proactiveEnabled);
+      -- Affective dialog: not yet in Vertex AI raw WebSocket proto
+      -- Include only when using AI Studio or when GEMINI_API_VERSION=v1alpha
+      let affectiveKvs = if affectiveEnabled && apiVersion == "v1alpha"
+        then buildAffectiveConfig(true) else [];
+      let activityKvs = buildActivityHandlingConfig(noInterrupt);
+      let realtimeKvs = buildRealtimeInputConfig([], activityKvs);
+
+      -- Assemble setup KVs
+      let baseSetupKvs = [
+        kv("model", js(modelId)),
+        kv("generationConfig", jo(genConfigKvs)),
         kv("sessionResumption", sessionConfig),
         kv("contextWindowCompression", jo([
           kv("slidingWindow", jo([]))
@@ -164,7 +211,8 @@ func startLiveSession(token: string, region: string, projectId: string, prompt: 
         , decls);
         [kv("tools", ja([jo([kv("functionDeclarations", ja(funcDecls))])]))]
       } else [];
-      let setupMsg = encode(jo([kv("setup", jo(concat(baseSetupKvs, toolsKvs)))]));
+      let allKvs = concat(concat(concat(concat(baseSetupKvs, toolsKvs), proactivityKvs), affectiveKvs), realtimeKvs);
+      let setupMsg = encode(jo([kv("setup", jo(allKvs))]));
 
       -- Initialize per-turn temp files
       let turnDonePath = sessionDir ++ "/turn_done.flag";
@@ -244,11 +292,17 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
         Some(um) => handleUsageMetadata(um, sessionDir),
         None => match getObject(json, "toolCall") {
           Some(tc) => handleToolCall(tc, conn, sessionDir ++ "/transcript.jsonl", allowedPath),
-          None => match getObject(json, "serverContent") {
-            Some(sc) => handleServerContent(sc, sessionDir, turnDonePath),
-            None => {
-              println("[MSG] " ++ encode(json));
-              true
+          None => match getObject(json, "toolCallCancellation") {
+            Some(tcc) => handleToolCallCancellation(tcc),
+            None => match getObject(json, "goAway") {
+              Some(ga) => handleGoAway(ga),
+              None => match getObject(json, "serverContent") {
+                Some(sc) => handleServerContent(sc, sessionDir, turnDonePath),
+                None => {
+                  println("[MSG] " ++ encode(json));
+                  true
+                }
+              }
             }
           }
         }
@@ -356,25 +410,50 @@ func handleToolCall(tc: Json, conn: StreamConn, transcriptPath: string, allowedP
   }
 }
 
--- Handle serverContent: dispatch turnComplete, transcription, or audio
+-- Handle toolCallCancellation: log canceled tool IDs (triggered by interruption)
+func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
+  match getArray(tcc, "ids") {
+    Some(ids) => {
+      println("[Tool Canceled] " ++ show(listLength(ids)) ++ " pending call(s) canceled");
+      true
+    },
+    None => { println("[Tool Canceled]"); true }
+  }
+}
+
+-- Handle goAway: server signals imminent session close
+func handleGoAway(ga: Json) -> bool ! {IO} {
+  let timeLeft = getOrElse(getInt(ga, "timeLeft"), 0);
+  println("[GoAway] Server closing in " ++ show(timeLeft) ++ "ms — save handle for reconnection");
+  true
+}
+
+-- Handle serverContent: dispatch interrupted, turnComplete, transcription, or audio
 func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
   let pcmPath = sessionDir ++ "/output.pcm";
   let turnTextPath = sessionDir ++ "/turn_text.txt";
   let transcriptPath = sessionDir ++ "/transcript.jsonl";
-  match getBool(sc, "turnComplete") {
+  match getBool(sc, "interrupted") {
     Some(true) => {
-      println("");
-      println("[Turn Complete]");
-      writeFile(turnDonePath, "1");
+      println("[Interrupted] Generation canceled — clearing audio");
+      writeFile(pcmPath, "");
       true
     },
-    _ => match getObject(sc, "outputTranscription") {
-      Some(ot) => handleOutputTranscription(ot, transcriptPath, turnTextPath),
-      None => match getObject(sc, "inputTranscription") {
-        Some(it) => handleInputTranscription(it),
-        None => match getObject(sc, "modelTurn") {
-          Some(turn) => handleModelTurn(turn, pcmPath, turnDonePath),
-          None => true
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => {
+        println("");
+        println("[Turn Complete]");
+        writeFile(turnDonePath, "1");
+        true
+      },
+      _ => match getObject(sc, "outputTranscription") {
+        Some(ot) => handleOutputTranscription(ot, transcriptPath, turnTextPath),
+        None => match getObject(sc, "inputTranscription") {
+          Some(it) => handleInputTranscription(it),
+          None => match getObject(sc, "modelTurn") {
+            Some(turn) => handleModelTurn(turn, pcmPath, turnDonePath),
+            None => true
+          }
         }
       }
     }
@@ -401,16 +480,30 @@ func handleInputTranscription(it: Json) -> bool ! {IO} {
   }
 }
 
--- Accumulate audio PCM from model turn parts
+-- Accumulate audio PCM from model turn parts, and log any thought summaries
 func handleModelTurn(turn: Json, pcmPath: string, turnDonePath: string) -> bool ! {IO, FS} {
   match getArray(turn, "parts") {
     Some(parts) => {
+      logThoughtParts(parts);
       accumulateAudioParts(parts, pcmPath);
       writeFile(turnDonePath, "1");
       true
     },
     None => true
   }
+}
+
+-- Log thought summaries from model turn parts (when thinking is enabled)
+func logThoughtParts(parts: List[Json]) -> () ! {IO} {
+  forEachE(\part.
+    match getBool(part, "thought") {
+      Some(true) => match getString(part, "text") {
+        Some(t) => println("[Thought] " ++ t),
+        None => ()
+      },
+      _ => ()
+    }
+  , parts)
 }
 
 -- ============================================================

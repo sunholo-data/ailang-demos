@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG × Ambient Assistant</title>
+<link rel="icon" type="image/svg+xml" href="../../shared/ailang-logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #050506;
+    --bg-deep: #0a0a0c;
+    --bg-panel: #0f1012;
+    --bg-raised: #151618;
+    --bg-surface: #1b1c1f;
+    --bg-hover: #222326;
+    --border: #1e1f22;
+    --border-warm: #2a2520;
+    --border-active: #3a3530;
+    --text: #c8c4bc;
+    --text-muted: #706b62;
+    --text-dim: #3d3a35;
+    --amber: #d4a046;
+    --amber-bright: #e8b85a;
+    --amber-glow: rgba(212,160,70,0.12);
+    --green: #4ade80;
+    --green-dim: #0d2818;
+    --blue: #60a5fa;
+    --blue-dim: #0f1a2e;
+    --purple: #a78bfa;
+    --red: #ef4444;
+    --red-dim: #2a0f0f;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Outfit', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-void);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px;
+  }
+
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(212,160,70,0.03) 0%, transparent 100%);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .nav-home { display: flex; flex-shrink: 0; }
+  .nav-logo { width: 22px; height: 22px; opacity: 0.7; transition: opacity 0.15s; }
+  .nav-home:hover .nav-logo { opacity: 1; }
+  .logo {
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--amber);
+    letter-spacing: -0.3px;
+  }
+  .logo span { color: var(--text-dim); font-weight: 300; margin: 0 2px; }
+  .badge {
+    font-size: 9px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .badge-ambient {
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid #1a2a4a;
+  }
+  .badge-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .badge-status .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .badge-status.listening .dot {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(74,222,128,0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  .badge-status.speaking .dot {
+    background: var(--amber);
+    box-shadow: 0 0 6px rgba(212,160,70,0.5);
+  }
+  .badge-status.thinking .dot {
+    background: var(--purple);
+    box-shadow: 0 0 6px rgba(167,139,250,0.5);
+    animation: pulse-dot 1s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 4px rgba(74,222,128,0.3); }
+    50% { box-shadow: 0 0 10px rgba(74,222,128,0.6); }
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-sm {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 500;
+    padding: 4px 10px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--border-warm); color: var(--amber); }
+
+  /* ── Config panel ── */
+  .config {
+    background: var(--bg-deep);
+    border-bottom: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+    padding: 0 20px;
+  }
+  .config.open { max-height: 200px; padding: 14px 20px; }
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .config-row:last-child { margin-bottom: 0; }
+  .config-row label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 60px;
+  }
+  .config-input {
+    flex: 1;
+    background: var(--bg-void);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .config-input:focus { border-color: var(--border-warm); }
+  .config-input::placeholder { color: var(--text-dim); }
+  .config-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .config-check input { accent-color: var(--amber); }
+
+  /* ── Main content — two columns ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    overflow: hidden;
+  }
+
+  /* ── Left: waveform + conversation ── */
+  .left-panel {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  .scope-container {
+    padding: 16px 20px 10px;
+  }
+  .scope-frame {
+    position: relative;
+    border: 1px solid var(--border-warm);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-void);
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(212,160,70,0.03);
+    transition: box-shadow 0.5s;
+  }
+  .scope-frame.active {
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.3), 0 0 40px rgba(212,160,70,0.08);
+    border-color: var(--border-active);
+  }
+  .scope-label {
+    position: absolute;
+    top: 6px;
+    left: 10px;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    z-index: 2;
+    user-select: none;
+  }
+  .scope-idle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    z-index: 2;
+    user-select: none;
+    transition: opacity 0.5s;
+  }
+  .scope-idle.hidden { opacity: 0; }
+  #waveform {
+    width: 100%;
+    height: 120px;
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* ── Conversation log ── */
+  .conversation {
+    overflow-y: auto;
+    padding: 10px 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-warm) transparent;
+  }
+  .msg {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    max-width: 85%;
+    animation: msgIn 0.2s ease-out;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg-heard {
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    align-self: flex-start;
+    border: 1px solid var(--border);
+  }
+  .msg-ailang {
+    background: var(--blue-dim);
+    color: var(--blue);
+    align-self: flex-end;
+    border: 1px solid #1a2a4a;
+  }
+  .msg-thought {
+    background: transparent;
+    color: var(--purple);
+    font-style: italic;
+    font-size: 11px;
+    align-self: flex-end;
+    border: 1px solid rgba(167,139,250,0.15);
+    opacity: 0.7;
+  }
+  .msg-tool {
+    background: var(--green-dim);
+    color: var(--green);
+    align-self: flex-end;
+    border: 1px solid #1a3a28;
+    font-size: 11px;
+  }
+  .msg-system {
+    background: transparent;
+    color: var(--text-dim);
+    align-self: center;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .msg-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    opacity: 0.6;
+  }
+
+  /* ── Right: context sidebar ── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-warm) transparent;
+  }
+  .sidebar-section {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+  }
+  .sidebar-title {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: var(--display);
+  }
+  .stat-value.active { color: var(--amber); }
+  .context-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .context-item {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .context-item:last-child { border-bottom: none; }
+  .context-empty {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .tool-tag {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid #1a3a28;
+    margin: 2px 2px 2px 0;
+  }
+
+  /* ── Bottom bar ── */
+  .bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-deep);
+  }
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+  .mic-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-warm);
+    background: var(--bg-raised);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mic-btn:hover { border-color: var(--amber); }
+  .mic-btn.active {
+    background: var(--amber-glow);
+    border-color: var(--amber);
+    box-shadow: 0 0 12px rgba(212,160,70,0.2);
+    animation: mic-pulse 2s ease-in-out infinite;
+  }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(212,160,70,0.15); }
+    50% { box-shadow: 0 0 16px rgba(212,160,70,0.3); }
+  }
+  .text-input {
+    flex: 1;
+    background: var(--bg-void);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+  }
+  .text-input:focus { border-color: var(--border-warm); }
+  .text-input::placeholder { color: var(--text-dim); }
+  .send-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 8px 16px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-warm);
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .send-btn:hover { color: var(--amber); border-color: var(--amber); }
+  .send-btn:disabled { opacity: 0.3; cursor: default; }
+  .bottom-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 16px;
+  }
+  .bottom-stats span { white-space: nowrap; }
+  .bottom-stats .active { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <a class="nav-home" href="../../index.html" title="Back to demos">
+        <img class="nav-logo" src="../../shared/ailang-logo.svg" alt="AILANG">
+      </a>
+      <div class="logo">Ambient<span> / </span>AILANG</div>
+      <span class="badge badge-ambient">Proactive</span>
+      <span class="badge badge-status" id="statusBadge"><span class="dot"></span>Idle</span>
+    </div>
+    <div class="header-right">
+      <button class="btn-sm" onclick="toggleConfig()">Config</button>
+      <button class="btn-sm" onclick="reconnect()">Connect</button>
+    </div>
+  </div>
+
+  <!-- Config panel -->
+  <div class="config" id="configPanel">
+    <div class="config-row">
+      <label>API Key</label>
+      <input class="config-input" id="apiKey" type="password" placeholder="Gemini API key (AI Studio)">
+      <button class="btn-sm" onclick="saveConfig()">Save</button>
+    </div>
+    <div class="config-row">
+      <label>Voice</label>
+      <select class="config-input" id="voiceSelect" style="max-width:200px"></select>
+      <label class="config-check"><input type="checkbox" id="chkAffective"> Affective</label>
+    </div>
+    <div class="config-row">
+      <label>Thinking</label>
+      <input class="config-input" id="thinkingBudget" type="number" value="-1" min="-1" max="8192" style="max-width:100px" title="Token budget (-1 = off)">
+      <label class="config-check"><input type="checkbox" id="chkAutoMic" checked> Auto Mic</label>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <!-- Left: waveform + conversation -->
+    <div class="left-panel">
+      <div class="scope-container">
+        <div class="scope-frame" id="scopeFrame">
+          <span class="scope-label">Ambient Audio</span>
+          <span class="scope-idle" id="scopeIdle">listening...</span>
+          <canvas id="waveform"></canvas>
+        </div>
+      </div>
+      <div class="conversation" id="conversation"></div>
+    </div>
+
+    <!-- Right: context sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Session</div>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="stat-label">Status</span>
+            <span class="stat-value" id="sState">Idle</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Duration</span>
+            <span class="stat-value" id="sDuration">0:00</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Audio Frames</span>
+            <span class="stat-value" id="sFrames">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Audio Size</span>
+            <span class="stat-value" id="sBytes">0 B</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Latency</span>
+            <span class="stat-value" id="sLatency">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Turns</span>
+            <span class="stat-value" id="sTurns">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">Tools Used</div>
+        <div id="toolsList" class="context-list">
+          <div class="context-empty">No tools called yet</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">Conversation</div>
+        <div id="contextList" class="context-list">
+          <div class="context-empty">Waiting for audio...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <div class="input-row">
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">&#x1f3a4;</button>
+      <input type="text" class="text-input" id="textInput"
+             placeholder="Say 'Hey AILANG' or type here..."
+             disabled>
+      <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
+    </div>
+    <div class="bottom-stats">
+      <span id="fState">idle</span>
+      <span id="fFrames">0 frames</span>
+      <span id="fBytes">0 B</span>
+    </div>
+  </div>
+</div>
+
+<script src="../../shared/gemini-live-core.js"></script>
+<script src="../../shared/streaming-ui.js"></script>
+<script>
+// ═══════════════════════════════════════════════════
+// Ambient AILANG Assistant — Browser Demo
+//
+// Two-column layout: conversation log + context sidebar.
+// Uses GeminiLiveCore for WebSocket, audio, waveform.
+// Proactive audio is always enabled — model only responds
+// when addressed directly by name ("AILANG").
+// ═══════════════════════════════════════════════════
+
+const $ = {};
+function cacheDom() {
+  for (const id of [
+    'statusBadge', 'configPanel', 'apiKey', 'voiceSelect',
+    'conversation', 'textInput', 'sendBtn', 'micBtn',
+    'scopeFrame', 'scopeIdle',
+    'fState', 'fFrames', 'fBytes',
+    'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sTurns',
+    'toolsList', 'contextList',
+    'chkAffective', 'chkAutoMic', 'thinkingBudget',
+  ]) {
+    $[id] = document.getElementById(id);
+  }
+}
+
+// ── Session state ──
+let turnCount = 0;
+let toolsUsed = new Map();
+let sessionStartTime = null;
+let sessionTimer = null;
+
+// ── Conversation messages ──
+function addMessage(type, text, label) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-' + type;
+  let html = '';
+  if (label) html += '<div class="msg-label">' + label + '</div>';
+  html += escHtml(text);
+  el.innerHTML = html;
+  $.conversation.appendChild(el);
+  $.conversation.scrollTop = $.conversation.scrollHeight;
+}
+
+function addSystemMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-system';
+  el.textContent = text;
+  $.conversation.appendChild(el);
+  $.conversation.scrollTop = $.conversation.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Sidebar updates ──
+function updateSessionDuration() {
+  if (!sessionStartTime) return;
+  const secs = Math.floor((Date.now() - sessionStartTime) / 1000);
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  $.sDuration.textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+function recordToolUse(name) {
+  toolsUsed.set(name, (toolsUsed.get(name) || 0) + 1);
+  let html = '';
+  for (const [tool, count] of toolsUsed) {
+    html += '<span class="tool-tag">' + escHtml(tool) + ' (' + count + ')</span>';
+  }
+  $.toolsList.innerHTML = html;
+}
+
+function addContextEntry(text) {
+  const firstEmpty = $.contextList.querySelector('.context-empty');
+  if (firstEmpty) firstEmpty.remove();
+  const el = document.createElement('div');
+  el.className = 'context-item';
+  el.textContent = text;
+  $.contextList.appendChild(el);
+  // Keep only last 20 entries
+  while ($.contextList.children.length > 20) {
+    $.contextList.removeChild($.contextList.firstChild);
+  }
+}
+
+function setStatus(status) {
+  $.sState.textContent = status;
+  $.sState.classList.toggle('active', status !== 'Idle');
+  $.fState.textContent = status.toLowerCase();
+  // Update badge
+  $.statusBadge.className = 'badge badge-status';
+  $.statusBadge.querySelector('.dot');
+  const label = $.statusBadge.childNodes[$.statusBadge.childNodes.length - 1];
+  if (status === 'Listening') {
+    $.statusBadge.classList.add('listening');
+    label.textContent = 'Listening';
+  } else if (status === 'Speaking') {
+    $.statusBadge.classList.add('speaking');
+    label.textContent = 'Speaking';
+  } else if (status === 'Thinking') {
+    $.statusBadge.classList.add('thinking');
+    label.textContent = 'Thinking';
+  } else {
+    label.textContent = status;
+  }
+}
+
+// ── Stats ──
+function updateStatsUI(stats) {
+  $.sFrames.textContent = stats.frames;
+  $.sFrames.classList.toggle('active', stats.frames > 0);
+  $.sBytes.textContent = GeminiLiveCore.fmtBytes(stats.bytes);
+  $.sBytes.classList.toggle('active', stats.bytes > 0);
+  $.fFrames.textContent = stats.frames + ' frames';
+  $.fFrames.classList.toggle('active', stats.frames > 0);
+  $.fBytes.textContent = GeminiLiveCore.fmtBytes(stats.bytes);
+  $.fBytes.classList.toggle('active', stats.bytes > 0);
+  if (stats.firstLatency) {
+    $.sLatency.textContent = stats.firstLatency + 'ms';
+    $.sLatency.classList.add('active');
+  }
+  $.scopeFrame.classList.add('active');
+  $.scopeIdle.classList.add('hidden');
+}
+
+// ── GeminiLiveCore ──
+const WASM_MODULE = 'streaming/ambient_assistant/ambient_browser';
+const core = new GeminiLiveCore({
+  modules: [{
+    name: WASM_MODULE,
+    path: '../../ailang/streaming/ambient_assistant/ambient_browser.ail',
+  }],
+  playbackRate: 48000,
+  sourceRate: 24000,
+  micRate: 16000,
+  fftSize: 2048,
+  canvasHeight: 120,
+  localStorageKeys: { apiKey: 'ambient-api-key', voice: 'ambient-voice' },
+  onEvent: handleAILANGEvent,
+  onLog: (type, html) => {},
+  onStatsUpdate: updateStatsUI,
+  onConnectionChange: (state) => {},
+  onFallbackActivated: () => {},
+  onFallbackDeactivated: () => {},
+  onWasmReady: () => { populateVoices(); },
+  onWasmError: () => {},
+});
+
+// ── Ambient system instruction ──
+const AMBIENT_INSTRUCTION = 'You are AILANG, an ambient voice assistant. ' +
+  'You are always listening but should ONLY respond when directly addressed by name — ' +
+  "'AILANG', 'hey AILANG', or similar. " +
+  'When not addressed, stay completely silent. ' +
+  'When addressed, respond with full awareness of everything you\'ve heard in the conversation. ' +
+  'Speak with a British English accent. Keep responses conversational and helpful.';
+
+// ── Event handler ──
+function handleAILANGEvent(event) {
+  switch (event.type) {
+    case 'log':
+      addSystemMessage(event.text || '');
+      break;
+    case 'setup':
+      core.sessionReady = true;
+      setStatus('Listening');
+      addSystemMessage('Ambient mode active — say "Hey AILANG" to get a response');
+      $.textInput.disabled = false;
+      $.sendBtn.disabled = false;
+      // Auto-start mic
+      if ($.chkAutoMic?.checked && !core.isRecording) {
+        setTimeout(() => toggleMic(), 500);
+      }
+      break;
+    case 'turnComplete':
+      turnCount++;
+      $.sTurns.textContent = turnCount;
+      $.sTurns.classList.add('active');
+      core.sessionReady = true;
+      setStatus('Listening');
+      break;
+    case 'inputTranscript':
+      if (event.text) {
+        addMessage('heard', event.text, 'Heard');
+        addContextEntry('Heard: ' + event.text.substring(0, 60));
+      }
+      break;
+    case 'outputTranscript':
+      if (event.text) {
+        addMessage('ailang', event.text, 'AILANG');
+        addContextEntry('AILANG: ' + event.text.substring(0, 60));
+      }
+      break;
+    case 'modelTurn':
+      if (event.parts && Array.isArray(event.parts)) {
+        setStatus('Speaking');
+        event.parts.forEach(part => {
+          if (part.thought && part.text) {
+            addMessage('thought', part.text, 'Thinking');
+          }
+          if (part.inlineData && part.inlineData.data) {
+            core.handleAudioFrame(part.inlineData.data);
+          }
+        });
+      }
+      break;
+    case 'toolCall':
+      if (event.calls && Array.isArray(event.calls)) {
+        setStatus('Thinking');
+        event.calls.forEach(call => {
+          const name = call.name || 'unknown';
+          const args = call.args ? JSON.stringify(call.args) : '{}';
+          addMessage('tool', name + '(' + args.substring(0, 80) + ')', 'Tool Call');
+          recordToolUse(name);
+        });
+      }
+      break;
+    case 'interrupted':
+      core.clearAudioQueue();
+      addSystemMessage('Interrupted — generation canceled');
+      setStatus('Listening');
+      break;
+    case 'toolCallCancellation':
+      addSystemMessage('Tool calls canceled');
+      break;
+    case 'goAway':
+      addSystemMessage('Server closing soon — reconnect for continuity');
+      break;
+    case 'sessionResumption':
+      addSystemMessage('Session handle saved');
+      break;
+    case 'opened':
+      setStatus('Connected');
+      addSystemMessage('WebSocket connected');
+      break;
+    case 'closed':
+      core.sessionReady = false;
+      setStatus('Idle');
+      addSystemMessage('Session ended');
+      $.textInput.disabled = true;
+      $.sendBtn.disabled = true;
+      core.releaseConnectLock();
+      if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+      break;
+    case 'error':
+      addSystemMessage('Error: ' + (event.text || ''));
+      break;
+  }
+}
+
+// ── Voice catalog ──
+function populateVoices() {
+  if (!core.wasmReady) return;
+  try {
+    const catalogJson = core.wasmEngine.call(WASM_MODULE, 'voiceCatalog');
+    const voices = JSON.parse(catalogJson.result || '[]');
+    $.voiceSelect.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.desc + ')';
+      $.voiceSelect.appendChild(opt);
+    });
+    const saved = localStorage.getItem('ambient-voice');
+    if (saved) $.voiceSelect.value = saved;
+    if (!$.voiceSelect.value) $.voiceSelect.value = 'Sulafat';
+  } catch (e) {
+    // Fallback
+    $.voiceSelect.innerHTML = '<option value="Sulafat">Sulafat (Warm)</option>';
+  }
+}
+
+// ── Config ──
+let ui;
+function initUI() {
+  ui = new StreamingUI({
+    elements: {
+      configPanel: $.configPanel,
+      apiKeyInput: $.apiKey,
+      voiceSelect: $.voiceSelect,
+      textInput: $.textInput,
+      sendButton: $.sendBtn,
+      statusBadge: $.statusBadge,
+    },
+    localStorage: { apiKey: 'ambient-api-key', voice: 'ambient-voice' },
+    agentName: 'AILANG Ambient',
+  });
+}
+function toggleConfig() { ui.toggleConfig(); }
+function saveConfig() { ui.saveConfig(); }
+
+// ── Connect ──
+async function reconnect() {
+  if (!core.acquireConnectLock()) { addSystemMessage('Connection already in progress'); return; }
+
+  const key = ui.getApiKey();
+  if (!key) { core.releaseConnectLock(); toggleConfig(); addSystemMessage('Enter your Gemini API key'); return; }
+  ui.saveConfig();
+
+  if (!core.wasmReady) {
+    core.releaseConnectLock();
+    addSystemMessage('AILANG WASM not loaded');
+    return;
+  }
+
+  // Reset state
+  core.sessionReady = false;
+  core.resetStats();
+  turnCount = 0;
+  toolsUsed.clear();
+  $.sTurns.textContent = '0';
+  $.sLatency.textContent = '--';
+  $.sLatency.classList.remove('active');
+  $.toolsList.innerHTML = '<div class="context-empty">No tools called yet</div>';
+  $.contextList.innerHTML = '<div class="context-empty">Waiting for audio...</div>';
+
+  setStatus('Connecting');
+  $.textInput.disabled = true;
+  $.sendBtn.disabled = true;
+
+  await core.initAudio();
+
+  sessionStartTime = Date.now();
+  sessionTimer = setInterval(updateSessionDuration, 1000);
+
+  const voice = $.voiceSelect.value;
+  localStorage.setItem('ambient-voice', voice);
+
+  addSystemMessage('Starting ambient session (voice: ' + voice + ', proactive: ON)...');
+
+  try {
+    // Start ambient session — no initial prompt, mic-only
+    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startAmbientSession', key, voice);
+    if (!result.success) {
+      addSystemMessage('Session error: ' + (result.error || 'unknown'));
+    } else {
+      addSystemMessage('Session ended: ' + (result.result || 'complete'));
+    }
+  } catch (e) {
+    addSystemMessage('Session failed: ' + e.message);
+  }
+
+  core.sessionReady = false;
+  setStatus('Idle');
+  core.releaseConnectLock();
+  $.textInput.disabled = true;
+  $.sendBtn.disabled = true;
+  if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+}
+
+// ── Send text ──
+async function sendText() {
+  const text = $.textInput.value.trim();
+  if (!text || !core.sessionReady) return;
+
+  const activeConn = core.getActiveConnection();
+  if (!activeConn) { addSystemMessage('No active connection'); return; }
+
+  await core.initAudio();
+  core.resetStats();
+  core.markPromptSent();
+  core.clearAudioQueue();
+
+  addMessage('heard', text, 'You');
+
+  const msgJson = core.callAILANG('buildTextMessage', text);
+  activeConn.ws.send(msgJson || JSON.stringify({
+    clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true }
+  }));
+
+  $.textInput.value = '';
+  setStatus('Thinking');
+  $.scopeIdle.textContent = 'processing...';
+  $.scopeIdle.classList.remove('hidden');
+  setTimeout(() => $.scopeIdle.classList.add('hidden'), 1500);
+}
+
+// ── Mic ──
+async function toggleMic() {
+  if (core.isRecording) {
+    await core.toggleMic(() => {});
+    $.micBtn.classList.remove('active');
+    return;
+  }
+  const started = await core.toggleMic((b64) => {
+    const activeConn = core.getActiveConnection();
+    if (activeConn && core.sessionReady) {
+      const chunkJson = core.callAILANG('buildAudioChunk', b64);
+      activeConn.ws.send(chunkJson || JSON.stringify({
+        realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
+      }));
+    }
+  });
+  if (started) {
+    $.micBtn.classList.add('active');
+    if (!core.getActiveConnection()) reconnect();
+  }
+}
+
+// ── Init ──
+window.addEventListener('load', async () => {
+  cacheDom();
+  initUI();
+
+  $.textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  });
+
+  ui.loadConfig({ 'ambient_key': 'ambient-api-key' });
+  core.initWaveform(document.getElementById('waveform'));
+
+  addSystemMessage('AILANG Ambient Assistant — loading WASM...');
+  await core.initWASM();
+  if (core.wasmReady) {
+    addSystemMessage('AILANG WASM loaded — ambient mode ready');
+    addSystemMessage('Click Connect to start listening');
+  } else {
+    addSystemMessage('WASM failed to load — check console');
+  }
+});
+</script>
+</body>
+</html>

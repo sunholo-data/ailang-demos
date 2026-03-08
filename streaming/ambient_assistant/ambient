@@ -1,39 +1,33 @@
 #!/usr/bin/env bash
-# speak — AILANG talks back
+# ambient — AILANG ambient assistant (always-listening, proactive mode)
 #
 # Usage:
-#   speak "Tell me a joke"
-#   speak "What did I just ask you?"       # resumes session (remembers context)
-#   speak --voice Charon "What is AILANG?"
-#   speak -v Orus "Explain algebraic effects"
-#   speak --new "Start fresh"              # ignores previous session
-#   speak --session work "Project update"  # named session
-#   speak --session global "Hello"         # global session
-#   speak --tools "What time is it?"       # with tool calling
-#   speak -t "Calculate 500 times 300"     # shorthand for --tools
-#   speak -t "What's the git status?"      # git read-only ops
-#   speak -t "Any open PRs?"              # gh read-only ops
-#   speak -t "Check my ailang messages"   # ailang messaging
-#   speak --proactive "Hello"              # only respond when addressed
-#   speak --affective "I'm excited!"       # emotion-aware response tone
-#   speak --thinking 1024 "Hard problem"   # enable reasoning with budget
-#   speak --thoughts "Explain this"        # include thought summaries
-#   speak --no-interrupt "Long answer"     # don't interrupt on barge-in
-#   speak --list                           # list active sessions
-#   speak                                  # uses default prompt
+#   ambient "Hey AILANG, what time is it?"     # interactive: type follow-ups
+#   ambient "Summarize our conversation"       # resumes previous session
+#   ambient --voice Charon "What happened?"    # interactive with voice choice
+#   ambient --no-interactive "Quick query"     # single-prompt mode
+#   ambient --new "Start fresh"                # new session (interactive)
+#   ambient --session work "Project update"    # named session
+#   ambient --list                             # list sessions
+#   ambient --thinking 2048 "Hard problem"     # with thinking budget
+#   ambient --mic "Start listening"            # with microphone capture (needs sox)
+#   ambient                                    # uses default prompt
+#
+# All ambient features are pre-enabled by default:
+#   - Interactive mode (type follow-up messages, type 'exit' to quit)
+#   - Proactive audio (model decides when to respond)
+#   - Tool calling (speak tools + summarizeContext, searchNotes, remindLater)
+#   - Session resumption (remembers context across invocations)
+#   - Context window compression (for long sessions)
+#   - Input/output transcription
 #
 # Sessions: scoped like ailang message inboxes
 #   Default:  project-based (git repo name or cwd basename)
 #   --session NAME:  named session
 #   --session global:  global session
-#   Storage: ~/.ailang/speak/sessions/<scope>/
+#   Storage: ~/.ailang/ambient/sessions/<scope>/
 #
-# Install: ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak
-#
-# Voices: Sulafat (default, Warm), Charon (Informative), Orus (Firm),
-#   Puck (Upbeat), Kore (Firm), Fenrir (Excitable), Leda (Youthful),
-#   Aoede (Breezy), Gacrux (Mature), Achird (Friendly), Achernar (Soft)
-#   ... and 19 more. See main.ail header for full list.
+# Install: ln -s $(pwd)/streaming/ambient_assistant/ambient ~/.local/bin/ambient
 
 set -euo pipefail
 
@@ -42,12 +36,12 @@ VOICE="${GEMINI_VOICE:-Sulafat}"
 NEW_SESSION=false
 SESSION_NAME=""
 LIST_SESSIONS=false
-ENABLE_TOOLS=false
-ENABLE_PROACTIVE=false
-ENABLE_AFFECTIVE=false
 THINKING_BUDGET=""
 ENABLE_THOUGHTS=false
 ENABLE_NO_INTERRUPT=false
+ENABLE_AFFECTIVE=false
+ENABLE_INTERACTIVE=true
+ENABLE_MIC=false
 PROMPT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -68,14 +62,6 @@ while [[ $# -gt 0 ]]; do
       LIST_SESSIONS=true
       shift
       ;;
-    --tools|-t)
-      ENABLE_TOOLS=true
-      shift
-      ;;
-    --proactive|-p)
-      ENABLE_PROACTIVE=true
-      shift
-      ;;
     --affective|-a)
       ENABLE_AFFECTIVE=true
       shift
@@ -92,6 +78,14 @@ while [[ $# -gt 0 ]]; do
       ENABLE_NO_INTERRUPT=true
       shift
       ;;
+    --no-interactive)
+      ENABLE_INTERACTIVE=false
+      shift
+      ;;
+    --mic|-m)
+      ENABLE_MIC=true
+      shift
+      ;;
     *)
       PROMPT_ARGS+=("$1")
       shift
@@ -99,7 +93,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve symlinks to find the real script location (like docparse)
+# Resolve symlinks to find the real script location
 SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SOURCE" ]; do
   DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
@@ -110,17 +104,11 @@ SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # --- Session scope resolution ---
-# Same scoping model as ailang message inboxes:
-#   default = project (git repo name or cwd basename)
-#   --session NAME = named session
-#   --session global = global session
-
-SESSIONS_ROOT="$HOME/.ailang/speak/sessions"
+SESSIONS_ROOT="$HOME/.ailang/ambient/sessions"
 
 if [ -n "$SESSION_NAME" ]; then
   SESSION_SCOPE="$SESSION_NAME"
 else
-  # Auto-detect project name from git repo or cwd
   if git rev-parse --show-toplevel &>/dev/null; then
     SESSION_SCOPE="$(basename "$(git rev-parse --show-toplevel)")"
   else
@@ -132,7 +120,7 @@ SESSION_DIR="$SESSIONS_ROOT/$SESSION_SCOPE"
 
 # --- List sessions ---
 if $LIST_SESSIONS; then
-  echo "Sessions (~/.ailang/speak/sessions/):"
+  echo "Ambient Sessions (~/.ailang/ambient/sessions/):"
   echo ""
   if [ -d "$SESSIONS_ROOT" ]; then
     for dir in "$SESSIONS_ROOT"/*/; do
@@ -140,7 +128,6 @@ if $LIST_SESSIONS; then
       name="$(basename "$dir")"
       handle_age=""
       if [ -f "$dir/session.handle" ]; then
-        # Show age of handle
         if stat -f %m "$dir/session.handle" &>/dev/null; then
           age_secs=$(( $(date +%s) - $(stat -f %m "$dir/session.handle") ))
           if [ "$age_secs" -lt 60 ]; then
@@ -156,11 +143,16 @@ if $LIST_SESSIONS; then
       if [ -f "$dir/transcript.jsonl" ]; then
         transcript_lines=$(wc -l < "$dir/transcript.jsonl" | tr -d ' ')
       fi
+      reminders=0
+      if [ -f "$dir/reminders.txt" ]; then
+        reminders=$(wc -l < "$dir/reminders.txt" | tr -d ' ')
+      fi
       marker="  "
       [ "$name" = "$SESSION_SCOPE" ] && marker="▸ "
       echo "${marker}${name}"
       [ -n "$handle_age" ] && echo "    handle: $handle_age"
       [ "$transcript_lines" -gt 0 ] && echo "    turns: $transcript_lines"
+      [ "$reminders" -gt 0 ] && echo "    reminders: $reminders"
     done
   else
     echo "  (no sessions yet)"
@@ -173,26 +165,27 @@ fi
 # Create session directory
 mkdir -p "$SESSION_DIR"
 
-# Force ADC (unset API key so AILANG doesn't use it instead of ADC)
+# Force ADC
 export GOOGLE_API_KEY=""
 export GEMINI_VOICE="$VOICE"
 export GEMINI_SESSION_DIR="$SESSION_DIR"
 
-# Session resumption: --new starts a fresh session
+# Ambient defaults: proactive + tools + interactive always ON
+export GEMINI_PROACTIVE=1
+export GEMINI_TOOLS=1
+if $ENABLE_INTERACTIVE; then
+  export GEMINI_INTERACTIVE=1
+else
+  export GEMINI_INTERACTIVE=0
+fi
+
+# Session resumption
 if $NEW_SESSION; then
   rm -f "$SESSION_DIR/session.handle"
   export GEMINI_NEW_SESSION=1
 fi
 
-# Tool calling: --tools enables function calling
-if $ENABLE_TOOLS; then
-  export GEMINI_TOOLS=1
-fi
-
-# Gemini Live v2 features
-if $ENABLE_PROACTIVE; then
-  export GEMINI_PROACTIVE=1
-fi
+# Optional features
 if $ENABLE_AFFECTIVE; then
   export GEMINI_AFFECTIVE=1
 fi
@@ -205,27 +198,29 @@ fi
 if $ENABLE_NO_INTERRUPT; then
   export GEMINI_NO_INTERRUPT=1
 fi
+if $ENABLE_MIC; then
+  export GEMINI_MIC=1
+fi
 
-# Run from repo root (AILANG needs relative module paths)
-# Audio playback is handled natively by AILANG via std/process (exec afplay)
+# Run from repo root
 cd "$REPO_ROOT"
 
 RUN_CMD=(ailang run --entry main --caps IO,FS,Stream,Net,Env,Process
-  streaming/gemini_live/main.ail "${PROMPT_ARGS[@]}")
+  streaming/ambient_assistant/main.ail "${PROMPT_ARGS[@]}")
 
 # First attempt — may fail if session.handle is stale
 if "${RUN_CMD[@]}"; then
   exit 0
 fi
 
-# If there's a session handle, the failure was likely a stale session — retry fresh
+# Stale session — retry fresh
 if [ -f "$SESSION_DIR/session.handle" ]; then
   echo ""
-  echo "[speak] Session expired — starting fresh session for '$SESSION_SCOPE'"
+  echo "[ambient] Session expired — starting fresh session for '$SESSION_SCOPE'"
   rm -f "$SESSION_DIR/session.handle"
   export GEMINI_NEW_SESSION=1
   exec "${RUN_CMD[@]}"
 fi
 
-# No handle to clear — genuine failure
+# Genuine failure
 exit 1
