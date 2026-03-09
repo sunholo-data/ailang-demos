@@ -1617,28 +1617,22 @@ async function toggleScreenShare() {
 }
 
 // ── Clipboard grant ──
-// Clipboard API requires a user gesture. This button reads the clipboard
-// once (which grants the permission) and caches the result so that when
-// the model calls readClipboard it has the latest content.
+// Clipboard API requires a user gesture. Click the button to read once.
+// Each click refreshes the cached content. No polling.
 let lastClipboardText = null;
 
 async function grantClipboard() {
   try {
     lastClipboardText = await navigator.clipboard.readText();
     $.clipBtn.classList.add('active');
-    addSystemMessage('Clipboard access granted — readClipboard tool is ready');
-    // Keep refreshing clipboard every 5s while active
-    if (!clipboardInterval) {
-      clipboardInterval = setInterval(async () => {
-        try { lastClipboardText = await navigator.clipboard.readText(); }
-        catch (e) { /* may fail if tab loses focus */ }
-      }, 5000);
-    }
+    const preview = lastClipboardText.length > 60
+      ? lastClipboardText.substring(0, 60) + '...'
+      : lastClipboardText;
+    addSystemMessage('Clipboard read: "' + preview + '"');
   } catch (e) {
     addSystemMessage('Clipboard access denied: ' + e.message);
   }
 }
-let clipboardInterval = null;
 
 // ── Init ──
 window.addEventListener('load', async () => {
