@@ -81,49 +81,61 @@ function saveFormsConfig(config) {
   writeFileSync(FORMS_JSON_PATH, JSON.stringify(config, null, 2), 'utf-8');
 }
 
+// Master spreadsheet shared with the SA (Editor). Each site gets its own tab.
+// Set FORM_SHEET_ID env var or configure in portal Settings.
+const FORM_SHEET_ID = process.env.FORM_SHEET_ID || '';
+
 async function getOrCreateSheet(siteSlug) {
   const auth = new google.auth.GoogleAuth({
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file',
-    ],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
+  // Resolve spreadsheet ID: env var > forms.json master > per-site legacy
   const config = loadFormsConfig();
-  if (config[siteSlug]) {
-    return { spreadsheetId: config[siteSlug], auth };
+  const spreadsheetId = FORM_SHEET_ID || config._master || config[siteSlug];
+  if (!spreadsheetId) {
+    throw new Error(
+      'No form spreadsheet configured. Set FORM_SHEET_ID env var or configure in Settings. ' +
+      'Create a Google Sheet and share it (Editor) with: ' +
+      'ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com'
+    );
   }
 
+  // Ensure a tab exists for this site
   const sheets = google.sheets({ version: 'v4', auth });
-  const response = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: { title: `Form Submissions - ${siteSlug}` },
-      sheets: [{
-        properties: { title: 'Submissions' },
-        data: [{
-          startRow: 0, startColumn: 0,
-          rowData: [{
-            values: ['Timestamp', 'Page', 'Name', 'Email', 'Phone', 'Subject', 'Message', 'Other Fields']
-              .map(v => ({ userEnteredValue: { stringValue: v } })),
+  const tabName = siteSlug.substring(0, 100); // Sheet tab names max 100 chars
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' });
+    const existing = meta.data.sheets.map(s => s.properties.title);
+    if (!existing.includes(tabName)) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            addSheet: { properties: { title: tabName } },
           }],
-        }],
-      }],
-    },
-  });
+        },
+      });
+      // Add header row to new tab
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${tabName}'!A1:H1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [['Timestamp', 'Page', 'Name', 'Email', 'Phone', 'Subject', 'Message', 'Other Fields']],
+        },
+      });
+      console.log(`[sidecar] Created tab "${tabName}" in spreadsheet ${spreadsheetId}`);
+    }
+  } catch (err) {
+    console.error(`[sidecar] Failed to ensure tab for ${siteSlug}:`, err.message);
+    // Continue anyway — append will fail with a clear error if the tab is missing
+  }
 
-  const spreadsheetId = response.data.spreadsheetId;
-  console.log(`[sidecar] Created spreadsheet for ${siteSlug}: ${spreadsheetId}`);
-
-  config[siteSlug] = spreadsheetId;
-  saveFormsConfig(config);
-
-  // Commit forms.json to GitHub (best-effort)
-  commitToRepo(['forms.json'], `Add form sheet for ${siteSlug}`).catch(() => {});
-
-  return { spreadsheetId, auth };
+  return { spreadsheetId, tabName, auth };
 }
 
-async function appendFormRow(spreadsheetId, auth, page, fields, submittedAt) {
+async function appendFormRow(spreadsheetId, tabName, auth, page, fields, submittedAt) {
   const sheets = google.sheets({ version: 'v4', auth });
   const known = ['name', 'email', 'phone', 'subject', 'message'];
   const knownValues = known.map(k => fields[k] || '');
@@ -135,7 +147,7 @@ async function appendFormRow(spreadsheetId, auth, page, fields, submittedAt) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Submissions!A:H',
+    range: `'${tabName}'!A:H`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[submittedAt || new Date().toISOString(), page, ...knownValues, otherJson]] },
   });
@@ -647,8 +659,8 @@ app.post('/api/form-submit', async (req, res) => {
     }
 
     // Store in Google Sheets
-    const { spreadsheetId, auth } = await getOrCreateSheet(site);
-    await appendFormRow(spreadsheetId, auth, page || 'unknown', fields, submittedAt);
+    const { spreadsheetId, tabName, auth } = await getOrCreateSheet(site);
+    await appendFormRow(spreadsheetId, tabName, auth, page || 'unknown', fields, submittedAt);
     console.log(`[sidecar] Form submission stored for ${site}/${page}`);
 
     // Webhook (async, don't block response)
@@ -656,8 +668,14 @@ app.post('/api/form-submit', async (req, res) => {
 
     res.json({ ok: true, message: 'Thank you! Your message has been received.' });
   } catch (err) {
-    console.error('[sidecar] Form submission error:', err);
-    res.status(500).json({ ok: false, message: 'Something went wrong. Please try again later.' });
+    console.error('[sidecar] Form submission error:', err.message);
+    const isConfig = err.message?.includes('No form spreadsheet configured');
+    res.status(isConfig ? 503 : 500).json({
+      ok: false,
+      message: isConfig
+        ? 'Form submissions are not configured yet. The site owner needs to set up a Google Sheet.'
+        : 'Something went wrong. Please try again later.',
+    });
   }
 });
 
