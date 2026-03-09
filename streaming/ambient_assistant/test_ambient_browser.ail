@@ -1,0 +1,340 @@
+module streaming/ambient_assistant/test_ambient_browser
+
+-- Tests for the ambient browser AILANG module.
+-- Verifies setup JSON structure, message builders, and instruction content.
+--
+-- Run: ailang run --entry main streaming/ambient_assistant/test_ambient_browser.ail
+
+import std/io (println)
+import std/json (decode, encode, get, has, getString, getObject, getArray, getBool, asString,
+                 jo, kv, js, jb, ja, jnum)
+import std/option (Some, None, getOrElse)
+import std/string (contains, length)
+import std/list (length as listLength)
+import streaming/ambient_assistant/ambient_browser (
+  buildAmbientSetup, buildTextMessage, buildToolResponse, buildAudioChunk,
+  parseMessage, ambientInstruction, defaultModel, defaultVoice, voiceCatalog,
+  aiStudioUrl
+)
+
+-- ── Test helpers ──
+
+func check(name: string, ok: bool) -> () ! {IO} =
+  if ok then println("  PASS: " ++ name)
+  else println("  FAIL: " ++ name)
+
+func checkHas(name: string, json: Json, key: string) -> () ! {IO} =
+  check(name ++ " has '" ++ key ++ "'", has(json, key))
+
+-- ── Tests ──
+
+func testDefaults() -> () ! {IO} {
+  println("== Defaults ==");
+  check("defaultModel", defaultModel() == "models/gemini-2.5-flash-native-audio-preview-12-2025");
+  check("defaultVoice is Sulafat", defaultVoice() == "Sulafat")
+}
+
+func testInstruction() -> () ! {IO} {
+  println("== Instruction ==");
+  let inst = ambientInstruction();
+  check("mentions AILANG name", contains(inst, "AILANG"));
+  check("mentions SILENT", contains(inst, "COMPLETELY SILENT"));
+  check("mentions British English accent", contains(inst, "British English"));
+  check("mentions never American", contains(inst, "American"));
+  check("has NEVER directive", contains(inst, "NEVER"));
+  check("lists currentTime tool", contains(inst, "currentTime"));
+  check("lists webFetch tool", contains(inst, "webFetch"));
+  check("lists takeScreenshot tool", contains(inst, "takeScreenshot"));
+  -- Proactive tool use: tools should run silently, speech only on address
+  check("has PROACTIVE TOOL USE", contains(inst, "PROACTIVE TOOL USE"));
+  check("mentions silently in background", contains(inst, "silently"));
+  check("only speak rule", contains(inst, "ONLY speak"));
+  -- Should NOT mention Google Search (removed)
+  check("no Google Search mention", contains(inst, "Google Search") == false)
+}
+
+func testAiStudioUrl() -> () ! {IO} {
+  println("== AI Studio URL ==");
+  let urlAlpha = aiStudioUrl("test-key", true);
+  check("v1alpha URL contains v1alpha", contains(urlAlpha, "v1alpha"));
+  check("v1alpha URL contains key", contains(urlAlpha, "key=test-key"));
+  let urlBeta = aiStudioUrl("test-key", false);
+  check("v1beta URL contains v1beta", contains(urlBeta, "v1beta"))
+}
+
+func testSetupStructure() -> () ! {IO} {
+  println("== Setup JSON Structure ==");
+  let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test instruction", -1);
+  match decode(setupJson) {
+    Err(e) => println("  FAIL: decode setup: " ++ e),
+    Ok(json) => {
+      checkHas("root", json, "setup");
+      match getObject(json, "setup") {
+        None => println("  FAIL: setup is not object"),
+        Some(setup) => {
+          -- Required top-level fields
+          checkHas("setup", setup, "model");
+          checkHas("setup", setup, "generationConfig");
+          checkHas("setup", setup, "systemInstruction");
+          checkHas("setup", setup, "tools");
+          checkHas("setup", setup, "proactivity");
+          checkHas("setup", setup, "outputAudioTranscription");
+          checkHas("setup", setup, "inputAudioTranscription");
+          checkHas("setup", setup, "contextWindowCompression");
+          checkHas("setup", setup, "realtimeInputConfig");
+
+          -- Model value
+          check("model value", getOrElse(getString(setup, "model"), "") == "models/test");
+
+          -- Proactivity structure
+          match getObject(setup, "proactivity") {
+            None => println("  FAIL: proactivity not object"),
+            Some(p) => match getBool(p, "proactiveAudio") {
+              Some(true) => println("  PASS: proactiveAudio is true"),
+              _ => println("  FAIL: proactiveAudio should be true")
+            }
+          };
+
+          -- Should NOT have enableAffectiveDialog (removed)
+          check("no enableAffectiveDialog", has(setup, "enableAffectiveDialog") == false);
+
+          -- Tools: should have functionDeclarations, no google_search
+          match getArray(setup, "tools") {
+            None => println("  FAIL: tools not array"),
+            Some(tools) => {
+              check("tools has 1 element (no google_search)", listLength(tools) == 1);
+              -- Check first tool object has functionDeclarations
+              match get(json, "setup") {
+                Some(_) => println("  PASS: tools array present"),
+                None => println("  FAIL: tools missing")
+              }
+            }
+          };
+
+          -- generationConfig: responseModalities, speechConfig
+          match getObject(setup, "generationConfig") {
+            None => println("  FAIL: generationConfig not object"),
+            Some(gc) => {
+              checkHas("genConfig", gc, "responseModalities");
+              checkHas("genConfig", gc, "speechConfig");
+              -- No thinkingConfig when budget is -1
+              check("no thinkingConfig when budget=-1", has(gc, "thinkingConfig") == false)
+            }
+          };
+
+          -- realtimeInputConfig: VAD + activityHandling
+          match getObject(setup, "realtimeInputConfig") {
+            None => println("  FAIL: realtimeInputConfig not object"),
+            Some(ric) => {
+              checkHas("realtimeInput", ric, "automaticActivityDetection");
+              check("activityHandling is NO_INTERRUPTION",
+                getOrElse(getString(ric, "activityHandling"), "") == "NO_INTERRUPTION")
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+func testSetupWithThinking() -> () ! {IO} {
+  println("== Setup with Thinking ==");
+  let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test", 1024);
+  match decode(setupJson) {
+    Err(e) => println("  FAIL: decode: " ++ e),
+    Ok(json) => match getObject(json, "setup") {
+      None => println("  FAIL: no setup"),
+      Some(setup) => match getObject(setup, "generationConfig") {
+        None => println("  FAIL: no generationConfig"),
+        Some(gc) => {
+          checkHas("genConfig with thinking", gc, "thinkingConfig");
+          println("  PASS: thinkingConfig present when budget=1024")
+        }
+      }
+    }
+  }
+}
+
+func testBuildTextMessage() -> () ! {IO} {
+  println("== buildTextMessage ==");
+  let msg = buildTextMessage("Hello AILANG");
+  match decode(msg) {
+    Err(e) => println("  FAIL: decode: " ++ e),
+    Ok(json) => {
+      checkHas("textMsg", json, "clientContent");
+      match getObject(json, "clientContent") {
+        None => println("  FAIL: clientContent not object"),
+        Some(cc) => {
+          checkHas("clientContent", cc, "turns");
+          match getBool(cc, "turnComplete") {
+            Some(true) => println("  PASS: turnComplete is true"),
+            _ => println("  FAIL: turnComplete should be true")
+          }
+        }
+      }
+    }
+  }
+}
+
+func testBuildAudioChunk() -> () ! {IO} {
+  println("== buildAudioChunk ==");
+  let msg = buildAudioChunk("AAAA");
+  match decode(msg) {
+    Err(e) => println("  FAIL: decode: " ++ e),
+    Ok(json) => {
+      checkHas("audioChunk", json, "realtimeInput");
+      match getObject(json, "realtimeInput") {
+        None => println("  FAIL: realtimeInput not object"),
+        Some(ri) => checkHas("realtimeInput", ri, "mediaChunks")
+      }
+    }
+  }
+}
+
+func testBuildToolResponse() -> () ! {IO} {
+  println("== buildToolResponse ==");
+  let msg = buildToolResponse("call-123", "currentTime", "2025-01-01 12:00");
+  match decode(msg) {
+    Err(e) => println("  FAIL: decode: " ++ e),
+    Ok(json) => {
+      checkHas("toolResp", json, "toolResponse");
+      match getObject(json, "toolResponse") {
+        None => println("  FAIL: toolResponse not object"),
+        Some(tr) => checkHas("toolResponse", tr, "functionResponses")
+      }
+    }
+  }
+}
+
+func testParseMessage() -> () ! {IO} {
+  println("== parseMessage ==");
+  -- setupComplete
+  let r1 = parseMessage("{\"setupComplete\":{}}");
+  match decode(r1) {
+    Err(_) => println("  FAIL: setupComplete parse"),
+    Ok(j) => check("setupComplete -> type=setup", getOrElse(getString(j, "type"), "") == "setup")
+  };
+  -- turnComplete
+  let r2 = parseMessage("{\"serverContent\":{\"turnComplete\":true}}");
+  match decode(r2) {
+    Err(_) => println("  FAIL: turnComplete parse"),
+    Ok(j) => check("turnComplete -> type=turnComplete", getOrElse(getString(j, "type"), "") == "turnComplete")
+  };
+  -- interrupted
+  let r3 = parseMessage("{\"serverContent\":{\"interrupted\":true}}");
+  match decode(r3) {
+    Err(_) => println("  FAIL: interrupted parse"),
+    Ok(j) => check("interrupted -> type=interrupted", getOrElse(getString(j, "type"), "") == "interrupted")
+  };
+  -- toolCall
+  let r4 = parseMessage("{\"toolCall\":{\"functionCalls\":[{\"name\":\"currentTime\",\"id\":\"c1\",\"args\":{}}]}}");
+  match decode(r4) {
+    Err(_) => println("  FAIL: toolCall parse"),
+    Ok(j) => check("toolCall -> type=toolCall", getOrElse(getString(j, "type"), "") == "toolCall")
+  };
+  -- inputTranscription
+  let r5 = parseMessage("{\"serverContent\":{\"inputTranscription\":{\"text\":\"hello\"}}}");
+  match decode(r5) {
+    Err(_) => println("  FAIL: inputTranscript parse"),
+    Ok(j) => check("inputTranscript -> type", getOrElse(getString(j, "type"), "") == "inputTranscript")
+  };
+  -- invalid JSON
+  let r6 = parseMessage("not json");
+  match decode(r6) {
+    Err(_) => println("  FAIL: error parse"),
+    Ok(j) => check("invalid JSON -> type=error", getOrElse(getString(j, "type"), "") == "error")
+  }
+}
+
+func testVoiceCatalog() -> () ! {IO} {
+  println("== voiceCatalog ==");
+  let catalog = voiceCatalog();
+  match decode(catalog) {
+    Err(e) => println("  FAIL: decode catalog: " ++ e),
+    Ok(json) => {
+      check("catalog contains Sulafat", contains(catalog, "Sulafat"));
+      check("catalog contains Charon", contains(catalog, "Charon"));
+      check("catalog is valid JSON", true)
+    }
+  }
+}
+
+func testToolDeclarations() -> () ! {IO} {
+  println("== Tool Declarations ==");
+  -- Check via setup that all 10 tools are declared
+  let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test", -1);
+  check("setup contains currentTime", contains(setupJson, "currentTime"));
+  check("setup contains calculate", contains(setupJson, "calculate"));
+  check("setup contains remindLater", contains(setupJson, "remindLater"));
+  check("setup contains cacheResult", contains(setupJson, "cacheResult"));
+  check("setup contains getCachedResult", contains(setupJson, "getCachedResult"));
+  check("setup contains summarizeContext", contains(setupJson, "summarizeContext"));
+  check("setup contains takeScreenshot", contains(setupJson, "takeScreenshot"));
+  check("setup contains readClipboard", contains(setupJson, "readClipboard"));
+  check("setup contains saveNote", contains(setupJson, "saveNote"));
+  check("setup contains webFetch", contains(setupJson, "webFetch"));
+  -- Should NOT contain google_search
+  check("setup does NOT contain google_search", contains(setupJson, "google_search") == false);
+  -- Should NOT contain enableAffectiveDialog
+  check("setup does NOT contain enableAffectiveDialog", contains(setupJson, "enableAffectiveDialog") == false)
+}
+
+-- ── Future feature tests ──
+-- These test what the setup SHOULD look like when Google Search
+-- and Affective Dialog become available on the native audio WebSocket.
+-- Currently both cause API errors (code 1011 / 1008) on the raw proto.
+-- When support is added to buildAmbientSetup, flip the checks below.
+
+func testFutureGoogleSearch() -> () ! {IO} {
+  println("== Future: Google Search ==");
+  let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test", -1);
+  -- CURRENTLY: google_search is NOT in setup (causes API error)
+  -- FUTURE: flip to == true when raw WebSocket supports it
+  check("google_search absent (unsupported on raw WS)", contains(setupJson, "google_search") == false);
+  -- CURRENTLY: instruction does NOT mention Google Search
+  -- FUTURE: flip when re-enabled
+  let inst = ambientInstruction();
+  check("instruction omits Google Search", contains(inst, "Google Search") == false);
+  println("  INFO: google_search causes code 1011 on native audio WebSocket")
+}
+
+func testFutureAffectiveDialog() -> () ! {IO} {
+  println("== Future: Affective Dialog ==");
+  let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test", -1);
+  -- CURRENTLY: enableAffectiveDialog is NOT in setup (causes API error)
+  -- FUTURE: flip to == true when raw WebSocket supports it
+  check("enableAffectiveDialog absent (unsupported)", contains(setupJson, "enableAffectiveDialog") == false);
+  println("  INFO: enableAffectiveDialog only works via Gen AI SDK, not raw WebSocket")
+}
+
+export func main() -> () ! {IO} {
+  println("=== Ambient Browser AILANG Tests ===");
+  println("");
+  testDefaults();
+  println("");
+  testInstruction();
+  println("");
+  testAiStudioUrl();
+  println("");
+  testSetupStructure();
+  println("");
+  testSetupWithThinking();
+  println("");
+  testBuildTextMessage();
+  println("");
+  testBuildAudioChunk();
+  println("");
+  testBuildToolResponse();
+  println("");
+  testParseMessage();
+  println("");
+  testVoiceCatalog();
+  println("");
+  testToolDeclarations();
+  println("");
+  testFutureGoogleSearch();
+  println("");
+  testFutureAffectiveDialog();
+  println("");
+  println("=== Tests Complete ===")
+}

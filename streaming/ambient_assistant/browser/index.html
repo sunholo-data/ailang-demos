@@ -4,63 +4,63 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG × Ambient Assistant</title>
-<link rel="icon" type="image/svg+xml" href="../../shared/ailang-logo.svg">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../shared/ailang-logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg-void: #050506;
-    --bg-deep: #0a0a0c;
-    --bg-panel: #0f1012;
-    --bg-raised: #151618;
-    --bg-surface: #1b1c1f;
-    --bg-hover: #222326;
-    --border: #1e1f22;
-    --border-warm: #2a2520;
-    --border-active: #3a3530;
-    --text: #c8c4bc;
-    --text-muted: #706b62;
-    --text-dim: #3d3a35;
-    --amber: #d4a046;
-    --amber-bright: #e8b85a;
-    --amber-glow: rgba(212,160,70,0.12);
+    --bg: #111114;
+    --bg-panel: #191a1e;
+    --bg-card: #1e2024;
+    --bg-input: #15161a;
+    --border: #2a2b30;
+    --border-warm: #3a352e;
+    --text: #e8e5de;
+    --text-secondary: #a09a90;
+    --text-dim: #5a564e;
+    --amber: #e8a830;
+    --amber-bright: #f0c050;
+    --amber-glow: rgba(232,168,48,0.15);
     --green: #4ade80;
-    --green-dim: #0d2818;
-    --blue: #60a5fa;
-    --blue-dim: #0f1a2e;
-    --purple: #a78bfa;
-    --red: #ef4444;
-    --red-dim: #2a0f0f;
+    --green-glow: rgba(74,222,128,0.12);
+    --green-dim: #0f2e1a;
+    --blue: #70b0ff;
+    --blue-dim: #142640;
+    --purple: #b49aff;
+    --purple-dim: #1e1640;
+    --red: #ff6b6b;
     --mono: 'JetBrains Mono', monospace;
-    --display: 'Outfit', system-ui, sans-serif;
+    --display: 'Syne', system-ui, sans-serif;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
     height: 100%;
-    background: var(--bg-void);
+    background: var(--bg);
     color: var(--text);
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Subtle grain */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: 9999;
     pointer-events: none;
-    opacity: 0.025;
+    opacity: 0.02;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-repeat: repeat;
     background-size: 256px;
   }
 
+  /* ── Layout: header, main (left + right), bottom ── */
   .app {
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto 1fr auto;
     height: 100vh;
   }
 
@@ -69,9 +69,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 20px;
+    padding: 12px 24px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(212,160,70,0.03) 0%, transparent 100%);
+    background: var(--bg-panel);
   }
   .header-left {
     display: flex;
@@ -79,116 +79,109 @@
     gap: 14px;
   }
   .nav-home { display: flex; flex-shrink: 0; }
-  .nav-logo { width: 22px; height: 22px; opacity: 0.7; transition: opacity 0.15s; }
+  .nav-logo { width: 24px; height: 24px; opacity: 0.8; transition: opacity 0.15s; }
   .nav-home:hover .nav-logo { opacity: 1; }
   .logo {
     font-family: var(--display);
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--amber);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
     letter-spacing: -0.3px;
   }
-  .logo span { color: var(--text-dim); font-weight: 300; margin: 0 2px; }
-  .badge {
-    font-size: 9px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-  }
-  .badge-ambient {
-    background: var(--blue-dim);
-    color: var(--blue);
-    border: 1px solid #1a2a4a;
-  }
-  .badge-status {
+  .logo span { color: var(--text-dim); font-weight: 400; }
+  .status-pill {
     display: flex;
     align-items: center;
-    gap: 5px;
-    background: var(--bg-surface);
-    color: var(--text-muted);
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--bg-card);
+    color: var(--text-dim);
     border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
-  .badge-status .dot {
-    width: 6px;
-    height: 6px;
+  .status-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--text-dim);
-    transition: background 0.3s;
+    transition: all 0.3s;
   }
-  .badge-status.listening .dot {
+  .status-pill.listening .status-dot {
     background: var(--green);
-    box-shadow: 0 0 6px rgba(74,222,128,0.5);
-    animation: pulse-dot 2s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(74,222,128,0.5);
   }
-  .badge-status.speaking .dot {
+  .status-pill.listening { color: var(--green); border-color: rgba(74,222,128,0.3); }
+  .status-pill.speaking .status-dot {
     background: var(--amber);
-    box-shadow: 0 0 6px rgba(212,160,70,0.5);
+    box-shadow: 0 0 8px rgba(232,168,48,0.5);
   }
-  .badge-status.thinking .dot {
+  .status-pill.speaking { color: var(--amber); border-color: rgba(232,168,48,0.3); }
+  .status-pill.thinking .status-dot {
     background: var(--purple);
-    box-shadow: 0 0 6px rgba(167,139,250,0.5);
+    box-shadow: 0 0 8px rgba(180,154,255,0.5);
     animation: pulse-dot 1s ease-in-out infinite;
   }
+  .status-pill.thinking { color: var(--purple); border-color: rgba(180,154,255,0.3); }
   @keyframes pulse-dot {
-    0%, 100% { box-shadow: 0 0 4px rgba(74,222,128,0.3); }
-    50% { box-shadow: 0 0 10px rgba(74,222,128,0.6); }
+    0%, 100% { box-shadow: 0 0 4px rgba(180,154,255,0.3); }
+    50% { box-shadow: 0 0 12px rgba(180,154,255,0.6); }
   }
   .header-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
-  .btn-sm {
+  .btn {
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 500;
-    padding: 4px 10px;
+    padding: 6px 16px;
     background: none;
     border: 1px solid var(--border);
-    color: var(--text-muted);
-    border-radius: 3px;
+    color: var(--text-secondary);
+    border-radius: 6px;
     cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
     transition: all 0.15s;
   }
-  .btn-sm:hover { border-color: var(--border-warm); color: var(--amber); }
+  .btn:hover { border-color: var(--amber); color: var(--amber); }
 
   /* ── Config panel ── */
   .config {
-    background: var(--bg-deep);
+    background: var(--bg-panel);
     border-bottom: 1px solid var(--border);
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.35s ease, padding 0.35s ease;
-    padding: 0 20px;
+    padding: 0 24px;
   }
-  .config.open { max-height: 200px; padding: 14px 20px; }
+  .config.open { max-height: 200px; padding: 14px 24px; }
   .config-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
+    gap: 12px;
+    margin-bottom: 10px;
   }
   .config-row:last-child { margin-bottom: 0; }
   .config-row label {
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    min-width: 60px;
+    min-width: 65px;
   }
   .config-input {
     flex: 1;
-    background: var(--bg-void);
+    background: var(--bg-input);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 6px 10px;
-    border-radius: 3px;
+    padding: 8px 12px;
+    border-radius: 6px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     outline: none;
     transition: border-color 0.2s;
   }
@@ -199,90 +192,216 @@
     align-items: center;
     gap: 6px;
     cursor: pointer;
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   .config-check input { accent-color: var(--amber); }
 
-  /* ── Main content — two columns ── */
+  /* ── Main content: two columns ── */
   .main {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 1fr 340px;
     overflow: hidden;
+    min-height: 0; /* critical for grid child to respect overflow */
   }
 
-  /* ── Left: waveform + conversation ── */
+  /* ── Left panel: orb + chat ── */
   .left-panel {
-    display: grid;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
+    min-height: 0; /* allow flex children to shrink */
     border-right: 1px solid var(--border);
   }
 
-  .scope-container {
-    padding: 16px 20px 10px;
+  /* Orb area — fixed height, always visible */
+  .orb-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 20px 14px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(232,168,48,0.02) 0%, transparent 100%);
+    transition: padding 0.4s;
+    overflow: visible;
   }
-  .scope-frame {
+  .app.connected .orb-area { padding: 10px 20px 8px; }
+
+  .orb-container {
     position: relative;
-    border: 1px solid var(--border-warm);
-    border-radius: 6px;
-    overflow: hidden;
-    background: var(--bg-void);
-    box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(212,160,70,0.03);
-    transition: box-shadow 0.5s;
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .scope-frame.active {
-    box-shadow: inset 0 0 60px rgba(0,0,0,0.3), 0 0 40px rgba(212,160,70,0.08);
-    border-color: var(--border-active);
-  }
-  .scope-label {
+  .app.connected .orb-container { width: 70px; height: 70px; }
+  .orb-container:hover { transform: scale(1.05); }
+
+  /* Rings */
+  .ring {
     position: absolute;
-    top: 6px;
-    left: 10px;
-    font-size: 9px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    z-index: 2;
-    user-select: none;
-  }
-  .scope-idle {
-    position: absolute;
-    top: 50%;
-    left: 50%;
+    border-radius: 50%;
+    border: 1px solid rgba(232,168,48,0.15);
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 11px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    z-index: 2;
-    user-select: none;
-    transition: opacity 0.5s;
+    animation: spin-ring 20s linear infinite;
   }
-  .scope-idle.hidden { opacity: 0; }
+  .ring-outer {
+    width: 160%;
+    height: 160%;
+    border-style: dashed;
+    border-color: rgba(232,168,48,0.1);
+    animation-duration: 25s;
+  }
+  .ring-mid {
+    width: 135%;
+    height: 135%;
+    animation-duration: 16s;
+    animation-direction: reverse;
+  }
+  .ring-inner {
+    width: 115%;
+    height: 115%;
+    border-color: rgba(232,168,48,0.2);
+    animation-duration: 10s;
+  }
+  @keyframes spin-ring { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+  /* Ring state colors */
+  .app.listening .ring { border-color: rgba(74,222,128,0.25); }
+  .app.listening .ring-outer { animation-duration: 12s; }
+  .app.listening .ring-mid { animation-duration: 8s; }
+  .app.listening .ring-inner { animation-duration: 5s; }
+  .app.speaking .ring { border-color: rgba(232,168,48,0.35); }
+  .app.speaking .ring-outer { animation-duration: 6s; }
+  .app.speaking .ring-mid { animation-duration: 4s; }
+  .app.speaking .ring-inner { animation-duration: 2s; }
+  .app.speaking .orb-core { animation: orb-pulse 1.5s ease-in-out infinite; }
+  .app.thinking .ring { border-color: rgba(180,154,255,0.3); }
+  .app.thinking .ring-outer { animation-duration: 5s; }
+  .app.thinking .ring-mid { animation-duration: 3s; }
+  .app.thinking .ring-inner { animation-duration: 2s; }
+  @keyframes orb-pulse {
+    0%, 100% { filter: brightness(1) drop-shadow(0 0 15px rgba(232,168,48,0.2)); }
+    50% { filter: brightness(1.2) drop-shadow(0 0 30px rgba(232,168,48,0.4)); }
+  }
+
+  .orb-core {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    height: 70%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #222018, #0e0d0a);
+    border: 2px solid rgba(232,168,48,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.3);
+    transition: all 0.5s;
+  }
+  .app.listening .orb-core {
+    border-color: rgba(74,222,128,0.3);
+    box-shadow: 0 0 40px rgba(74,222,128,0.1), inset 0 0 20px rgba(0,0,0,0.2);
+  }
+  .app.speaking .orb-core {
+    border-color: rgba(232,168,48,0.35);
+    box-shadow: 0 0 40px rgba(232,168,48,0.15), inset 0 0 20px rgba(0,0,0,0.2);
+  }
+  .app.thinking .orb-core {
+    border-color: rgba(180,154,255,0.3);
+    box-shadow: 0 0 40px rgba(180,154,255,0.1), inset 0 0 20px rgba(0,0,0,0.2);
+  }
+  .orb-core img {
+    width: 55%;
+    height: 55%;
+    object-fit: contain;
+    opacity: 0.85;
+    transition: opacity 0.3s;
+  }
+  .app.connected .orb-core img { opacity: 1; }
+
+  /* Big start button — only visible when disconnected */
+  .start-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 18px;
+    padding: 12px 32px;
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 700;
+    color: #111;
+    background: linear-gradient(135deg, var(--amber-bright), var(--amber));
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(232,168,48,0.3);
+    letter-spacing: 0.3px;
+  }
+  .start-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 28px rgba(232,168,48,0.4);
+  }
+  .start-btn:active { transform: translateY(0); }
+  .app.connected .start-btn { display: none; }
+
+  /* Info row — always visible, shows zeroed stats until connected */
+  .orb-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .orb-info-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .orb-info-label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .orb-info-value { font-weight: 500; }
+
+  /* Waveform — always visible */
+  .waveform-bar {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 10px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+  }
   #waveform {
     width: 100%;
-    height: 120px;
+    height: 40px;
     display: block;
     image-rendering: pixelated;
   }
 
-  /* ── Conversation log ── */
+  /* ── Chat area ── */
   .conversation {
+    flex: 1;
+    min-height: 0; /* critical: allows flex child to scroll */
     overflow-y: auto;
-    padding: 10px 20px 10px;
+    padding: 14px 24px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     scrollbar-width: thin;
     scrollbar-color: var(--border-warm) transparent;
   }
   .msg {
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
     line-height: 1.6;
     max-width: 85%;
     animation: msgIn 0.2s ease-out;
@@ -292,50 +411,67 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .msg-heard {
-    background: var(--bg-raised);
-    color: var(--text-muted);
+    background: var(--bg-card);
+    color: var(--text-secondary);
     align-self: flex-start;
     border: 1px solid var(--border);
+    border-radius: 10px 10px 10px 2px;
   }
   .msg-ailang {
     background: var(--blue-dim);
     color: var(--blue);
     align-self: flex-end;
-    border: 1px solid #1a2a4a;
+    border: 1px solid #1e3050;
+    border-radius: 10px 10px 2px 10px;
   }
   .msg-thought {
     background: transparent;
     color: var(--purple);
     font-style: italic;
-    font-size: 11px;
+    font-size: 12px;
     align-self: flex-end;
-    border: 1px solid rgba(167,139,250,0.15);
-    opacity: 0.7;
+    border: 1px solid rgba(180,154,255,0.15);
+    opacity: 0.6;
+    cursor: pointer;
+    border-radius: 8px;
   }
+  .msg-thought .thought-label { font-size: 10px; color: var(--text-dim); margin-bottom: 2px; }
+  .msg-thought .thought-body { display: none; white-space: pre-wrap; margin-top: 4px; }
+  .msg-thought.expanded { opacity: 0.9; }
+  .msg-thought.expanded .thought-body { display: block; }
+  .msg-thought.expanded .thought-label-text { display: none; }
   .msg-tool {
     background: var(--green-dim);
     color: var(--green);
     align-self: flex-end;
     border: 1px solid #1a3a28;
-    font-size: 11px;
+    font-size: 13px;
   }
   .msg-system {
     background: transparent;
     color: var(--text-dim);
     align-self: center;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 12px;
+    padding: 4px 0;
   }
   .msg-label {
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 3px;
     opacity: 0.6;
   }
+  .msg-text { white-space: pre-wrap; }
+  .streaming .msg-text .streaming-cursor {
+    display: inline-block;
+    width: 6px; height: 14px;
+    background: var(--amber);
+    margin-left: 2px;
+    animation: blink-cursor 0.8s step-end infinite;
+  }
+  @keyframes blink-cursor { 50% { opacity: 0; } }
 
-  /* ── Right: context sidebar ── */
+  /* ── Right sidebar: tools + context ── */
   .sidebar {
     display: flex;
     flex-direction: column;
@@ -344,164 +480,242 @@
     gap: 16px;
     scrollbar-width: thin;
     scrollbar-color: var(--border-warm) transparent;
+    background: var(--bg-panel);
   }
   .sidebar-section {
-    background: var(--bg-panel);
+    background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 14px;
   }
   .sidebar-title {
-    font-size: 9px;
+    font-family: var(--display);
+    font-size: 12px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--text);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     margin-bottom: 10px;
   }
+
+  /* Session stats */
   .stat-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 10px;
   }
-  .stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .stat-label {
-    font-size: 9px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .stat-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-family: var(--display);
-  }
+  .stat-item { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 16px; font-weight: 600; color: var(--text-secondary); font-family: var(--display); }
   .stat-value.active { color: var(--amber); }
-  .context-list {
+
+  /* Available tools */
+  .tools-grid {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 4px;
-  }
-  .context-item {
-    font-size: 11px;
-    color: var(--text-muted);
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .context-item:last-child { border-bottom: none; }
-  .context-empty {
-    font-size: 10px;
-    color: var(--text-dim);
-    font-style: italic;
   }
   .tool-tag {
     display: inline-block;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .tool-tag.used {
+    background: var(--green-dim);
+    color: var(--green);
+    border-color: #1a3a28;
+  }
+
+  /* Tool cards in sidebar */
+  .tool-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    animation: msgIn 0.25s ease-out;
+    font-size: 12px;
+  }
+  .tool-card[data-tool="currentTime"] { border-left-color: var(--amber); }
+  .tool-card[data-tool="calculate"] { border-left-color: var(--blue); }
+  .tool-card[data-tool="webFetch"] { border-left-color: var(--purple); }
+  .tool-card[data-tool="takeScreenshot"] { border-left-color: var(--red); }
+  .tool-card[data-tool="summarizeContext"] { border-left-color: #f472b6; }
+  .tool-card[data-tool="readClipboard"] { border-left-color: #fbbf24; }
+  .tool-card[data-tool="saveNote"] { border-left-color: #34d399; }
+  .tool-card[data-tool="remindLater"] { border-left-color: #fb923c; }
+  .tool-card[data-tool="cacheResult"],
+  .tool-card[data-tool="getCachedResult"] { border-left-color: #94a3b8; }
+
+  .tool-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .tool-card-icon { font-size: 14px; line-height: 1; }
+  .tool-card-name {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .tool-card-badge {
     font-size: 9px;
     padding: 2px 6px;
     border-radius: 3px;
-    background: var(--green-dim);
-    color: var(--green);
-    border: 1px solid #1a3a28;
-    margin: 2px 2px 2px 0;
+    background: var(--amber-glow);
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: auto;
   }
+  .tool-card-badge.done { background: var(--green-dim); color: var(--green); }
+  .tool-card-args { color: var(--text-secondary); font-size: 11px; margin-bottom: 2px; }
+  .tool-card-result {
+    display: none;
+    color: var(--text);
+    font-size: 11px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .tool-card-result.visible { display: block; }
+  .tool-card-timing {
+    display: none;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    text-align: right;
+  }
+  .tool-card-timing.visible { display: block; }
+
+  /* Sidebar context list */
+  .context-list { display: flex; flex-direction: column; gap: 4px; }
+  .context-item {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.4;
+  }
+  .context-item:last-child { border-bottom: none; }
+  .context-empty { font-size: 12px; color: var(--text-dim); font-style: italic; }
 
   /* ── Bottom bar ── */
   .bottom-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 20px;
+    gap: 8px;
+    padding: 10px 24px;
     border-top: 1px solid var(--border);
-    background: var(--bg-deep);
+    background: var(--bg-panel);
   }
-  .input-row {
+  .action-group {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .action-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex: 1;
-  }
-  .mic-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1px solid var(--border-warm);
-    background: var(--bg-raised);
-    font-size: 16px;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 2px solid var(--border);
+    background: var(--bg-card);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
-  .mic-btn:hover { border-color: var(--amber); }
+  .action-btn .action-icon { font-size: 16px; line-height: 1; }
+  .action-btn:hover { border-color: var(--amber); color: var(--text); }
   .mic-btn.active {
     background: var(--amber-glow);
     border-color: var(--amber);
-    box-shadow: 0 0 12px rgba(212,160,70,0.2);
+    color: var(--amber);
+    box-shadow: 0 0 16px rgba(232,168,48,0.25);
     animation: mic-pulse 2s ease-in-out infinite;
   }
   @keyframes mic-pulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(212,160,70,0.15); }
-    50% { box-shadow: 0 0 16px rgba(212,160,70,0.3); }
+    0%, 100% { box-shadow: 0 0 10px rgba(232,168,48,0.15); }
+    50% { box-shadow: 0 0 24px rgba(232,168,48,0.35); }
+  }
+  .screen-btn:hover { border-color: var(--green); color: var(--green); }
+  .screen-btn.active {
+    background: var(--green-glow);
+    border-color: var(--green);
+    color: var(--green);
+    box-shadow: 0 0 12px rgba(74,222,128,0.2);
+  }
+  .clip-btn:hover { border-color: #fbbf24; color: #fbbf24; }
+  .clip-btn.active {
+    background: rgba(251,191,36,0.1);
+    border-color: #fbbf24;
+    color: #fbbf24;
   }
   .text-input {
     flex: 1;
-    background: var(--bg-void);
+    background: var(--bg-input);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 8px 12px;
-    border-radius: 4px;
+    padding: 12px 18px;
+    border-radius: 24px;
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 14px;
     outline: none;
+    transition: border-color 0.2s;
   }
-  .text-input:focus { border-color: var(--border-warm); }
+  .text-input:focus { border-color: var(--amber); }
   .text-input::placeholder { color: var(--text-dim); }
   .send-btn {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 8px 16px;
-    background: var(--bg-raised);
-    border: 1px solid var(--border-warm);
-    color: var(--text-muted);
-    border-radius: 4px;
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 24px;
     cursor: pointer;
     transition: all 0.15s;
+    flex-shrink: 0;
   }
   .send-btn:hover { color: var(--amber); border-color: var(--amber); }
   .send-btn:disabled { opacity: 0.3; cursor: default; }
-  .bottom-stats {
-    display: flex;
-    gap: 16px;
-    font-size: 10px;
-    color: var(--text-dim);
-    margin-left: 16px;
-  }
-  .bottom-stats span { white-space: nowrap; }
-  .bottom-stats .active { color: var(--text-muted); }
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="app">
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <a class="nav-home" href="../../index.html" title="Back to demos">
-        <img class="nav-logo" src="../../shared/ailang-logo.svg" alt="AILANG">
+      <a class="nav-home" href="../index.html" title="Back to demos">
+        <img class="nav-logo" src="../shared/ailang-logo.svg" alt="AILANG">
       </a>
-      <div class="logo">Ambient<span> / </span>AILANG</div>
-      <span class="badge badge-ambient">Proactive</span>
-      <span class="badge badge-status" id="statusBadge"><span class="dot"></span>Idle</span>
+      <div class="logo">Ambient <span>/ AILANG</span></div>
+      <div class="status-pill" id="statusPill">
+        <span class="status-dot"></span>
+        <span id="statusText">Idle</span>
+      </div>
     </div>
     <div class="header-right">
-      <button class="btn-sm" onclick="toggleConfig()">Config</button>
-      <button class="btn-sm" onclick="reconnect()">Connect</button>
+      <button class="btn" onclick="toggleConfig()">Config</button>
+      <button class="btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
     </div>
   </div>
 
@@ -510,12 +724,11 @@
     <div class="config-row">
       <label>API Key</label>
       <input class="config-input" id="apiKey" type="password" placeholder="Gemini API key (AI Studio)">
-      <button class="btn-sm" onclick="saveConfig()">Save</button>
+      <button class="btn" onclick="saveConfig()">Save</button>
     </div>
     <div class="config-row">
       <label>Voice</label>
       <select class="config-input" id="voiceSelect" style="max-width:200px"></select>
-      <label class="config-check"><input type="checkbox" id="chkAffective"> Affective</label>
     </div>
     <div class="config-row">
       <label>Thinking</label>
@@ -526,19 +739,51 @@
 
   <!-- Main content -->
   <div class="main">
-    <!-- Left: waveform + conversation -->
+    <!-- Left: orb + conversation -->
     <div class="left-panel">
-      <div class="scope-container">
-        <div class="scope-frame" id="scopeFrame">
-          <span class="scope-label">Ambient Audio</span>
-          <span class="scope-idle" id="scopeIdle">listening...</span>
+      <!-- Orb area (fixed, never scrolls away) -->
+      <div class="orb-area">
+        <div class="orb-container" id="orbContainer" onclick="handleOrbClick()">
+          <div class="ring ring-outer"></div>
+          <div class="ring ring-mid"></div>
+          <div class="ring ring-inner"></div>
+          <div class="orb-core">
+            <img src="../shared/ailang-logo.svg" alt="AILANG" draggable="false">
+          </div>
+        </div>
+
+        <!-- Big start button (hidden when connected) -->
+        <button class="start-btn" id="startBtn" onclick="toggleConnection()">
+          Start Listening
+        </button>
+
+        <!-- Connected info (hidden when disconnected) -->
+        <div class="orb-info">
+          <div class="orb-info-item">
+            <span class="orb-info-label">Duration</span>
+            <span class="orb-info-value" id="sDuration">0:00</span>
+          </div>
+          <div class="orb-info-item">
+            <span class="orb-info-label">Turns</span>
+            <span class="orb-info-value" id="sTurns">0</span>
+          </div>
+          <div class="orb-info-item">
+            <span class="orb-info-label">Latency</span>
+            <span class="orb-info-value" id="sLatency">--</span>
+          </div>
+        </div>
+
+        <!-- Waveform (hidden when disconnected) -->
+        <div class="waveform-bar">
           <canvas id="waveform"></canvas>
         </div>
       </div>
+
+      <!-- Chat -->
       <div class="conversation" id="conversation"></div>
     </div>
 
-    <!-- Right: context sidebar -->
+    <!-- Right: sidebar -->
     <div class="sidebar">
       <div class="sidebar-section">
         <div class="sidebar-title">Session</div>
@@ -548,31 +793,39 @@
             <span class="stat-value" id="sState">Idle</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Duration</span>
-            <span class="stat-value" id="sDuration">0:00</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Audio Frames</span>
-            <span class="stat-value" id="sFrames">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Audio Size</span>
+            <span class="stat-label">Audio</span>
             <span class="stat-value" id="sBytes">0 B</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Latency</span>
-            <span class="stat-value" id="sLatency">--</span>
+            <span class="stat-label">Frames</span>
+            <span class="stat-value" id="sFrames">0</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Turns</span>
-            <span class="stat-value" id="sTurns">0</span>
+            <span class="stat-label">Latency</span>
+            <span class="stat-value" id="sLatencySide">--</span>
           </div>
         </div>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-title">Tools Used</div>
-        <div id="toolsList" class="context-list">
+        <div class="sidebar-title">Available Tools</div>
+        <div id="availableTools" class="tools-grid">
+          <span class="tool-tag" data-tool="currentTime">currentTime</span>
+          <span class="tool-tag" data-tool="calculate">calculate</span>
+          <span class="tool-tag" data-tool="remindLater">remindLater</span>
+          <span class="tool-tag" data-tool="cacheResult">cacheResult</span>
+          <span class="tool-tag" data-tool="getCachedResult">getCachedResult</span>
+          <span class="tool-tag" data-tool="summarizeContext">summarizeContext</span>
+          <span class="tool-tag" data-tool="takeScreenshot">takeScreenshot</span>
+          <span class="tool-tag" data-tool="readClipboard">readClipboard</span>
+          <span class="tool-tag" data-tool="saveNote">saveNote</span>
+          <span class="tool-tag" data-tool="webFetch">webFetch</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">Tool Activity</div>
+        <div id="toolsList">
           <div class="context-empty">No tools called yet</div>
         </div>
       </div>
@@ -588,43 +841,58 @@
 
   <!-- Bottom bar -->
   <div class="bottom-bar">
-    <div class="input-row">
-      <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">&#x1f3a4;</button>
-      <input type="text" class="text-input" id="textInput"
-             placeholder="Say 'Hey AILANG' or type here..."
-             disabled>
-      <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
+    <div class="action-group">
+      <button class="action-btn mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">
+        <span class="action-icon">&#x1f3a4;</span> Mic
+      </button>
+      <button class="action-btn screen-btn" id="screenBtn" onclick="toggleScreenShare()" title="Share screen for screenshots">
+        <span class="action-icon">&#x1f5b5;</span> Screen
+      </button>
+      <button class="action-btn clip-btn" id="clipBtn" onclick="grantClipboard()" title="Allow clipboard access">
+        <span class="action-icon">&#x1f4cb;</span> Clipboard
+      </button>
     </div>
-    <div class="bottom-stats">
-      <span id="fState">idle</span>
-      <span id="fFrames">0 frames</span>
-      <span id="fBytes">0 B</span>
-    </div>
+    <input type="text" class="text-input" id="textInput"
+           placeholder="Say 'Hey AILANG' or type here..."
+           disabled>
+    <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
   </div>
 </div>
 
-<script src="../../shared/gemini-live-core.js"></script>
-<script src="../../shared/streaming-ui.js"></script>
+<!-- Hidden compat elements -->
+<div style="display:none">
+  <span id="statusBadge"><span class="dot"></span>Idle</span>
+  <span id="fState"></span>
+  <span id="fFrames"></span>
+  <span id="fBytes"></span>
+  <span id="scopeFrame"></span>
+  <span id="scopeIdle"></span>
+</div>
+
+<script src="../../wasm/wasm_exec.js"></script>
+<script src="../../wasm/ailang-repl.js"></script>
+<script src="../shared/gemini-live-core.js"></script>
+<script src="../shared/streaming-ui.js"></script>
 <script>
 // ═══════════════════════════════════════════════════
 // Ambient AILANG Assistant — Browser Demo
 //
-// Two-column layout: conversation log + context sidebar.
-// Uses GeminiLiveCore for WebSocket, audio, waveform.
-// Proactive audio is always enabled — model only responds
-// when addressed directly by name ("AILANG").
+// Two-column: orb + chat on left, tools sidebar on right.
+// Orb stays fixed at top; chat scrolls below.
 // ═══════════════════════════════════════════════════
 
 const $ = {};
 function cacheDom() {
   for (const id of [
-    'statusBadge', 'configPanel', 'apiKey', 'voiceSelect',
-    'conversation', 'textInput', 'sendBtn', 'micBtn',
+    'statusBadge', 'statusPill', 'statusText',
+    'configPanel', 'apiKey', 'voiceSelect',
+    'conversation', 'textInput', 'sendBtn', 'micBtn', 'connectBtn',
     'scopeFrame', 'scopeIdle',
     'fState', 'fFrames', 'fBytes',
-    'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sTurns',
-    'toolsList', 'contextList',
-    'chkAffective', 'chkAutoMic', 'thinkingBudget',
+    'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sLatencySide', 'sTurns',
+    'toolsList', 'contextList', 'availableTools',
+    'chkAutoMic', 'thinkingBudget', 'screenBtn', 'clipBtn',
+    'orbContainer', 'startBtn', 'app',
   ]) {
     $[id] = document.getElementById(id);
   }
@@ -635,6 +903,85 @@ let turnCount = 0;
 let toolsUsed = new Map();
 let sessionStartTime = null;
 let sessionTimer = null;
+
+// ── Sidebar turn accumulators ──
+let heardBuffer = '';
+let ailangBuffer = '';
+let heardEntry = null;
+let ailangEntry = null;
+
+// ── Conversation log accumulators ──
+let logHeardBuffer = '';
+let logAILANGBuffer = '';
+
+// ── Tool card icons ──
+const TOOL_ICONS = {
+  currentTime: '&#x1f552;',
+  calculate: '&#x1f4ca;',
+  remindLater: '&#x23f0;',
+  cacheResult: '&#x1f4be;',
+  getCachedResult: '&#x1f50d;',
+  summarizeContext: '&#x1f4dd;',
+  takeScreenshot: '&#x1f4f7;',
+  readClipboard: '&#x1f4cb;',
+  saveNote: '&#x1f4c4;',
+  webFetch: '&#x1f310;',
+};
+
+function formatToolArgs(name, args) {
+  switch (name) {
+    case 'currentTime': return '';
+    case 'calculate': {
+      const ops = { add: '+', subtract: '-', multiply: '×', divide: '÷' };
+      return (args.a || '?') + ' ' + (ops[args.operation] || args.operation) + ' ' + (args.b || '?');
+    }
+    case 'webFetch': return args.url || '';
+    case 'remindLater': return args.reminder || '';
+    case 'cacheResult': return args.key + ' = ' + (args.value || '').substring(0, 50);
+    case 'getCachedResult': return 'key: ' + (args.key || '');
+    case 'summarizeContext': return args.maxTurns ? 'last ' + args.maxTurns + ' turns' : '';
+    case 'takeScreenshot': return 'capturing screen';
+    case 'readClipboard': return 'reading clipboard';
+    case 'saveNote': return args.title || 'untitled';
+    default: return JSON.stringify(args).substring(0, 80);
+  }
+}
+
+// ── Tool cards (added to sidebar) ──
+let toolCardCounter = 0;
+function addToolCard(name, args) {
+  const id = 'tc-' + (++toolCardCounter);
+  // Clear empty placeholder
+  const empty = $.toolsList.querySelector('.context-empty');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = 'tool-card';
+  el.id = id;
+  el.setAttribute('data-tool', name);
+  const icon = TOOL_ICONS[name] || '&#x2699;';
+  const fmtArgs = formatToolArgs(name, args);
+  el.innerHTML =
+    '<div class="tool-card-header">' +
+      '<span class="tool-card-icon">' + icon + '</span>' +
+      '<span class="tool-card-name">' + escHtml(name) + '</span>' +
+      '<span class="tool-card-badge" id="' + id + '-badge">Running</span>' +
+    '</div>' +
+    (fmtArgs ? '<div class="tool-card-args">' + escHtml(fmtArgs) + '</div>' : '') +
+    '<div class="tool-card-result" id="' + id + '-result"></div>' +
+    '<div class="tool-card-timing" id="' + id + '-timing"></div>';
+  $.toolsList.appendChild(el);
+  return id;
+}
+
+function updateToolCard(cardId, result, elapsedMs) {
+  const badge = document.getElementById(cardId + '-badge');
+  const resEl = document.getElementById(cardId + '-result');
+  const timing = document.getElementById(cardId + '-timing');
+  if (badge) { badge.textContent = 'Done'; badge.classList.add('done'); }
+  if (resEl) { resEl.textContent = result.substring(0, 400); resEl.classList.add('visible'); }
+  if (timing) { timing.textContent = elapsedMs + 'ms'; timing.classList.add('visible'); }
+}
 
 // ── Conversation messages ──
 function addMessage(type, text, label) {
@@ -671,11 +1018,9 @@ function updateSessionDuration() {
 
 function recordToolUse(name) {
   toolsUsed.set(name, (toolsUsed.get(name) || 0) + 1);
-  let html = '';
-  for (const [tool, count] of toolsUsed) {
-    html += '<span class="tool-tag">' + escHtml(tool) + ' (' + count + ')</span>';
-  }
-  $.toolsList.innerHTML = html;
+  // Light up tool tag in sidebar
+  const tag = $.availableTools?.querySelector('[data-tool="' + name + '"]');
+  if (tag) tag.classList.add('used');
 }
 
 function addContextEntry(text) {
@@ -685,32 +1030,73 @@ function addContextEntry(text) {
   el.className = 'context-item';
   el.textContent = text;
   $.contextList.appendChild(el);
-  // Keep only last 20 entries
   while ($.contextList.children.length > 20) {
     $.contextList.removeChild($.contextList.firstChild);
   }
 }
 
+function appendSidebarHeard(text) {
+  const firstEmpty = $.contextList.querySelector('.context-empty');
+  if (firstEmpty) firstEmpty.remove();
+  heardBuffer += text;
+  if (!heardEntry) {
+    heardEntry = document.createElement('div');
+    heardEntry.className = 'context-item';
+    $.contextList.appendChild(heardEntry);
+  }
+  heardEntry.textContent = 'Heard: ' + heardBuffer.substring(0, 200);
+  while ($.contextList.children.length > 20) {
+    $.contextList.removeChild($.contextList.firstChild);
+  }
+}
+
+function appendSidebarAILANG(text) {
+  const firstEmpty = $.contextList.querySelector('.context-empty');
+  if (firstEmpty) firstEmpty.remove();
+  ailangBuffer += text;
+  if (!ailangEntry) {
+    ailangEntry = document.createElement('div');
+    ailangEntry.className = 'context-item';
+    $.contextList.appendChild(ailangEntry);
+  }
+  ailangEntry.textContent = 'AILANG: ' + ailangBuffer.substring(0, 200);
+  while ($.contextList.children.length > 20) {
+    $.contextList.removeChild($.contextList.firstChild);
+  }
+}
+
+function flushSidebarTurn() {
+  heardBuffer = '';
+  ailangBuffer = '';
+  heardEntry = null;
+  ailangEntry = null;
+}
+
 function setStatus(status) {
   $.sState.textContent = status;
   $.sState.classList.toggle('active', status !== 'Idle');
-  $.fState.textContent = status.toLowerCase();
-  // Update badge
+  if ($.fState) $.fState.textContent = status.toLowerCase();
+
+  // Status pill
+  $.statusPill.className = 'status-pill';
+  if (status === 'Listening') $.statusPill.classList.add('listening');
+  else if (status === 'Speaking') $.statusPill.classList.add('speaking');
+  else if (status === 'Thinking') $.statusPill.classList.add('thinking');
+  $.statusText.textContent = status;
+
+  // App-level classes for orb animation
+  $.app.classList.remove('listening', 'speaking', 'thinking');
+  if (status === 'Listening') $.app.classList.add('listening');
+  else if (status === 'Speaking') $.app.classList.add('speaking');
+  else if (status === 'Thinking') $.app.classList.add('thinking');
+
+  // Hidden badge compat
   $.statusBadge.className = 'badge badge-status';
-  $.statusBadge.querySelector('.dot');
   const label = $.statusBadge.childNodes[$.statusBadge.childNodes.length - 1];
-  if (status === 'Listening') {
-    $.statusBadge.classList.add('listening');
-    label.textContent = 'Listening';
-  } else if (status === 'Speaking') {
-    $.statusBadge.classList.add('speaking');
-    label.textContent = 'Speaking';
-  } else if (status === 'Thinking') {
-    $.statusBadge.classList.add('thinking');
-    label.textContent = 'Thinking';
-  } else {
-    label.textContent = status;
-  }
+  if (status === 'Listening') { $.statusBadge.classList.add('listening'); label.textContent = 'Listening'; }
+  else if (status === 'Speaking') { $.statusBadge.classList.add('speaking'); label.textContent = 'Speaking'; }
+  else if (status === 'Thinking') { $.statusBadge.classList.add('thinking'); label.textContent = 'Thinking'; }
+  else { label.textContent = status; }
 }
 
 // ── Stats ──
@@ -719,16 +1105,14 @@ function updateStatsUI(stats) {
   $.sFrames.classList.toggle('active', stats.frames > 0);
   $.sBytes.textContent = GeminiLiveCore.fmtBytes(stats.bytes);
   $.sBytes.classList.toggle('active', stats.bytes > 0);
-  $.fFrames.textContent = stats.frames + ' frames';
-  $.fFrames.classList.toggle('active', stats.frames > 0);
-  $.fBytes.textContent = GeminiLiveCore.fmtBytes(stats.bytes);
-  $.fBytes.classList.toggle('active', stats.bytes > 0);
+  if ($.fFrames) $.fFrames.textContent = stats.frames + ' frames';
+  if ($.fBytes) $.fBytes.textContent = GeminiLiveCore.fmtBytes(stats.bytes);
   if (stats.firstLatency) {
     $.sLatency.textContent = stats.firstLatency + 'ms';
     $.sLatency.classList.add('active');
+    $.sLatencySide.textContent = stats.firstLatency + 'ms';
+    $.sLatencySide.classList.add('active');
   }
-  $.scopeFrame.classList.add('active');
-  $.scopeIdle.classList.add('hidden');
 }
 
 // ── GeminiLiveCore ──
@@ -742,8 +1126,8 @@ const core = new GeminiLiveCore({
   sourceRate: 24000,
   micRate: 16000,
   fftSize: 2048,
-  canvasHeight: 120,
-  localStorageKeys: { apiKey: 'ambient-api-key', voice: 'ambient-voice' },
+  canvasHeight: 40,
+  localStorageKeys: { apiKey: 'gemini-api-key', voice: 'ambient-voice' },
   onEvent: handleAILANGEvent,
   onLog: (type, html) => {},
   onStatsUpdate: updateStatsUI,
@@ -754,19 +1138,15 @@ const core = new GeminiLiveCore({
   onWasmError: () => {},
 });
 
-// ── Ambient system instruction ──
-const AMBIENT_INSTRUCTION = 'You are AILANG, an ambient voice assistant. ' +
-  'You are always listening but should ONLY respond when directly addressed by name — ' +
-  "'AILANG', 'hey AILANG', or similar. " +
-  'When not addressed, stay completely silent. ' +
-  'When addressed, respond with full awareness of everything you\'ve heard in the conversation. ' +
-  'Speak with a British English accent. Keep responses conversational and helpful. ' +
-  'You have access to tools: currentTime (date/time), calculate (arithmetic), ' +
-  'cacheResult/getCachedResult (data caching), remindLater (save reminders), ' +
-  'and summarizeContext (conversation summary). Use tools when they help answer questions.';
+// ── Orb click ──
+function handleOrbClick() {
+  if (!core.getActiveConnection() && !core._connectLock) {
+    toggleConnection();
+  }
+}
 
 // ── Event handler ──
-function handleAILANGEvent(event) {
+async function handleAILANGEvent(event) {
   switch (event.type) {
     case 'log':
       addSystemMessage(event.text || '');
@@ -774,15 +1154,21 @@ function handleAILANGEvent(event) {
     case 'setup':
       core.sessionReady = true;
       setStatus('Listening');
+      $.app.classList.add('connected');
       addSystemMessage('Ambient mode active — say "Hey AILANG" to get a response');
+      $.connectBtn.textContent = 'Disconnect';
       $.textInput.disabled = false;
       $.sendBtn.disabled = false;
-      // Auto-start mic
       if ($.chkAutoMic?.checked && !core.isRecording) {
         setTimeout(() => toggleMic(), 500);
       }
       break;
     case 'turnComplete':
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
+      flushSidebarTurn();
+      if (logHeardBuffer) { conversationLog.push('User: ' + logHeardBuffer); logHeardBuffer = ''; }
+      if (logAILANGBuffer) { conversationLog.push('AILANG: ' + logAILANGBuffer); logAILANGBuffer = ''; }
       turnCount++;
       $.sTurns.textContent = turnCount;
       $.sTurns.classList.add('active');
@@ -791,16 +1177,16 @@ function handleAILANGEvent(event) {
       break;
     case 'inputTranscript':
       if (event.text) {
-        addMessage('heard', event.text, 'Heard');
-        addContextEntry('Heard: ' + event.text.substring(0, 60));
-        conversationLog.push('User: ' + event.text);
+        ui.appendUserTranscript(event.text);
+        appendSidebarHeard(event.text);
+        logHeardBuffer += event.text;
       }
       break;
     case 'outputTranscript':
       if (event.text) {
-        addMessage('ailang', event.text, 'AILANG');
-        addContextEntry('AILANG: ' + event.text.substring(0, 60));
-        conversationLog.push('AILANG: ' + event.text);
+        ui.appendAgentText(event.text);
+        appendSidebarAILANG(event.text);
+        logAILANGBuffer += event.text;
       }
       break;
     case 'modelTurn':
@@ -808,7 +1194,16 @@ function handleAILANGEvent(event) {
         setStatus('Speaking');
         event.parts.forEach(part => {
           if (part.thought && part.text) {
-            addMessage('thought', part.text, 'Thinking');
+            const el = document.createElement('div');
+            el.className = 'msg msg-thought';
+            el.innerHTML = '<div class="thought-label"><span class="thought-label-text">thinking... (click)</span></div><div class="thought-body"></div>';
+            el.querySelector('.thought-body').textContent = part.text;
+            el.onclick = () => el.classList.toggle('expanded');
+            $.conversation.appendChild(el);
+            $.conversation.scrollTop = $.conversation.scrollHeight;
+          }
+          if (part.text && !part.thought) {
+            ui.appendAgentText(part.text);
           }
           if (part.inlineData && part.inlineData.data) {
             core.handleAudioFrame(part.inlineData.data);
@@ -817,18 +1212,25 @@ function handleAILANGEvent(event) {
       }
       break;
     case 'toolCall':
+      ui.resetUserTranscript();
+      ui.finishAgentMessage(true);
       if (event.calls && Array.isArray(event.calls)) {
         setStatus('Thinking');
-        event.calls.forEach(call => {
+        for (const call of event.calls) {
           const name = call.name || 'unknown';
           const callId = call.id || '';
           const args = call.args || {};
-          addMessage('tool', name + '(' + JSON.stringify(args).substring(0, 80) + ')', 'Tool Call');
+          // Rich card in sidebar
+          const cardId = addToolCard(name, args);
+          // Also add brief note to chat
+          addMessage('tool', name + '(' + formatToolArgs(name, args) + ')', 'Tool Call');
           recordToolUse(name);
-          // Dispatch browser-safe tools and send response
-          const result = dispatchBrowserTool(name, args);
+          const t0 = performance.now();
+          const result = await dispatchBrowserTool(name, args);
+          const elapsed = Math.round(performance.now() - t0);
+          updateToolCard(cardId, result, elapsed);
           sendToolResponse(callId, name, result);
-        });
+        }
       }
       break;
     case 'interrupted':
@@ -850,9 +1252,12 @@ function handleAILANGEvent(event) {
       addSystemMessage('WebSocket connected');
       break;
     case 'closed':
+      ui.finishAgentMessage(true);
       core.sessionReady = false;
+      $.app.classList.remove('connected', 'listening', 'speaking', 'thinking');
       setStatus('Idle');
       addSystemMessage('Session ended');
+      $.connectBtn.textContent = 'Connect';
       $.textInput.disabled = true;
       $.sendBtn.disabled = true;
       core.releaseConnectLock();
@@ -879,10 +1284,9 @@ function populateVoices() {
     });
     const saved = localStorage.getItem('ambient-voice');
     if (saved) $.voiceSelect.value = saved;
-    if (!$.voiceSelect.value) $.voiceSelect.value = 'Charon';
+    if (!$.voiceSelect.value) $.voiceSelect.value = 'Sulafat';
   } catch (e) {
-    // Fallback
-    $.voiceSelect.innerHTML = '<option value="Charon">Charon (Informative)</option>';
+    $.voiceSelect.innerHTML = '<option value="Sulafat">Sulafat (Informative)</option>';
   }
 }
 
@@ -894,18 +1298,35 @@ function initUI() {
       configPanel: $.configPanel,
       apiKeyInput: $.apiKey,
       voiceSelect: $.voiceSelect,
+      chatContainer: $.conversation,
       textInput: $.textInput,
       sendButton: $.sendBtn,
       statusBadge: $.statusBadge,
     },
-    localStorage: { apiKey: 'ambient-api-key', voice: 'ambient-voice' },
-    agentName: 'AILANG Ambient',
+    localStorage: { apiKey: 'gemini-api-key', voice: 'ambient-voice' },
+    agentName: 'AILANG',
+    userName: 'Heard',
+    cssClasses: {
+      userMsg: 'msg msg-heard',
+      agentMsg: 'msg msg-ailang',
+      systemMsg: 'msg msg-system',
+    },
   });
 }
 function toggleConfig() { ui.toggleConfig(); }
 function saveConfig() { ui.saveConfig(); }
 
-// ── Connect ──
+// ── Connect / Disconnect ──
+async function toggleConnection() {
+  const active = core.getActiveConnection();
+  if (active) {
+    active.ws.close();
+    $.connectBtn.textContent = 'Connect';
+    return;
+  }
+  await reconnect();
+}
+
 async function reconnect() {
   if (!core.acquireConnectLock()) { addSystemMessage('Connection already in progress'); return; }
 
@@ -927,10 +1348,16 @@ async function reconnect() {
   $.sTurns.textContent = '0';
   $.sLatency.textContent = '--';
   $.sLatency.classList.remove('active');
+  $.sLatencySide.textContent = '--';
+  $.sLatencySide.classList.remove('active');
   $.toolsList.innerHTML = '<div class="context-empty">No tools called yet</div>';
   $.contextList.innerHTML = '<div class="context-empty">Waiting for audio...</div>';
+  // Reset tool tags
+  $.availableTools?.querySelectorAll('.tool-tag').forEach(t => t.classList.remove('used'));
 
   setStatus('Connecting');
+  $.startBtn.textContent = 'Connecting...';
+  $.connectBtn.textContent = 'Connecting...';
   $.textInput.disabled = true;
   $.sendBtn.disabled = true;
 
@@ -945,8 +1372,8 @@ async function reconnect() {
   addSystemMessage('Starting ambient session (voice: ' + voice + ', proactive: ON)...');
 
   try {
-    // Start ambient session — no initial prompt, mic-only
-    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startAmbientSession', key, voice);
+    const thinkingBudget = $.thinkingBudget ? parseInt($.thinkingBudget.value) || -1 : -1;
+    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startAmbientSession', key, voice, thinkingBudget);
     if (!result.success) {
       addSystemMessage('Session error: ' + (result.error || 'unknown'));
     } else {
@@ -957,7 +1384,10 @@ async function reconnect() {
   }
 
   core.sessionReady = false;
+  $.app.classList.remove('connected', 'listening', 'speaking', 'thinking');
   setStatus('Idle');
+  $.startBtn.textContent = 'Start Listening';
+  $.connectBtn.textContent = 'Connect';
   core.releaseConnectLock();
   $.textInput.disabled = true;
   $.sendBtn.disabled = true;
@@ -977,7 +1407,7 @@ async function sendText() {
   core.markPromptSent();
   core.clearAudioQueue();
 
-  addMessage('heard', text, 'You');
+  ui.addUserMessage(text);
 
   const msgJson = core.callAILANG('buildTextMessage', text);
   activeConn.ws.send(msgJson || JSON.stringify({
@@ -986,9 +1416,6 @@ async function sendText() {
 
   $.textInput.value = '';
   setStatus('Thinking');
-  $.scopeIdle.textContent = 'processing...';
-  $.scopeIdle.classList.remove('hidden');
-  setTimeout(() => $.scopeIdle.classList.add('hidden'), 1500);
 }
 
 // ── Browser-safe tool dispatch ──
@@ -996,7 +1423,7 @@ const browserCache = new Map();
 const browserReminders = [];
 const conversationLog = [];
 
-function dispatchBrowserTool(name, args) {
+async function dispatchBrowserTool(name, args) {
   switch (name) {
     case 'currentTime': {
       const now = new Date();
@@ -1039,6 +1466,86 @@ function dispatchBrowserTool(name, args) {
       const recent = conversationLog.slice(-maxTurns);
       return 'Recent conversation (' + recent.length + ' entries):\n' + recent.join('\n');
     }
+    case 'takeScreenshot': {
+      if (!screenStream) {
+        return 'Screen sharing not enabled. The user needs to click the Share Screen button first.';
+      }
+      try {
+        addSystemMessage('Capturing screenshot...');
+        const video = document.createElement('video');
+        video.srcObject = screenStream;
+        await video.play();
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(video.videoWidth, 1024);
+        canvas.height = Math.min(video.videoHeight, 768);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.pause();
+        video.srcObject = null;
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const b64 = dataUrl.split(',')[1];
+        const activeConn = core.getActiveConnection();
+        if (activeConn) {
+          activeConn.ws.send(JSON.stringify({
+            realtimeInput: {
+              mediaChunks: [{ mimeType: 'image/jpeg', data: b64 }]
+            }
+          }));
+        }
+        addContextEntry('Screenshot captured');
+        return 'Screenshot captured and sent for analysis. Describe what you see.';
+      } catch (e) {
+        return 'Screenshot failed: ' + e.message;
+      }
+    }
+    case 'readClipboard': {
+      // Use cached clipboard from user-gesture button click
+      if (lastClipboardText !== null) {
+        return lastClipboardText || '(clipboard is empty)';
+      }
+      // Try direct access (may fail without user gesture)
+      try {
+        const text = await navigator.clipboard.readText();
+        return text || '(clipboard is empty)';
+      } catch (e) {
+        return 'Clipboard not available — click the Clipboard button in the bottom bar first to grant access.';
+      }
+    }
+    case 'saveNote': {
+      const title = args.title || 'untitled';
+      const content = args.content || '';
+      const notes = JSON.parse(localStorage.getItem('ambient-notes') || '{}');
+      notes[title] = { content, savedAt: new Date().toISOString() };
+      localStorage.setItem('ambient-notes', JSON.stringify(notes));
+      addContextEntry('Note saved: ' + title);
+      return 'Note saved: ' + title;
+    }
+    case 'webFetch': {
+      let url = args.url || '';
+      if (!url) return 'Error: no URL provided';
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      try {
+        addSystemMessage('Fetching ' + url.substring(0, 60) + '...');
+        // Try direct fetch first
+        let resp;
+        try {
+          resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(8000) });
+        } catch (directErr) {
+          // CORS blocked — try allorigins proxy
+          addSystemMessage('Direct fetch blocked by CORS, trying proxy...');
+          const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+          resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        }
+        if (!resp.ok) return 'Fetch failed: HTTP ' + resp.status;
+        const text = await resp.text();
+        const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        const result = clean.substring(0, 4000);
+        addContextEntry('Fetched: ' + url.substring(0, 50));
+        return result || '(empty page)';
+      } catch (e) {
+        return 'Fetch error: ' + e.message;
+      }
+    }
     default:
       return 'Tool not available in browser: ' + name;
   }
@@ -1051,7 +1558,6 @@ function sendToolResponse(callId, name, result) {
   if (responseJson) {
     activeConn.ws.send(responseJson);
   } else {
-    // Fallback: build JSON directly
     activeConn.ws.send(JSON.stringify({
       toolResponse: {
         functionResponses: [{
@@ -1061,7 +1567,6 @@ function sendToolResponse(callId, name, result) {
       }
     }));
   }
-  addMessage('tool', result.substring(0, 120), 'Tool Result');
 }
 
 // ── Mic ──
@@ -1086,6 +1591,55 @@ async function toggleMic() {
   }
 }
 
+// ── Screen share ──
+let screenStream = null;
+
+async function toggleScreenShare() {
+  if (screenStream) {
+    screenStream.getTracks().forEach(t => t.stop());
+    screenStream = null;
+    $.screenBtn.classList.remove('active');
+    addSystemMessage('Screen sharing stopped');
+    return;
+  }
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    $.screenBtn.classList.add('active');
+    addSystemMessage('Screen sharing active — takeScreenshot tool is now available');
+    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+      screenStream = null;
+      $.screenBtn.classList.remove('active');
+      addSystemMessage('Screen sharing stopped');
+    });
+  } catch (e) {
+    addSystemMessage('Screen share denied: ' + e.message);
+  }
+}
+
+// ── Clipboard grant ──
+// Clipboard API requires a user gesture. This button reads the clipboard
+// once (which grants the permission) and caches the result so that when
+// the model calls readClipboard it has the latest content.
+let lastClipboardText = null;
+
+async function grantClipboard() {
+  try {
+    lastClipboardText = await navigator.clipboard.readText();
+    $.clipBtn.classList.add('active');
+    addSystemMessage('Clipboard access granted — readClipboard tool is ready');
+    // Keep refreshing clipboard every 5s while active
+    if (!clipboardInterval) {
+      clipboardInterval = setInterval(async () => {
+        try { lastClipboardText = await navigator.clipboard.readText(); }
+        catch (e) { /* may fail if tab loses focus */ }
+      }, 5000);
+    }
+  } catch (e) {
+    addSystemMessage('Clipboard access denied: ' + e.message);
+  }
+}
+let clipboardInterval = null;
+
 // ── Init ──
 window.addEventListener('load', async () => {
   cacheDom();
@@ -1095,14 +1649,13 @@ window.addEventListener('load', async () => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
   });
 
-  ui.loadConfig({ 'ambient_key': 'ambient-api-key' });
+  ui.loadConfig({ 'ambient_key': 'gemini-api-key' });
   core.initWaveform(document.getElementById('waveform'));
 
-  addSystemMessage('AILANG Ambient Assistant — loading WASM...');
+  addSystemMessage('Loading AILANG WASM...');
   await core.initWASM();
   if (core.wasmReady) {
-    addSystemMessage('AILANG WASM loaded — ambient mode ready');
-    addSystemMessage('Click Connect to start listening');
+    addSystemMessage('Ready — click Start Listening or the orb to begin');
   } else {
     addSystemMessage('WASM failed to load — check console');
   }

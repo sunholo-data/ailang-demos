@@ -7,7 +7,7 @@ module streaming/ambient_assistant/ambient_browser
 --   - Extended system instruction for ambient behavior
 --   - Tool declarations included in setup
 --   - No initial text prompt (mic-only start)
---   - AI Studio v1alpha URL for proactive/affective features
+--   - AI Studio v1alpha URL for proactive audio
 --
 -- JS usage:
 --   window.ailangSetEffectHandler('IO', { println: fn });
@@ -33,19 +33,31 @@ import std/math (intToFloat)
 export pure func defaultModel() -> string =
   "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
-export pure func defaultVoice() -> string = "Charon"
+export pure func defaultVoice() -> string = "Sulafat"
 
 export pure func ambientInstruction() -> string =
-  "You are AILANG, an ambient voice assistant. "
-    ++ "You are always listening but should ONLY respond when directly addressed by name — "
+  "You are AILANG, an ambient voice assistant running in a browser. "
+    ++ "SPEAKING RULE: You must ONLY speak when directly addressed by name — "
     ++ "'AILANG', 'hey AILANG', or similar. "
-    ++ "When not addressed, stay completely silent. "
-    ++ "When addressed, respond with full awareness of everything you've heard in the conversation. "
-    ++ "Speak with a British English accent. Keep responses conversational and helpful. "
-    ++ "You have access to tools: currentTime (date/time), calculate (arithmetic), "
-    ++ "cacheResult/getCachedResult (data caching), and remindLater (save reminders). "
-    ++ "Use tools when they help answer the user's questions. "
-    ++ "You can cache data with cacheResult and retrieve it later with getCachedResult."
+    ++ "If someone speaks without saying your name, you MUST stay COMPLETELY SILENT — "
+    ++ "do not speak, do not acknowledge, do not comment. "
+    ++ "NEVER respond vocally to questions like 'are you working?', 'hello?', or 'what time is it?' "
+    ++ "unless they include your name 'AILANG'. "
+    ++ "When addressed by name, respond with full awareness of everything you have heard. "
+    ++ "VOICE: ALWAYS speak with a British English accent throughout the entire conversation. "
+    ++ "Never switch to an American accent, even mid-sentence. Maintain British pronunciation consistently. "
+    ++ "Keep responses conversational and helpful. "
+    ++ "TOOLS: You have these tools: "
+    ++ "currentTime, calculate, remindLater, cacheResult, getCachedResult, "
+    ++ "summarizeContext, takeScreenshot, readClipboard, saveNote, webFetch. "
+    ++ "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools "
+    ++ "to gather context based on what you hear. If someone mentions a time, call currentTime. "
+    ++ "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. "
+    ++ "If someone mentions reminders, call remindLater. Use tools silently in the background — "
+    ++ "do NOT speak about them unless addressed by name. "
+    ++ "When the user finally addresses you by name, you will already have the data ready. "
+    ++ "takeScreenshot captures the user's screen — use when asked 'what is on my screen?'. "
+    ++ "webFetch retrieves content from a URL — use when someone mentions a website."
 
 -- ══════════════════════════════════════════════════════
 -- Voice Catalog (re-exported for browser UI)
@@ -72,7 +84,7 @@ export pure func voiceCatalog() -> string =
 -- URL Builders
 -- ══════════════════════════════════════════════════════
 
--- AI Studio URL — v1alpha needed for proactive audio + affective dialog
+-- AI Studio URL — v1alpha needed for proactive audio
 export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
   let version = if useAlpha then "v1alpha" else "v1beta";
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ version ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
@@ -84,7 +96,8 @@ export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
 
 -- Start an ambient session. Empty prompt = mic-only mode.
 -- Proactive audio is always enabled. Voice selector from browser UI.
-export func startAmbientSession(apiKey: string, voice: string) -> string ! {Stream, IO} {
+-- thinkingBudget: thinking token budget (-1 = disabled, 0+ = enabled)
+export func startAmbientSession(apiKey: string, voice: string, thinkingBudget: int) -> string ! {Stream, IO} {
   let model = defaultModel();
   let url = aiStudioUrl(apiKey, true);
 
@@ -94,7 +107,7 @@ export func startAmbientSession(apiKey: string, voice: string) -> string ! {Stre
     Ok(conn) => {
       println(encode(jo([kv("type", js("log")), kv("text", js("Connected. Sending ambient setup..."))])));
 
-      let setupMsg = buildAmbientSetup(model, voice, ambientInstruction());
+      let setupMsg = buildAmbientSetup(model, voice, ambientInstruction(), thinkingBudget);
       match transmit(conn, setupMsg) {
         Ok(_) => {
           println(encode(jo([kv("type", js("log")), kv("text", js("Ambient mode active. Voice: " ++ voice ++ " | Proactive: ON"))])));
@@ -232,38 +245,56 @@ func handleToolCallEvent(json: Json) -> bool ! {IO} {
 -- Protocol: Setup Message Builder
 -- ══════════════════════════════════════════════════════
 
--- Build ambient setup: proactive audio ON, affective ON, tools, session resumption, transcription.
+-- Build ambient setup: proactive audio, tools, transcription, VAD, optional affective + thinking.
 -- Uses AI Studio v1alpha which supports all features.
-export pure func buildAmbientSetup(model: string, voice: string, instruction: string) -> string {
-  let setupKvs = [
-    kv("model", js(model)),
-    kv("generationConfig", jo([
-      kv("responseModalities", ja([js("AUDIO")])),
-      kv("speechConfig", jo([
-        kv("voiceConfig", jo([
-          kv("prebuiltVoiceConfig", jo([
-            kv("voiceName", js(voice))
-          ]))
+export pure func buildAmbientSetup(model: string, voice: string, instruction: string, thinkingBudget: int) -> string {
+  -- Generation config with optional thinking
+  let baseGenKvs = [
+    kv("responseModalities", ja([js("AUDIO")])),
+    kv("speechConfig", jo([
+      kv("voiceConfig", jo([
+        kv("prebuiltVoiceConfig", jo([
+          kv("voiceName", js(voice))
         ]))
       ]))
-    ])),
+    ]))
+  ];
+  let thinkingKvs = if thinkingBudget >= 0 then
+    [kv("thinkingConfig", jo([kv("thinkingBudget", jnum(intToFloat(thinkingBudget)))]))]
+  else [];
+  let genConfigKvs = concat(baseGenKvs, thinkingKvs);
+
+  -- VAD + no-interruption for ambient mic mode
+  let realtimeKvs = [
+    kv("realtimeInputConfig", jo([
+      kv("automaticActivityDetection", jo([
+        kv("startOfSpeechSensitivity", js("START_SENSITIVITY_LOW")),
+        kv("endOfSpeechSensitivity", js("END_SENSITIVITY_HIGH")),
+        kv("prefixPaddingMs", jnum(intToFloat(20))),
+        kv("silenceDurationMs", jnum(intToFloat(1000)))
+      ])),
+      kv("activityHandling", js("NO_INTERRUPTION"))
+    ]))
+  ];
+
+  let setupKvs = [
+    kv("model", js(model)),
+    kv("generationConfig", jo(genConfigKvs)),
     kv("systemInstruction", jo([
       kv("parts", ja([jo([kv("text", js(instruction))])]))
     ])),
-    kv("tools", ja([jo([
-      kv("functionDeclarations", ja(ambientToolDeclarations()))
-    ])])),
+    kv("tools", ja([
+      jo([kv("functionDeclarations", ja(ambientToolDeclarations()))])
+    ])),
     kv("outputAudioTranscription", jo([])),
     kv("inputAudioTranscription", jo([])),
     kv("contextWindowCompression", jo([
       kv("slidingWindow", jo([]))
     ])),
-    -- Proactive audio: model decides when to respond
-    kv("proactivity", jo([kv("proactiveAudio", jb(true))])),
-    -- Affective dialog: emotion-aware tone (v1alpha only)
-    kv("enableAffectiveDialog", jb(true))
+    kv("proactivity", jo([kv("proactiveAudio", jb(true))]))
   ];
-  encode(jo([kv("setup", jo(setupKvs))]))
+  let allKvs = concat(setupKvs, realtimeKvs);
+  encode(jo([kv("setup", jo(allKvs))]))
 }
 
 -- ══════════════════════════════════════════════════════
@@ -302,7 +333,20 @@ pure func ambientToolDeclarations() -> [Json] = [
   toolDecl("summarizeContext", "Summarize the recent conversation. Returns a summary of what has been discussed.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("maxTurns", jo([kv("type", js("number")), kv("description", js("Max turns to include (default 20)"))]))])),
-      kv("required", ja([]))]))
+      kv("required", ja([]))])),
+  toolDecl("takeScreenshot", "Capture a screenshot of the user's screen and send it for analysis. Use when the user asks about what's on their screen.",
+    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
+  toolDecl("readClipboard", "Read the current contents of the user's clipboard.",
+    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
+  toolDecl("saveNote", "Save a named note to browser storage for later retrieval.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("title", jo([kv("type", js("string")), kv("description", js("Note title"))])),
+      kv("content", jo([kv("type", js("string")), kv("description", js("Note content"))]))])),
+      kv("required", ja([js("title"), js("content")]))])),
+  toolDecl("webFetch", "Fetch content from a URL and return the text. Use when the user mentions a URL or asks about a web page.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("url", jo([kv("type", js("string")), kv("description", js("The URL to fetch"))]))])),
+      kv("required", ja([js("url")]))]))
 ]
 
 -- ══════════════════════════════════════════════════════
