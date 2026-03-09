@@ -195,6 +195,10 @@ jobs:
             invoice_processor_wasm/ailang/streaming/safe_agent/services/
           cp streaming/safe_agent/services/business_browser.ail \
             invoice_processor_wasm/ailang/streaming/safe_agent/services/
+          # Ambient Assistant module (WASM bridge)
+          mkdir -p invoice_processor_wasm/ailang/streaming/ambient_assistant
+          cp streaming/ambient_assistant/ambient_browser.ail \
+            invoice_processor_wasm/ailang/streaming/ambient_assistant/
           echo "Copied streaming modules"
 
       - name: Copy demo Office files
