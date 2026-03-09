@@ -196,7 +196,7 @@ Sessions are scoped per git repository (auto-detected) or custom-named:
 
 **[Try it live](https://www.sunholo.com/ailang-demos/streaming/ambient_assistant/)**
 
-The browser version runs at `streaming/ambient_assistant/browser/` via any static file server. It uses AILANG WASM for protocol construction and falls back to pure JS if WASM isn't available.
+The browser version runs at `streaming/ambient_assistant/` via any static file server. It uses AILANG WASM for protocol construction and falls back to pure JS if WASM isn't available.
 
 ```bash
 # Serve locally
