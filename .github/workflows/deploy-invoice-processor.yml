@@ -288,7 +288,7 @@ jobs:
           cp docparse/services/*.ail _site/website_builder/ailang/docparse/services/
 
           echo "::group::Site contents"
-          find _site -type f | head -60
+          find _site -type f | head -60 || true
           echo "::endgroup::"
           echo "Assembled $(find _site -type f | wc -l) files into _site/"
 
