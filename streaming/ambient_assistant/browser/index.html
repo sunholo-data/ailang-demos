@@ -1526,16 +1526,9 @@ async function dispatchBrowserTool(name, args) {
       if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
       try {
         addSystemMessage('Fetching ' + url.substring(0, 60) + '...');
-        // Try direct fetch first
-        let resp;
-        try {
-          resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(8000) });
-        } catch (directErr) {
-          // CORS blocked — try allorigins proxy
-          addSystemMessage('Direct fetch blocked by CORS, trying proxy...');
-          const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-          resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-        }
+        // Use CORS proxy — external sites almost never send CORS headers
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) return 'Fetch failed: HTTP ' + resp.status;
         const text = await resp.text();
         const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
