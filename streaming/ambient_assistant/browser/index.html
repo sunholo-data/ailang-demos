@@ -454,6 +454,28 @@
     font-size: 12px;
     padding: 4px 0;
   }
+  .msg-screenshot {
+    align-self: center;
+    padding: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-width: 320px;
+  }
+  .msg-screenshot img {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+  }
+  .msg-screenshot .msg-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    opacity: 0.6;
+    text-align: center;
+    color: var(--text-dim);
+  }
   .msg-label {
     font-size: 10px;
     text-transform: uppercase;
@@ -994,6 +1016,14 @@ function addSystemMessage(text) {
   $.conversation.scrollTop = $.conversation.scrollHeight;
 }
 
+function addScreenshotPreview(dataUrl) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-screenshot';
+  el.innerHTML = '<img src="' + dataUrl + '" alt="Screenshot"><div class="msg-label">Screenshot sent to AILANG</div>';
+  $.conversation.appendChild(el);
+  $.conversation.scrollTop = $.conversation.scrollHeight;
+}
+
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -1474,6 +1504,7 @@ async function dispatchBrowserTool(name, args) {
         video.pause();
         video.srcObject = null;
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        addScreenshotPreview(dataUrl);
         const b64 = dataUrl.split(',')[1];
         const activeConn = core.getActiveConnection();
         if (activeConn) {
