@@ -713,6 +713,95 @@
   }
   .send-btn:hover { color: var(--amber); border-color: var(--amber); }
   .send-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* ── Sidebar toggle (hidden on desktop) ── */
+  .sidebar-toggle { display: none; }
+  .sidebar-backdrop { display: none; }
+
+  /* ── Camera button (hidden on desktop — screen share is better) ── */
+  .camera-btn { display: none; }
+
+  /* ── Mobile responsive ── */
+  @media (max-width: 768px) {
+    html, body { font-size: 13px; }
+
+    .app { height: 100dvh; }
+
+    /* Header compact */
+    .header { padding: 8px 12px; }
+    .logo { font-size: 15px; }
+    .logo span { display: none; }
+    .status-pill { font-size: 10px; padding: 3px 8px; }
+    .btn { font-size: 11px; padding: 5px 10px; }
+
+    /* Config stacked */
+    .config.open { padding: 10px 12px; }
+    .config-row { flex-wrap: wrap; gap: 8px; }
+    .config-row label { min-width: auto; }
+
+    /* Single column — hide sidebar */
+    .main { grid-template-columns: 1fr; }
+    .left-panel { border-right: none; }
+
+    /* Sidebar as bottom drawer */
+    .sidebar-toggle { display: inline-block; }
+    .sidebar {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      max-height: 60vh;
+      z-index: 100;
+      border-top: 2px solid var(--amber);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
+    }
+    .sidebar.open { display: flex; }
+    .sidebar-backdrop.open {
+      display: block;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99;
+    }
+
+    /* Smaller orb */
+    .orb-container { width: 80px; height: 80px; }
+    .app.connected .orb-container { width: 50px; height: 50px; }
+    .orb-area { padding: 8px 12px 6px; }
+    .app.connected .orb-area { padding: 6px 12px 4px; }
+    .orb-info { gap: 12px; font-size: 11px; margin-top: 6px; }
+
+    /* Hide waveform on mobile — status indicators are enough */
+    .waveform-bar { display: none; }
+
+    /* Chat messages wider */
+    .msg { max-width: 95%; }
+    .conversation { padding: 10px 12px; }
+
+    /* Bottom bar — compact + safe area */
+    .bottom-bar {
+      padding: 8px 12px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      gap: 6px;
+    }
+    .action-btn {
+      padding: 10px 14px;
+      min-width: 44px;
+      min-height: 44px;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .action-btn .action-label { display: none; }
+    .text-input { padding: 10px 14px; font-size: 16px; /* prevents iOS zoom */ }
+    .send-btn { padding: 10px 16px; font-size: 13px; }
+
+    /* On mobile: show camera, hide screen share */
+    .camera-btn { display: flex; }
+    .screen-btn { display: none; }
+
+    /* Screenshot preview smaller */
+    .msg-screenshot { max-width: 200px; }
+  }
 </style>
 </head>
 <body>
@@ -730,6 +819,7 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="btn sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">Tools</button>
       <button class="btn" onclick="toggleConfig()">Config</button>
       <button class="btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
     </div>
@@ -800,7 +890,7 @@
     </div>
 
     <!-- Right: sidebar -->
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-section">
         <div class="sidebar-title">Session</div>
         <div class="stat-grid">
@@ -859,10 +949,13 @@
   <div class="bottom-bar">
     <div class="action-group">
       <button class="action-btn mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">
-        <span class="action-icon">&#x1f3a4;</span> Mic
+        <span class="action-icon">&#x1f3a4;</span><span class="action-label"> Mic</span>
       </button>
       <button class="action-btn screen-btn" id="screenBtn" onclick="toggleScreenShare()" title="Share screen for screenshots">
-        <span class="action-icon">&#x1f4bb;</span> Screen
+        <span class="action-icon">&#x1f4bb;</span><span class="action-label"> Screen</span>
+      </button>
+      <button class="action-btn camera-btn" id="cameraBtn" onclick="toggleCamera()" title="Use camera for screenshots">
+        <span class="action-icon">&#x1f4f7;</span><span class="action-label"> Camera</span>
       </button>
     </div>
     <input type="text" class="text-input" id="textInput"
@@ -871,6 +964,9 @@
     <button class="send-btn" id="sendBtn" onclick="sendText()" disabled>Send</button>
   </div>
 </div>
+
+<!-- Sidebar backdrop (mobile only) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
 
 <!-- Hidden compat elements -->
 <div style="display:none">
@@ -904,7 +1000,8 @@ function cacheDom() {
     'fState', 'fFrames', 'fBytes',
     'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sLatencySide', 'sTurns',
     'toolsList', 'contextList', 'availableTools',
-    'chkAutoMic', 'thinkingBudget', 'screenBtn',
+    'chkAutoMic', 'thinkingBudget', 'screenBtn', 'cameraBtn',
+    'sidebarToggle', 'sidebar', 'sidebarBackdrop',
     'orbContainer', 'startBtn', 'app',
   ]) {
     $[id] = document.getElementById(id);
@@ -1488,13 +1585,14 @@ async function dispatchBrowserTool(name, args) {
       return 'Recent conversation (' + recent.length + ' entries):\n' + recent.join('\n');
     }
     case 'takeScreenshot': {
-      if (!screenStream) {
-        return 'Screen sharing not enabled. The user needs to click the Share Screen button first.';
+      const stream = screenStream || cameraStream;
+      if (!stream) {
+        return 'No video source available. The user needs to click the Camera or Share Screen button first.';
       }
       try {
         addSystemMessage('Capturing screenshot...');
         const video = document.createElement('video');
-        video.srcObject = screenStream;
+        video.srcObject = stream;
         await video.play();
         const canvas = document.createElement('canvas');
         canvas.width = Math.min(video.videoWidth, 1024);
@@ -1622,6 +1720,40 @@ async function toggleScreenShare() {
 }
 
 
+
+// ── Camera (mobile alternative to screen share) ──
+let cameraStream = null;
+
+async function toggleCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+    $.cameraBtn.classList.remove('active');
+    addSystemMessage('Camera stopped');
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    $.cameraBtn.classList.add('active');
+    addSystemMessage('Camera active — takeScreenshot tool is now available');
+    cameraStream.getVideoTracks()[0].addEventListener('ended', () => {
+      cameraStream = null;
+      $.cameraBtn.classList.remove('active');
+      addSystemMessage('Camera stopped');
+    });
+  } catch (e) {
+    addSystemMessage('Camera denied: ' + e.message);
+  }
+}
+
+// ── Sidebar drawer (mobile) ──
+function toggleSidebar() {
+  $.sidebar.classList.toggle('open');
+  $.sidebarBackdrop.classList.toggle('open');
+}
 
 // ── Init ──
 window.addEventListener('load', async () => {
