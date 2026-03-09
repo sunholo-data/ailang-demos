@@ -213,7 +213,7 @@ jobs:
 
       - name: Build Website Builder portal
         env:
-          VITE_API_URL: https://website-builder-api-tb6m6slywa-uc.a.run.app/api
+          VITE_API_URL: https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app/api
         run: |
           cd website_builder/portal
           npm ci

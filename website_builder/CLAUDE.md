@@ -200,7 +200,7 @@ curl -s https://sunholo-voight-kampff.github.io/sunholo-websites/sites/default/t
 | What | URL |
 |------|-----|
 | Portal (SPA) | https://www.sunholo.com/ailang-demos/website_builder/ |
-| Sidecar API | https://website-builder-api-tb6m6slywa-uc.a.run.app |
+| Sidecar API | https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app |
 | Generated sites | https://sunholo-voight-kampff.github.io/sunholo-websites/sites/{user}/{site}/ |
 | Sites repo | https://github.com/sunholo-voight-kampff/sunholo-websites |
 

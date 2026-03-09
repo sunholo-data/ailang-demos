@@ -32,7 +32,7 @@ const SITES_DIR = join(WEBSITES_REPO, 'sites');
 
 // Form submission config
 const FORMS_JSON_PATH = join(WEBSITES_REPO, 'forms.json');
-const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://website-builder-api-blqtqfexwa-uc.a.run.app';
+const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app';
 const FORM_ENDPOINT_ABS = `${CLOUD_RUN_URL}/api/form-submit`;
 
 // In-memory rate limiting: IP → { count, resetAt }

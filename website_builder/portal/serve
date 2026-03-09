@@ -15,7 +15,7 @@ PORT=5174
 SIDECAR_PORT=3456
 URL="http://localhost:${PORT}"
 MODE="local"
-CLOUD_API_URL="https://website-builder-api-tb6m6slywa-uc.a.run.app/api"
+CLOUD_API_URL="https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app/api"
 
 # Parse args
 for arg in "$@"; do
