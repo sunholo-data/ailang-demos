@@ -268,9 +268,9 @@ jobs:
           # Streaming AILANG modules already copied via rsync from
           # invoice_processor_wasm/ailang/streaming/ (cleaned in earlier step)
 
-          # DocParse hub page
-          mkdir -p _site/docparse
-          cp docparse/site/index.html _site/docparse/
+          # DocParse hub page (document-intelligence/ to avoid confusion with docparse.html)
+          mkdir -p _site/document-intelligence
+          cp docparse/site/index.html _site/document-intelligence/
 
           # Website Builder portal (Vue SPA + WASM)
           mkdir -p _site/website_builder/wasm
