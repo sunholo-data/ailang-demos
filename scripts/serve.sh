@@ -70,11 +70,8 @@ ln -s "$REPO_ROOT/streaming/shared/streaming-ui.js" "$SITE/streaming/shared/"
 ln -s "$REPO_ROOT/streaming/shared/ailang-logo.svg" "$SITE/streaming/shared/" 2>/dev/null || true
 for demo in claude_chat gemini_live safe_agent voice_docparse ambient_assistant; do
   if [ -f "$REPO_ROOT/streaming/$demo/browser/index.html" ]; then
-    # Preserve browser/ subdirectory so relative paths (../../shared/) resolve correctly
-    mkdir -p "$SITE/streaming/$demo/browser"
-    ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/browser/index.html"
-    # Also create a redirect at the demo root for convenience
-    echo "<meta http-equiv='refresh' content='0;url=browser/'>" > "$SITE/streaming/$demo/index.html"
+    mkdir -p "$SITE/streaming/$demo"
+    ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/index.html"
   fi
 done
 
