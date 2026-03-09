@@ -225,7 +225,7 @@ func handleListFiles(argsJson: string, allowedPath: string) -> Result[string, st
 -- Tool: Safe Command Execution
 -- ============================================================
 
-pure func isAllowedCommand(cmd: string) -> bool {
+export pure func isAllowedCommand(cmd: string) -> bool {
   match cmd {
     "ls" => true, "date" => true, "echo" => true, "wc" => true,
     "head" => true, "tail" => true, "grep" => true,
@@ -295,7 +295,7 @@ pure func isAilangSubcmdSafe(subcmd: string) -> bool {
 
 -- Validate subcommands for git, gh, ailang
 -- Returns Ok(()) if safe, Err(reason) if blocked
-pure func validateSubcommands(cmd: string, args: [string]) -> Result[(), string] {
+export pure func validateSubcommands(cmd: string, args: [string]) -> Result[(), string] {
   match cmd {
     "git" => match args {
       [] => Err("git requires a subcommand"),

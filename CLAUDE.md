@@ -24,6 +24,7 @@ demos/
 │   ├── index.html         # Hub page (links to browser UIs)
 │   ├── test_sse.ail       # Minimal Gemini SSE test
 │   ├── shared/            # Shared browser assets (audio-worklet, nav)
+│   ├── ambient_assistant/ # Always-listening voice assistant (mic, video, tools)
 │   ├── claude_chat/       # Claude SSE streaming
 │   ├── gemini_live/       # Gemini Live WebSocket bidi (audio)
 │   ├── safe_agent/        # Contract-verified tool calling (REST + SSE)
@@ -31,8 +32,29 @@ demos/
 │   ├── voice_analytics/   # Voice → BigQuery queries
 │   ├── voice_docparse/    # Voice → document analysis
 │   └── voice_pipeline/    # STT → LLM → TTS pipeline
+├── scripts/
+│   └── serve.sh           # Local dev server (assembles _site/, symlinks for live editing)
 └── invoice_processor_wasm/ # AILANG WASM runtime (hosts DocParse browser)
 ```
+
+## Local Dev Server
+
+One script to serve all browser demos locally with live editing (symlinks):
+
+```bash
+scripts/serve.sh                # serve on http://localhost:8080
+scripts/serve.sh --port 3000    # custom port
+scripts/serve.sh --build        # rebuild website builder portal first
+```
+
+URLs served:
+- Hub: `http://localhost:8080/`
+- Ambient: `http://localhost:8080/streaming/ambient_assistant/`
+- Streaming: `http://localhost:8080/streaming/`
+- DocParse: `http://localhost:8080/docparse.html`
+- Website Builder: `http://localhost:8080/website_builder/`
+
+Edits to source files are reflected immediately (refresh browser). The script assembles `_site/` with symlinks to source directories.
 
 ## Quick Commands
 
@@ -44,6 +66,18 @@ done
 
 # ── Verified working CLI demos ──
 
+# Ambient Assistant — always-listening voice assistant
+ambient --mic "Hey AILANG"                    # mic + interactive
+ambient --mic --screen "What's on my screen?" # + screen capture
+ambient --mic --video "Can you see me?"       # + webcam
+ambient --list                                # list sessions
+
+# Gemini Live — speak CLI
+speak "Tell me a joke"
+speak --voice Charon "What is AILANG?"
+speak --tools "What's the git status?"    # with tool calling
+speak --list                              # show active sessions
+
 # Claude SSE (needs ANTHROPIC_API_KEY)
 ANTHROPIC_API_KEY=sk-ant-... ailang run --entry main \
   --caps IO,Stream,Env streaming/claude_chat/main.ail "What is AILANG?"
@@ -51,14 +85,6 @@ ANTHROPIC_API_KEY=sk-ant-... ailang run --entry main \
 # Gemini SSE (uses ADC — ensure GOOGLE_API_KEY is unset)
 GOOGLE_API_KEY="" ailang run --entry main \
   --caps IO,Stream,Net,Env streaming/test_sse.ail "What is 2+2?"
-
-# Gemini Live — AILANG speaks (symlinked to ~/.local/bin/speak)
-speak "Tell me a joke"
-speak --voice Charon "What is AILANG?"
-speak -v Orus "Explain algebraic effects"
-speak --tools "What's the git status?"    # with tool calling
-speak -t "Any open PRs?"                  # git, gh, ailang tools
-speak --list                              # show active sessions
 
 # Safe Agent with contract verification (uses ADC)
 GOOGLE_API_KEY="" ailang run --entry main \
@@ -96,6 +122,32 @@ GOOGLE_API_KEY="" ailang run --entry main \
 | Voice Analytics | WebSocket (`connect`) | No | Audio-only model output |
 | Voice DocParse | WebSocket (`connect`) | No | Audio-only model output |
 | Voice Pipeline | WebSocket (`connect`) | No | Needs Deepgram + ElevenLabs keys |
+| Ambient Assistant | WebSocket (`connect`) | **YES** | Proactive audio, tools, mic, video, async |
+
+## Ambient Assistant (ambient)
+
+Always-listening voice assistant. Only responds when addressed by name ("AILANG"). See `streaming/ambient_assistant/README.md` for full docs.
+
+```bash
+# Install
+ln -s $(pwd)/streaming/ambient_assistant/ambient ~/.local/bin/ambient
+
+# Basic usage
+ambient --mic "Hey AILANG"                    # mic + interactive
+ambient --mic --screen "What's on my screen?" # + screen capture
+ambient --mic --video "Can you see me?"       # + webcam
+ambient --no-interactive "Quick query"        # single-prompt
+ambient --list                                # list sessions
+```
+
+| Feature | Description |
+|---------|-------------|
+| Proactive audio | Model decides when to respond (always on) |
+| 12 tools | speak_tools + summarize, search, remind, cache, prefetch, takeScreenshot |
+| Async tools | Slow tools run in background, audio stays responsive |
+| Video input | Screen/webcam via ffmpeg (512px/320px, 1 FPS) |
+| On-demand screenshot | `takeScreenshot` tool — single frame, no continuous streaming needed |
+| Sessions | Per-project, auto-resumed (2-hour Gemini handles) |
 
 ## Known AILANG Issues
 
@@ -114,7 +166,7 @@ Inline `tests [...]` on pure functions that call imported stdlib functions fail 
 - Native playback via `std/process` (v0.8.0) — no shell chain needed
 
 ### Gemini Live voice selection
-Set `GEMINI_VOICE` env var to any of the 30 prebuilt voices. Default: `Sulafat` (Warm).
+Set `GEMINI_VOICE` env var to any of the 30 prebuilt voices. Default: `Charon` (Informative) for ambient, `Sulafat` (Warm) for speak.
 Accent is controlled via system instruction (default: British English).
 Available voices: Zephyr (Bright), Puck (Upbeat), Charon (Informative), Kore (Firm), Fenrir (Excitable), Leda (Youthful), Orus (Firm), Aoede (Breezy), Callirrhoe (Easy-going), Autonoe (Bright), Enceladus (Breathy), Iapetus (Clear), Umbriel (Easy-going), Algieba (Smooth), Despina (Smooth), Erinome (Clear), Algenib (Gravelly), Rasalgethi (Informative), Laomedeia (Upbeat), Achernar (Soft), Alnilam (Firm), Schedar (Even), Gacrux (Mature), Pulcherrima (Forward), Achird (Friendly), Zubenelgenubi (Casual), Vindemiatrix (Gentle), Sadachbia (Lively), Sadaltager (Knowledgeable), Sulafat (Warm).
 
@@ -131,6 +183,7 @@ Browser demos should load AILANG modules via `ailangLoadModule()` and use `ailan
 | Command | Symlink | Script | Purpose |
 |---------|---------|--------|---------|
 | `docparse` | `~/.local/bin/docparse` | `docparse/docparse` | Document parsing |
+| `ambient` | `~/.local/bin/ambient` | `streaming/ambient_assistant/ambient` | Ambient voice assistant |
 | `speak` | `~/.local/bin/speak` | `streaming/gemini_live/speak` | Text to speech |
 
 Install: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`

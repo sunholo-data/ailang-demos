@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 # Assemble _site/ from multiple source directories and serve locally.
 # Mirrors what CI does, but uses symlinks for fast iteration.
-# Usage: bash scripts/serve.sh [port]  (default: 8888)
+#
+# Usage:
+#   scripts/serve.sh                  # serve on port 8080
+#   scripts/serve.sh --port 3000      # custom port
+#   scripts/serve.sh --build          # rebuild website builder portal first
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SITE="$REPO_ROOT/_site"
-PORT="${1:-8888}"
+PORT=8080
+BUILD_WB=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --port)  PORT="$2"; shift 2 ;;
+    --build) BUILD_WB=true; shift ;;
+    *)       PORT="$1"; shift ;;  # positional arg = port
+  esac
+done
 
 # Kill any existing server on the target port
 if lsof -ti :"$PORT" >/dev/null 2>&1; then
@@ -50,12 +63,19 @@ done
 
 # Streaming demos
 mkdir -p "$SITE/streaming/shared"
+cp "$REPO_ROOT/streaming/index.html" "$SITE/streaming/" 2>/dev/null || true
 ln -s "$REPO_ROOT/streaming/shared/audio-worklet.js" "$SITE/streaming/shared/"
 ln -s "$REPO_ROOT/streaming/shared/gemini-live-core.js" "$SITE/streaming/shared/"
 ln -s "$REPO_ROOT/streaming/shared/streaming-ui.js" "$SITE/streaming/shared/"
-for demo in claude_chat gemini_live safe_agent voice_docparse; do
-  mkdir -p "$SITE/streaming/$demo"
-  ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/index.html"
+ln -s "$REPO_ROOT/streaming/shared/ailang-logo.svg" "$SITE/streaming/shared/" 2>/dev/null || true
+for demo in claude_chat gemini_live safe_agent voice_docparse ambient_assistant; do
+  if [ -f "$REPO_ROOT/streaming/$demo/browser/index.html" ]; then
+    # Preserve browser/ subdirectory so relative paths (../../shared/) resolve correctly
+    mkdir -p "$SITE/streaming/$demo/browser"
+    ln -s "$REPO_ROOT/streaming/$demo/browser/index.html" "$SITE/streaming/$demo/browser/index.html"
+    # Also create a redirect at the demo root for convenience
+    echo "<meta http-equiv='refresh' content='0;url=browser/'>" > "$SITE/streaming/$demo/index.html"
+  fi
 done
 
 # Ecommerce landing page (CLI demo — no WASM)
@@ -63,7 +83,11 @@ mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
-# Website Builder portal (Vue SPA — must be pre-built with `npm run build`)
+# Website Builder portal
+if [ "$BUILD_WB" = true ] && [ -f "$REPO_ROOT/website_builder/portal/package.json" ]; then
+  echo "Building website builder portal..."
+  (cd "$REPO_ROOT/website_builder/portal" && npm install --silent && npm run build --silent)
+fi
 mkdir -p "$SITE/website_builder"
 if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
   # Copy built SPA assets
@@ -85,10 +109,26 @@ if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
   ln -sf "$REPO_ROOT/docparse/services/"*.ail "$SITE/website_builder/ailang/docparse/services/"
 fi
 
+# DocParse hub
+if [ -f "$REPO_ROOT/docparse/site/index.html" ]; then
+  mkdir -p "$SITE/document-intelligence"
+  cp "$REPO_ROOT/docparse/site/index.html" "$SITE/document-intelligence/"
+fi
+
+# Shared design system CSS
+mkdir -p "$SITE/shared"
+cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/shared/" 2>/dev/null || true
+cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/streaming/shared/" 2>/dev/null || true
+
 # Streaming AILANG modules (for WASM demos)
 mkdir -p "$SITE/ailang/streaming/gemini_live"
 ln -sf "$REPO_ROOT/streaming/gemini_live/gemini_live_browser.ail" \
   "$SITE/ailang/streaming/gemini_live/gemini_live_browser.ail"
+
+# Ambient Assistant AILANG modules
+mkdir -p "$SITE/ailang/streaming/ambient_assistant"
+ln -sf "$REPO_ROOT/streaming/ambient_assistant/ambient_browser.ail" \
+  "$SITE/ailang/streaming/ambient_assistant/ambient_browser.ail"
 
 # Claude Chat AILANG modules (SSE demo)
 mkdir -p "$SITE/ailang/streaming/claude_chat/types"
@@ -122,6 +162,7 @@ echo "  DocParse:  http://localhost:$PORT/docparse.html"
 echo "  Ecommerce: http://localhost:$PORT/ecommerce/"
 echo "  Website:   http://localhost:$PORT/website_builder/"
 echo "  Streaming: http://localhost:$PORT/streaming/"
+echo "  Ambient:   http://localhost:$PORT/streaming/ambient_assistant/"
 echo ""
 echo "Press Ctrl+C to stop."
 cd "$SITE" && python3 -m http.server "$PORT"

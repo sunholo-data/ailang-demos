@@ -11,6 +11,9 @@
 #   ambient --list                             # list sessions
 #   ambient --thinking 2048 "Hard problem"     # with thinking budget
 #   ambient --mic "Start listening"            # with microphone capture (needs sox)
+#   ambient --screen "What do you see?"       # with screen capture (needs ffmpeg)
+#   ambient --video "Can you see me?"         # with webcam (needs ffmpeg)
+#   ambient --fps 2 --screen "Watch this"     # custom frame rate (default 1 FPS)
 #   ambient                                    # uses default prompt
 #
 # All ambient features are pre-enabled by default:
@@ -32,7 +35,7 @@
 set -euo pipefail
 
 # Parse flags
-VOICE="${GEMINI_VOICE:-Sulafat}"
+VOICE="${GEMINI_VOICE:-Charon}"
 NEW_SESSION=false
 SESSION_NAME=""
 LIST_SESSIONS=false
@@ -42,6 +45,8 @@ ENABLE_NO_INTERRUPT=false
 ENABLE_AFFECTIVE=false
 ENABLE_INTERACTIVE=true
 ENABLE_MIC=false
+ENABLE_VIDEO=""
+VIDEO_FPS=""
 PROMPT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -85,6 +90,18 @@ while [[ $# -gt 0 ]]; do
     --mic|-m)
       ENABLE_MIC=true
       shift
+      ;;
+    --screen)
+      ENABLE_VIDEO="screen"
+      shift
+      ;;
+    --video)
+      ENABLE_VIDEO="webcam"
+      shift
+      ;;
+    --fps)
+      VIDEO_FPS="$2"
+      shift 2
       ;;
     *)
       PROMPT_ARGS+=("$1")
@@ -200,6 +217,10 @@ if $ENABLE_NO_INTERRUPT; then
 fi
 if $ENABLE_MIC; then
   export GEMINI_MIC=1
+fi
+if [ -n "$ENABLE_VIDEO" ]; then
+  export GEMINI_VIDEO="$ENABLE_VIDEO"
+  export GEMINI_VIDEO_FPS="${VIDEO_FPS:-1}"
 fi
 
 # Run from repo root

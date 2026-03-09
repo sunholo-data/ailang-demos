@@ -30,7 +30,7 @@
 --   Stream @limit=50000 - WebSocket messages (mic audio chunks + responses)
 --   Net @limit=5        - Auth
 --   Env                 - Read environment variables
---   Process @limit=200  - Audio playback + tool execution
+--   Process @limit=50000 - Audio playback (writeProcessStdin per frame) + tool execution
 
 module streaming/ambient_assistant/main
 
@@ -47,15 +47,16 @@ import std/net (httpRequest)
 import streaming/gemini_live/services/gcp_auth (getAccessToken, getDefaultProject)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
-import std/string (length, join, substring, stringToInt)
-import std/list (length as listLength, map, forEachE, concat, nth)
+import std/string (length, join, substring, stringToInt, endsWith, startsWith, trim, split)
+import std/list (length as listLength, map, forEachE, concat, nth, filter)
 import std/json (encode, decode, getString, getObject, getArray, getBool, getInt,
-                 jo, kv, js, ja, jb)
-import std/bytes (fromBase64, toBase64, length as bytesLen, concat as bytesConcat, fromInts)
+                 jo, kv, js, ja, jb, filterStrings)
+import std/bytes (fromBase64, toBase64, length as bytesLen, concat as bytesConcat, fromInts, toString as bytesToString)
 import std/process (exec, NotFound, spawnProcess, writeProcessStdin, closeProcessStdin, ProcessHandle)
 import streaming/ambient_assistant/services/ambient_tools (getAmbientToolDeclarations, dispatchAmbientTool)
 import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool,
-  isPathSafe, containsTraversal, safeCalculate, clampInput)
+  isPathSafe, containsTraversal, safeCalculate, clampInput,
+  isAllowedCommand, validateSubcommands)
 import streaming/gemini_live/services/live_config (buildProactivityConfig, buildAffectiveConfig,
   buildThinkingConfig, buildRealtimeInputConfig, buildVadConfig, buildActivityHandlingConfig)
 import std/math (intToFloat, floatToInt)
@@ -64,7 +65,7 @@ import std/math (intToFloat, floatToInt)
 -- Entry Point
 -- ============================================================
 
-export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000, Net @limit=5, Env, Process @limit=200} {
+export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000, Net @limit=5, Env, Process @limit=50000} {
   let voice = getEnvOr("GEMINI_VOICE", "Sulafat");
   -- Ambient defaults: all features ON
   let proactiveEnabled = getEnvOr("GEMINI_PROACTIVE", "1") == "1";
@@ -78,6 +79,8 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
   let noInterrupt = getEnvOr("GEMINI_NO_INTERRUPT", "") == "1";
   let interactive = getEnvOr("GEMINI_INTERACTIVE", "1") == "1";
   let micEnabled = getEnvOr("GEMINI_MIC", "") == "1";
+  let videoMode = getEnvOr("GEMINI_VIDEO", "");
+  let videoFps = getEnvOr("GEMINI_VIDEO_FPS", "1");
   -- Auto-enable no-interrupt when mic is on (prevents continuous mic from interrupting model)
   let noInterrupt = if micEnabled then true else noInterrupt;
 
@@ -91,7 +94,8 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
     ++ (if thinkingBudget >= 0 then " | Thinking: " ++ show(thinkingBudget) else "")
     ++ (if noInterrupt then " | NoInterrupt" else "")
     ++ (if interactive then " | Interactive" else "")
-    ++ (if micEnabled then " | Mic" else "");
+    ++ (if micEnabled then " | Mic" else "")
+    ++ (if length(videoMode) > 0 then " | Video:" ++ videoMode else "");
   println("Voice: " ++ voice ++ " | Features: " ++ features);
   if affectiveEnabled then
     println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw Vertex AI WebSocket)")
@@ -123,7 +127,7 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
           let prompt = if listLength(args) > 0 then join(" ", args)
             else "Hello AILANG! I'm here. Let me know if you hear anything interesting.";
           startAmbientSession(token, region, projectId, prompt, voice, handle, sessionDir,
-            toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled)
+            toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
         },
         Err(e) => {
           println("Error: ADC authentication failed: " ++ e);
@@ -142,7 +146,7 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
 func geminiLiveUrl(region: string, apiVersion: string) -> string =
   "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform." ++ apiVersion ++ ".LlmBidiService/BidiGenerateContent"
 
-func startAmbientSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool) -> () ! {IO, FS, Stream, Process, Env} {
+func startAmbientSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
   let url = geminiLiveUrl(region, apiVersion);
   let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
@@ -172,12 +176,27 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
         ++ "You passively build context from all audio you receive. "
         ++ "Speak with a British English accent. Keep responses conversational and helpful. "
         ++ "You have tools available: currentTime, calculate, readFile, listFiles, runCommand, "
-        ++ "summarizeContext, searchNotes, remindLater. "
+        ++ "summarizeContext, searchNotes, remindLater, cacheResult, getCachedResult, prefetch, takeScreenshot. "
+        ++ "takeScreenshot captures the user's screen or webcam on demand — use it when the user says "
+        ++ "'what's on my screen?', 'look at this', or 'can you see this?' without needing continuous video. "
         ++ "Use tools proactively when the user asks about time, calculations, files, "
         ++ "conversation history, notes, or wants to set reminders. "
         ++ "runCommand supports: git (status/log/diff/branch/show/blame/add/commit), "
         ++ "gh (pr/issue list/view), ailang (messages/check/docs/prompt/version), "
-        ++ "plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname.";
+        ++ "plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname. "
+        ++ "PROACTIVE DATA GATHERING: When you hear conversational cues suggesting information "
+        ++ "will be needed soon, silently pre-fetch it using the prefetch tool. Examples: "
+        ++ "'let's look at the issues' -> prefetch(key='gh_issues', command='gh', subcommand='issue list'); "
+        ++ "'we need to check the build' -> prefetch(key='gh_runs', command='gh', subcommand='run list'); "
+        ++ "'what's changed since yesterday' -> prefetch(key='git_log', command='git', subcommand='log', args='--since=yesterday --oneline'). "
+        ++ "When pre-fetching, do NOT speak the results — just cache them silently. "
+        ++ "When the user asks directly about cached data, use getCachedResult to retrieve and speak it. "
+        ++ "You can also use cacheResult to store computed summaries for quick retrieval."
+        ++ (if length(videoMode) > 0 then
+          " You can see the user's " ++ (if videoMode == "screen" then "screen" else "webcam")
+          ++ ". Use visual context to help with conversations. "
+          ++ "When you see code, documents, or UI, you can reference what you see."
+        else "");
 
       -- Generation config
       let baseGenKvs = [
@@ -231,11 +250,15 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
       -- Initialize per-turn temp files
       let turnDonePath = sessionDir ++ "/turn_done.flag";
       let setupDonePath = sessionDir ++ "/setup_done.flag";
+      let pendingToolsDir = sessionDir ++ "/pending_tools";
       writeFile(pcmPath, "");
       writeFile(turnTextPath, "");
       writeFile(turnUsagePath, "");
       writeFile(turnDonePath, "");
       writeFile(setupDonePath, "");
+      writeFile(sessionDir ++ "/speaking.flag", "");
+      -- Create pending_tools directory for async tool execution
+      exec("mkdir", ["-p", pendingToolsDir]);
 
       -- Save user prompt to transcript
       let transcriptPath = sessionDir ++ "/transcript.jsonl";
@@ -250,17 +273,29 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
       println("");
 
       if interactive then {
-        -- Interactive mode: multiplex WebSocket + stdin (+ optional mic) via selectEvents
+        -- Interactive mode: multiplex WebSocket + stdin (+ optional mic + optional video) via selectEvents
         let wsSrc = sourceOfConn(conn, "gemini", 10);
         let stdinSrc = asyncReadStdinLines("stdin", 5);
         -- Mic: spawn sox rec capturing 16kHz mono 16-bit PCM, 150ms chunks (4800 bytes)
-        let sources = if micEnabled then {
+        let baseSources = if micEnabled then {
           println("[Mic] Starting capture (rec 16kHz mono 16-bit PCM)...");
           let micSrc = asyncExecProcess("rec",
             ["-q", "-r", "16000", "-c", "1", "-b", "16", "-e", "signed-integer", "-t", "raw", "-"],
             "mic", 8, 4800);
           [wsSrc, stdinSrc, micSrc]
         } else [wsSrc, stdinSrc];
+        -- Video: spawn capture_frames.sh (outputs base64 JPEG lines via ffmpeg)
+        let scriptDir = getEnvOr("GEMINI_SCRIPT_DIR", "streaming/ambient_assistant/scripts");
+        let sources = if length(videoMode) > 0 then {
+          println("[Video] Starting " ++ videoMode ++ " capture (ffmpeg " ++ videoFps ++ " FPS)...");
+          let videoSrc = asyncExecProcess(scriptDir ++ "/capture_frames.sh",
+            [videoMode, videoFps],
+            "video", 6, 65536);
+          concat(baseSources, [videoSrc])
+        } else baseSources;
+        -- Initialize video line buffer for accumulating partial base64 lines
+        let videoBufferPath = sessionDir ++ "/video_line_buffer.txt";
+        writeFile(videoBufferPath, "");
         -- Spawn sox for streaming audio playback (plays PCM as frames arrive)
         let soxHandle = spawnSoxPlayback();
         selectEvents(sources, \event.
@@ -291,10 +326,14 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
 -- SourceText = user typed a line in the terminal.
 -- SourceBytes("mic", ...) = mic PCM audio chunk.
 -- WebSocket events = responses from Gemini.
-func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, pcmPath: string, wavPath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process} =
+func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, pcmPath: string, wavPath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process, Env} {
+  -- Check for completed async tools before processing each event
+  checkPendingTools(conn, sessionDir);
   match event {
     SourceText(source, line) => handleStdinLine(line, conn, sessionDir, setupDonePath, pcmPath, wavPath),
-    SourceBytes(source, data) => sendMicAudio(data, conn, setupDonePath),
+    SourceBytes(source, data) =>
+      if source == "video" then handleVideoBytes(data, conn, sessionDir, setupDonePath)
+      else sendMicAudio(data, conn, setupDonePath, sessionDir),
     Message(msg) => match decode(msg) {
       Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle),
       Err(_) => true
@@ -315,6 +354,7 @@ func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, ses
     Ping(_) => true,
     _ => true
   }
+}
 
 -- Handle a line typed by the user in the terminal.
 -- "exit"/"quit" stops the session. Otherwise send as new turn to Gemini.
@@ -341,24 +381,112 @@ func reportWaiting(line: string) -> bool ! {IO} {
 }
 
 -- Send mic PCM audio to Gemini as realtimeInput.
--- Gated on setup being complete (same as stdin).
-func sendMicAudio(pcmData: bytes, conn: StreamConn, setupDonePath: string) -> bool ! {IO, FS, Stream} {
+-- Gated on setup being complete AND model not currently speaking (echo prevention).
+-- speaking.flag values: "" = mic open, "1" = actively speaking, "N" (number > 1) = cooldown counter.
+-- Cooldown decrements on each mic event until 0 (prevents echo from speaker buffer after model stops).
+func sendMicAudio(pcmData: bytes, conn: StreamConn, setupDonePath: string, sessionDir: string) -> bool ! {IO, FS, Stream} {
   let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
   if setupReady != "1" then true
   else {
-    let b64 = toBase64(pcmData);
-    let audioMsg = encode(jo([
-      kv("realtimeInput", jo([
-        kv("mediaChunks", ja([jo([
-          kv("mimeType", js("audio/pcm;rate=16000")),
-          kv("data", js(b64))
-        ])]))
-      ]))
-    ]));
-    match transmit(conn, audioMsg) {
-      Ok(_) => true,
-      Err(e) => { println("[Mic Error] " ++ show(e)); true }
+    -- Mic gating: skip sending while model is speaking or cooling down
+    let speakingFlag = sessionDir ++ "/speaking.flag";
+    let flagVal = if fileExists(speakingFlag) then readFile(speakingFlag) else "";
+    if flagVal == "1" then true  -- actively speaking, drop mic data
+    else if flagVal == "" then {
+      -- Mic open — send audio to Gemini
+      let b64 = toBase64(pcmData);
+      let audioMsg = encode(jo([
+        kv("realtimeInput", jo([
+          kv("mediaChunks", ja([jo([
+            kv("mimeType", js("audio/pcm;rate=16000")),
+            kv("data", js(b64))
+          ])]))
+        ]))
+      ]));
+      match transmit(conn, audioMsg) {
+        Ok(_) => true,
+        Err(e) => { println("[Mic Error] " ++ show(e)); true }
+      }
+    } else {
+      -- Cooldown counter: decrement until 0, then clear flag
+      match stringToInt(flagVal) {
+        Some(n) => {
+          if n <= 1 then {
+            writeFile(speakingFlag, "");
+            println("[Mic] Unmuted (cooldown complete)")
+          } else writeFile(speakingFlag, show(n - 1));
+          true
+        },
+        None => { writeFile(speakingFlag, ""); true }  -- invalid value, reset
+      }
     }
+  }
+}
+
+-- ============================================================
+-- Video Frame Handling
+-- ============================================================
+-- capture_frames.sh outputs base64 JPEG strings, one per line.
+-- asyncExecProcess delivers raw bytes. We accumulate in a line buffer,
+-- split on newlines, and send each complete line as a video frame.
+
+func handleVideoBytes(data: bytes, conn: StreamConn, sessionDir: string, setupDonePath: string) -> bool ! {IO, FS, Stream} {
+  let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
+  if setupReady != "1" then true
+  else {
+    let videoBufferPath = sessionDir ++ "/video_line_buffer.txt";
+    let existing = if fileExists(videoBufferPath) then readFile(videoBufferPath) else "";
+    let newData = bytesToString(data);
+    let combined = existing ++ newData;
+    -- Split on newlines: complete lines are frames, last element may be partial
+    let parts = split(combined, "\n");
+    let numParts = listLength(parts);
+    if numParts <= 1 then {
+      -- No complete line yet, keep accumulating
+      writeFile(videoBufferPath, combined);
+      true
+    } else {
+      -- Send all complete lines as frames, keep the last (possibly partial) one
+      let lastPart = getLastPart(parts);
+      writeFile(videoBufferPath, lastPart);
+      sendCompleteFrames(parts, numParts, 0, conn);
+      true
+    }
+  }
+}
+
+-- Get the last element of a list (the possibly-partial line to keep in buffer)
+pure func getLastPart(parts: [string]) -> string =
+  match parts {
+    [] => "",
+    x :: [] => x,
+    _ :: rest => getLastPart(rest)
+  }
+
+-- Send all complete frames (all but the last element in the split list)
+func sendCompleteFrames(parts: [string], total: int, idx: int, conn: StreamConn) -> () ! {IO, Stream} =
+  match parts {
+    [] => (),
+    x :: rest =>
+      if idx < total - 1 then {
+        if length(x) > 0 then sendVideoFrame(x, conn) else ();
+        sendCompleteFrames(rest, total, idx + 1, conn)
+      } else ()
+  }
+
+-- Send a single base64-encoded JPEG frame as realtimeInput.mediaChunks
+func sendVideoFrame(jpegB64: string, conn: StreamConn) -> () ! {IO, Stream} {
+  let videoMsg = encode(jo([
+    kv("realtimeInput", jo([
+      kv("mediaChunks", ja([jo([
+        kv("mimeType", js("image/jpeg")),
+        kv("data", js(jpegB64))
+      ])]))
+    ]))
+  ]));
+  match transmit(conn, videoMsg) {
+    Ok(_) => println("[Video] Frame sent (" ++ show(length(jpegB64)) ++ " bytes b64)"),
+    Err(e) => println("[Video Error] " ++ show(e))
   }
 }
 
@@ -423,7 +551,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
 -- ============================================================
 
 -- Interactive mode: never disconnect on turnComplete or sessionResumption
-func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process} =
+func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process, Env} =
   match getObject(json, "setupComplete") {
     Some(_) => {
       writeFile(setupDonePath, "1");
@@ -437,7 +565,7 @@ func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, 
       None => match getObject(json, "usageMetadata") {
         Some(um) => handleUsageMetadata(um, sessionDir),
         None => match getObject(json, "toolCall") {
-          Some(tc) => handleToolCall(tc, conn, sessionDir, allowedPath),
+          Some(tc) => handleToolCallAsync(tc, conn, sessionDir, allowedPath),
           None => match getObject(json, "toolCallCancellation") {
             Some(tcc) => handleToolCallCancellation(tcc),
             None => match getObject(json, "goAway") {
@@ -521,6 +649,13 @@ func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle:
         Some(true) => println("[Session] Handle saved (resumable)"),
         _ => println("[Session] Handle saved")
       };
+      -- Start mic cooldown (~3 sec at 7 events/sec = 21 ticks before unmute)
+      -- turnComplete may not fire with continuous mic, so session update is the fallback signal
+      let currentFlag = if fileExists(sessionDir ++ "/speaking.flag") then readFile(sessionDir ++ "/speaking.flag") else "";
+      if currentFlag == "1" then {
+        writeFile(sessionDir ++ "/speaking.flag", "21");
+        println("[Mic] Muted (cooldown 3s)")
+      } else ();
       -- Play accumulated audio (skipped when streaming — already played in real-time)
       maybePlayTurnAudio(soxHandle, pcmPath, wavPath);
       let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
@@ -588,7 +723,12 @@ func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath:
             Ok(r) => r,
             Err(e) => "Error: " ++ e
           };
-          let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
+          -- If result is a screenshot, send the frame as video and use text response
+          let truncResult = if startsWith(result, "SCREENSHOT:") then {
+            let b64Frame = substring(result, 11, length(result));
+            sendVideoFrame(b64Frame, conn);
+            "Screenshot captured and sent (" ++ show(length(b64Frame)) ++ " bytes)"
+          } else if length(result) > 2000 then substring(result, 0, 2000) else result;
           println("[Tool Result] " ++ truncResult);
           let responseMsg = buildToolResponseMsg(fnName, truncResult);
           match transmit(conn, responseMsg) {
@@ -609,6 +749,290 @@ func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath:
     None => true
   }
 }
+
+-- ============================================================
+-- Async Tool Execution (interactive mode)
+-- ============================================================
+-- Fast tools run synchronously, slow tools spawn in background
+-- so the selectEvents loop stays responsive (mic, audio, stdin).
+
+pure func isSlowTool(name: string) -> bool =
+  match name {
+    "runCommand" => true,
+    "prefetch" => true,
+    "searchNotes" => true,
+    _ => false
+  }
+
+-- Async-aware tool handler: fast tools sync, slow tools spawned as subprocess
+func handleToolCallAsync(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process, Env} {
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  match getArray(tc, "functionCalls") {
+    Some(calls) => match nth(calls, 0) {
+      Some(call) => {
+        let fnName = getOrElse(getString(call, "name"), "");
+        let callId = getOrElse(getString(call, "id"), fnName ++ "_" ++ show(getNextCallId(sessionDir)));
+        let argsJson = match getObject(call, "args") {
+          Some(a) => encode(a),
+          None => "{}"
+        };
+        println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+        if isSlowTool(fnName) then
+          spawnAsyncTool(callId, fnName, argsJson, sessionDir, allowedPath, transcriptPath)
+        else {
+          -- Fast path: dispatch synchronously
+          let result = match dispatchAmbientTool(fnName, argsJson, allowedPath, sessionDir) {
+            Ok(r) => r,
+            Err(e) => "Error: " ++ e
+          };
+          -- If result is a screenshot, send the frame as video and use text response
+          let truncResult = if startsWith(result, "SCREENSHOT:") then {
+            let b64Frame = substring(result, 11, length(result));
+            sendVideoFrame(b64Frame, conn);
+            "Screenshot captured and sent (" ++ show(length(b64Frame)) ++ " bytes)"
+          } else if length(result) > 2000 then substring(result, 0, 2000) else result;
+          println("[Tool Result] " ++ truncResult);
+          match transmit(conn, buildToolResponseMsg(fnName, truncResult)) {
+            Ok(_) => (),
+            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+          };
+          appendFile(transcriptPath, encode(jo([
+            kv("type", js("tool_call")),
+            kv("name", js(fnName)),
+            kv("args", js(argsJson)),
+            kv("result", js(truncResult))
+          ])) ++ "\n");
+          true
+        }
+      },
+      None => true
+    },
+    None => true
+  }
+}
+
+-- Monotonic call ID counter for async tools (when Gemini doesn't provide an id)
+func getNextCallId(sessionDir: string) -> int ! {FS} {
+  let counterPath = sessionDir ++ "/pending_tools/counter.txt";
+  let current = if fileExists(counterPath) then
+    match stringToInt(trim(readFile(counterPath))) { Some(n) => n, None => 0 }
+  else 0;
+  let next = current + 1;
+  writeFile(counterPath, show(next));
+  next
+}
+
+-- Spawn a slow tool as a background subprocess.
+-- Validates command safety first (sync), then spawns execution (async).
+func spawnAsyncTool(callId: string, fnName: string, argsJson: string, sessionDir: string, allowedPath: string, transcriptPath: string) -> bool ! {IO, FS, Process, Env} {
+  let pendingDir = sessionDir ++ "/pending_tools";
+  let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
+  let resultPath = pendingDir ++ "/" ++ callId ++ ".result";
+  let donePath = pendingDir ++ "/" ++ callId ++ ".done";
+
+  -- Build and validate the shell command
+  match buildToolShellCommand(fnName, argsJson, allowedPath, sessionDir) {
+    Err(reason) => {
+      -- Validation failed — send error response synchronously
+      println("[Tool Error] " ++ reason);
+      false
+    },
+    Ok(shellCmd) => {
+      -- Save pending state
+      writeFile(pendingPath, encode(jo([
+        kv("fnName", js(fnName)),
+        kv("argsJson", js(argsJson))
+      ])));
+      writeFile(resultPath, "");
+      -- Mark that pending tools exist (so checkPendingTools can skip exec("ls") when idle)
+      writeFile(pendingDir ++ "/has_pending", "1");
+      -- Spawn: run command, write output, touch done marker
+      let fullCmd = shellCmd ++ " > " ++ resultPath ++ " 2>&1; touch " ++ donePath;
+      spawnProcess("sh", ["-c", fullCmd]);
+      println("[Tool Async] " ++ fnName ++ " (id=" ++ callId ++ ") spawned in background");
+      appendFile(transcriptPath, encode(jo([
+        kv("type", js("tool_call_async")),
+        kv("name", js(fnName)),
+        kv("args", js(argsJson)),
+        kv("callId", js(callId))
+      ])) ++ "\n");
+      true
+    }
+  }
+}
+
+-- Build a validated shell command string for async execution.
+-- Returns Err if validation fails (unsafe command/subcommand).
+func buildToolShellCommand(fnName: string, argsJson: string, allowedPath: string, sessionDir: string) -> Result[string, string] ! {FS, Process, Env} =
+  match fnName {
+    "runCommand" => buildRunCommandShell(argsJson),
+    "prefetch" => buildPrefetchShell(argsJson, sessionDir),
+    "searchNotes" => buildSearchNotesShell(argsJson, allowedPath),
+    _ => Err("No async handler for tool: " ++ fnName)
+  }
+
+-- Build shell command for runCommand (validates allowlist + subcommands)
+func buildRunCommandShell(argsJson: string) -> Result[string, string] ! {} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let cmd = getOrElse(getString(json, "command"), "");
+      let args = match getArray(json, "args") {
+        Some(arr) => filterStrings(arr),
+        None => []
+      };
+      if not isAllowedCommand(cmd) then
+        Err("Command rejected: '" ++ cmd ++ "' is not in the allowlist")
+      else match validateSubcommands(cmd, args) {
+        Err(reason) => Err(reason),
+        Ok(_) => Ok(cmd ++ " " ++ join(" ", args))
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- Build shell command for prefetch (runCommand + will cache after completion)
+func buildPrefetchShell(argsJson: string, sessionDir: string) -> Result[string, string] ! {} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let command = getOrElse(getString(json, "command"), "");
+      let subcommand = getOrElse(getString(json, "subcommand"), "");
+      let extraArgs = getOrElse(getString(json, "args"), "");
+      -- Build command + subcommand + args as a single shell line
+      let fullArgs = split(subcommand, " ");
+      let allArgs = if length(extraArgs) > 0 then concat(fullArgs, split(extraArgs, " ")) else fullArgs;
+      if not isAllowedCommand(command) then
+        Err("Command rejected: '" ++ command ++ "' is not in the allowlist")
+      else match validateSubcommands(command, allArgs) {
+        Err(reason) => Err(reason),
+        Ok(_) => Ok(command ++ " " ++ join(" ", allArgs))
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- Build shell command for searchNotes
+func buildSearchNotesShell(argsJson: string, allowedPath: string) -> Result[string, string] ! {Env} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let keyword = getOrElse(getString(json, "keyword"), "");
+      if length(keyword) == 0 then Err("keyword is required")
+      else {
+        let notesDir = getEnvOr("AILANG_NOTES_DIR", allowedPath);
+        if not isPathSafe(notesDir, allowedPath) then
+          Err("Notes directory outside allowed path")
+        else Ok("grep -rl --include='*.md' --include='*.txt' --include='*.org' '" ++ keyword ++ "' " ++ notesDir)
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- Check for completed async tools and send their responses to Gemini.
+-- Called on each event tick from handleSelectEvent.
+func checkPendingTools(conn: StreamConn, sessionDir: string) -> () ! {IO, FS, Stream, Process} {
+  let pendingDir = sessionDir ++ "/pending_tools";
+  let markerPath = pendingDir ++ "/has_pending";
+  -- Fast path: skip exec("ls") when no tools are pending (readFile is FS op, not Process op)
+  let hasPending = if fileExists(markerPath) then readFile(markerPath) else "";
+  if hasPending != "1" then ()
+  else {
+    -- List .done files (each = one completed async tool)
+    match exec("ls", [pendingDir]) {
+      Ok(out) => {
+        let allFiles = split(trim(bytesToString(out.stdout)), "\n");
+        let doneFiles = filter(\f. endsWith(f, ".done"), allFiles);
+        forEachE(\doneFile. processDoneFile(doneFile, conn, sessionDir, pendingDir), doneFiles);
+        -- Check if all pending tools are done (each tool has .json + .done when complete)
+        let pendingJsons = filter(\f. endsWith(f, ".json"), allFiles);
+        if listLength(pendingJsons) <= listLength(doneFiles) then
+          writeFile(markerPath, "")
+        else ()
+      },
+      Err(_) => ()
+    }
+  }
+}
+
+-- Process a single .done file: extract callId and send completed tool response
+func processDoneFile(doneFile: string, conn: StreamConn, sessionDir: string, pendingDir: string) -> () ! {IO, FS, Stream, Process} {
+  let callId = substring(doneFile, 0, length(doneFile) - 5);
+  sendCompletedToolResponse(conn, sessionDir, pendingDir, callId)
+}
+
+-- Read result of a completed async tool and send toolResponse to Gemini
+func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir: string, callId: string) -> () ! {IO, FS, Stream, Process} {
+  let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
+  let resultPath = pendingDir ++ "/" ++ callId ++ ".result";
+  let donePath = pendingDir ++ "/" ++ callId ++ ".done";
+  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+
+  let fnName = match decode(readFile(pendingPath)) {
+    Ok(j) => getOrElse(getString(j, "fnName"), "unknown"),
+    Err(_) => "unknown"
+  };
+  let result = if fileExists(resultPath) then readFile(resultPath) else "(no output)";
+  let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
+
+  println("[Tool Async] " ++ fnName ++ " (id=" ++ callId ++ ") completed");
+  println("[Tool Result] " ++ truncResult);
+
+  -- For prefetch: also cache the result
+  handlePrefetchCache(fnName, callId, sessionDir, truncResult);
+
+  match transmit(conn, buildToolResponseMsg(fnName, truncResult)) {
+    Ok(_) => (),
+    Err(e) => println("[Error] Tool response send failed: " ++ show(e))
+  };
+  appendFile(transcriptPath, encode(jo([
+    kv("type", js("tool_call_result")),
+    kv("name", js(fnName)),
+    kv("callId", js(callId)),
+    kv("result", js(truncResult))
+  ])) ++ "\n");
+
+  -- Clean up pending files
+  exec("rm", ["-f", pendingPath, resultPath, donePath])
+}
+
+-- For prefetch tools: cache the result after async completion
+func handlePrefetchCache(fnName: string, callId: string, sessionDir: string, result: string) -> () ! {IO, FS, Process} =
+  if fnName == "prefetch" then {
+    -- The callId often contains the cache key info, but we need to read it from pending metadata
+    -- For now, use the callId as cache key (prefetch sets key in args)
+    let pendingDir = sessionDir ++ "/pending_tools";
+    let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
+    match decode(readFile(pendingPath)) {
+      Ok(j) => {
+        let argsStr = getOrElse(getString(j, "argsJson"), "{}");
+        match decode(argsStr) {
+          Ok(args) => {
+            let cacheKey = getOrElse(getString(args, "key"), callId);
+            let cacheDir = sessionDir ++ "/cache";
+            exec("mkdir", ["-p", cacheDir]);
+            let cachePath = cacheDir ++ "/" ++ cacheKey ++ ".json";
+            -- Get expiry (5 min TTL)
+            match exec("date", ["+%s"]) {
+              Ok(dateOut) => {
+                let now = match stringToInt(trim(bytesToString(dateOut.stdout))) { Some(n) => n, None => 0 };
+                let expires = now + 300;
+                writeFile(cachePath, encode(jo([
+                  kv("value", js(result)),
+                  kv("expires", js(show(expires))),
+                  kv("cachedAt", js(show(now)))
+                ])));
+                println("[Cache] Prefetch result cached as '" ++ cacheKey ++ "'")
+              },
+              Err(_) => ()
+            }
+          },
+          Err(_) => ()
+        }
+      },
+      Err(_) => ()
+    }
+  } else ()
 
 func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
   match getArray(tcc, "ids") {
@@ -636,10 +1060,14 @@ func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: 
     Some(true) => {
       println("[Interrupted] Generation canceled — clearing audio");
       writeFile(pcmPath, "");
+      writeFile(sessionDir ++ "/speaking.flag", "");
       true
     },
     _ => match getBool(sc, "turnComplete") {
       Some(true) => {
+        -- Start mic cooldown (~3 sec at 7 events/sec = 21 ticks before unmute)
+        writeFile(sessionDir ++ "/speaking.flag", "21");
+        println("[Mic] Muted (cooldown 3s)");
         -- Play accumulated audio (skipped when streaming — already played in real-time)
         maybePlayTurnAudio(soxHandle, pcmPath, wavPath);
         -- Show transcription summary
@@ -661,7 +1089,7 @@ func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: 
         None => match getObject(sc, "inputTranscription") {
           Some(it) => handleInputTranscription(it),
           None => match getObject(sc, "modelTurn") {
-            Some(turn) => handleModelTurnInteractive(turn, pcmPath, turnDonePath, soxHandle),
+            Some(turn) => handleModelTurnInteractive(turn, pcmPath, turnDonePath, soxHandle, sessionDir),
             None => true
           }
         }
@@ -879,9 +1307,13 @@ func streamToSox(soxHandle: Option[ProcessHandle], pcmData: bytes) -> () ! {Proc
   }
 
 -- Interactive model turn handler: accumulates + streams audio
-func handleModelTurnInteractive(turn: Json, pcmPath: string, turnDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} =
+func handleModelTurnInteractive(turn: Json, pcmPath: string, turnDonePath: string, soxHandle: Option[ProcessHandle], sessionDir: string) -> bool ! {IO, FS, Process} =
   match getArray(turn, "parts") {
     Some(parts) => {
+      -- Gate mic while model is speaking (prevents echo feedback)
+      let prevFlag = if fileExists(sessionDir ++ "/speaking.flag") then readFile(sessionDir ++ "/speaking.flag") else "";
+      if prevFlag != "1" then println("[Mic] Muted (model speaking)") else ();
+      writeFile(sessionDir ++ "/speaking.flag", "1");
       logThoughtParts(parts);
       accumulateAndStreamAudio(parts, pcmPath, soxHandle);
       writeFile(turnDonePath, "1");

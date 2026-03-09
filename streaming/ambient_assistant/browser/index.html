@@ -760,7 +760,10 @@ const AMBIENT_INSTRUCTION = 'You are AILANG, an ambient voice assistant. ' +
   "'AILANG', 'hey AILANG', or similar. " +
   'When not addressed, stay completely silent. ' +
   'When addressed, respond with full awareness of everything you\'ve heard in the conversation. ' +
-  'Speak with a British English accent. Keep responses conversational and helpful.';
+  'Speak with a British English accent. Keep responses conversational and helpful. ' +
+  'You have access to tools: currentTime (date/time), calculate (arithmetic), ' +
+  'cacheResult/getCachedResult (data caching), remindLater (save reminders), ' +
+  'and summarizeContext (conversation summary). Use tools when they help answer questions.';
 
 // ── Event handler ──
 function handleAILANGEvent(event) {
@@ -790,12 +793,14 @@ function handleAILANGEvent(event) {
       if (event.text) {
         addMessage('heard', event.text, 'Heard');
         addContextEntry('Heard: ' + event.text.substring(0, 60));
+        conversationLog.push('User: ' + event.text);
       }
       break;
     case 'outputTranscript':
       if (event.text) {
         addMessage('ailang', event.text, 'AILANG');
         addContextEntry('AILANG: ' + event.text.substring(0, 60));
+        conversationLog.push('AILANG: ' + event.text);
       }
       break;
     case 'modelTurn':
@@ -816,9 +821,13 @@ function handleAILANGEvent(event) {
         setStatus('Thinking');
         event.calls.forEach(call => {
           const name = call.name || 'unknown';
-          const args = call.args ? JSON.stringify(call.args) : '{}';
-          addMessage('tool', name + '(' + args.substring(0, 80) + ')', 'Tool Call');
+          const callId = call.id || '';
+          const args = call.args || {};
+          addMessage('tool', name + '(' + JSON.stringify(args).substring(0, 80) + ')', 'Tool Call');
           recordToolUse(name);
+          // Dispatch browser-safe tools and send response
+          const result = dispatchBrowserTool(name, args);
+          sendToolResponse(callId, name, result);
         });
       }
       break;
@@ -870,10 +879,10 @@ function populateVoices() {
     });
     const saved = localStorage.getItem('ambient-voice');
     if (saved) $.voiceSelect.value = saved;
-    if (!$.voiceSelect.value) $.voiceSelect.value = 'Sulafat';
+    if (!$.voiceSelect.value) $.voiceSelect.value = 'Charon';
   } catch (e) {
     // Fallback
-    $.voiceSelect.innerHTML = '<option value="Sulafat">Sulafat (Warm)</option>';
+    $.voiceSelect.innerHTML = '<option value="Charon">Charon (Informative)</option>';
   }
 }
 
@@ -980,6 +989,79 @@ async function sendText() {
   $.scopeIdle.textContent = 'processing...';
   $.scopeIdle.classList.remove('hidden');
   setTimeout(() => $.scopeIdle.classList.add('hidden'), 1500);
+}
+
+// ── Browser-safe tool dispatch ──
+const browserCache = new Map();
+const browserReminders = [];
+const conversationLog = [];
+
+function dispatchBrowserTool(name, args) {
+  switch (name) {
+    case 'currentTime': {
+      const now = new Date();
+      return now.toLocaleString() + ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+    }
+    case 'calculate': {
+      const op = args.operation || '';
+      const a = parseFloat(args.a) || 0;
+      const b = parseFloat(args.b) || 0;
+      switch (op) {
+        case 'add': return String(a + b);
+        case 'subtract': return String(a - b);
+        case 'multiply': return String(a * b);
+        case 'divide': return b !== 0 ? String(a / b) : 'Error: division by zero';
+        default: return 'Unknown operation: ' + op;
+      }
+    }
+    case 'remindLater': {
+      const text = args.reminder || '';
+      const entry = '[' + new Date().toLocaleTimeString() + '] ' + text;
+      browserReminders.push(entry);
+      addContextEntry('Reminder: ' + text.substring(0, 50));
+      return 'Reminder saved: ' + text;
+    }
+    case 'cacheResult': {
+      const key = args.key || '';
+      const value = args.value || '';
+      browserCache.set(key, { value, cachedAt: Date.now() });
+      return 'Cached \'' + key + '\'';
+    }
+    case 'getCachedResult': {
+      const key = args.key || '';
+      const entry = browserCache.get(key);
+      if (!entry) return 'Not found: no cached data for \'' + key + '\'';
+      return entry.value;
+    }
+    case 'summarizeContext': {
+      if (conversationLog.length === 0) return 'No conversation history yet.';
+      const maxTurns = parseInt(args.maxTurns) || 20;
+      const recent = conversationLog.slice(-maxTurns);
+      return 'Recent conversation (' + recent.length + ' entries):\n' + recent.join('\n');
+    }
+    default:
+      return 'Tool not available in browser: ' + name;
+  }
+}
+
+function sendToolResponse(callId, name, result) {
+  const activeConn = core.getActiveConnection();
+  if (!activeConn) return;
+  const responseJson = core.callAILANG('buildToolResponse', callId, name, result);
+  if (responseJson) {
+    activeConn.ws.send(responseJson);
+  } else {
+    // Fallback: build JSON directly
+    activeConn.ws.send(JSON.stringify({
+      toolResponse: {
+        functionResponses: [{
+          id: callId, name: name,
+          response: { result: result }
+        }]
+      }
+    }));
+  }
+  addMessage('tool', result.substring(0, 120), 'Tool Result');
 }
 
 // ── Mic ──

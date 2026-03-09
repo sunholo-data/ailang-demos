@@ -33,7 +33,7 @@ import std/math (intToFloat)
 export pure func defaultModel() -> string =
   "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
-export pure func defaultVoice() -> string = "Sulafat"
+export pure func defaultVoice() -> string = "Charon"
 
 export pure func ambientInstruction() -> string =
   "You are AILANG, an ambient voice assistant. "
@@ -41,7 +41,11 @@ export pure func ambientInstruction() -> string =
     ++ "'AILANG', 'hey AILANG', or similar. "
     ++ "When not addressed, stay completely silent. "
     ++ "When addressed, respond with full awareness of everything you've heard in the conversation. "
-    ++ "Speak with a British English accent. Keep responses conversational and helpful."
+    ++ "Speak with a British English accent. Keep responses conversational and helpful. "
+    ++ "You have access to tools: currentTime (date/time), calculate (arithmetic), "
+    ++ "cacheResult/getCachedResult (data caching), and remindLater (save reminders). "
+    ++ "Use tools when they help answer the user's questions. "
+    ++ "You can cache data with cacheResult and retrieve it later with getCachedResult."
 
 -- ══════════════════════════════════════════════════════
 -- Voice Catalog (re-exported for browser UI)
@@ -228,7 +232,7 @@ func handleToolCallEvent(json: Json) -> bool ! {IO} {
 -- Protocol: Setup Message Builder
 -- ══════════════════════════════════════════════════════
 
--- Build ambient setup: proactive audio ON, affective ON, session resumption, transcription.
+-- Build ambient setup: proactive audio ON, affective ON, tools, session resumption, transcription.
 -- Uses AI Studio v1alpha which supports all features.
 export pure func buildAmbientSetup(model: string, voice: string, instruction: string) -> string {
   let setupKvs = [
@@ -246,6 +250,9 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
     kv("systemInstruction", jo([
       kv("parts", ja([jo([kv("text", js(instruction))])]))
     ])),
+    kv("tools", ja([jo([
+      kv("functionDeclarations", ja(ambientToolDeclarations()))
+    ])])),
     kv("outputAudioTranscription", jo([])),
     kv("inputAudioTranscription", jo([])),
     kv("contextWindowCompression", jo([
@@ -258,6 +265,45 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
   ];
   encode(jo([kv("setup", jo(setupKvs))]))
 }
+
+-- ══════════════════════════════════════════════════════
+-- Tool Declarations (inline for WASM self-containment)
+-- ══════════════════════════════════════════════════════
+-- Mirrors getAmbientToolDeclarations() from ambient_tools.ail
+-- but as pure JSON so no transitive imports are needed.
+
+pure func toolDecl(name: string, desc: string, params: Json) -> Json =
+  jo([kv("name", js(name)), kv("description", js(desc)), kv("parameters", params)])
+
+-- Browser-safe tools only. File/process tools (readFile, runCommand, prefetch, etc.)
+-- are CLI-only and not available in the browser WASM environment.
+pure func ambientToolDeclarations() -> [Json] = [
+  toolDecl("currentTime", "Get the current date, time, and timezone.",
+    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
+  toolDecl("calculate", "Perform basic arithmetic (add, subtract, multiply, divide).",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("operation", jo([kv("type", js("string")), kv("description", js("add, subtract, multiply, or divide"))])),
+      kv("a", jo([kv("type", js("number")), kv("description", js("First operand"))])),
+      kv("b", jo([kv("type", js("number")), kv("description", js("Second operand"))]))])),
+      kv("required", ja([js("operation"), js("a"), js("b")]))])),
+  toolDecl("remindLater", "Save a reminder for later. The reminder will be shown in the session sidebar.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("reminder", jo([kv("type", js("string")), kv("description", js("Reminder text"))]))])),
+      kv("required", ja([js("reminder")]))])),
+  toolDecl("cacheResult", "Cache a key-value pair for later retrieval during this session.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("key", jo([kv("type", js("string")), kv("description", js("Cache key"))])),
+      kv("value", jo([kv("type", js("string")), kv("description", js("Data to cache"))]))])),
+      kv("required", ja([js("key"), js("value")]))])),
+  toolDecl("getCachedResult", "Retrieve a previously cached value by key.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("key", jo([kv("type", js("string")), kv("description", js("Cache key to look up"))]))])),
+      kv("required", ja([js("key")]))])),
+  toolDecl("summarizeContext", "Summarize the recent conversation. Returns a summary of what has been discussed.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("maxTurns", jo([kv("type", js("number")), kv("description", js("Max turns to include (default 20)"))]))])),
+      kv("required", ja([]))]))
+]
 
 -- ══════════════════════════════════════════════════════
 -- Protocol: Outgoing Messages (pure helpers)

@@ -64,6 +64,46 @@
   .key-note { font-size: 10px; color: var(--text-muted); }
   .key-note a { color: var(--primary); }
 
+  /* Hub navigation pills */
+  .hub-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+  }
+
+  .hub-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 8px 18px;
+    border-radius: 100px;
+    border: 1px solid;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+
+  .hub-nav-link svg {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .hub-nav--docs { color: var(--blue); border-color: rgba(37,99,235,0.3); background: var(--blue-bg); }
+  .hub-nav--docs:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  .hub-nav--streaming { color: var(--teal); border-color: rgba(13,148,136,0.3); background: var(--teal-bg); }
+  .hub-nav--streaming:hover { background: var(--teal); color: #fff; border-color: var(--teal); }
+
+  .hub-nav--website { color: var(--purple); border-color: rgba(124,58,237,0.3); background: var(--purple-bg); }
+  .hub-nav--website:hover { background: var(--purple); color: #fff; border-color: var(--purple); }
+
   @media (max-width: 900px) { .key-bar { padding: 8px 20px; flex-wrap: wrap; } }
   @media (max-width: 560px) { .key-bar { flex-direction: column; align-items: stretch; } .key-bar input { flex: 1; } }
 </style>
@@ -75,6 +115,11 @@
   <span class="header-title"><span class="ai">AI</span>LANG</span>
   <span class="header-sep"></span>
   <span class="header-subtitle">Demo Hub</span>
+  <nav class="header-nav">
+    <a href="document-intelligence/">Documents</a>
+    <a href="streaming/">Streaming</a>
+    <a href="website_builder/">Builder</a>
+  </nav>
   <div class="header-right">
     <a href="https://www.sunholo.com/" target="_blank" rel="noopener"><img src="sunholo-logo.svg" alt="" width="14" height="14" style="vertical-align: -2px; margin-right: 3px;">sunholo.com</a>
     <a href="https://github.com/sunholo-data/ailang-demos" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 3px;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Source</a>
@@ -112,30 +157,40 @@
       <span class="tag tag--contracts">Contracts</span>
       <span class="tag tag--budgets">Budgets</span>
     </div>
-    <div style="max-width: 680px; margin: 28px auto 0; text-align: left; font-size: 14px; color: var(--text-secondary); line-height: 1.7;">
-      <p style="margin-bottom: 12px;">
-        <strong style="color: var(--primary); font-size: 16px;">10,000% AI-Coded.</strong>
-        AILANG itself is 100% AI-coded &mdash; the language, compiler, type checker, effect system, Z3 verification backend, WASM runtime, and standard library were all written by AI.
-        These demos are 100% AI-coded using AILANG. That's 100% &times; 100%.
-      </p>
-      <p style="font-size: 13px;">
-        AILANG's type system, algebraic effects, and <code style="font-family: var(--font-mono); font-size: 12px; background: var(--bg-input); padding: 1px 5px; border-radius: 3px;">requires</code>/<code style="font-family: var(--font-mono); font-size: 12px; background: var(--bg-input); padding: 1px 5px; border-radius: 3px;">ensures</code> contracts mean the AI has to produce code that is provably correct &mdash; the compiler rejects anything that doesn't type-check, the contract verifier rejects anything that violates invariants, and capability budgets enforce hard resource limits.
-        The result: AI writes the code, and the code proves itself safe.
-      </p>
-    </div>
+    <p style="max-width: 680px; margin: 20px auto 0; font-size: 14px; color: var(--text-secondary); line-height: 1.7;">
+      <strong style="color: var(--primary);">10,000% AI-Coded.</strong>
+      AILANG itself is 100% AI-coded &mdash; language, compiler, type checker, effects, Z3 verification, WASM runtime, and stdlib. These demos are 100% AI-coded using AILANG.
+      The compiler rejects anything that doesn't type-check, and contracts prove it safe.
+    </p>
+
+    <nav class="hub-nav">
+      <a href="document-intelligence/" class="hub-nav-link hub-nav--docs">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Document Intelligence
+      </a>
+      <a href="streaming/" class="hub-nav-link hub-nav--streaming">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+        Streaming &amp; Voice
+      </a>
+      <a href="website_builder/" class="hub-nav-link hub-nav--website">
+        <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        Website Builder
+      </a>
+    </nav>
   </section>
 
   <!-- Document Intelligence -->
   <div class="section">
-    <div style="text-align: center; margin-bottom: 16px;">
-      <img src="demo-document-intelligence.svg" alt="Document Intelligence" width="400" style="border-radius: 8px;">
+    <div class="section-intro section-intro--docs">
+      <div class="section-intro-title">Document Intelligence</div>
+      <div class="section-intro-stats">
+        <span class="tag tag--formats">10 modules</span>
+        <span class="tag tag--contracts">28 contracts</span>
+        <span class="tag tag--wasm">5 formats</span>
+      </div>
+      <p class="section-intro-desc">Parse, extract, and validate DOCX, PPTX, XLSX, PDF, and images with formal safety guarantees. 10 AILANG modules parse Office XML directly &mdash; no Python, no server. Every AI extraction is validated by contracts. 99.8% recall vs Unstructured in head-to-head benchmarks.</p>
+      <a href="document-intelligence/" class="section-intro-cta">Explore Document Intelligence &rarr;</a>
     </div>
-    <div class="section-header">
-      <span class="section-title">Document Intelligence</span>
-      <span class="section-count">4 demos</span>
-      <a href="document-intelligence/" class="section-link">See all &rarr;</a>
-    </div>
-    <p style="font-size: 13px; color: var(--text-secondary); margin: -12px 0 20px; line-height: 1.6;">Parse, extract, and validate documents with formal safety guarantees. Every AI extraction result is validated by AILANG contracts &mdash; deterministic verification of stochastic AI output. All demos run entirely in your browser via WebAssembly.</p>
     <div class="grid">
       <a href="extractor.html" class="card card--extractor">
         <span class="card-arrow">&rarr;</span>
@@ -193,14 +248,16 @@
 
   <!-- Streaming & Voice -->
   <div class="section">
-    <div style="text-align: center; margin-bottom: 16px;">
-      <img src="demo-streaming-voice.svg" alt="Streaming & Voice" width="400" style="border-radius: 8px;">
+    <div class="section-intro section-intro--streaming">
+      <div class="section-intro-title">Streaming &amp; Voice</div>
+      <div class="section-intro-stats">
+        <span class="tag tag--streaming">std/stream</span>
+        <span class="tag tag--effects">WebSocket</span>
+        <span class="tag tag--budgets">SSE</span>
+      </div>
+      <p class="section-intro-desc">Real-time streaming protocols &mdash; SSE, WebSocket bidirectional audio, and hybrid REST+SSE &mdash; all exercising AILANG's <code style="font-family: var(--font-mono); font-size: 12px; background: var(--bg-input); padding: 1px 5px; border-radius: 3px;">std/stream</code> effect system. Each demo has a CLI module as its canonical integration test.</p>
+      <a href="streaming/" class="section-intro-cta">Explore Streaming Demos &rarr;</a>
     </div>
-    <div class="section-header">
-      <span class="section-title">Streaming &amp; Voice</span>
-      <span class="section-count">4 demos</span>
-    </div>
-    <p style="font-size: 13px; color: var(--text-secondary); margin: -12px 0 20px; line-height: 1.6;">Real-time streaming protocols &mdash; SSE, WebSocket bidirectional audio, and hybrid REST+SSE &mdash; all exercising AILANG's <code style="font-family: var(--font-mono); font-size: 12px; background: var(--bg-input); padding: 1px 5px; border-radius: 3px;">std/stream</code> effect system. Each demo also has a CLI module (<code style="font-family: var(--font-mono); font-size: 12px; background: var(--bg-input); padding: 1px 5px; border-radius: 3px;">.ail</code>) as its canonical integration test.</p>
     <div class="grid">
       <a href="streaming/voice_docparse/index.html" class="card card--vdocparse">
         <span class="card-arrow">&rarr;</span>
@@ -258,16 +315,33 @@
         </div>
       </a>
 
+      <a href="streaming/ambient_assistant/browser/index.html" class="card card--live">
+        <span class="card-arrow">&rarr;</span>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </div>
+        <div class="card-name">Ambient Assistant</div>
+        <div class="card-desc">Always-listening voice assistant that responds when addressed. Gemini Live with proactive audio &mdash; the model decides when to speak based on conversation context.</div>
+        <div class="card-meta">
+          <span class="badge badge-provider">Gemini Live</span>
+          <span class="badge badge-ws">Proactive Audio</span>
+          <span class="badge badge-key">API key</span>
+        </div>
+      </a>
+
     </div>
   </div>
 
   <!-- Website Building -->
   <div class="section">
-    <div class="section-header">
-      <span class="section-title">Website Building</span>
-      <span class="section-count">1 demo</span>
+    <div class="section-intro section-intro--website">
+      <div class="section-intro-title">Website Building</div>
+      <div class="section-intro-stats">
+        <span class="tag tag--wasm">WASM</span>
+        <span class="tag tag--ai">AI-generated</span>
+      </div>
+      <p class="section-intro-desc">Describe a website, upload content and photos, pick a style &mdash; AI generates a complete multi-page site. AILANG WASM runs Gemini in the browser. No server needed for generation.</p>
     </div>
-    <p style="font-size: 13px; color: var(--text-secondary); margin: -12px 0 20px; line-height: 1.6;">Describe a website, upload content and photos, pick a style &mdash; AI generates a complete multi-page site. AILANG WASM runs Gemini in the browser. No server needed for generation.</p>
     <div class="grid">
       <a href="website_builder/index.html" class="card card--website">
         <span class="card-arrow">&rarr;</span>
@@ -287,14 +361,14 @@
 
   <!-- Data & Analytics -->
   <div class="section">
-    <div style="text-align: center; margin-bottom: 16px;">
-      <img src="demo-contract-verified.svg" alt="Contract-Verified AI" width="400" style="border-radius: 8px;">
+    <div class="section-intro section-intro--data">
+      <div class="section-intro-title">Data &amp; Analytics</div>
+      <div class="section-intro-stats">
+        <span class="tag tag--contracts">Contracts</span>
+        <span class="tag tag--streaming">BigQuery</span>
+      </div>
+      <p class="section-intro-desc">BigQuery integration with contract-verified SQL generation. AILANG contracts guarantee that AI-generated queries are SELECT-only &mdash; no mutations, no injection, enforced at the language level.</p>
     </div>
-    <div class="section-header">
-      <span class="section-title">Data &amp; Analytics</span>
-      <span class="section-count">1 demo</span>
-    </div>
-    <p style="font-size: 13px; color: var(--text-secondary); margin: -12px 0 20px; line-height: 1.6;">BigQuery integration with contract-verified SQL generation. AILANG contracts guarantee that AI-generated queries are SELECT-only &mdash; no mutations, no injection, enforced at the language level.</p>
     <div class="grid">
       <a href="ecommerce/index.html" class="card card--ecommerce">
         <span class="card-arrow">&rarr;</span>

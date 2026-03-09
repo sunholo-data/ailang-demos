@@ -260,7 +260,7 @@ jobs:
           cp streaming/index.html _site/streaming/
 
           # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
-          for demo in claude_chat gemini_live safe_agent voice_docparse; do
+          for demo in claude_chat gemini_live safe_agent voice_docparse ambient_assistant; do
             mkdir -p "_site/streaming/${demo}"
             cp "streaming/${demo}/browser/index.html" "_site/streaming/${demo}/"
           done

@@ -5,18 +5,21 @@
 --   summarizeContext — reads transcript JSONL, returns conversation summary
 --   searchNotes     — searches user notes directory for keyword matches
 --   remindLater     — writes timestamped reminder to session reminders file
+--   cacheResult     — cache a key-value pair with TTL for proactive pre-fetching
+--   getCachedResult — retrieve a cached value by key (checks expiry)
+--   prefetch        — run a command and cache its output (combines runCommand + cache)
 --
 -- All tools are contract-verified with path safety.
 
 module streaming/ambient_assistant/services/ambient_tools
 
-import std/string (length, startsWith, split, join, find, substring)
+import std/string (length, startsWith, split, join, find, substring, stringToInt, trim)
 import std/list (length as listLength, map, filter, concat, nth, foldl, forEachE)
 import std/result (Ok, Err)
 import std/option (Some, None, getOrElse)
-import std/json (decode, encode, getString, getObject,
+import std/json (decode, encode, getString, getObject, getInt,
                  jo, kv, js, ja, Json)
-import std/fs (readFile, fileExists, appendFile)
+import std/fs (readFile, fileExists, appendFile, writeFile)
 import std/process (exec, NotFound, Timeout, NotAllowed)
 import std/bytes (toString)
 import std/env (getEnvOr)
@@ -58,6 +61,51 @@ export func getAmbientToolDeclarations() -> [{name: string, description: string,
           kv("reminder", jo([kv("type", js("string")), kv("description", js("The reminder text to save"))]))
         ])),
         kv("required", ja([js("reminder")]))
+      ]) },
+
+    { name: "cacheResult",
+      description: "Cache a key-value pair for later retrieval. Use this to store pre-fetched data that the user might ask about soon. Call this after proactively gathering information.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("key", jo([kv("type", js("string")), kv("description", js("Cache key (e.g. 'gh_issues', 'git_status')"))])),
+          kv("value", jo([kv("type", js("string")), kv("description", js("The data to cache"))])),
+          kv("ttlSeconds", jo([kv("type", js("number")), kv("description", js("Time to live in seconds (default 300 = 5 minutes)"))]))
+        ])),
+        kv("required", ja([js("key"), js("value")]))
+      ]) },
+
+    { name: "getCachedResult",
+      description: "Retrieve a previously cached value by key. Returns the cached data or 'not found' if expired or missing.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("key", jo([kv("type", js("string")), kv("description", js("Cache key to look up"))]))
+        ])),
+        kv("required", ja([js("key")]))
+      ]) },
+
+    { name: "prefetch",
+      description: "Run a command and cache its output under a key. Combines runCommand + cacheResult in one step. Use this to silently pre-fetch data when you hear cues suggesting the user will need it soon. Example: prefetch(key='gh_issues', command='gh', subcommand='issue list')",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("key", jo([kv("type", js("string")), kv("description", js("Cache key for the result"))])),
+          kv("command", jo([kv("type", js("string")), kv("description", js("Command to run (git, gh, ailang, ls, etc.)"))])),
+          kv("subcommand", jo([kv("type", js("string")), kv("description", js("Subcommand (e.g. 'issue list', 'status')"))])),
+          kv("args", jo([kv("type", js("string")), kv("description", js("Additional arguments (optional)"))]))
+        ])),
+        kv("required", ja([js("key"), js("command"), js("subcommand")]))
+      ]) },
+
+    { name: "takeScreenshot",
+      description: "Take a screenshot of the user's screen or webcam right now. Returns a single frame. Use this when the user asks 'what's on my screen?' or 'can you see this?' instead of continuous video streaming. The screenshot is sent as a visual frame to analyze.",
+      parameters: jo([
+        kv("type", js("object")),
+        kv("properties", jo([
+          kv("source", jo([kv("type", js("string")), kv("description", js("'screen' for screen capture or 'webcam' for camera (default: screen)"))]))
+        ])),
+        kv("required", ja([]))
       ]) }
   ];
   concat(baseTools, ambientTools)
@@ -67,11 +115,15 @@ export func getAmbientToolDeclarations() -> [{name: string, description: string,
 -- Dispatch (delegates to speak_tools for base tools)
 -- ============================================================
 
-export func dispatchAmbientTool(name: string, argsJson: string, allowedPath: string, sessionDir: string) -> Result[string, string] ! {FS, Process} {
+export func dispatchAmbientTool(name: string, argsJson: string, allowedPath: string, sessionDir: string) -> Result[string, string] ! {FS, Process, Env} {
   match name {
     "summarizeContext" => handleSummarizeContext(argsJson, sessionDir),
     "searchNotes" => handleSearchNotes(argsJson, allowedPath),
     "remindLater" => handleRemindLater(argsJson, sessionDir),
+    "cacheResult" => handleCacheResult(argsJson, sessionDir),
+    "getCachedResult" => handleGetCachedResult(argsJson, sessionDir),
+    "prefetch" => handlePrefetch(argsJson, sessionDir, allowedPath),
+    "takeScreenshot" => handleTakeScreenshot(argsJson, sessionDir),
     _ => dispatchTool(name, argsJson, allowedPath)
   }
 }
@@ -168,5 +220,160 @@ func handleRemindLater(argsJson: string, sessionDir: string) -> Result[string, s
       }
     },
     Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Cache Result
+-- ============================================================
+-- Stores a key-value pair in $sessionDir/cache/<key>.json with TTL.
+-- Used by the model to proactively cache pre-fetched data.
+
+func handleCacheResult(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS, Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let key = getOrElse(getString(json, "key"), "");
+      let value = getOrElse(getString(json, "value"), "");
+      if length(key) == 0 then Err("key is required")
+      else if length(value) == 0 then Err("value is required")
+      else {
+        let ttl = match getInt(json, "ttlSeconds") { Some(n) => n, None => 300 };
+        writeCacheEntry(sessionDir, key, value, ttl)
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Get Cached Result
+-- ============================================================
+-- Retrieves a cached value by key. Checks expiry.
+
+func handleGetCachedResult(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS, Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let key = getOrElse(getString(json, "key"), "");
+      if length(key) == 0 then Err("key is required")
+      else readCacheEntry(sessionDir, key)
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Tool: Prefetch
+-- ============================================================
+-- Runs a command via dispatchTool (runCommand) and caches the output.
+-- Combines runCommand + cacheResult in one step for proactive PA.
+
+func handlePrefetch(argsJson: string, sessionDir: string, allowedPath: string) -> Result[string, string] ! {FS, Process} {
+  match decode(argsJson) {
+    Ok(json) => {
+      let key = getOrElse(getString(json, "key"), "");
+      let command = getOrElse(getString(json, "command"), "");
+      let subcommand = getOrElse(getString(json, "subcommand"), "");
+      let args = getOrElse(getString(json, "args"), "");
+      if length(key) == 0 then Err("key is required")
+      else if length(command) == 0 then Err("command is required")
+      else {
+        -- Build runCommand args JSON and dispatch
+        let cmdArgs = encode(jo([
+          kv("command", js(command)),
+          kv("subcommand", js(subcommand)),
+          kv("args", js(args))
+        ]));
+        match dispatchTool("runCommand", cmdArgs, allowedPath) {
+          Ok(result) => {
+            -- Cache the result (5 minute TTL)
+            match writeCacheEntry(sessionDir, key, result, 300) {
+              Ok(_) => Ok("Prefetched and cached as '" ++ key ++ "': " ++ result),
+              Err(e) => Ok("Prefetched but cache write failed: " ++ e ++ "\nResult: " ++ result)
+            }
+          },
+          Err(e) => Err("Prefetch command failed: " ++ e)
+        }
+      }
+    },
+    Err(e) => Err("Invalid args: " ++ e)
+  }
+}
+
+-- ============================================================
+-- Cache Helpers
+-- ============================================================
+
+func getUnixTimestamp() -> int ! {Process} =
+  match exec("date", ["+%s"]) {
+    Ok(out) => match stringToInt(trim(toString(out.stdout))) {
+      Some(n) => n,
+      None => 0
+    },
+    Err(_) => 0
+  }
+
+func writeCacheEntry(sessionDir: string, key: string, value: string, ttlSeconds: int) -> Result[string, string] ! {FS, Process} {
+  let cacheDir = sessionDir ++ "/cache";
+  -- Ensure cache directory exists
+  exec("mkdir", ["-p", cacheDir]);
+  let cachePath = cacheDir ++ "/" ++ key ++ ".json";
+  let now = getUnixTimestamp();
+  let expires = now + ttlSeconds;
+  let entry = encode(jo([
+    kv("value", js(value)),
+    kv("expires", js(show(expires))),
+    kv("cachedAt", js(show(now)))
+  ]));
+  writeFile(cachePath, entry);
+  Ok("Cached '" ++ key ++ "' (expires in " ++ show(ttlSeconds) ++ "s)")
+}
+
+func readCacheEntry(sessionDir: string, key: string) -> Result[string, string] ! {FS, Process} {
+  let cachePath = sessionDir ++ "/cache/" ++ key ++ ".json";
+  if not fileExists(cachePath) then Ok("Not found: no cached data for '" ++ key ++ "'")
+  else {
+    let content = readFile(cachePath);
+    match decode(content) {
+      Ok(json) => {
+        let value = getOrElse(getString(json, "value"), "");
+        let expiresStr = getOrElse(getString(json, "expires"), "0");
+        let expires = match stringToInt(expiresStr) { Some(n) => n, None => 0 };
+        let now = getUnixTimestamp();
+        if now > expires then
+          Ok("Expired: cached data for '" ++ key ++ "' has expired")
+        else
+          Ok(value)
+      },
+      Err(e) => Err("Cache read error: " ++ e)
+    }
+  }
+}
+
+-- ============================================================
+-- Tool: Take Screenshot
+-- ============================================================
+-- Captures a single frame from screen or webcam on demand.
+-- Returns base64 JPEG prefixed with "SCREENSHOT:" so main.ail
+-- can detect it and send as realtimeInput.mediaChunks.
+
+func handleTakeScreenshot(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS, Process, Env} {
+  let source = match decode(argsJson) {
+    Ok(json) => getOrElse(getString(json, "source"), "screen"),
+    Err(_) => "screen"
+  };
+  let scriptDir = getEnvOr("GEMINI_SCRIPT_DIR", "streaming/ambient_assistant/scripts");
+  let scriptPath = scriptDir ++ "/take_screenshot.sh";
+  match exec(scriptPath, [source]) {
+    Ok(out) => {
+      let b64 = trim(toString(out.stdout));
+      if length(b64) == 0 then Err("Screenshot capture returned empty result")
+      else {
+        -- Prefix with SCREENSHOT: so main.ail sends it as a video frame
+        Ok("SCREENSHOT:" ++ b64)
+      }
+    },
+    Err(NotFound(_)) => Err("Screenshot script not found: " ++ scriptPath),
+    Err(Timeout(_)) => Err("Screenshot capture timed out"),
+    Err(_) => Err("Screenshot capture failed")
   }
 }
