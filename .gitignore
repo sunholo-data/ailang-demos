@@ -30,3 +30,4 @@ Thumbs.db
 # Website Builder generated output (CLI)
 /website_builder/output/*.html
 /website_builder/output/*.css
+benchmarks/
