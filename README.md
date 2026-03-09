@@ -58,6 +58,7 @@ Real-time streaming protocols — SSE, WebSocket bidirectional audio, and hybrid
 
 | Demo | Live Link | Protocol | Description |
 |------|-----------|----------|-------------|
+| **Ambient Assistant** | [Try it](https://www.sunholo.com/ailang-demos/streaming/ambient_assistant/) | WebSocket bidi | Always-listening voice assistant — proactive audio, 9 browser tools, screen sharing, thinking display |
 | **Voice DocParse** | [Try it](https://www.sunholo.com/ailang-demos/streaming/voice_docparse/) | WebSocket bidi | Talk to your documents via Gemini Live voice — upload DOCX, PPTX, XLSX, PDF, or images and discuss them |
 | **Claude Chat** | [Try it](https://www.sunholo.com/ailang-demos/streaming/claude_chat/) | SSE | Streaming text responses from Claude Messages API |
 | **Gemini Live** | [Try it](https://www.sunholo.com/ailang-demos/streaming/gemini_live/) | WebSocket bidi | Text to streaming audio — 30 voices, native WAV generation |
@@ -107,6 +108,16 @@ Upload a document and talk to it. Gemini Live bidirectional audio streaming lets
 
 **Features:** Bidirectional audio via Gemini Live WebSocket, document upload mid-conversation, AILANG WASM parsing (Office XML + AI for PDF/images), AI image descriptions via `std/ai` effect, real-time audio playback, chat transcript with document preview.
 
+### Ambient Assistant
+
+An always-listening voice assistant that stays silent until addressed by name ("AILANG"). Uses Gemini Live's proactive audio — the model hears everything but only responds when spoken to directly. The browser demo features an animated Ambient Orb that visualizes connection state, screen sharing for visual context, and 9 browser tools including screenshot capture, web fetching, and note-taking.
+
+**[Try Ambient Assistant &rarr;](https://www.sunholo.com/ailang-demos/streaming/ambient_assistant/)**
+
+![Ambient AILANG Assistant](streaming/ambient_assistant/ambient-demo.png)
+
+**Features:** Proactive audio (model decides when to respond), screen sharing with on-demand screenshots, 9 browser tools (time, calculate, cache, remind, summarize, screenshot, notes, web fetch), thinking bubble display, animated Ambient Orb UI, real-time transcription sidebar, AILANG WASM protocol construction. CLI version adds 11 tools with shell access, async background execution, video input, and session persistence.
+
 ### Safe Agent
 
 Contract-verified AI tool calling. The agent has access to tools (calculator, file reader, SQL query runner) but every tool is wrapped in AILANG `requires`/`ensures` contracts that enforce safety invariants at the language level. If the AI tries to call a tool with invalid arguments — a negative subtotal, a path traversal attack, a mutating SQL query — the contract blocks it *before execution*. The contracts are also statically verifiable via Z3: `ailang verify` can prove at compile time that the calculator never overflows and file reads never escape the sandbox.
@@ -143,6 +154,7 @@ All streaming demos have CLI modules (`.ail`) alongside their browser UIs. The C
 
 | Demo | Protocol | CLI Status | What it does |
 |------|----------|-----------|-------------|
+| **Ambient Assistant** | WebSocket bidi | Working | Always-listening voice assistant — proactive audio, 11 tools, screen/webcam, async tools |
 | **Gemini Live** | WebSocket bidi | Working | Text to streaming audio — 30 voices, native WAV generation |
 | **Claude Chat** | SSE | Working | Streaming text responses from Claude Messages API |
 | **Gemini SSE** | SSE | Working | Minimal Gemini streaming test via ADC |
@@ -153,13 +165,17 @@ All streaming demos have CLI modules (`.ail`) alongside their browser UIs. The C
 | Voice Pipeline | WebSocket (dual) | Type-checks | Deepgram STT + ElevenLabs TTS pipeline |
 
 ```bash
-# Install the speak wrapper (works from any directory)
+# Install CLI wrappers (work from any directory)
+ln -s $(pwd)/streaming/ambient_assistant/ambient ~/.local/bin/ambient
 ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak
+
+# Ambient Assistant — always-listening voice assistant
+ambient --mic "Hey AILANG"
+ambient --mic --screen "What do you see?"
 
 # AILANG speaks
 speak "Tell me a joke"
 speak --voice Charon "What is AILANG?"
-speak -v Orus "Explain algebraic effects"
 speak --tools "What's the git status?"    # with tool calling
 ```
 
@@ -206,9 +222,10 @@ The core idea: every layer of the software engineering stack has mechanical guar
 ## Install CLI Tools
 
 ```bash
-# From the demos/ directory — both work from any directory via symlink resolution
+# From the demos/ directory — all work from any directory via symlink resolution
 ln -s $(pwd)/docparse/docparse ~/.local/bin/docparse
 ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak
+ln -s $(pwd)/streaming/ambient_assistant/ambient ~/.local/bin/ambient
 ```
 
 ## Install AILANG
@@ -246,6 +263,7 @@ demos/
 │   ├── index.html               # Streaming hub page
 │   ├── shared/                  # Shared browser assets (nav, audio worklet, logo)
 │   ├── test_sse.ail             # Minimal Gemini SSE test
+│   ├── ambient_assistant/       # Always-listening voice assistant (mic, video, tools)
 │   ├── gemini_live/             # Text to audio via WebSocket bidi
 │   ├── claude_chat/             # Claude SSE streaming
 │   ├── safe_agent/              # Contract-verified AI agent

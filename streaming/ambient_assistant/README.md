@@ -4,6 +4,8 @@ An always-listening voice assistant powered by Gemini Live and AILANG. It listen
 
 Inspired by Google's [Project Livewire](https://github.com/nickhobbs-at-google/project-livewire).
 
+![Ambient AILANG Assistant — Browser Demo](ambient-demo.png)
+
 ## Quick Start
 
 ```bash
@@ -111,10 +113,21 @@ ambient --list
 - **ailang**: messages, check, docs, prompt, version
 - **General**: ls, date, echo, wc, head, tail, grep, pwd, whoami, uname
 
-### Browser Tools (Subset)
+### Browser Tools
 
-The browser demo includes only tools that work without a filesystem:
-`currentTime`, `calculate`, `remindLater`, `cacheResult`, `getCachedResult`, `summarizeContext`
+The browser demo includes 9 tools adapted for the browser environment:
+
+| Tool | Description |
+|------|-------------|
+| `currentTime` | Current date/time/timezone |
+| `calculate` | Arithmetic (add/sub/mul/div) |
+| `remindLater` | Save timestamped reminders |
+| `cacheResult` | Cache key-value with TTL |
+| `getCachedResult` | Retrieve cached values |
+| `summarizeContext` | Conversation summary |
+| `takeScreenshot` | Capture frame from shared screen (requires Screen Share) |
+| `saveNote` | Save notes to local storage |
+| `webFetch` | Fetch web pages (via CORS proxy) |
 
 ### Proactive Data Gathering
 
@@ -181,22 +194,27 @@ Sessions are scoped per git repository (auto-detected) or custom-named:
 
 ## Browser Demo
 
+**[Try it live](https://www.sunholo.com/ailang-demos/streaming/ambient_assistant/)**
+
 The browser version runs at `streaming/ambient_assistant/browser/` via any static file server. It uses AILANG WASM for protocol construction and falls back to pure JS if WASM isn't available.
 
 ```bash
-# Serve from repo root
-cd /path/to/demos
-python3 -m http.server 8080
-# Open http://localhost:8080/streaming/ambient_assistant/browser/
+# Serve locally
+scripts/serve.sh
+# Open http://localhost:8080/streaming/ambient_assistant/
 ```
 
 Features:
-- Dark theme with amber accents and waveform visualization
-- Two-column layout: conversation log + context sidebar
-- Mic capture via Web Audio API
-- Tool calling (browser-safe subset dispatched in JS)
-- Session stats: duration, frames, latency, turns, tools used
-- Config panel: API key, voice selector, affective toggle, thinking budget
+- **Ambient Orb** — animated pulsing orb that visualizes connection state (idle, listening, speaking, thinking)
+- Dark theme with emerald/amber accents
+- Two-column layout: conversation log + context sidebar (heard/AILANG/tools)
+- Mic capture via Web Audio API (AudioWorklet)
+- Screen sharing via `getDisplayMedia()` — enables `takeScreenshot` tool
+- Screenshot preview thumbnails in chat when captured
+- Tool calling with 9 browser tools (dispatched in JS)
+- Thinking bubble display for extended reasoning
+- Session stats: duration, data transferred, latency
+- Config panel: API key, model, voice selector, thinking budget
 
 **Note:** The browser demo uses AI Studio (API key auth), not Vertex AI ADC. Enter a Gemini API key in the config panel.
 

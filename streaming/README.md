@@ -8,6 +8,7 @@ Every demo has a CLI module (`.ail`) as the canonical integration test, plus a b
 
 | Demo | Directory | Protocol | CLI Status | Description |
 |------|-----------|----------|-----------|-------------|
+| **Ambient Assistant** | [ambient_assistant/](ambient_assistant/) | WebSocket bidi | Working | Always-listening voice assistant with proactive audio, tools, screen sharing |
 | **Gemini Live** | [gemini_live/](gemini_live/) | WebSocket bidi | Working | Text to streaming audio — 30 voices, native WAV generation |
 | **Claude Chat** | [claude_chat/](claude_chat/) | SSE | Working | Streaming text responses from Claude Messages API |
 | **Safe Agent** | [safe_agent/](safe_agent/) | REST + SSE | Working | Contract-verified AI tool calling with safety guarantees |
@@ -17,6 +18,10 @@ Every demo has a CLI module (`.ail`) as the canonical integration test, plus a b
 ## Quick Start
 
 ```bash
+# Ambient Assistant (uses ADC)
+ambient --mic "Hey AILANG"
+ambient --mic --screen "What do you see?"
+
 # Gemini Live (uses ADC)
 speak "Tell me a joke"
 speak --tools "What's the git status?"
