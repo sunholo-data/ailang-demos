@@ -39,12 +39,14 @@ echo "  Source:   ${PORTAL_DIR}"
 echo ""
 
 # Build and push image via Cloud Build
+# Custom SA requires explicit logging config (no default bucket access)
 echo "Building image via Cloud Build..."
 gcloud builds submit "${PORTAL_DIR}" \
   --project=multivac-deploy \
   --region="${REGION}" \
   --service-account="${CB_SA}" \
   --tag="${IMAGE}" \
+  --default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET \
   --quiet
 
 # Update Cloud Run service (Terraform created it, we just swap the image)
