@@ -237,9 +237,11 @@ jobs:
           rsync -a --exclude='wasm/' invoice_processor_wasm/ _site/
           mv _site/index.html _site/extractor.html
 
-          # Hub page + SVGs (AFTER rsync+rename so it doesn't get overwritten)
+          # Hub page + SVGs + shared CSS (AFTER rsync+rename so it doesn't get overwritten)
           cp site/index.html _site/
           cp site/*.svg _site/
+          mkdir -p _site/shared
+          cp site/shared/design-system.css _site/shared/
 
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
@@ -254,6 +256,7 @@ jobs:
           cp streaming/shared/gemini-live-core.js _site/streaming/shared/
           cp streaming/shared/streaming-ui.js _site/streaming/shared/
           cp streaming/shared/ailang-logo.svg _site/streaming/shared/
+          cp site/shared/design-system.css _site/streaming/shared/
           cp streaming/index.html _site/streaming/
 
           # Streaming demos (each browser/index.html → streaming/<demo>/index.html)
@@ -264,6 +267,10 @@ jobs:
 
           # Streaming AILANG modules already copied via rsync from
           # invoice_processor_wasm/ailang/streaming/ (cleaned in earlier step)
+
+          # DocParse hub page
+          mkdir -p _site/docparse
+          cp docparse/site/index.html _site/docparse/
 
           # Website Builder portal (Vue SPA + WASM)
           mkdir -p _site/website_builder/wasm
