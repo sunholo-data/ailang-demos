@@ -718,8 +718,14 @@
   .sidebar-toggle { display: none; }
   .sidebar-backdrop { display: none; }
 
-  /* ── Camera button (hidden on desktop — screen share is better) ── */
-  .camera-btn { display: none; }
+  /* ── Camera button ── */
+  .camera-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .camera-btn.active {
+    background: rgba(112,176,255,0.12);
+    border-color: var(--blue);
+    color: var(--blue);
+    box-shadow: 0 0 12px rgba(112,176,255,0.2);
+  }
 
   /* ── Mobile responsive ── */
   @media (max-width: 768px) {
@@ -795,8 +801,7 @@
     .text-input { padding: 10px 14px; font-size: 16px; /* prevents iOS zoom */ }
     .send-btn { padding: 10px 16px; font-size: 13px; }
 
-    /* On mobile: show camera, hide screen share */
-    .camera-btn { display: flex; }
+    /* On mobile: hide screen share (not supported) */
     .screen-btn { display: none; }
 
     /* Screenshot preview smaller */
