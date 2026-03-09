@@ -547,7 +547,7 @@
   .tool-card[data-tool="webFetch"] { border-left-color: var(--purple); }
   .tool-card[data-tool="takeScreenshot"] { border-left-color: var(--red); }
   .tool-card[data-tool="summarizeContext"] { border-left-color: #f472b6; }
-  .tool-card[data-tool="readClipboard"] { border-left-color: #fbbf24; }
+
   .tool-card[data-tool="saveNote"] { border-left-color: #34d399; }
   .tool-card[data-tool="remindLater"] { border-left-color: #fb923c; }
   .tool-card[data-tool="cacheResult"],
@@ -661,12 +661,6 @@
     border-color: var(--green);
     color: var(--green);
     box-shadow: 0 0 12px rgba(74,222,128,0.2);
-  }
-  .clip-btn:hover { border-color: #fbbf24; color: #fbbf24; }
-  .clip-btn.active {
-    background: rgba(251,191,36,0.1);
-    border-color: #fbbf24;
-    color: #fbbf24;
   }
   .text-input {
     flex: 1;
@@ -817,7 +811,7 @@
           <span class="tool-tag" data-tool="getCachedResult">getCachedResult</span>
           <span class="tool-tag" data-tool="summarizeContext">summarizeContext</span>
           <span class="tool-tag" data-tool="takeScreenshot">takeScreenshot</span>
-          <span class="tool-tag" data-tool="readClipboard">readClipboard</span>
+
           <span class="tool-tag" data-tool="saveNote">saveNote</span>
           <span class="tool-tag" data-tool="webFetch">webFetch</span>
         </div>
@@ -847,9 +841,6 @@
       </button>
       <button class="action-btn screen-btn" id="screenBtn" onclick="toggleScreenShare()" title="Share screen for screenshots">
         <span class="action-icon">&#x1f5b5;</span> Screen
-      </button>
-      <button class="action-btn clip-btn" id="clipBtn" onclick="grantClipboard()" title="Allow clipboard access">
-        <span class="action-icon">&#x1f4cb;</span> Clipboard
       </button>
     </div>
     <input type="text" class="text-input" id="textInput"
@@ -891,7 +882,7 @@ function cacheDom() {
     'fState', 'fFrames', 'fBytes',
     'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sLatencySide', 'sTurns',
     'toolsList', 'contextList', 'availableTools',
-    'chkAutoMic', 'thinkingBudget', 'screenBtn', 'clipBtn',
+    'chkAutoMic', 'thinkingBudget', 'screenBtn',
     'orbContainer', 'startBtn', 'app',
   ]) {
     $[id] = document.getElementById(id);
@@ -923,7 +914,7 @@ const TOOL_ICONS = {
   getCachedResult: '&#x1f50d;',
   summarizeContext: '&#x1f4dd;',
   takeScreenshot: '&#x1f4f7;',
-  readClipboard: '&#x1f4cb;',
+
   saveNote: '&#x1f4c4;',
   webFetch: '&#x1f310;',
 };
@@ -941,7 +932,7 @@ function formatToolArgs(name, args) {
     case 'getCachedResult': return 'key: ' + (args.key || '');
     case 'summarizeContext': return args.maxTurns ? 'last ' + args.maxTurns + ' turns' : '';
     case 'takeScreenshot': return 'capturing screen';
-    case 'readClipboard': return 'reading clipboard';
+
     case 'saveNote': return args.title || 'untitled';
     default: return JSON.stringify(args).substring(0, 80);
   }
@@ -1499,17 +1490,7 @@ async function dispatchBrowserTool(name, args) {
       }
     }
     case 'readClipboard': {
-      // Use cached clipboard from user-gesture button click
-      if (lastClipboardText !== null) {
-        return lastClipboardText || '(clipboard is empty)';
-      }
-      // Try direct access (may fail without user gesture)
-      try {
-        const text = await navigator.clipboard.readText();
-        return text || '(clipboard is empty)';
-      } catch (e) {
-        return 'Clipboard not available — click the Clipboard button in the bottom bar first to grant access.';
-      }
+      return 'Clipboard tool is not available in the browser. It has been disabled.';
     }
     case 'saveNote': {
       const title = args.title || 'untitled';
@@ -1609,23 +1590,7 @@ async function toggleScreenShare() {
   }
 }
 
-// ── Clipboard grant ──
-// Clipboard API requires a user gesture. Click the button to read once.
-// Each click refreshes the cached content. No polling.
-let lastClipboardText = null;
 
-async function grantClipboard() {
-  try {
-    lastClipboardText = await navigator.clipboard.readText();
-    $.clipBtn.classList.add('active');
-    const preview = lastClipboardText.length > 60
-      ? lastClipboardText.substring(0, 60) + '...'
-      : lastClipboardText;
-    addSystemMessage('Clipboard read: "' + preview + '"');
-  } catch (e) {
-    addSystemMessage('Clipboard access denied: ' + e.message);
-  }
-}
 
 // ── Init ──
 window.addEventListener('load', async () => {

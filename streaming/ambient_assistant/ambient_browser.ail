@@ -49,7 +49,7 @@ export pure func ambientInstruction() -> string =
     ++ "Keep responses conversational and helpful. "
     ++ "TOOLS: You have these tools: "
     ++ "currentTime, calculate, remindLater, cacheResult, getCachedResult, "
-    ++ "summarizeContext, takeScreenshot, readClipboard, saveNote, webFetch. "
+    ++ "summarizeContext, takeScreenshot, saveNote, webFetch. "
     ++ "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools "
     ++ "to gather context based on what you hear. If someone mentions a time, call currentTime. "
     ++ "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. "
@@ -335,8 +335,6 @@ pure func ambientToolDeclarations() -> [Json] = [
       kv("maxTurns", jo([kv("type", js("number")), kv("description", js("Max turns to include (default 20)"))]))])),
       kv("required", ja([]))])),
   toolDecl("takeScreenshot", "Capture a screenshot of the user's screen and send it for analysis. Use when the user asks about what's on their screen.",
-    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
-  toolDecl("readClipboard", "Read the current contents of the user's clipboard.",
     jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
   toolDecl("saveNote", "Save a named note to browser storage for later retrieval.",
     jo([kv("type", js("object")), kv("properties", jo([

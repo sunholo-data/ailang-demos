@@ -270,7 +270,7 @@ func testToolDeclarations() -> () ! {IO} {
   check("setup contains getCachedResult", contains(setupJson, "getCachedResult"));
   check("setup contains summarizeContext", contains(setupJson, "summarizeContext"));
   check("setup contains takeScreenshot", contains(setupJson, "takeScreenshot"));
-  check("setup contains readClipboard", contains(setupJson, "readClipboard"));
+  check("setup does NOT contain readClipboard (removed)", contains(setupJson, "readClipboard") == false);
   check("setup contains saveNote", contains(setupJson, "saveNote"));
   check("setup contains webFetch", contains(setupJson, "webFetch"));
   -- Should NOT contain google_search
