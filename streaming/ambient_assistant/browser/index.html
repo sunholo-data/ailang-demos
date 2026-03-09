@@ -60,7 +60,7 @@
   /* ── Layout: header, main (left + right), bottom ── */
   .app {
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     height: 100vh;
   }
 
@@ -152,13 +152,13 @@
   /* ── Config panel ── */
   .config {
     background: var(--bg-panel);
-    border-bottom: 1px solid var(--border);
+    border-bottom: none;
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.35s ease, padding 0.35s ease;
+    transition: max-height 0.35s ease, padding 0.35s ease, border-bottom 0.35s ease;
     padding: 0 24px;
   }
-  .config.open { max-height: 200px; padding: 14px 24px; }
+  .config.open { max-height: 200px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
   .config-row {
     display: flex;
     align-items: center;
@@ -221,14 +221,14 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 20px 20px 14px;
+    padding: 12px 20px 10px;
     flex-shrink: 0;
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(232,168,48,0.02) 0%, transparent 100%);
     transition: padding 0.4s;
     overflow: visible;
   }
-  .app.connected .orb-area { padding: 10px 20px 8px; }
+  .app.connected .orb-area { padding: 8px 20px 6px; }
 
   .orb-container {
     position: relative;
@@ -331,7 +331,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 18px;
+    margin-top: 12px;
     padding: 12px 32px;
     font-family: var(--display);
     font-size: 16px;
