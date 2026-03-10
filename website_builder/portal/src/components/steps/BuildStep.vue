@@ -21,9 +21,14 @@
             <p>Paste your key here:</p>
             <input
               v-model="inlineApiKey"
-              type="password"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               placeholder="AIza..."
-              class="api-key-input"
+              class="api-key-input api-key-masked"
               @keydown.enter="saveKeyAndBuild"
             />
           </div>
@@ -66,9 +71,14 @@
         <p>Your key may be missing or invalid. Paste a new one below:</p>
         <input
           v-model="inlineApiKey"
-          type="password"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
           placeholder="AIza..."
-          class="api-key-input"
+          class="api-key-input api-key-masked"
           @keydown.enter="saveKeyAndBuild"
         />
         <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a></p>
@@ -855,6 +865,10 @@ function dataURLToBlob(dataURL) {
   font-family: monospace;
 }
 .api-key-input:focus { border-color: var(--primary); }
+.api-key-masked {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
 
 /* Error boxes */
 .error-box {

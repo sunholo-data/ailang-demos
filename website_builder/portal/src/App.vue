@@ -17,8 +17,14 @@
           <label>Gemini API Key</label>
           <input
             v-model="apiKeyInput"
-            type="password"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
             placeholder="AIza..."
+            class="api-key-masked"
             @keydown.enter="saveKey"
           />
           <p class="hint">Get a free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></p>
@@ -434,6 +440,10 @@ body {
   outline: none;
 }
 .settings-panel input:focus { border-color: var(--primary); }
+.api-key-masked {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
 .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; }
 .hint a { color: var(--primary); }
 .hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
