@@ -42,7 +42,7 @@
     <div class="nav-btns">
       <button class="btn-secondary" @click="$emit('back')">← Back</button>
       <button class="btn-primary" @click="$emit('next', selectedId, notes.trim())">
-        Build It! 🚀
+        Let's build it!
       </button>
     </div>
   </div>
@@ -103,10 +103,10 @@ const styles = [
   },
   {
     id: 'auto',
-    icon: '🤖',
-    label: 'You Decide!',
-    description: 'Let the AI analyse your content and pick the best style. You can always steer it afterwards.',
-    colors: ['#F3EEFF', '#7C5CBF', '#E8A87C', '#2D2640'],
+    icon: '🎲',
+    label: 'Surprise me!',
+    description: 'Let the AI analyse your content and pick the best style. You can always change it later.',
+    colors: ['#F3EEFF', '#6B52A3', '#E8A87C', '#33302E'],
     fontFamily: 'inherit',
   }
 ];
@@ -129,14 +129,16 @@ const styles = [
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
   position: relative;
 }
 .style-option input[type="radio"] { display: none; }
-.style-option:hover { border-color: var(--primary-light); }
+.style-option:hover { border-color: var(--primary-light); transform: translateY(-1px); }
+.style-option:active { transform: translateY(0); }
 .style-option.selected {
   border-color: var(--primary);
-  background: #F3EEFF;
+  background: var(--primary-soft);
+  box-shadow: 0 2px 8px rgba(107,82,163,0.12);
 }
 .style-option.selected::after {
   content: '✓';
@@ -144,9 +146,16 @@ const styles = [
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--primary);
+  color: white;
+  background: var(--primary);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
   font-weight: 700;
-  font-size: 1rem;
 }
 
 /* Visual preview swatch */
@@ -212,7 +221,7 @@ const styles = [
   resize: vertical;
   outline: none;
 }
-.custom-input:focus { border-color: var(--primary); }
+.custom-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 
 @media (max-width: 600px) {
   .style-option { padding: 0.6rem; gap: 0.5rem; }

@@ -38,6 +38,10 @@
 
     <!-- Feedback chat -->
     <div class="chat-bar">
+      <div class="chat-bar-label" v-if="!refining && !selectedElement && !feedback && pendingItems.length === 0">
+        <span>Tell the AI what to change</span>
+        <span class="chat-bar-hint">You can also click on any part of the preview to edit just that section</span>
+      </div>
       <div v-if="refining" class="refining-msg">
         <span class="spinner-inline">⟳</span> {{ refineStatus }}
       </div>
@@ -165,8 +169,8 @@
       >
         📋 {{ history.length }}
       </button>
-      <button class="btn-primary" @click="$emit('publish')">
-        Publish → 🚀
+      <button class="btn-primary publish-btn" @click="$emit('publish')">
+        Publish
       </button>
     </div>
   </div>
@@ -1071,8 +1075,23 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
 
 .chat-bar {
   background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding: 0.6rem 1rem;
+  border-top: 2px solid var(--primary);
+  padding: 0.65rem 1rem;
+}
+.chat-bar-label {
+  margin-bottom: 0.4rem;
+}
+.chat-bar-label > span:first-child {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.chat-bar-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
 }
 
 /* Context chip (selected element) */
@@ -1080,8 +1099,8 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(124,92,191,0.08);
-  border: 1px solid rgba(124,92,191,0.25);
+  background: var(--primary-soft);
+  border: 1px solid rgba(107,82,163,0.25);
   border-radius: 8px;
   padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
@@ -1151,7 +1170,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   outline: none;
   font-family: inherit;
 }
-.chat-input:focus { border-color: var(--primary); }
+.chat-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 
 .add-btn {
   background: var(--bg);
@@ -1176,9 +1195,14 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   border-radius: 24px;
   padding: 0.6rem 1.2rem;
   font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 44px;
+  transition: background 0.15s;
 }
+.send-btn:hover:not(:disabled) { background: var(--primary-light); }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .refining-msg {
@@ -1373,10 +1397,19 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
 .action-bar .btn-primary { flex: 1; }
+.action-bar .publish-btn {
+  background: var(--success);
+  box-shadow: 0 2px 8px rgba(74,166,117,0.25);
+}
+.action-bar .publish-btn:hover {
+  background: #3D9166;
+  box-shadow: 0 4px 12px rgba(74,166,117,0.35);
+}
 
 /* Inline text note input */
 .text-note-row {
@@ -1431,7 +1464,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
 .btn-history:hover, .btn-history.active {
   border-color: var(--primary);
   color: var(--primary);
-  background: rgba(124,92,191,0.06);
+  background: var(--primary-soft);
 }
 
 /* ── Mobile responsive ─────────────────────────────────────────────────────── */
@@ -1446,10 +1479,12 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
 
   /* Chat bar: stack vertically */
   .chat-bar { padding: 0.5rem 0.75rem; }
+  .chat-bar-label > span:first-child { font-size: 0.8rem; }
+  .chat-bar-hint { font-size: 0.7rem; }
   .chat-input-row { flex-wrap: wrap; gap: 0.35rem; }
-  .chat-input { width: 100%; flex: none; font-size: 0.85rem; padding: 0.5rem 0.75rem; }
-  .send-btn { width: 100%; padding: 0.5rem; font-size: 0.85rem; }
-  .add-btn { width: 2rem; height: 2rem; font-size: 0.85rem; }
+  .chat-input { width: 100%; flex: none; font-size: 1rem; padding: 0.5rem 0.75rem; } /* 16px prevents iOS zoom */
+  .send-btn { width: 100%; padding: 0.5rem; font-size: 0.9rem; }
+  .add-btn { width: 2.5rem; height: 2.5rem; font-size: 0.85rem; }
 
   /* Action bar: stack buttons */
   .action-bar { flex-wrap: wrap; padding: 0.5rem 0.75rem; gap: 0.5rem; }

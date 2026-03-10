@@ -180,7 +180,7 @@ export async function uploadMedia(mediaItems, user, site, onProgress) {
 const REPO_CONFIG_KEY = 'wb-repo-config';
 
 const DEFAULT_REPO_CONFIG = {
-  owner: 'sunholo-voight-kampff',
+  owner: 'sunholo-data',
   repo: 'sunholo-websites',
   branch: 'main',
 };

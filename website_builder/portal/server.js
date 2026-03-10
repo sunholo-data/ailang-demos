@@ -425,7 +425,7 @@ async function commitToRepo(filePaths, message, repoConfig = {}) {
   try {
     if (process.env.GITHUB_TOKEN) {
       // Per-request overrides (from user settings) fall back to env vars
-      const owner = repoConfig.owner || process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+      const owner = repoConfig.owner || process.env.GITHUB_OWNER || 'sunholo-data';
       const repo = repoConfig.repo || process.env.GITHUB_REPO || 'sunholo-websites';
       const branch = repoConfig.branch || process.env.GITHUB_BRANCH || 'main';
 
@@ -582,7 +582,7 @@ app.post('/api/save', async (req, res) => {
     await commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`, repoConfig);
 
     // Build the GitHub Pages URL for the response
-    const ghOwner = repoConfig?.owner || process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+    const ghOwner = repoConfig?.owner || process.env.GITHUB_OWNER || 'sunholo-data';
     const ghRepo = repoConfig?.repo || process.env.GITHUB_REPO || 'sunholo-websites';
     const liveUrl = process.env.GITHUB_TOKEN
       ? `https://${ghOwner}.github.io/${ghRepo}/sites/${user}/${slug}/`
@@ -863,7 +863,7 @@ app.delete('/api/sites/:user/:site', async (req, res) => {
   try {
     // Delete from GitHub repo if configured
     if (process.env.GITHUB_TOKEN) {
-      const owner = process.env.GITHUB_OWNER || 'sunholo-voight-kampff';
+      const owner = process.env.GITHUB_OWNER || 'sunholo-data';
       const repo = process.env.GITHUB_REPO || 'sunholo-websites';
       const branch = process.env.GITHUB_BRANCH || 'main';
       const prefix = `sites/${user}/${site}`;

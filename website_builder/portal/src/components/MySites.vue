@@ -3,7 +3,7 @@
     <h1>My Websites</h1>
     <p class="subtitle" v-if="loading">Loading your sites...</p>
     <p class="subtitle" v-else-if="sites.length === 0 && !error">
-      You haven't built any websites yet. Let's create one!
+      You haven't built any websites yet. It only takes a few minutes!
     </p>
     <p class="subtitle" v-else-if="error">
       Could not load sites. Is the sidecar running?
@@ -26,14 +26,14 @@
           <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
         </div>
         <a v-if="liveBaseUrl" :href="liveBaseUrl + site.slug + '/'" target="_blank" class="live-link">
-          {{ liveBaseUrl + site.slug + '/' }}
+          View live site &rarr;
         </a>
         <div class="site-meta">
           Updated {{ formatDate(site.updatedAt) }}
         </div>
         <div class="site-actions">
           <button class="btn-primary btn-sm" @click="viewSite(site)" :disabled="!!loadingSite">
-            Edit / Preview
+            Open
           </button>
           <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
             &#x2197;
@@ -50,7 +50,7 @@
 
         <!-- Delete confirmation -->
         <div v-if="deleteConfirm === site.slug" class="delete-confirm">
-          <span>Delete "{{ site.title }}"? This cannot be undone.</span>
+          <span>This will permanently delete "{{ site.title }}". Are you sure?</span>
           <div class="delete-confirm-btns">
             <button class="btn-danger btn-sm" @click="doDelete(site)">Delete</button>
             <button class="btn-secondary btn-sm" @click="deleteConfirm = ''">Cancel</button>
@@ -224,10 +224,10 @@ function formatDate(iso) {
 .my-sites {
   max-width: 600px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 6rem;
+  padding: 2rem 1.25rem 6rem;
 }
-.my-sites h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: var(--text); }
-.my-sites .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.5; }
+.my-sites h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: var(--text); font-weight: 700; }
+.my-sites .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; font-size: 1rem; }
 
 .loading-site {
   display: flex;
@@ -251,10 +251,14 @@ function formatDate(iso) {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem;
-  transition: border-color 0.15s;
+  padding: 1.25rem;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
-.site-card:hover { border-color: var(--primary-light); }
+.site-card:hover {
+  border-color: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
 
 .site-card-header {
   display: flex;
@@ -263,7 +267,7 @@ function formatDate(iso) {
   margin-bottom: 0.4rem;
 }
 .site-card-header h3 {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text);
   margin: 0;
@@ -272,15 +276,16 @@ function formatDate(iso) {
   font-size: 0.75rem;
   color: var(--text-muted);
   background: var(--bg);
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-weight: 500;
 }
 
 .site-desc {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   color: var(--text-muted);
   margin-bottom: 0.5rem;
-  line-height: 1.4;
+  line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -298,22 +303,25 @@ function formatDate(iso) {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   color: var(--text-muted);
 }
 
 .live-link {
-  display: block;
-  font-size: 0.78rem;
+  display: inline-block;
+  font-size: 0.82rem;
   color: var(--primary);
+  font-weight: 500;
   margin-bottom: 0.4rem;
-  word-break: break-all;
+  text-decoration: none;
+  transition: color 0.15s;
 }
+.live-link:hover { color: var(--primary-light); text-decoration: underline; }
 
 .site-meta {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
 }
 
 .site-actions {
@@ -322,28 +330,33 @@ function formatDate(iso) {
 }
 
 .btn-sm {
-  padding: 0.45rem 1rem;
+  padding: 0.5rem 1rem;
   font-size: 0.85rem;
+  font-family: inherit;
+  min-height: 40px;
 }
 
 .btn-danger {
   background: transparent;
   color: #CC0000;
-  border: 1.5px solid #CC0000;
-  padding: 0.45rem 0.7rem;
+  border: 1.5px solid var(--border);
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
   font-size: 0.85rem;
+  font-family: inherit;
   cursor: pointer;
+  min-height: 40px;
+  transition: all 0.15s;
 }
-.btn-danger:hover { background: #FFF0F0; }
+.btn-danger:hover { border-color: #CC0000; background: #FFF0F0; }
 
 .delete-confirm {
   margin-top: 0.75rem;
-  padding: 0.75rem;
+  padding: 0.85rem;
   background: #FFF0F0;
   border: 1px solid #FFB3B3;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
   color: #CC0000;
 }
 .delete-confirm-btns {
@@ -354,14 +367,16 @@ function formatDate(iso) {
 
 .new-site-section {
   text-align: center;
+  padding-top: 0.5rem;
 }
 
 @media (max-width: 600px) {
-  .my-sites { padding: 1.25rem 0.75rem 5rem; }
-  .my-sites h1 { font-size: 1.3rem; }
-  .site-card { padding: 0.75rem; }
+  .my-sites { padding: 1.5rem 1rem 5.5rem; }
+  .my-sites h1 { font-size: 1.35rem; }
+  .site-card { padding: 1rem; }
+  .site-card:hover { transform: none; } /* Disable hover lift on mobile (touch devices) */
   .site-actions { flex-wrap: wrap; }
-  .btn-sm { padding: 0.4rem 0.75rem; font-size: 0.82rem; }
+  .btn-sm { padding: 0.45rem 0.85rem; font-size: 0.85rem; }
   .new-site-section .btn-primary { width: 100%; }
 }
 </style>

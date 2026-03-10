@@ -1,16 +1,16 @@
 <template>
   <div class="step">
-    <h1>Your website is ready!</h1>
+    <h1>{{ saved && !deploying ? 'Your website is live!' : 'Your website is ready!' }}</h1>
     <p class="subtitle" v-if="saving">Saving your website...</p>
-    <p class="subtitle" v-else-if="deploying">Deploying to GitHub Pages...</p>
-    <p class="subtitle" v-else-if="saved">Your website has been saved and is ready to share.</p>
+    <p class="subtitle" v-else-if="deploying">Almost there — your website is going live!</p>
+    <p class="subtitle" v-else-if="saved">Share it with anyone using the link below.</p>
     <p class="subtitle" v-else>Download your website files or view the live preview.</p>
 
     <!-- Deploying spinner -->
     <div v-if="deploying" class="deploy-card">
       <div class="spinner"></div>
-      <h2>Publishing to GitHub Pages</h2>
-      <p class="deploy-note">This usually takes 15–30 seconds...</p>
+      <h2>Publishing your website</h2>
+      <p class="deploy-note">This usually takes less than 30 seconds...</p>
     </div>
 
     <!-- Saved confirmation with live link -->
@@ -18,8 +18,13 @@
       <div class="success-icon">🎉</div>
       <h2>Website published!</h2>
       <p class="success-pages">{{ pageCount }} page{{ pageCount !== 1 ? 's' : '' }} saved</p>
-      <a v-if="previewUrl" :href="previewUrl" target="_blank" class="live-url">{{ previewUrl }}</a>
-      <p v-if="isLive" class="live-note">Your site is live on GitHub Pages.</p>
+      <div v-if="previewUrl" class="url-row">
+        <a :href="previewUrl" target="_blank" class="live-url">{{ previewUrl }}</a>
+        <button class="copy-btn" @click="copyLink">
+          {{ copied ? '✓ Copied!' : '📋 Copy link' }}
+        </button>
+      </div>
+      <p v-if="isLive" class="live-note">Your site is live and anyone with the link can see it.</p>
       <p v-else-if="previewUrl" class="live-note">Preview link (works while the local server is running).</p>
     </div>
 
@@ -30,11 +35,11 @@
 
     <!-- Actions -->
     <div class="actions-card">
-      <button class="btn-primary download-btn" @click="downloadFiles">
-        ⬇️ Download website files
+      <button v-if="previewUrl && !deploying" class="btn-primary action-btn" @click="openPreview">
+        ↗ Open in browser
       </button>
-      <button v-if="previewUrl && !deploying" class="btn-secondary download-btn" @click="openPreview">
-        ↗ Open in new tab
+      <button class="btn-secondary action-btn" @click="downloadFiles">
+        ⬇️ Download files
       </button>
     </div>
 
@@ -44,9 +49,9 @@
     </div>
 
     <div class="nav-btns">
-      <button class="btn-secondary" @click="$emit('back')">← Preview</button>
-      <button class="btn-secondary" @click="$emit('edit')">✏️ Edit website</button>
-      <button class="btn-primary" @click="$emit('restart')">+ New site</button>
+      <button class="btn-secondary" @click="$emit('back')">← Back to preview</button>
+      <button class="btn-secondary" @click="$emit('edit')">✏️ Make changes</button>
+      <button class="btn-primary" @click="$emit('restart')">Start a new website</button>
     </div>
   </div>
 </template>
@@ -65,7 +70,9 @@ const saved = ref(false);
 const deploying = ref(false);
 const saveError = ref('');
 const liveUrl = ref('');
+const copied = ref(false);
 let pollTimer = null;
+let copiedTimer = null;
 
 const pageCount = computed(() => Object.keys(props.generated?.pages || {}).length);
 
@@ -181,6 +188,25 @@ function extractSiteName() {
   }
 }
 
+async function copyLink() {
+  if (!previewUrl.value) return;
+  try {
+    await navigator.clipboard.writeText(previewUrl.value);
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => { copied.value = false; }, 2000);
+  } catch {
+    // Fallback: select the URL text
+    const el = document.querySelector('.live-url');
+    if (el) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+    }
+  }
+}
+
 function openPreview() {
   if (previewUrl.value) window.open(previewUrl.value, '_blank');
 }
@@ -217,7 +243,7 @@ function downloadString(filename, content, type) {
   padding: 2rem 1.5rem;
   margin-bottom: 1.5rem;
 }
-.deploy-card h2 { margin-bottom: 0.5rem; }
+.deploy-card h2 { margin-bottom: 0.5rem; font-size: 1.1rem; }
 .deploy-note { font-size: 0.9rem; color: var(--text-muted); }
 .spinner {
   width: 40px; height: 40px;
@@ -231,23 +257,46 @@ function downloadString(filename, content, type) {
 
 .success-card {
   text-align: center;
-  background: var(--surface);
-  border: 1.5px solid #B2DFDB;
+  background: var(--success-light);
+  border: 1.5px solid var(--success);
   border-radius: var(--radius);
   padding: 2rem 1.5rem;
   margin-bottom: 1.5rem;
 }
 .success-icon { font-size: 3rem; margin-bottom: 0.75rem; }
-.success-card h2 { margin-bottom: 0.5rem; }
-.success-pages { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+.success-card h2 { margin-bottom: 0.5rem; color: #2D6B4A; }
+.success-pages { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; }
+
+.url-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
 .live-url {
   display: block;
   color: var(--primary);
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 0.5rem;
   word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
+.copy-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+.copy-btn:hover { background: var(--primary-light); }
 .live-note { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
 
 .actions-card {
@@ -256,21 +305,21 @@ function downloadString(filename, content, type) {
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
-.download-btn { width: 100%; }
+.action-btn { width: 100%; }
 
 .info-box {
-  background: #EFF8FF;
-  border: 1px solid #B3D7FF;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.25rem;
   margin-bottom: 1rem;
 }
-.info-box p { font-size: 0.9rem; color: #1A5276; margin: 0; }
+.info-box p { font-size: 0.9rem; color: var(--text); margin: 0; }
 
 .error-box {
   background: #FFF0F0;
   border: 1px solid #FFB3B3;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0.85rem;
   font-size: 0.9rem;
   color: #CC0000;
@@ -280,7 +329,8 @@ function downloadString(filename, content, type) {
 @media (max-width: 600px) {
   .deploy-card, .success-card { padding: 1.5rem 1rem; }
   .success-icon { font-size: 2.5rem; }
-  .live-url { font-size: 0.95rem; }
+  .live-url { font-size: 0.88rem; }
+  .copy-btn { width: 100%; }
   .info-box { padding: 1rem; }
   .info-box p { font-size: 0.85rem; }
 }

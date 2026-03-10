@@ -2,8 +2,8 @@
   <div class="app">
     <!-- API Key banner if missing -->
     <div v-if="showApiKeyBanner" class="api-key-banner">
-      <span>⚠️ Gemini API key needed to generate websites.</span>
-      <button @click="showSettings = true">Add Key</button>
+      <span>You'll need an AI key to build websites.</span>
+      <button @click="showSettings = true">Set up</button>
     </div>
 
     <!-- Settings overlay -->
@@ -14,7 +14,7 @@
           <button class="settings-close" @click="showSettings = false">&times;</button>
         </div>
         <div class="settings-body">
-          <label>Gemini API Key</label>
+          <label>Your AI Key</label>
           <input
             v-model="apiKeyInput"
             type="text"
@@ -27,12 +27,12 @@
             class="api-key-masked"
             @keydown.enter="saveKey"
           />
-          <p class="hint">Get a free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></p>
+          <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Your key stays on your device.</p>
 
           <!-- Publishing (collapsible) -->
           <div class="settings-section">
             <button class="section-toggle" @click="showPublishing = !showPublishing">
-              <span>Publishing</span>
+              <span>Where your website goes</span>
               <span class="toggle-arrow" :class="{ open: showPublishing }">&#9662;</span>
             </button>
             <div v-if="showPublishing" class="section-content">
@@ -56,7 +56,7 @@
           <!-- Advanced (collapsible) -->
           <div class="settings-section">
             <button class="section-toggle" @click="showAdvanced = !showAdvanced">
-              <span>Advanced</span>
+              <span>Extra options</span>
               <span class="toggle-arrow" :class="{ open: showAdvanced }">&#9662;</span>
             </button>
             <div v-if="showAdvanced" class="section-content">
@@ -87,7 +87,7 @@
           </div>
 
           <div class="btn-row">
-            <button class="btn-secondary" @click="clearKey">Clear</button>
+            <button class="btn-secondary btn-text" @click="clearKey">Remove key</button>
             <button class="btn-primary" @click="saveKey">Save</button>
           </div>
         </div>
@@ -127,16 +127,21 @@
       <!-- Main wizard -->
       <div v-else class="wizard">
 
-      <!-- Step progress indicator (clickable for completed steps) -->
-      <div class="step-dots">
-        <span
+      <!-- Step progress bar -->
+      <div class="step-bar">
+        <div
           v-for="(label, i) in steps"
           :key="i"
-          class="dot"
+          class="step-bar-item"
           :class="{ active: currentStep === i, done: currentStep > i, clickable: currentStep > i }"
-          :title="label"
           @click="currentStep > i && (currentStep = i)"
-        />
+        >
+          <div class="step-bar-circle">
+            <span v-if="currentStep > i" class="step-check">&#10003;</span>
+            <span v-else>{{ i + 1 }}</span>
+          </div>
+          <span class="step-bar-label">{{ label }}</span>
+        </div>
       </div>
 
       <!-- Step content -->
@@ -339,24 +344,29 @@ function restart() {
 </script>
 
 <style>
-/* Global */
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  --primary: #7C5CBF;
-  --primary-light: #9B7DD4;
+  --primary: #6B52A3;
+  --primary-light: #8E77C0;
+  --primary-soft: #F0EBF8;
   --accent: #E8A87C;
-  --bg: #F8F6FF;
+  --accent-light: #FFF4ED;
+  --success: #4AA675;
+  --success-light: #EDFAF2;
+  --bg: #FAF8F5;
   --surface: #FFFFFF;
-  --text: #2D2640;
-  --text-muted: #7A7190;
-  --border: #E2DCF5;
-  --radius: 12px;
-  --shadow: 0 2px 12px rgba(124,92,191,0.12);
+  --text: #33302E;
+  --text-muted: #8A847E;
+  --border: #E8E4DF;
+  --radius: 14px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.06);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.1);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -368,31 +378,35 @@ body {
   flex-direction: column;
 }
 
-/* API key banner */
+/* ── API key banner ────────────────────────────────────────────────────────── */
 .api-key-banner {
-  background: #FFF3E0;
-  border-bottom: 1px solid #FFCC80;
-  padding: 0.6rem 1rem;
+  background: var(--accent-light);
+  border-bottom: 1px solid #F0D4BB;
+  padding: 0.65rem 1rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   font-size: 0.9rem;
+  color: var(--text);
 }
 .api-key-banner button {
   background: var(--accent);
   color: white;
   border: none;
-  padding: 0.3rem 0.8rem;
-  border-radius: 6px;
+  padding: 0.35rem 1rem;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 0.85rem;
+  font-weight: 600;
   white-space: nowrap;
+  transition: opacity 0.15s;
 }
+.api-key-banner button:hover { opacity: 0.85; }
 
-/* Settings overlay */
+/* ── Settings overlay ──────────────────────────────────────────────────────── */
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.4);
   z-index: 100;
   display: flex;
   align-items: center;
@@ -405,7 +419,7 @@ body {
   width: 100%;
   max-width: 420px;
   max-height: 90vh;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
 }
@@ -415,7 +429,7 @@ body {
   justify-content: space-between;
   padding: 1.25rem 1.5rem 0;
 }
-.settings-header h2 { margin: 0; }
+.settings-header h2 { margin: 0; font-size: 1.2rem; }
 .settings-close {
   background: none;
   border: none;
@@ -425,6 +439,11 @@ body {
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
   line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .settings-close:hover { background: var(--bg); color: var(--text); }
 .settings-body {
@@ -432,22 +451,24 @@ body {
   overflow-y: auto;
   flex: 1;
 }
-.settings-panel label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+.settings-panel label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; font-weight: 500; }
 .settings-panel input {
   width: 100%;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 0.7rem;
+  border-radius: 10px;
+  padding: 0.75rem;
   font-size: 1rem;
+  font-family: inherit;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.settings-panel input:focus { border-color: var(--primary); }
+.settings-panel input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .api-key-masked {
   -webkit-text-security: disc;
   text-security: disc;
 }
-.hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; }
-.hint a { color: var(--primary); }
+.hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; line-height: 1.5; }
+.hint a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
 .hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
 
 /* Collapsible settings sections */
@@ -464,6 +485,7 @@ body {
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
+  font-family: inherit;
 }
 .section-toggle:hover { color: var(--primary); }
 .toggle-arrow {
@@ -482,7 +504,7 @@ body {
   gap: 0.5rem;
   padding: 0.6rem 0.8rem;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 0.95rem;
   transition: border-color 0.15s;
@@ -490,7 +512,7 @@ body {
 .radio-label:hover { border-color: var(--primary-light); }
 .radio-label input[type="radio"] { margin-top: 0.15rem; accent-color: var(--primary); }
 
-/* Wizard */
+/* ── Wizard layout ─────────────────────────────────────────────────────────── */
 .wizard {
   display: flex;
   flex-direction: column;
@@ -507,15 +529,26 @@ body {
   top: 0;
   z-index: 10;
 }
-.logo { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
-.header-actions { display: flex; gap: 0.5rem; }
+.logo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+  padding: 0.25rem 0;
+}
+.header-actions { display: flex; gap: 0.25rem; }
 .icon-btn {
   background: none;
   border: none;
   font-size: 1.2rem;
   cursor: pointer;
-  padding: 0.3rem;
-  border-radius: 6px;
+  padding: 0.4rem;
+  border-radius: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
 }
 .icon-btn:hover { background: var(--bg); }
 
@@ -528,7 +561,7 @@ body {
   background: white;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-elevated);
   min-width: 200px;
   z-index: 100;
   overflow: hidden;
@@ -558,35 +591,96 @@ body {
   font-size: 0.9rem;
   cursor: pointer;
   color: #CC0000;
+  font-family: inherit;
 }
 .user-menu-item:hover { background: #FFF0F0; }
 
-/* Step dots */
-.step-dots {
+/* ── Step progress bar ─────────────────────────────────────────────────────── */
+.step-bar {
   display: flex;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.8rem;
+  align-items: flex-start;
+  gap: 0;
+  padding: 0.75rem 0.5rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
-.dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  transition: all 0.2s;
+.step-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1;
+  max-width: 90px;
+  position: relative;
+  transition: opacity 0.2s;
 }
-.dot.active { background: var(--primary); transform: scale(1.3); }
-.dot.done { background: var(--primary-light); }
-.dot.clickable { cursor: pointer; }
-.dot.clickable:hover { transform: scale(1.3); background: var(--primary); }
+/* Connector line between steps */
+.step-bar-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 16px);
+  width: calc(100% - 32px);
+  height: 2px;
+  background: var(--border);
+  transition: background 0.3s;
+}
+.step-bar-item.done:not(:last-child)::after {
+  background: var(--success);
+}
+.step-bar-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 2px solid var(--border);
+  transition: all 0.3s;
+  position: relative;
+  z-index: 1;
+}
+.step-bar-item.active .step-bar-circle {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+.step-bar-item.done .step-bar-circle {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+.step-check { font-size: 0.8rem; line-height: 1; }
+.step-bar-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+.step-bar-item.active .step-bar-label {
+  color: var(--primary);
+  font-weight: 700;
+}
+.step-bar-item.done .step-bar-label {
+  color: var(--success);
+}
+.step-bar-item.clickable { cursor: pointer; }
+.step-bar-item.clickable:hover .step-bar-circle { transform: scale(1.1); }
 
 .step-content {
   flex: 1;
   overflow-y: auto;
 }
 
-/* Shared button styles */
+/* ── Shared button styles ──────────────────────────────────────────────────── */
 .btn-primary {
   background: var(--primary);
   color: white;
@@ -595,24 +689,40 @@ body {
   border-radius: var(--radius);
   font-size: 1rem;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
+  min-height: 48px;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(107,82,163,0.2);
 }
-.btn-primary:hover { background: var(--primary-light); }
-.btn-primary:active { transform: scale(0.98); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(107,82,163,0.3); }
+.btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 1px 4px rgba(107,82,163,0.2); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-secondary {
   background: transparent;
   color: var(--primary);
-  border: 1.5px solid var(--primary);
+  border: 1.5px solid var(--border);
   padding: 0.85rem 1.8rem;
   border-radius: var(--radius);
   font-size: 1rem;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
+  min-height: 48px;
+  transition: background 0.15s, border-color 0.15s;
 }
-.btn-secondary:hover { background: var(--bg); }
+.btn-secondary:hover { background: var(--primary-soft); border-color: var(--primary-light); }
+
+.btn-text {
+  border: none;
+  background: none;
+  padding: 0.5rem 1rem;
+  min-height: auto;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.btn-text:hover { color: var(--primary); background: none; border: none; }
 
 .btn-row {
   display: flex;
@@ -620,14 +730,25 @@ body {
   margin-top: 1rem;
 }
 
-/* Shared step container */
+/* ── Shared step container ─────────────────────────────────────────────────── */
 .step {
   max-width: 600px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 6rem;
+  padding: 2rem 1.25rem 6rem;
 }
-.step h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: var(--text); }
-.step .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.5; }
+.step h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.step .subtitle {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+  font-size: 1rem;
+}
 
 .nav-btns {
   display: flex;
@@ -636,7 +757,8 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   background: var(--surface);
   border-top: 1px solid var(--border);
   z-index: 5;
@@ -657,21 +779,33 @@ body {
   .settings-body { padding: 0.75rem 1rem 1.5rem; }
 
   /* Typography */
-  .step h1 { font-size: 1.3rem; }
-  .step .subtitle { font-size: 0.9rem; margin-bottom: 1rem; }
+  .step h1 { font-size: 1.35rem; }
+  .step .subtitle { font-size: 0.92rem; margin-bottom: 1.25rem; }
 
   /* Step container */
-  .step { padding: 1.25rem 0.75rem 5rem; }
+  .step { padding: 1.5rem 1rem 5.5rem; }
+
+  /* Step bar: compact on mobile */
+  .step-bar { padding: 0.6rem 0.25rem; }
+  .step-bar-item { max-width: 70px; }
+  .step-bar-circle { width: 24px; height: 24px; font-size: 0.7rem; }
+  .step-bar-item:not(:last-child)::after { top: 12px; left: calc(50% + 12px); width: calc(100% - 24px); }
+  .step-bar-label { font-size: 0.58rem; }
 
   /* Header */
   .wizard-header { padding: 0.6rem 0.75rem; }
   .logo { font-size: 1rem; }
 
   /* Navigation */
-  .nav-btns { padding: 0.75rem; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
-  .btn-primary, .btn-secondary { padding: 0.7rem 1rem; font-size: 0.9rem; }
+  .btn-primary, .btn-secondary { padding: 0.75rem 1rem; font-size: 0.95rem; }
 
   /* API key banner */
-  .api-key-banner { font-size: 0.8rem; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem 0.75rem; }
+  .api-key-banner { font-size: 0.85rem; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem 0.75rem; }
+}
+
+@media (max-width: 360px) {
+  .step-bar-label { display: none; }
+  .step-bar-item { max-width: 50px; }
+  .step { padding: 1.25rem 0.75rem 5.5rem; }
 }
 </style>

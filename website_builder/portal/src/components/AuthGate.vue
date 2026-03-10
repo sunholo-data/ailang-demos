@@ -23,7 +23,7 @@
 
       <button class="skip-btn" @click="$emit('skip')">
         Continue without signing in
-        <span class="note">(dev mode — changes won't be saved)</span>
+        <span class="note">(your websites will only be saved on this device)</span>
       </button>
     </div>
   </div>
@@ -66,8 +66,8 @@ async function handleGoogleSignIn() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, #F8F6FF 0%, #EDE8FF 100%);
+  padding: 1.5rem;
+  background: linear-gradient(160deg, #FAF8F5 0%, #F5F0EB 100%);
 }
 
 .auth-card {
@@ -76,19 +76,19 @@ async function handleGoogleSignIn() {
   padding: 2.5rem 2rem;
   max-width: 400px;
   width: 100%;
-  box-shadow: 0 8px 32px rgba(124,92,191,0.15);
+  box-shadow: var(--shadow-elevated);
   text-align: center;
 }
 
 .brand { margin-bottom: 2rem; }
 .brand-icon { font-size: 3rem; display: block; margin-bottom: 0.75rem; }
-.brand h1 { font-size: 1.8rem; color: #7C5CBF; margin-bottom: 0.75rem; }
-.brand p { color: #7A7190; line-height: 1.6; font-size: 1rem; }
+.brand h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 0.75rem; font-weight: 700; }
+.brand p { color: var(--text-muted); line-height: 1.6; font-size: 1rem; }
 
 .error-msg {
   background: #FFF0F0;
   border: 1px solid #FFB3B3;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.75rem;
   margin-bottom: 1rem;
   font-size: 0.9rem;
@@ -103,17 +103,20 @@ async function handleGoogleSignIn() {
   width: 100%;
   padding: 0.9rem 1.5rem;
   background: white;
-  border: 1.5px solid #DADCE0;
-  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
   font-size: 1rem;
-  font-weight: 500;
-  color: #3C4043;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text);
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
+  min-height: 52px;
+  transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 .google-btn:hover:not(:disabled) {
-  background: #F8F8F8;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  background: var(--bg);
+  border-color: var(--primary-light);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -122,38 +125,40 @@ async function handleGoogleSignIn() {
   align-items: center;
   gap: 0.75rem;
   margin: 1.25rem 0;
-  color: #BDBDBD;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 .divider::before, .divider::after {
   content: '';
   flex: 1;
   height: 1px;
-  background: #E0E0E0;
+  background: var(--border);
 }
 
 .skip-btn {
   background: none;
   border: none;
-  color: #7A7190;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
+  font-family: inherit;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.5rem;
-  border-radius: 8px;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 10px;
   transition: background 0.2s;
   width: 100%;
+  min-height: 48px;
 }
-.skip-btn:hover { background: #F8F6FF; }
-.note { font-size: 0.75rem; color: #BDBDBD; }
+.skip-btn:hover { background: var(--bg); }
+.note { font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; }
 
 @media (max-width: 600px) {
-  .auth-card { padding: 2rem 1.25rem; max-width: calc(100% - 1rem); }
+  .auth-card { padding: 2rem 1.5rem; }
   .brand h1 { font-size: 1.5rem; }
-  .brand p { font-size: 0.9rem; }
+  .brand p { font-size: 0.92rem; }
   .google-btn { padding: 0.85rem 1rem; font-size: 0.95rem; }
 }
 </style>

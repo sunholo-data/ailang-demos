@@ -3,7 +3,7 @@
     <!-- API key prompt (shown before build starts if key is missing) -->
     <template v-if="needsApiKey">
       <h1>Almost there!</h1>
-      <p class="subtitle">You need a Gemini API key to generate your website. It's free and takes about 30 seconds.</p>
+      <p class="subtitle">To create your website, we need to connect to Google's AI. You'll need a free API key — it only takes a moment.</p>
 
       <div class="api-key-card">
         <div class="api-key-card-step">
@@ -11,7 +11,7 @@
           <div>
             <p>Get a free API key from Google:</p>
             <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="get-key-link">
-              Open Google AI Studio &rarr;
+              Get your free key (opens Google) &rarr;
             </a>
           </div>
         </div>
@@ -31,6 +31,7 @@
               class="api-key-input api-key-masked"
               @keydown.enter="saveKeyAndBuild"
             />
+            <p class="key-reassurance">Your key stays on your device and is never shared with us.</p>
           </div>
         </div>
       </div>
@@ -47,6 +48,11 @@
     <template v-else>
       <h1>Building your website...</h1>
       <p class="subtitle">{{ statusMessage }}</p>
+
+      <!-- Time estimate -->
+      <div v-if="building" class="time-estimate">
+        <span>This usually takes about 1–2 minutes</span>
+      </div>
 
       <!-- Progress steps -->
       <div class="progress-list">
@@ -123,7 +129,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['done', 'back']);
 
-const statusMessage = ref('Getting started...');
+const statusMessage = ref('Hang tight — we\'re creating your website!');
 const error = ref('');
 const building = ref(false);
 const inlineApiKey = ref('');
@@ -147,13 +153,13 @@ async function saveKeyAndBuild() {
 }
 
 const WASM_STEPS = [
-  { id: 'init',      label: 'Loading AI engine',      status: 'pending' },
-  { id: 'upload',    label: 'Uploading media files',   status: 'pending' },
-  { id: 'describe',  label: 'Describing images',       status: 'pending' },
-  { id: 'structure', label: 'Planning your website',   status: 'pending' },
-  { id: 'pages',     label: 'Writing page content',    status: 'pending' },
-  { id: 'css',       label: 'Designing the look',      status: 'pending' },
-  { id: 'save',      label: 'Saving your website',     status: 'pending' },
+  { id: 'init',      label: 'Starting up...',              status: 'pending' },
+  { id: 'upload',    label: 'Sending your photos',         status: 'pending' },
+  { id: 'describe',  label: 'Understanding your photos',   status: 'pending' },
+  { id: 'structure', label: 'Planning your pages',         status: 'pending' },
+  { id: 'pages',     label: 'Writing your website',        status: 'pending' },
+  { id: 'css',       label: 'Making it beautiful',         status: 'pending' },
+  { id: 'save',      label: 'Saving everything',           status: 'pending' },
 ];
 
 const MESSAGES_STEPS = [
@@ -776,6 +782,20 @@ function dataURLToBlob(dataURL) {
 </script>
 
 <style scoped>
+/* Time estimate */
+.time-estimate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--primary-soft);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--primary);
+  font-weight: 500;
+}
+
 .progress-list {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -788,14 +808,15 @@ function dataURLToBlob(dataURL) {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0;
+  padding: 0.65rem 0;
   color: var(--text-muted);
   font-size: 0.95rem;
   border-bottom: 1px solid var(--border);
+  transition: color 0.2s;
 }
 .progress-item:last-child { border-bottom: none; }
-.progress-item.done { color: var(--text); }
-.progress-item.active { color: var(--primary); font-weight: 500; }
+.progress-item.done { color: var(--success); }
+.progress-item.active { color: var(--primary); font-weight: 600; }
 
 .progress-icon { font-size: 1.1rem; width: 1.5rem; text-align: center; }
 
@@ -813,7 +834,7 @@ function dataURLToBlob(dataURL) {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: 1.5rem;
   margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -849,25 +870,34 @@ function dataURLToBlob(dataURL) {
   font-weight: 600;
   font-size: 0.95rem;
   text-decoration: none;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.2rem;
   border: 1.5px solid var(--primary);
-  border-radius: 8px;
-  transition: background 0.15s;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
 }
-.get-key-link:hover { background: var(--bg); }
+.get-key-link:hover { background: var(--primary); color: white; }
 .api-key-input {
   width: 100%;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.75rem;
   font-size: 1rem;
   outline: none;
-  font-family: monospace;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.api-key-input:focus { border-color: var(--primary); }
+.api-key-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .api-key-masked {
   -webkit-text-security: disc;
   text-security: disc;
+}
+.key-reassurance {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
 }
 
 /* Error boxes */
@@ -884,10 +914,12 @@ function dataURLToBlob(dataURL) {
 .error-box .hint a { color: var(--primary); }
 
 @media (max-width: 600px) {
+  .time-estimate { font-size: 0.85rem; padding: 0.65rem 0.85rem; }
   .progress-list { padding: 0.75rem; }
-  .progress-item { font-size: 0.88rem; gap: 0.5rem; padding: 0.5rem 0; }
+  .progress-item { font-size: 0.9rem; gap: 0.5rem; padding: 0.5rem 0; }
   .progress-icon { font-size: 1rem; }
   .api-key-card { padding: 1rem; }
   .api-key-card-step p { font-size: 0.9rem; }
+  .api-key-input { font-size: 1rem; } /* 16px prevents iOS zoom */
 }
 </style>

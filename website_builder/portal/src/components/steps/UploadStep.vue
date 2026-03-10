@@ -25,7 +25,7 @@
 
     <!-- Processing progress -->
     <div v-if="processing" class="progress-bar-container">
-      <div class="progress-text">Processing {{ processedCount }} of {{ totalToProcess }}...</div>
+      <div class="progress-text">Getting your photos ready... {{ processedCount }} of {{ totalToProcess }}</div>
       <div class="progress-track">
         <div class="progress-fill" :style="{ width: progressPct + '%' }" />
       </div>
@@ -50,7 +50,7 @@
 
     <!-- Items list -->
     <div v-if="items.length > 0" class="items-list">
-      <h3>Added content ({{ items.length }} item{{ items.length !== 1 ? 's' : '' }}{{ totalSizeLabel ? ' · ' + totalSizeLabel : '' }})</h3>
+      <h3>Your content ({{ items.length }} item{{ items.length !== 1 ? 's' : '' }})</h3>
       <div v-for="(item, i) in items" :key="i" class="item-row" :class="{ 'item-error': item.error }">
         <div class="item-preview">
           <img v-if="item.type === 'image'" :src="item.preview" class="item-thumb" :alt="item.filename" />
@@ -63,11 +63,7 @@
         </div>
         <div class="item-info">
           <span class="item-name">{{ item.filename || 'Text note' }}</span>
-          <span class="item-type">
-            {{ item.formatLabel || item.type }}
-            <template v-if="item.sizeLabel"> · {{ item.sizeLabel }}</template>
-            <template v-if="item.dimensions"> · {{ item.dimensions }}</template>
-          </span>
+          <span class="item-type">{{ item.formatLabel || item.type }}</span>
           <span v-if="item.error" class="item-error-text">{{ item.error }}</span>
         </div>
         <!-- Use toggle — only for images and videos -->
@@ -75,17 +71,18 @@
           v-if="item.type === 'image' || item.type === 'video'"
           class="use-toggle"
           :class="{ 'content-only': item.useOnSite === false }"
-          :title="item.useOnSite === false ? 'Click to show on the website' : 'Click to use for content only (won\'t appear on site)'"
+          :title="item.useOnSite === false ? 'Click to show on your website' : 'Click to use as background info only'"
           @click="toggleUseOnSite(i)"
         >
-          {{ item.useOnSite === false ? '📝 Content only' : (item.type === 'video' ? '🎬 On site' : '🖼️ On site') }}
+          {{ item.useOnSite === false ? 'Use as info' : 'Show on website' }}
         </button>
         <button class="remove-btn" @click="removeItem(i)">✕</button>
       </div>
     </div>
 
     <div v-else class="empty-hint">
-      <p>Add at least one photo, document, or text note to get started.</p>
+      <span class="empty-icon">📸</span>
+      <p>Share some photos, files, or write a few notes about what you'd like on your website.</p>
     </div>
 
     <div class="nav-btns">
@@ -281,7 +278,7 @@ function fileToBase64(file) {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .upload-btn {
@@ -291,31 +288,39 @@ function fileToBase64(file) {
   gap: 0.5rem;
   padding: 1.25rem 0.75rem;
   background: var(--surface);
-  border: 1.5px solid var(--border);
+  border: 2px dashed var(--border);
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
-  color: var(--primary);
-  transition: all 0.15s;
+  font-family: inherit;
+  color: var(--text);
+  font-weight: 500;
+  transition: all 0.2s;
+  min-height: 48px;
 }
 .upload-btn:hover {
-  border-color: var(--primary);
-  background: var(--bg);
+  border-color: var(--primary-light);
+  border-style: solid;
+  background: var(--primary-soft);
+  color: var(--primary);
+  transform: translateY(-1px);
 }
+.upload-btn:active { transform: translateY(0); }
 .upload-icon { font-size: 1.8rem; }
 
 /* Progress bar */
 .progress-bar-container {
   margin-bottom: 1.25rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface);
+  padding: 0.85rem 1rem;
+  background: var(--primary-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 .progress-text {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text);
   margin-bottom: 0.5rem;
+  font-weight: 500;
 }
 .progress-track {
   height: 6px;
@@ -338,32 +343,36 @@ function fileToBase64(file) {
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 0.85rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-family: inherit;
   resize: vertical;
   outline: none;
   margin-bottom: 0.75rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.text-input:focus { border-color: var(--primary); }
+.text-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .add-text-btn { width: 100%; }
 
 .items-list h3 {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   margin-bottom: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 .item-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem;
+  padding: 0.65rem 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 0.5rem;
+  transition: border-color 0.15s;
 }
+.item-row:hover { border-color: var(--primary-light); }
 .item-row.item-error {
   border-color: #FFB3B3;
   background: #FFF8F8;
@@ -372,7 +381,7 @@ function fileToBase64(file) {
   width: 48px;
   height: 48px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .video-thumb-wrap {
   position: relative;
@@ -386,34 +395,37 @@ function fileToBase64(file) {
   color: white;
   font-size: 0.65rem;
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
   line-height: 1.3;
 }
 .item-text-icon { font-size: 2rem; width: 48px; text-align: center; }
 .item-info { flex: 1; min-width: 0; }
 .item-name { display: block; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-type { font-size: 0.75rem; color: var(--text-muted); text-transform: capitalize; }
-.item-error-text { display: block; font-size: 0.75rem; color: #CC0000; margin-top: 2px; }
+.item-type { font-size: 0.78rem; color: var(--text-muted); text-transform: capitalize; }
+.item-error-text { display: block; font-size: 0.78rem; color: #CC0000; margin-top: 2px; }
 
 .use-toggle {
   flex-shrink: 0;
-  background: var(--primary);
+  background: var(--success);
   color: white;
   border: none;
   border-radius: 20px;
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: all 0.2s;
+  min-height: 32px;
 }
-.use-toggle:hover { background: var(--primary-light); }
+.use-toggle:hover { opacity: 0.85; }
 .use-toggle.content-only {
   background: transparent;
   color: var(--text-muted);
   border: 1.5px solid var(--border);
 }
-.use-toggle.content-only:hover { border-color: var(--primary); color: var(--primary); }
+.use-toggle.content-only:hover { border-color: var(--success); color: var(--success); }
 
 .remove-btn {
   background: none;
@@ -423,27 +435,41 @@ function fileToBase64(file) {
   font-size: 1rem;
   padding: 0.25rem;
   flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.15s;
 }
-.remove-btn:hover { color: #CC0000; }
+.remove-btn:hover { color: #CC0000; background: #FFF0F0; }
 
 .empty-hint {
   text-align: center;
-  padding: 2rem 1rem;
+  padding: 2.5rem 1.5rem;
   color: var(--text-muted);
   background: var(--surface);
-  border: 1.5px dashed var(--border);
+  border: 2px dashed var(--border);
   border-radius: var(--radius);
+  line-height: 1.6;
+}
+.empty-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
 }
 
 @media (max-width: 600px) {
   .upload-buttons { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .upload-btn { padding: 1rem 0.5rem; font-size: 0.85rem; }
   .upload-icon { font-size: 1.4rem; }
-  .item-row { gap: 0.5rem; padding: 0.5rem; }
+  .item-row { gap: 0.5rem; padding: 0.5rem 0.6rem; }
   .item-thumb { width: 40px; height: 40px; }
   .item-text-icon { font-size: 1.6rem; width: 40px; }
-  .item-name { font-size: 0.82rem; }
-  .use-toggle { font-size: 0.7rem; padding: 0.25rem 0.5rem; }
+  .item-name { font-size: 0.85rem; }
+  .use-toggle { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
+  .text-input { font-size: 1rem; } /* 16px prevents iOS zoom */
 }
 @media (max-width: 360px) {
   .upload-buttons { grid-template-columns: 1fr; }
