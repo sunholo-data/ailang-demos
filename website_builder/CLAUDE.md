@@ -50,7 +50,7 @@ website_builder/
 │   ├── src/
 │   │   ├── ailang.js                     # WASM module loader + Gemini AI handler
 │   │   ├── api.js                        # Sidecar API client (save, build, status)
-│   │   ├── firebase.js                   # Firebase Auth (Google sign-in)
+│   │   ├── firebase.js                   # Firebase Auth + Firestore user settings
 │   │   ├── App.vue                       # Root: auth gate + 6-step wizard
 │   │   └── components/steps/             # Wizard steps (Describe → Upload → Style → Build → Preview → Publish)
 │   └── public/
@@ -84,7 +84,7 @@ website_builder/
 Two build paths:
 
 1. **WASM path** (working now) — AILANG runs in the browser via WASM, calls Gemini directly. Sites are generated client-side, then saved via the sidecar API to GitHub.
-2. **Sidecar/ailang messages path** (Phase B) — Portal sends a brief to Claude Code via `ailang messages`. Claude Code builds the site with full tool access. Status via Firestore real-time.
+2. **Coordinator/messages path** (Phase B) — Portal sends a brief to the AILANG coordinator via REST API (`POST /api/messages`). The coordinator dispatches to an agent. Status via polling (`GET /api/messages`) or Firestore real-time.
 
 Both paths converge at `POST /api/save` → GitHub commit → GitHub Pages.
 
@@ -163,6 +163,9 @@ Set automatically by `deploy.sh`. Override with env vars before running:
 | `GITHUB_BRANCH` | `main` | Branch to commit to |
 | `CORS_ORIGINS` | `https://www.sunholo.com,...` | Allowed CORS origins (comma-separated) |
 | `WEBSITES_REPO` | `/tmp/websites` (Cloud Run) | Local path for temp file writes |
+| `COORDINATOR_URL` | (none) | AILANG coordinator REST API URL. If unset, falls back to `ailang messages` CLI |
+| `COORDINATOR_API_KEY` | (none) | Bearer token for coordinator auth |
+| `FORM_SHEET_ID` | (none) | Default Google Sheet ID for form submissions (per-user override via Settings) |
 
 ### After deploying
 
@@ -225,10 +228,10 @@ The Express sidecar (`server.js`) exposes these endpoints:
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/api/save` | Persist WASM-generated site to disk + GitHub |
-| `POST` | `/api/build` | Send build brief to Claude Code via ailang messages |
+| `POST` | `/api/build` | Send build brief to coordinator REST API (falls back to ailang CLI) |
 | `POST` | `/api/upload` | Upload media files to staging |
-| `POST` | `/api/feedback` | Send feedback to Claude Code |
-| `GET` | `/api/status` | Poll for response messages |
+| `POST` | `/api/feedback` | Send feedback to coordinator REST API |
+| `GET` | `/api/status` | Poll coordinator for response messages |
 | `GET` | `/api/sites/:user` | List all sites for a user |
 | `GET` | `/api/sites/:user/:site/*` | Serve generated site files |
 | `GET` | `/api/files/:user/:site` | List files in a site directory |
@@ -276,6 +279,26 @@ GOOGLE_API_KEY=your-key ailang run ...
 ```
 
 Portal needs a Gemini API key — enter it in Settings after opening.
+
+## Firebase / Firestore
+
+The portal uses Firebase for authentication (Google sign-in) and Firestore for persisting per-user settings (API keys, repo config, form sheet ID, build mode).
+
+- **Project**: `ailang-multivac-dev`
+- **Firestore database**: `website-builder` (named, not default)
+- **Config**: `firebase.js` contains the Firebase API key — this is public by design (see Security below)
+- **Terraform**: `website_builder/scripts/terraform-firebase.tf` provisions all Firebase resources
+
+### Security
+
+The Firebase API key in `firebase.js` is a **client-side identifier**, not a secret. This is standard for all Firebase web apps. It is protected by:
+
+1. **HTTP referrer restrictions** — the API key only accepts requests from whitelisted domains (`sunholo-voight-kampff.github.io`, `ailang-dev-website-builder-*.a.run.app`, `localhost`)
+2. **API restrictions** — the key is restricted to Identity Toolkit API and Cloud Firestore API only
+3. **Firestore security rules** — users can only read/write their own document (`users/{uid}`), and cannot self-set admin fields (`messagesEnabled`, `messagesEndpoint`)
+4. **Auth authorized domains** — only whitelisted domains can use Google sign-in
+
+These restrictions are configured in the GCP Console under APIs & Services > Credentials.
 
 ## Known AILANG Issues Hit During Development
 
