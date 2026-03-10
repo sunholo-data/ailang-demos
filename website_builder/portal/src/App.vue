@@ -47,6 +47,23 @@
         />
         <p class="hint">Share your sheet with: <code style="font-size:0.7em">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
 
+        <template v-if="messagesEnabled">
+          <hr class="settings-divider" />
+          <h3>Build Mode</h3>
+          <div class="build-mode-toggle">
+            <label class="radio-label">
+              <input type="radio" v-model="buildMode" value="wasm" />
+              Browser (Gemini)
+              <span class="hint" style="display:block;margin:0">Builds in your browser using AILANG WASM + Gemini API</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" v-model="buildMode" value="messages" />
+              Cloud (Claude Code)
+              <span class="hint" style="display:block;margin:0">Sends brief to Claude Code for higher-quality generation</span>
+            </label>
+          </div>
+        </template>
+
         <div class="btn-row">
           <button class="btn-secondary" @click="clearKey">Clear</button>
           <button class="btn-primary" @click="saveKey">Save</button>
@@ -109,6 +126,7 @@
         <BuildStep
           v-else-if="currentStep === 3"
           :data="data"
+          :build-mode="buildMode"
           @done="(result) => { data.generated = result; currentStep = 4 }"
           @back="currentStep = 2"
         />
@@ -144,7 +162,7 @@ import StyleStep from './components/steps/StyleStep.vue';
 import BuildStep from './components/steps/BuildStep.vue';
 import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
-import { onAuthChange, signOutUser } from './firebase.js';
+import { onAuthChange, signOutUser, getUserSettings, saveUserSettings } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
 import { getRepoConfig, saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
@@ -157,6 +175,8 @@ const apiKeyInput = ref('');
 const repoOwner = ref('');
 const repoName = ref('');
 const formSheetId = ref('');
+const buildMode = ref('wasm'); // 'wasm' or 'messages'
+const messagesEnabled = ref(false); // admin-set, read-only for users
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
@@ -183,17 +203,29 @@ onMounted(() => {
     repoOwner.value = rc.owner || '';
     repoName.value = rc.repo || '';
   }
-  // Listen for auth changes
-  onAuthChange((u) => {
+  // Listen for auth changes — load Firestore settings on sign-in
+  onAuthChange(async (u) => {
     user.value = u;
-    if (u) authed.value = true;
+    if (u) {
+      authed.value = true;
+      const settings = await getUserSettings(u.uid);
+      if (settings) {
+        // Merge Firestore → localStorage (Firestore wins)
+        if (settings.geminiApiKey) { saveApiKey(settings.geminiApiKey); apiKeyInput.value = settings.geminiApiKey; }
+        if (settings.repoConfig) { saveRepoConfig(settings.repoConfig); repoOwner.value = settings.repoConfig.owner || ''; repoName.value = settings.repoConfig.repo || ''; }
+        if (settings.formSheetId) { saveFormSheetId(settings.formSheetId); formSheetId.value = settings.formSheetId; }
+        if (settings.buildMode) buildMode.value = settings.buildMode;
+        if (settings.messagesEnabled) messagesEnabled.value = true;
+      }
+    }
   });
 });
 
-function handleSignIn(u) {
+async function handleSignIn(u) {
   user.value = u;
   authed.value = true;
   showDashboard.value = true;
+  // Settings loaded by onAuthChange listener
 }
 
 function handleSkipAuth() {
@@ -208,20 +240,26 @@ async function handleSignOut() {
   restart();
 }
 
-function saveKey() {
+async function saveKey() {
   if (apiKeyInput.value.trim()) {
     saveApiKey(apiKeyInput.value);
   }
   // Save repo config if either field is set
-  if (repoOwner.value.trim() || repoName.value.trim()) {
-    saveRepoConfig({
-      owner: repoOwner.value.trim() || undefined,
-      repo: repoName.value.trim() || undefined,
-    });
-  } else {
-    clearRepoConfig();
-  }
+  const rc = (repoOwner.value.trim() || repoName.value.trim())
+    ? { owner: repoOwner.value.trim() || undefined, repo: repoName.value.trim() || undefined }
+    : null;
+  if (rc) { saveRepoConfig(rc); } else { clearRepoConfig(); }
   saveFormSheetId(formSheetId.value);
+
+  // Persist to Firestore if signed in
+  if (user.value?.uid) {
+    await saveUserSettings(user.value.uid, {
+      geminiApiKey: apiKeyInput.value.trim() || null,
+      repoConfig: rc || null,
+      formSheetId: formSheetId.value.trim() || null,
+      buildMode: buildMode.value,
+    });
+  }
   showSettings.value = false;
 }
 
@@ -334,6 +372,22 @@ body {
 .hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
 .settings-divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
 .settings-panel h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+
+/* Build mode toggle */
+.build-mode-toggle { display: flex; flex-direction: column; gap: 0.5rem; }
+.radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: border-color 0.15s;
+}
+.radio-label:hover { border-color: var(--primary-light); }
+.radio-label input[type="radio"] { margin-top: 0.15rem; accent-color: var(--primary); }
 
 /* Wizard */
 .wizard {
