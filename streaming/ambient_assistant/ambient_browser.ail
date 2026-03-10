@@ -49,7 +49,7 @@ export pure func ambientInstruction() -> string =
     ++ "Keep responses conversational and helpful. "
     ++ "TOOLS: You have these tools: "
     ++ "currentTime, calculate, remindLater, cacheResult, getCachedResult, "
-    ++ "summarizeContext, takeScreenshot, saveNote, webFetch. "
+    ++ "summarizeContext, takeScreenshot, saveNote, webFetch, delegate. "
     ++ "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools "
     ++ "to gather context based on what you hear. If someone mentions a time, call currentTime. "
     ++ "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. "
@@ -57,7 +57,12 @@ export pure func ambientInstruction() -> string =
     ++ "do NOT speak about them unless addressed by name. "
     ++ "When the user finally addresses you by name, you will already have the data ready. "
     ++ "takeScreenshot captures the user's screen — use when asked 'what is on my screen?'. "
-    ++ "webFetch retrieves content from a URL — use when someone mentions a website."
+    ++ "webFetch retrieves content from a URL — use when someone mentions a website. "
+    ++ "DELEGATION: For complex tasks that need deep reasoning, code review, document analysis, "
+    ++ "research, or multi-step work — use the delegate tool. It sends your request to a specialist "
+    ++ "AI agent via AILANG Cloud Messaging. The task runs in the background and results are returned "
+    ++ "when ready. While waiting, you can tell the user you are working on it. "
+    ++ "For simple tasks (time, calculations, URLs, notes, screenshots) — use the direct tools instead."
 
 -- ══════════════════════════════════════════════════════
 -- Voice Catalog (re-exported for browser UI)
@@ -349,7 +354,14 @@ pure func ambientToolDeclarations() -> [Json] = [
   toolDeclAsync("webFetch", "Fetch content from a URL and return the text. Use when the user mentions a URL or asks about a web page. This tool runs asynchronously — you can continue speaking while it fetches.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("url", jo([kv("type", js("string")), kv("description", js("The URL to fetch"))]))])),
-      kv("required", ja([js("url")]))]))
+      kv("required", ja([js("url")]))])),
+  toolDeclAsync("delegate", "Delegate a complex task to a specialist AI agent via AILANG Cloud Messaging. Use for deep analysis, code review, research, document processing, or multi-step reasoning. The task runs in the background and results are returned when ready.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("task", jo([kv("type", js("string")), kv("description", js("Detailed description of the task to delegate"))])),
+      kv("inbox", jo([kv("type", js("string")), kv("description", js("Target agent inbox (e.g. coordinator, design-doc-creator). Default: coordinator"))])),
+      kv("category", jo([kv("type", js("string")), kv("enum", ja([js("general"), js("feature"), js("bug"), js("research")])),
+          kv("description", js("Task category. Default: general"))]))
+    ])), kv("required", ja([js("task")]))]))
 ]
 
 -- ══════════════════════════════════════════════════════

@@ -574,6 +574,7 @@
   .tool-card[data-tool="remindLater"] { border-left-color: #fb923c; }
   .tool-card[data-tool="cacheResult"],
   .tool-card[data-tool="getCachedResult"] { border-left-color: #94a3b8; }
+  .tool-card[data-tool="delegate"] { border-left-color: #f59e0b; }
 
   .tool-card-header {
     display: flex;
@@ -846,6 +847,11 @@
       <input class="config-input" id="thinkingBudget" type="number" value="-1" min="-1" max="8192" style="max-width:100px" title="Token budget (-1 = off)">
       <label class="config-check"><input type="checkbox" id="chkAutoMic" checked> Auto Mic</label>
     </div>
+    <div class="config-row">
+      <label>Messages</label>
+      <input class="config-input" id="messagesApiUrl" type="text" placeholder="https://coordinator.run.app" title="AILANG Cloud Messaging coordinator URL">
+      <input class="config-input" id="messagesApiKey" type="password" placeholder="API key" style="max-width:140px" title="Coordinator API key">
+    </div>
   </div>
 
   <!-- Main content -->
@@ -931,6 +937,7 @@
 
           <span class="tool-tag" data-tool="saveNote">saveNote</span>
           <span class="tool-tag" data-tool="webFetch">webFetch</span>
+          <span class="tool-tag" data-tool="delegate">delegate</span>
         </div>
       </div>
 
@@ -1006,6 +1013,7 @@ function cacheDom() {
     'sState', 'sDuration', 'sFrames', 'sBytes', 'sLatency', 'sLatencySide', 'sTurns',
     'toolsList', 'contextList', 'availableTools',
     'chkAutoMic', 'thinkingBudget', 'screenBtn', 'cameraBtn',
+    'messagesApiUrl', 'messagesApiKey',
     'sidebarToggle', 'sidebar', 'sidebarBackdrop',
     'orbContainer', 'startBtn', 'app',
   ]) {
@@ -1014,7 +1022,7 @@ function cacheDom() {
 }
 
 // ── NON_BLOCKING tools (async — model continues while tool runs) ──
-const NON_BLOCKING_TOOLS = new Set(['webFetch']);
+const NON_BLOCKING_TOOLS = new Set(['webFetch', 'delegate']);
 
 // ── Session state ──
 let turnCount = 0;
@@ -1044,6 +1052,7 @@ const TOOL_ICONS = {
 
   saveNote: '&#x1f4c4;',
   webFetch: '&#x1f310;',
+  delegate: '&#x1f4e8;',
 };
 
 function formatToolArgs(name, args) {
@@ -1061,6 +1070,7 @@ function formatToolArgs(name, args) {
     case 'takeScreenshot': return 'capturing screen';
 
     case 'saveNote': return args.title || 'untitled';
+    case 'delegate': return (args.task || '').substring(0, 60);
     default: return JSON.stringify(args).substring(0, 80);
   }
 }
@@ -1446,7 +1456,12 @@ function initUI() {
   });
 }
 function toggleConfig() { ui.toggleConfig(); }
-function saveConfig() { ui.saveConfig(); }
+function saveConfig() {
+  ui.saveConfig();
+  // Persist messages config
+  if ($.messagesApiUrl) localStorage.setItem('messages-api-url', $.messagesApiUrl.value.trim());
+  if ($.messagesApiKey) localStorage.setItem('messages-api-key', $.messagesApiKey.value.trim());
+}
 
 // ── Connect / Disconnect ──
 async function toggleConnection() {
@@ -1663,6 +1678,71 @@ async function dispatchBrowserTool(name, args) {
         return 'Fetch error: ' + e.message;
       }
     }
+    case 'delegate': {
+      const task = args.task || '';
+      const inbox = args.inbox || 'coordinator';
+      const category = args.category || 'general';
+      if (!task) return 'Error: no task provided';
+
+      const apiUrl = localStorage.getItem('messages-api-url');
+      const apiKey = localStorage.getItem('messages-api-key');
+      if (!apiUrl) return 'Messages API not configured. Open Config and set the coordinator URL.';
+
+      addSystemMessage('Delegating to ' + inbox + ': ' + task.substring(0, 60) + '...');
+      addContextEntry('Delegate: ' + task.substring(0, 50));
+
+      try {
+        // Step 1: Send message to coordinator (REST API per integration guide)
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+
+        const sendResp = await fetch(apiUrl + '/api/messages', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            inbox: inbox,
+            title: 'Delegate: ' + task.substring(0, 60),
+            content: task + '\n\n--- Conversation Context ---\n' + conversationLog.slice(-10).join('\n'),
+            from: 'ambient-assistant',
+            category: category,
+            message_type: 'request'
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        if (!sendResp.ok) return 'Delegation failed: HTTP ' + sendResp.status;
+        const { message_id } = await sendResp.json();
+        addSystemMessage('Task submitted (ID: ' + message_id.substring(0, 8) + '...). Polling for result...');
+
+        // Step 2: Poll GET /api/messages?inbox=ambient-assistant&status=unread
+        const deadline = Date.now() + 120000;
+        while (Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const pollResp = await fetch(
+              apiUrl + '/api/messages?inbox=ambient-assistant&status=unread&from=' + inbox,
+              { headers: apiKey ? { 'Authorization': 'Bearer ' + apiKey } : {},
+                signal: AbortSignal.timeout(10000) }
+            );
+            if (!pollResp.ok) continue;
+            const data = await pollResp.json();
+            const messages = data.messages || [];
+            // Find response matching our request
+            const response = messages.find(m =>
+              m.message_type === 'response' && m.title && m.title.includes(message_id.substring(0, 8))
+            );
+            if (response) {
+              addSystemMessage('Delegation complete');
+              return response.payload || response.content || 'Task completed (no result text)';
+            }
+          } catch (pollErr) {
+            // Transient poll error — keep trying
+          }
+        }
+        return 'Delegation timed out after 120s. The agent may still be working. Task ID: ' + message_id;
+      } catch (e) {
+        return 'Delegation error: ' + e.message;
+      }
+    }
     default:
       return 'Tool not available in browser: ' + name;
   }
@@ -1791,6 +1871,9 @@ window.addEventListener('load', async () => {
   });
 
   ui.loadConfig({ 'ambient_key': 'gemini-api-key' });
+  // Restore messages config
+  if ($.messagesApiUrl) $.messagesApiUrl.value = localStorage.getItem('messages-api-url') || '';
+  if ($.messagesApiKey) $.messagesApiKey.value = localStorage.getItem('messages-api-key') || '';
   core.initWaveform(document.getElementById('waveform'));
 
   addSystemMessage('Loading AILANG WASM...');
