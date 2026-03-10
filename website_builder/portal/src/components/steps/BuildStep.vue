@@ -495,4 +495,10 @@ function dataURLToBlob(dataURL) {
   margin-bottom: 1rem;
 }
 .error-box p { margin-bottom: 0.5rem; font-size: 0.95rem; }
+
+@media (max-width: 600px) {
+  .progress-list { padding: 0.75rem; }
+  .progress-item { font-size: 0.88rem; gap: 0.5rem; padding: 0.5rem 0; }
+  .progress-icon { font-size: 1rem; }
+}
 </style>

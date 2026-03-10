@@ -1433,4 +1433,33 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   color: var(--primary);
   background: rgba(124,92,191,0.06);
 }
+
+/* ── Mobile responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .preview-step { height: calc(100vh - 110px); }
+
+  /* Tabs: tighter spacing */
+  .page-tabs { padding: 0.35rem 0.5rem; gap: 0.15rem; }
+  .page-tab { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+  .tab-back { padding: 0.3rem 0.5rem; font-size: 0.82rem; }
+  .tab-action { padding: 0.3rem; font-size: 0.9rem; }
+
+  /* Chat bar: stack vertically */
+  .chat-bar { padding: 0.5rem 0.75rem; }
+  .chat-input-row { flex-wrap: wrap; gap: 0.35rem; }
+  .chat-input { width: 100%; flex: none; font-size: 0.85rem; padding: 0.5rem 0.75rem; }
+  .send-btn { width: 100%; padding: 0.5rem; font-size: 0.85rem; }
+  .add-btn { width: 2rem; height: 2rem; font-size: 0.85rem; }
+
+  /* Action bar: stack buttons */
+  .action-bar { flex-wrap: wrap; padding: 0.5rem 0.75rem; gap: 0.5rem; }
+  .action-bar .btn-primary,
+  .action-bar .btn-secondary,
+  .action-bar .btn-history { width: 100%; text-align: center; }
+
+  /* History panel overlay on mobile */
+  .history-panel { max-height: 50vh; }
+  .history-entry { padding: 0.4rem 0.75rem; gap: 0.5rem; }
+  .history-summary { font-size: 0.8rem; }
+}
 </style>

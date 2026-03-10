@@ -275,4 +275,12 @@ function downloadString(filename, content, type) {
   color: #CC0000;
   margin-bottom: 1rem;
 }
+
+@media (max-width: 600px) {
+  .deploy-card, .success-card { padding: 1.5rem 1rem; }
+  .success-icon { font-size: 2.5rem; }
+  .live-url { font-size: 0.95rem; }
+  .info-box { padding: 1rem; }
+  .info-box p { font-size: 0.85rem; }
+}
 </style>

@@ -9,64 +9,81 @@
     <!-- Settings overlay -->
     <div v-if="showSettings" class="overlay" @click.self="showSettings = false">
       <div class="settings-panel">
-        <h2>Settings</h2>
-        <label>Gemini API Key</label>
-        <input
-          v-model="apiKeyInput"
-          type="password"
-          placeholder="AIza..."
-          @keydown.enter="saveKey"
-        />
-        <p class="hint">Get a free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></p>
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button class="settings-close" @click="showSettings = false">&times;</button>
+        </div>
+        <div class="settings-body">
+          <label>Gemini API Key</label>
+          <input
+            v-model="apiKeyInput"
+            type="password"
+            placeholder="AIza..."
+            @keydown.enter="saveKey"
+          />
+          <p class="hint">Get a free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a></p>
 
-        <hr class="settings-divider" />
-        <h3>GitHub Repository</h3>
-        <p class="hint" style="margin-top:0.25rem">Optional. Set a custom GitHub repo for your published sites. Leave blank to use the default.</p>
-        <label>GitHub Owner / Org</label>
-        <input
-          v-model="repoOwner"
-          type="text"
-          placeholder="e.g. my-github-username"
-        />
-        <label style="margin-top:0.5rem">Repository Name</label>
-        <input
-          v-model="repoName"
-          type="text"
-          placeholder="e.g. my-websites"
-        />
-        <p class="hint">Sites will be published to <code>https://&lt;owner&gt;.github.io/&lt;repo&gt;/</code></p>
-
-        <hr class="settings-divider" />
-        <h3>Contact Form Submissions</h3>
-        <p class="hint" style="margin-top:0.25rem">Optional. Enter a Google Sheet ID to receive form submissions from your published sites. Create a sheet and share it (Editor) with the service account shown below.</p>
-        <label>Google Sheet ID</label>
-        <input
-          v-model="formSheetId"
-          type="text"
-          placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-        />
-        <p class="hint">Share your sheet with: <code style="font-size:0.7em">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
-
-        <template v-if="messagesEnabled">
-          <hr class="settings-divider" />
-          <h3>Build Mode</h3>
-          <div class="build-mode-toggle">
-            <label class="radio-label">
-              <input type="radio" v-model="buildMode" value="wasm" />
-              Browser (Gemini)
-              <span class="hint" style="display:block;margin:0">Builds in your browser using AILANG WASM + Gemini API</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" v-model="buildMode" value="messages" />
-              Cloud (Claude Code)
-              <span class="hint" style="display:block;margin:0">Sends brief to Claude Code for higher-quality generation</span>
-            </label>
+          <!-- Publishing (collapsible) -->
+          <div class="settings-section">
+            <button class="section-toggle" @click="showPublishing = !showPublishing">
+              <span>Publishing</span>
+              <span class="toggle-arrow" :class="{ open: showPublishing }">&#9662;</span>
+            </button>
+            <div v-if="showPublishing" class="section-content">
+              <p class="hint" style="margin-top:0">Set a custom GitHub repo for your published sites. Leave blank to use the default.</p>
+              <label>GitHub Owner / Org</label>
+              <input
+                v-model="repoOwner"
+                type="text"
+                placeholder="e.g. my-github-username"
+              />
+              <label style="margin-top:0.5rem">Repository Name</label>
+              <input
+                v-model="repoName"
+                type="text"
+                placeholder="e.g. my-websites"
+              />
+              <p class="hint">Sites will be published to <code>https://&lt;owner&gt;.github.io/&lt;repo&gt;/</code></p>
+            </div>
           </div>
-        </template>
 
-        <div class="btn-row">
-          <button class="btn-secondary" @click="clearKey">Clear</button>
-          <button class="btn-primary" @click="saveKey">Save</button>
+          <!-- Advanced (collapsible) -->
+          <div class="settings-section">
+            <button class="section-toggle" @click="showAdvanced = !showAdvanced">
+              <span>Advanced</span>
+              <span class="toggle-arrow" :class="{ open: showAdvanced }">&#9662;</span>
+            </button>
+            <div v-if="showAdvanced" class="section-content">
+              <label>Contact Form Sheet ID</label>
+              <input
+                v-model="formSheetId"
+                type="text"
+                placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+              />
+              <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
+
+              <template v-if="messagesEnabled">
+                <label style="margin-top:0.75rem">Build Mode</label>
+                <div class="build-mode-toggle">
+                  <label class="radio-label">
+                    <input type="radio" v-model="buildMode" value="wasm" />
+                    Browser (Gemini)
+                    <span class="hint" style="display:block;margin:0">Builds in your browser using AILANG WASM + Gemini API</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" v-model="buildMode" value="messages" />
+                    Cloud (Claude Code)
+                    <span class="hint" style="display:block;margin:0">Sends brief to Claude Code for higher-quality generation</span>
+                  </label>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn-secondary" @click="clearKey">Clear</button>
+            <button class="btn-primary" @click="saveKey">Save</button>
+          </div>
         </div>
       </div>
     </div>
@@ -181,6 +198,8 @@ const repoName = ref('');
 const formSheetId = ref('');
 const buildMode = ref('wasm'); // 'wasm' or 'messages'
 const messagesEnabled = ref(false); // admin-set, read-only for users
+const showPublishing = ref(false); // collapsible settings section
+const showAdvanced = ref(false); // collapsible settings section
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
@@ -355,12 +374,36 @@ body {
 .settings-panel {
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 1.5rem;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
+  max-height: 90vh;
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
 }
-.settings-panel h2 { margin-bottom: 1rem; }
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+}
+.settings-header h2 { margin: 0; }
+.settings-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.settings-close:hover { background: var(--bg); color: var(--text); }
+.settings-body {
+  padding: 1rem 1.5rem 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
 .settings-panel label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; }
 .settings-panel input {
   width: 100%;
@@ -374,8 +417,30 @@ body {
 .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; }
 .hint a { color: var(--primary); }
 .hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
-.settings-divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
-.settings-panel h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+
+/* Collapsible settings sections */
+.settings-section { border-top: 1px solid var(--border); margin-top: 0.75rem; }
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.75rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.section-toggle:hover { color: var(--primary); }
+.toggle-arrow {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+  color: var(--text-muted);
+}
+.toggle-arrow.open { transform: rotate(180deg); }
+.section-content { padding-bottom: 0.5rem; }
 
 /* Build mode toggle */
 .build-mode-toggle { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -501,4 +566,36 @@ body {
   z-index: 5;
 }
 .nav-btns .btn-primary { flex: 1; }
+
+/* ── Mobile responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  /* Settings: full-screen on mobile */
+  .overlay { padding: 0; align-items: stretch; }
+  .settings-panel {
+    max-width: 100%;
+    max-height: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  .settings-header { padding: 1rem 1rem 0; }
+  .settings-body { padding: 0.75rem 1rem 1.5rem; }
+
+  /* Typography */
+  .step h1 { font-size: 1.3rem; }
+  .step .subtitle { font-size: 0.9rem; margin-bottom: 1rem; }
+
+  /* Step container */
+  .step { padding: 1.25rem 0.75rem 5rem; }
+
+  /* Header */
+  .wizard-header { padding: 0.6rem 0.75rem; }
+  .logo { font-size: 1rem; }
+
+  /* Navigation */
+  .nav-btns { padding: 0.75rem; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
+  .btn-primary, .btn-secondary { padding: 0.7rem 1rem; font-size: 0.9rem; }
+
+  /* API key banner */
+  .api-key-banner { font-size: 0.8rem; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem 0.75rem; }
+}
 </style>

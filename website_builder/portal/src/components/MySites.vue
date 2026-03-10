@@ -355,4 +355,13 @@ function formatDate(iso) {
 .new-site-section {
   text-align: center;
 }
+
+@media (max-width: 600px) {
+  .my-sites { padding: 1.25rem 0.75rem 5rem; }
+  .my-sites h1 { font-size: 1.3rem; }
+  .site-card { padding: 0.75rem; }
+  .site-actions { flex-wrap: wrap; }
+  .btn-sm { padding: 0.4rem 0.75rem; font-size: 0.82rem; }
+  .new-site-section .btn-primary { width: 100%; }
+}
 </style>

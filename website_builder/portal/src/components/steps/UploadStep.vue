@@ -434,4 +434,18 @@ function fileToBase64(file) {
   border: 1.5px dashed var(--border);
   border-radius: var(--radius);
 }
+
+@media (max-width: 600px) {
+  .upload-buttons { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .upload-btn { padding: 1rem 0.5rem; font-size: 0.85rem; }
+  .upload-icon { font-size: 1.4rem; }
+  .item-row { gap: 0.5rem; padding: 0.5rem; }
+  .item-thumb { width: 40px; height: 40px; }
+  .item-text-icon { font-size: 1.6rem; width: 40px; }
+  .item-name { font-size: 0.82rem; }
+  .use-toggle { font-size: 0.7rem; padding: 0.25rem 0.5rem; }
+}
+@media (max-width: 360px) {
+  .upload-buttons { grid-template-columns: 1fr; }
+}
 </style>

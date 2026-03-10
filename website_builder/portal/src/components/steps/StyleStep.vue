@@ -213,4 +213,13 @@ const styles = [
   outline: none;
 }
 .custom-input:focus { border-color: var(--primary); }
+
+@media (max-width: 600px) {
+  .style-option { padding: 0.6rem; gap: 0.5rem; }
+  .style-preview { width: 52px; height: 40px; padding: 3px 4px; }
+  .swatch { height: 10px; }
+  .preview-heading { font-size: 14px; }
+  .style-label { font-size: 0.88rem; }
+  .style-desc { font-size: 0.78rem; }
+}
 </style>

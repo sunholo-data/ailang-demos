@@ -88,4 +88,9 @@ const examples = [
   border-color: var(--primary);
   color: white;
 }
+
+@media (max-width: 600px) {
+  .big-input { padding: 0.75rem; font-size: 0.95rem; rows: 4; }
+  .example-chip { font-size: 0.8rem; padding: 0.35rem 0.65rem; }
+}
 </style>

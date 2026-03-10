@@ -149,4 +149,11 @@ async function handleGoogleSignIn() {
 }
 .skip-btn:hover { background: #F8F6FF; }
 .note { font-size: 0.75rem; color: #BDBDBD; }
+
+@media (max-width: 600px) {
+  .auth-card { padding: 2rem 1.25rem; max-width: calc(100% - 1rem); }
+  .brand h1 { font-size: 1.5rem; }
+  .brand p { font-size: 0.9rem; }
+  .google-btn { padding: 0.85rem 1rem; font-size: 0.95rem; }
+}
 </style>
