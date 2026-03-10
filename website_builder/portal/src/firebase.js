@@ -15,14 +15,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Firebase config — replace placeholders with Terraform output values
+// Firebase config from Terraform output (firebase_web_app_config)
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_FIREBASE_API_KEY",
+  apiKey: "AIzaSyCkvFxVilpZkqao1ntOPQbhwMy2GJI0FIE",
   authDomain: "ailang-multivac-dev.firebaseapp.com",
   projectId: "ailang-multivac-dev",
   storageBucket: "ailang-multivac-dev.appspot.com",
-  messagingSenderId: "REPLACE_WITH_SENDER_ID",
-  appId: "REPLACE_WITH_APP_ID"
+  messagingSenderId: "812435936917",
+  appId: "1:812435936917:web:2dcf2a315dfc7cb2b66d9c"
 };
 
 // Named Firestore database (not default)
