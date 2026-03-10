@@ -6,6 +6,7 @@
 
 // Vite injects VITE_API_URL at build time. Falls back to relative /api for local sidecar.
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+export { API_BASE };
 
 /**
  * POST /api/build — Send a build brief to Claude Code.
@@ -146,6 +147,32 @@ export async function getSiteFile(user, site, file) {
   const res = await fetch(siteFileUrl(user, site, file));
   if (!res.ok) throw new Error(`Failed to fetch ${file} (${res.status})`);
   return res.text();
+}
+
+/**
+ * POST /api/upload — Upload media files to sidecar staging in batches.
+ * @param {Array<{file: File, filename: string}>} mediaItems
+ * @param {string} user
+ * @param {string} site
+ * @param {Function} [onProgress] - Optional callback(uploaded, total)
+ * @returns {Promise<Array<{originalName, storedName, stagingPath, size, mimeType}>>}
+ */
+export async function uploadMedia(mediaItems, user, site, onProgress) {
+  const BATCH_SIZE = 5;
+  const results = [];
+  for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
+    const batch = mediaItems.slice(i, i + BATCH_SIZE);
+    const form = new FormData();
+    for (const item of batch) form.append('files', item.file, item.filename);
+    const resp = await fetch(
+      `${API_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
+      { method: 'POST', body: form }
+    );
+    if (!resp.ok) throw new Error(`Upload failed (${resp.status}): ${await resp.text()}`);
+    results.push(...await resp.json());
+    onProgress?.(Math.min(i + BATCH_SIZE, mediaItems.length), mediaItems.length);
+  }
+  return results;
 }
 
 // ── GitHub repo config (per-user, stored in localStorage) ──

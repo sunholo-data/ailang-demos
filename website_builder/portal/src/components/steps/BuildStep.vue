@@ -1,61 +1,142 @@
 <template>
   <div class="step">
-    <h1>Building your website...</h1>
-    <p class="subtitle">{{ statusMessage }}</p>
+    <!-- API key prompt (shown before build starts if key is missing) -->
+    <template v-if="needsApiKey">
+      <h1>Almost there!</h1>
+      <p class="subtitle">You need a Gemini API key to generate your website. It's free and takes about 30 seconds.</p>
 
-    <!-- Progress steps -->
-    <div class="progress-list">
-      <div
-        v-for="step in buildSteps"
-        :key="step.id"
-        class="progress-item"
-        :class="step.status"
-      >
-        <span class="progress-icon">
-          <span v-if="step.status === 'done'">✅</span>
-          <span v-else-if="step.status === 'active'" class="spinner">⟳</span>
-          <span v-else>○</span>
-        </span>
-        <span class="progress-label">{{ step.label }}</span>
+      <div class="api-key-card">
+        <div class="api-key-card-step">
+          <span class="step-number">1</span>
+          <div>
+            <p>Get a free API key from Google:</p>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="get-key-link">
+              Open Google AI Studio &rarr;
+            </a>
+          </div>
+        </div>
+        <div class="api-key-card-step">
+          <span class="step-number">2</span>
+          <div>
+            <p>Paste your key here:</p>
+            <input
+              v-model="inlineApiKey"
+              type="password"
+              placeholder="AIza..."
+              class="api-key-input"
+              @keydown.enter="saveKeyAndBuild"
+            />
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Error state -->
-    <div v-if="error" class="error-box">
-      <p><strong>Something went wrong</strong></p>
-      <p>{{ error }}</p>
-      <div class="btn-row">
-        <button class="btn-secondary" @click="$emit('back')">← Go back</button>
-        <button class="btn-primary" @click="startBuild">Try again</button>
+      <div class="nav-btns">
+        <button class="btn-secondary" @click="$emit('back')">&larr; Back</button>
+        <button class="btn-primary" :disabled="!inlineApiKey.trim()" @click="saveKeyAndBuild">
+          Save &amp; Build
+        </button>
       </div>
-    </div>
+    </template>
 
-    <!-- Back button only shown if not actively building -->
-    <div v-if="!building && !error" class="nav-btns">
-      <button class="btn-secondary" @click="$emit('back')">← Back</button>
-    </div>
+    <!-- Build in progress / complete -->
+    <template v-else>
+      <h1>Building your website...</h1>
+      <p class="subtitle">{{ statusMessage }}</p>
+
+      <!-- Progress steps -->
+      <div class="progress-list">
+        <div
+          v-for="step in buildSteps"
+          :key="step.id"
+          class="progress-item"
+          :class="step.status"
+        >
+          <span class="progress-icon">
+            <span v-if="step.status === 'done'">✅</span>
+            <span v-else-if="step.status === 'active'" class="spinner">⟳</span>
+            <span v-else>○</span>
+          </span>
+          <span class="progress-label">{{ step.label }}</span>
+        </div>
+      </div>
+
+      <!-- Error state: API key specific -->
+      <div v-if="error && isApiKeyError" class="error-box api-key-error">
+        <p><strong>API key problem</strong></p>
+        <p>Your key may be missing or invalid. Paste a new one below:</p>
+        <input
+          v-model="inlineApiKey"
+          type="password"
+          placeholder="AIza..."
+          class="api-key-input"
+          @keydown.enter="saveKeyAndBuild"
+        />
+        <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a></p>
+        <div class="btn-row">
+          <button class="btn-secondary" @click="$emit('back')">&larr; Go back</button>
+          <button class="btn-primary" :disabled="!inlineApiKey.trim()" @click="saveKeyAndBuild">Save &amp; Retry</button>
+        </div>
+      </div>
+
+      <!-- Error state: generic -->
+      <div v-else-if="error" class="error-box">
+        <p><strong>Something went wrong</strong></p>
+        <p>{{ error }}</p>
+        <div class="btn-row">
+          <button class="btn-secondary" @click="$emit('back')">&larr; Go back</button>
+          <button class="btn-primary" @click="startBuild">Try again</button>
+        </div>
+      </div>
+
+      <!-- Back button only shown if not actively building -->
+      <div v-if="!building && !error" class="nav-btns">
+        <button class="btn-secondary" @click="$emit('back')">&larr; Back</button>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import JSZip from 'jszip';
-import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, DOCPARSE_MODULE } from '../../ailang.js';
+import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, getRepoConfig, getFormSheetId } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
+import { saveUserSettings } from '../../firebase.js';
 
 const props = defineProps({
-  data: { type: Object, required: true }
+  data: { type: Object, required: true },
+  buildMode: { type: String, default: 'wasm' },
+  userId: { type: String, default: 'default' },
 });
 const emit = defineEmits(['done', 'back']);
 
 const statusMessage = ref('Getting started...');
 const error = ref('');
 const building = ref(false);
+const inlineApiKey = ref('');
+const needsApiKey = ref(!getApiKey());
 
-const buildSteps = ref([
+const isApiKeyError = computed(() =>
+  error.value && /api.?key/i.test(error.value)
+);
+
+async function saveKeyAndBuild() {
+  const key = inlineApiKey.value.trim();
+  if (!key) return;
+  saveApiKey(key);
+  // Sync to Firestore (best-effort)
+  if (props.userId && props.userId !== 'default') {
+    saveUserSettings(props.userId, { geminiApiKey: key }).catch(() => {});
+  }
+  needsApiKey.value = false;
+  error.value = '';
+  startBuild();
+}
+
+const WASM_STEPS = [
   { id: 'init',      label: 'Loading AI engine',      status: 'pending' },
   { id: 'upload',    label: 'Uploading media files',   status: 'pending' },
   { id: 'describe',  label: 'Describing images',       status: 'pending' },
@@ -63,7 +144,16 @@ const buildSteps = ref([
   { id: 'pages',     label: 'Writing page content',    status: 'pending' },
   { id: 'css',       label: 'Designing the look',      status: 'pending' },
   { id: 'save',      label: 'Saving your website',     status: 'pending' },
-]);
+];
+
+const MESSAGES_STEPS = [
+  { id: 'upload', label: 'Uploading your files',           status: 'pending' },
+  { id: 'send',   label: 'Sending to Claude Code',         status: 'pending' },
+  { id: 'build',  label: 'Building your website',          status: 'pending' },
+  { id: 'load',   label: 'Loading your website',           status: 'pending' },
+];
+
+const buildSteps = ref([]);
 
 function setStep(id, status, message) {
   const s = buildSteps.value.find(s => s.id === id);
@@ -71,7 +161,14 @@ function setStep(id, status, message) {
   if (message) statusMessage.value = message;
 }
 
-onMounted(() => startBuild());
+onMounted(() => {
+  buildSteps.value = props.buildMode === 'messages'
+    ? MESSAGES_STEPS.map(s => ({ ...s }))
+    : WASM_STEPS.map(s => ({ ...s }));
+  if (!needsApiKey.value) {
+    startBuild();
+  }
+});
 
 // Sidecar upload: POST files in batches via multipart FormData
 const SIDECAR_BASE = '/api';
@@ -141,6 +238,12 @@ async function startBuild() {
   building.value = true;
   buildSteps.value.forEach(s => s.status = 'pending');
 
+  if (props.buildMode === 'messages') {
+    await buildViaMessages();
+    return;
+  }
+
+  // ── WASM build path ──
   try {
     // 1. Initialize AILANG WASM
     setStep('init', 'active', 'Loading AI engine...');
@@ -376,8 +479,216 @@ async function startBuild() {
     error.value = err.message;
     building.value = false;
     buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
+    if (/api.?key/i.test(err.message)) {
+      inlineApiKey.value = '';
+    }
   }
 }
+
+// ── Messages (Claude Code) build path ──
+
+async function buildViaMessages() {
+  try {
+    const imageItems = props.data.items.filter(i => i.type === 'image' && i.file);
+    const videoItems = props.data.items.filter(i => i.type === 'video' && i.file);
+    const docItems = props.data.items.filter(i => i.type === 'document');
+    const textItems = props.data.items.filter(i => i.type === 'text');
+    const mediaItems = [...imageItems, ...videoItems];
+    const siteSlug = slugify(props.data.description);
+
+    // 1. Upload media files to sidecar staging
+    const uploadMap = new Map();
+    if (mediaItems.length > 0) {
+      setStep('upload', 'active', `Uploading ${mediaItems.length} files...`);
+      const results = await uploadMedia(mediaItems, props.userId, siteSlug, (done, total) => {
+        setStep('upload', 'active', `Uploading files... ${done}/${total}`);
+      });
+      for (const r of results) uploadMap.set(r.originalName, r);
+      setStep('upload', 'done', `${mediaItems.length} files uploaded`);
+    } else {
+      setStep('upload', 'done', 'No media files');
+    }
+
+    // 2. Package brief for Claude Code agent (no WASM, no Gemini key needed)
+    setStep('send', 'active', 'Preparing your brief...');
+    const stylePrompt = getStylePrompt(props.data.styleId, props.data.customNotes);
+
+    const brief = {
+      user: props.userId,
+      siteName: siteSlug,
+      description: props.data.description,
+      style: {
+        id: props.data.styleId,
+        direction: stylePrompt,
+        customNotes: props.data.customNotes || '',
+      },
+      content: {
+        text: textItems.map(i => ({ label: i.label || 'User note', text: i.text })),
+        images: imageItems.map(i => {
+          const uploaded = uploadMap.get(i.filename);
+          return {
+            filename: i.filename,
+            stagingPath: uploaded?.stagingPath || '',
+            useOnSite: i.useOnSite !== false,
+            width: i.width,
+            height: i.height,
+          };
+        }),
+        videos: videoItems.map(i => {
+          const uploaded = uploadMap.get(i.filename);
+          return {
+            filename: i.filename,
+            stagingPath: uploaded?.stagingPath || '',
+            useOnSite: i.useOnSite !== false,
+            duration: i.duration,
+            width: i.width,
+            height: i.height,
+          };
+        }),
+        documents: docItems.map(i => ({
+          filename: i.filename,
+          format: i.format,
+          base64: i.base64, // sidecar saves to staging and strips base64
+        })),
+      },
+      repoConfig: getRepoConfig(),
+      formSheetId: getFormSheetId(),
+    };
+
+    // 3. Send to sidecar → coordinator → agent
+    statusMessage.value = 'Sending to Claude Code...';
+    const { briefId } = await sendBuild(brief);
+    console.log('[WB] Messages build sent, briefId:', briefId);
+    setStep('send', 'done', 'Brief sent');
+
+    // 4. Poll for completion
+    setStep('build', 'active', 'Claude Code is building your website...');
+    const startTime = Date.now();
+    const completion = await pollForCompletion(briefId, startTime);
+    console.log('[WB] Messages build complete:', completion);
+    setStep('build', 'done', 'Build complete!');
+
+    // 5. Load generated site from GitHub Pages
+    setStep('load', 'active', 'Loading your website...');
+    const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
+    setStep('load', 'done', 'Loaded!');
+
+    statusMessage.value = 'Your website is ready!';
+    building.value = false;
+    emit('done', generated);
+
+  } catch (err) {
+    error.value = err.message;
+    building.value = false;
+    buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
+  }
+}
+
+async function pollForCompletion(briefId, startTime) {
+  const POLL_INTERVAL = 5000;
+  const MAX_WAIT = 10 * 60 * 1000; // 10 minutes
+
+  while (Date.now() - startTime < MAX_WAIT) {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    statusMessage.value = `Claude Code is building your website... (${timeStr})`;
+
+    const messages = await pollStatus();
+
+    for (const msg of messages) {
+      try {
+        const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
+        if (payload.briefId === briefId) {
+          if (payload.status === 'complete' || payload.status === 'completed') {
+            return payload;
+          } else if (payload.status === 'failed' || payload.status === 'error') {
+            throw new Error(payload.error || payload.errorMsg || 'Build failed on the server');
+          }
+        }
+      } catch (e) {
+        if (e.message.includes('Build failed') || e.message.includes('server')) throw e;
+        // JSON parse error — skip this message
+      }
+    }
+
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+  }
+
+  throw new Error('Build timed out after 10 minutes. The build may still complete — check your sites list later.');
+}
+
+async function loadGeneratedSite(completion, userId, siteSlug) {
+  const files = completion.files || [];
+  const rc = getRepoConfig();
+  const baseUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`;
+
+  // Wait for GitHub Pages to deploy
+  statusMessage.value = 'Waiting for GitHub Pages to deploy...';
+  const indexUrl = `${baseUrl}/index.html`;
+  await waitForDeploy(indexUrl);
+
+  // Fetch all HTML + CSS files
+  const pages = {};
+  const slugs = [];
+  let css = '';
+
+  for (const file of files) {
+    const url = `${baseUrl}/${file}`;
+    try {
+      if (file.endsWith('.html')) {
+        const slug = file.replace('.html', '');
+        slugs.push(slug);
+        statusMessage.value = `Loading ${file}...`;
+        pages[slug] = await fetch(url, { cache: 'no-store' }).then(r => r.text());
+      } else if (file.endsWith('.css')) {
+        css = await fetch(url, { cache: 'no-store' }).then(r => r.text());
+      }
+    } catch (e) {
+      console.warn(`[WB] Failed to fetch ${file}:`, e.message);
+    }
+  }
+
+  // Fallback: if no files list in completion, try fetching index.html + style.css
+  if (slugs.length === 0) {
+    try {
+      pages['index'] = await fetch(`${baseUrl}/index.html`, { cache: 'no-store' }).then(r => r.text());
+      slugs.push('index');
+    } catch { /* no index.html available */ }
+    try {
+      css = await fetch(`${baseUrl}/style.css`, { cache: 'no-store' }).then(r => r.text());
+    } catch { /* no style.css */ }
+  }
+
+  if (slugs.length === 0) {
+    throw new Error('Could not load the generated website. It may still be deploying — try refreshing your sites list.');
+  }
+
+  return {
+    pages,
+    css,
+    slugs,
+    siteJson: '',
+    userId,
+    siteSlug,
+    liveUrl: `${baseUrl}/`,
+  };
+}
+
+async function waitForDeploy(url, maxWaitMs = 120000, intervalMs = 5000) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      if (resp.ok) return true;
+    } catch { /* keep trying */ }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return false; // Don't throw — proceed anyway, pages might load
+}
+
+// ── WASM build helpers ──
 
 async function parseDocumentItem(item) {
   const bytes = atob(item.base64);
@@ -487,6 +798,65 @@ function dataURLToBlob(dataURL) {
   to { transform: rotate(360deg); }
 }
 
+/* API key card */
+.api-key-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.api-key-card-step {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-top: 0.1rem;
+}
+.api-key-card-step p {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+.get-key-link {
+  display: inline-block;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--primary);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.get-key-link:hover { background: var(--bg); }
+.api-key-input {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  outline: none;
+  font-family: monospace;
+}
+.api-key-input:focus { border-color: var(--primary); }
+
+/* Error boxes */
 .error-box {
   background: #FFF0F0;
   border: 1px solid #FFB3B3;
@@ -495,10 +865,15 @@ function dataURLToBlob(dataURL) {
   margin-bottom: 1rem;
 }
 .error-box p { margin-bottom: 0.5rem; font-size: 0.95rem; }
+.error-box .api-key-input { margin: 0.75rem 0 0.25rem; }
+.error-box .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0.5rem; }
+.error-box .hint a { color: var(--primary); }
 
 @media (max-width: 600px) {
   .progress-list { padding: 0.75rem; }
   .progress-item { font-size: 0.88rem; gap: 0.5rem; padding: 0.5rem 0; }
   .progress-icon { font-size: 1rem; }
+  .api-key-card { padding: 1rem; }
+  .api-key-card-step p { font-size: 0.9rem; }
 }
 </style>

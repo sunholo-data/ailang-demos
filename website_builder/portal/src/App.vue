@@ -156,6 +156,7 @@
           v-else-if="currentStep === 3"
           :data="data"
           :build-mode="buildMode"
+          :user-id="userId"
           @done="(result) => { data.generated = result; currentStep = 4 }"
           @back="currentStep = 2"
         />

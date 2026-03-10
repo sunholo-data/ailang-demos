@@ -644,13 +644,8 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
     const briefPath = join(briefDir, 'brief.json');
     writeFileSync(briefPath, JSON.stringify(brief, null, 2));
 
-    // Send message to coordinator
-    const msgContent = {
-      type: 'build',
-      briefId,
-      briefPath: `staging/${user}/${site}/brief.json`,
-      outputDir: brief.outputDir
-    };
+    // Send full brief to coordinator (staging paths in place of base64)
+    const msgContent = { ...brief, type: 'build' };
     const title = `Build: ${brief.siteName || 'website'}`;
 
     try {
@@ -768,7 +763,8 @@ app.post('/api/form-submit', async (req, res) => {
  */
 app.get('/api/status', async (req, res) => {
   try {
-    const messages = await pollCoordinatorMessages('portal');
+    const inbox = req.query.inbox || 'portal';
+    const messages = await pollCoordinatorMessages(inbox);
     res.json({ messages });
   } catch (err) {
     res.json({ messages: [] });
