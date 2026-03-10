@@ -306,6 +306,11 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
 pure func toolDecl(name: string, desc: string, params: Json) -> Json =
   jo([kv("name", js(name)), kv("description", js(desc)), kv("parameters", params)])
 
+-- Tool declaration with NON_BLOCKING behavior (async tool — model continues while tool runs)
+pure func toolDeclAsync(name: string, desc: string, params: Json) -> Json =
+  jo([kv("name", js(name)), kv("description", js(desc)), kv("parameters", params),
+      kv("behavior", js("NON_BLOCKING"))])
+
 -- Browser-safe tools only. File/process tools (readFile, runCommand, prefetch, etc.)
 -- are CLI-only and not available in the browser WASM environment.
 pure func ambientToolDeclarations() -> [Json] = [
@@ -341,7 +346,7 @@ pure func ambientToolDeclarations() -> [Json] = [
       kv("title", jo([kv("type", js("string")), kv("description", js("Note title"))])),
       kv("content", jo([kv("type", js("string")), kv("description", js("Note content"))]))])),
       kv("required", ja([js("title"), js("content")]))])),
-  toolDecl("webFetch", "Fetch content from a URL and return the text. Use when the user mentions a URL or asks about a web page.",
+  toolDeclAsync("webFetch", "Fetch content from a URL and return the text. Use when the user mentions a URL or asks about a web page. This tool runs asynchronously — you can continue speaking while it fetches.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("url", jo([kv("type", js("string")), kv("description", js("The URL to fetch"))]))])),
       kv("required", ja([js("url")]))]))
@@ -379,6 +384,19 @@ export pure func buildToolResponse(callId: string, name: string, result: string)
         kv("id", js(callId)),
         kv("name", js(name)),
         kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- Tool response with scheduling for NON_BLOCKING tools.
+-- scheduling: "INTERRUPT" (stop and process), "WHEN_IDLE" (wait), "SILENT" (absorb quietly)
+export pure func buildToolResponseScheduled(callId: string, name: string, result: string, scheduling: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js(name)),
+        kv("response", jo([kv("result", js(result)), kv("scheduling", js(scheduling))]))
       ])]))
     ]))
   ]))

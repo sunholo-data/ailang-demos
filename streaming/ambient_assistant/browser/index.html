@@ -1013,6 +1013,9 @@ function cacheDom() {
   }
 }
 
+// ── NON_BLOCKING tools (async — model continues while tool runs) ──
+const NON_BLOCKING_TOOLS = new Set(['webFetch']);
+
 // ── Session state ──
 let turnCount = 0;
 let toolsUsed = new Map();
@@ -1279,6 +1282,10 @@ async function handleAILANGEvent(event) {
       setStatus('Listening');
       $.app.classList.add('connected');
       addSystemMessage('Ambient mode active — say "Hey AILANG" to get a response');
+      if (NON_BLOCKING_TOOLS.size > 0) {
+        console.log('[NON_BLOCKING] Setup accepted with async tools: ' + [...NON_BLOCKING_TOOLS].join(', '));
+        addSystemMessage('NON_BLOCKING tools active: ' + [...NON_BLOCKING_TOOLS].join(', '));
+      }
       $.connectBtn.textContent = 'Disconnect';
       $.textInput.disabled = false;
       $.sendBtn.disabled = false;
@@ -1352,7 +1359,9 @@ async function handleAILANGEvent(event) {
           const result = await dispatchBrowserTool(name, args);
           const elapsed = Math.round(performance.now() - t0);
           updateToolCard(cardId, result, elapsed);
-          sendToolResponse(callId, name, result);
+          // NON_BLOCKING tools get scheduling parameter
+          const scheduling = NON_BLOCKING_TOOLS.has(name) ? 'WHEN_IDLE' : undefined;
+          sendToolResponse(callId, name, result, scheduling);
         }
       }
       break;
@@ -1659,18 +1668,30 @@ async function dispatchBrowserTool(name, args) {
   }
 }
 
-function sendToolResponse(callId, name, result) {
+// scheduling: optional — "INTERRUPT", "WHEN_IDLE", "SILENT" (for NON_BLOCKING tools)
+function sendToolResponse(callId, name, result, scheduling) {
   const activeConn = core.getActiveConnection();
   if (!activeConn) return;
-  const responseJson = core.callAILANG('buildToolResponse', callId, name, result);
+
+  let responseJson;
+  if (scheduling && core.wasmReady) {
+    responseJson = core.callAILANG('buildToolResponseScheduled', callId, name, result, scheduling);
+    if (responseJson) console.log('[NON_BLOCKING] Sent ' + name + ' response with scheduling=' + scheduling);
+  }
+  if (!responseJson) {
+    responseJson = core.callAILANG('buildToolResponse', callId, name, result);
+  }
+
   if (responseJson) {
     activeConn.ws.send(responseJson);
   } else {
+    const resp = { result: result };
+    if (scheduling) resp.scheduling = scheduling;
     activeConn.ws.send(JSON.stringify({
       toolResponse: {
         functionResponses: [{
           id: callId, name: name,
-          response: { result: result }
+          response: resp
         }]
       }
     }));
