@@ -43,7 +43,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, getRepoConfig } from '../../api.js';
+import { saveSite, getRepoConfig, getFormSheetId } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 
 const props = defineProps({
@@ -340,6 +340,7 @@ async function startBuild() {
         const parsed = JSON.parse(String(siteJson));
         if (parsed.title) siteName = parsed.title;
       } catch {}
+      const formSheet = getFormSheetId();
       saveResult = await saveSite({
         user: 'default', // TODO: pass from auth
         siteName,
@@ -349,6 +350,7 @@ async function startBuild() {
         siteJson,
         description: props.data.description,
         repoConfig: getRepoConfig(),
+        ...(formSheet ? { formSheetId: formSheet } : {}),
       });
       setStep('save', 'done', 'Saved!');
       console.log('[WB] Site saved:', saveResult);

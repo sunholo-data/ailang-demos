@@ -185,3 +185,27 @@ export function saveRepoConfig(config) {
 export function clearRepoConfig() {
   localStorage.removeItem(REPO_CONFIG_KEY);
 }
+
+// ── Google Sheet config (per-user, stored in localStorage) ──
+
+const SHEET_CONFIG_KEY = 'wb-form-sheet-id';
+
+/**
+ * Get the user's Google Sheet ID for form submissions.
+ * @returns {string} spreadsheet ID or empty string
+ */
+export function getFormSheetId() {
+  return localStorage.getItem(SHEET_CONFIG_KEY) || '';
+}
+
+/**
+ * Save the user's Google Sheet ID for form submissions.
+ * @param {string} sheetId
+ */
+export function saveFormSheetId(sheetId) {
+  if (sheetId.trim()) {
+    localStorage.setItem(SHEET_CONFIG_KEY, sheetId.trim());
+  } else {
+    localStorage.removeItem(SHEET_CONFIG_KEY);
+  }
+}

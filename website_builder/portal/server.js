@@ -85,14 +85,14 @@ function saveFormsConfig(config) {
 // Set FORM_SHEET_ID env var or configure in portal Settings.
 const FORM_SHEET_ID = process.env.FORM_SHEET_ID || '';
 
-async function getOrCreateSheet(siteSlug) {
+async function getOrCreateSheet(siteSlug, requestSheetId) {
   const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
-  // Resolve spreadsheet ID: env var > forms.json master > per-site legacy
+  // Resolve spreadsheet ID: per-request (user setting) > env var > forms.json > per-site legacy
   const config = loadFormsConfig();
-  const spreadsheetId = FORM_SHEET_ID || config._master || config[siteSlug];
+  const spreadsheetId = requestSheetId || FORM_SHEET_ID || config._master || config[siteSlug];
   if (!spreadsheetId) {
     throw new Error(
       'No form spreadsheet configured. Set FORM_SHEET_ID env var or configure in Settings. ' +
@@ -421,7 +421,7 @@ async function commitToRepo(filePaths, message, repoConfig = {}) {
  */
 app.post('/api/save', async (req, res) => {
   try {
-    const { user = 'default', siteName, pages, css, images, siteJson, description, repoConfig } = req.body;
+    const { user = 'default', siteName, pages, css, images, siteJson, description, repoConfig, formSheetId } = req.body;
     if (!siteName || !pages) {
       return res.status(400).json({ error: 'siteName and pages are required' });
     }
@@ -496,7 +496,8 @@ app.post('/api/save', async (req, res) => {
       description: description || '',
       siteJson: siteJson || '',
       savedAt: new Date().toISOString(),
-      source: 'wasm'
+      source: 'wasm',
+      ...(formSheetId ? { formSheetId } : {}),
     }, null, 2));
     writtenFiles.push(`staging/${user}/${slug}/brief.json`);
 
@@ -637,7 +638,7 @@ app.post('/api/feedback', upload.array('files', 10), (req, res) => {
  */
 app.post('/api/form-submit', async (req, res) => {
   try {
-    const { site, page, fields, submittedAt } = req.body;
+    const { site, page, fields, submittedAt, formSheetId } = req.body;
 
     if (!site || typeof site !== 'string') {
       return res.status(400).json({ ok: false, message: 'Missing site identifier.' });
@@ -658,8 +659,21 @@ app.post('/api/form-submit', async (req, res) => {
       return res.status(429).json({ ok: false, message: 'Too many submissions. Please try again in a minute.' });
     }
 
-    // Store in Google Sheets
-    const { spreadsheetId, tabName, auth } = await getOrCreateSheet(site);
+    // Resolve sheet ID: request body > site brief.json > env var
+    let sheetId = formSheetId;
+    if (!sheetId) {
+      try {
+        // Look up from any user's brief.json that matches this site slug
+        for (const u of existsSync(STAGING_DIR) ? readdirSync(STAGING_DIR) : []) {
+          const bp = join(STAGING_DIR, u, site, 'brief.json');
+          if (existsSync(bp)) {
+            const brief = JSON.parse(readFileSync(bp, 'utf-8'));
+            if (brief.formSheetId) { sheetId = brief.formSheetId; break; }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    const { spreadsheetId, tabName, auth } = await getOrCreateSheet(site, sheetId);
     await appendFormRow(spreadsheetId, tabName, auth, page || 'unknown', fields, submittedAt);
     console.log(`[sidecar] Form submission stored for ${site}/${page}`);
 

@@ -36,6 +36,17 @@
         />
         <p class="hint">Sites will be published to <code>https://&lt;owner&gt;.github.io/&lt;repo&gt;/</code></p>
 
+        <hr class="settings-divider" />
+        <h3>Contact Form Submissions</h3>
+        <p class="hint" style="margin-top:0.25rem">Optional. Enter a Google Sheet ID to receive form submissions from your published sites. Create a sheet and share it (Editor) with the service account shown below.</p>
+        <label>Google Sheet ID</label>
+        <input
+          v-model="formSheetId"
+          type="text"
+          placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+        />
+        <p class="hint">Share your sheet with: <code style="font-size:0.7em">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
+
         <div class="btn-row">
           <button class="btn-secondary" @click="clearKey">Clear</button>
           <button class="btn-primary" @click="saveKey">Save</button>
@@ -135,7 +146,7 @@ import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
 import { onAuthChange, signOutUser } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
-import { getRepoConfig, saveRepoConfig, clearRepoConfig } from './api.js';
+import { getRepoConfig, saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
 const authed = ref(false);
 const user = ref(null);
@@ -145,6 +156,7 @@ const showSettings = ref(false);
 const apiKeyInput = ref('');
 const repoOwner = ref('');
 const repoName = ref('');
+const formSheetId = ref('');
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
@@ -165,6 +177,7 @@ const showApiKeyBanner = computed(() => {
 
 onMounted(() => {
   apiKeyInput.value = getApiKey();
+  formSheetId.value = getFormSheetId();
   const rc = getRepoConfig();
   if (rc) {
     repoOwner.value = rc.owner || '';
@@ -208,6 +221,7 @@ function saveKey() {
   } else {
     clearRepoConfig();
   }
+  saveFormSheetId(formSheetId.value);
   showSettings.value = false;
 }
 
