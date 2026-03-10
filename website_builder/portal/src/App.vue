@@ -97,7 +97,16 @@
         <span class="logo" @click="showDashboard = true" style="cursor:pointer">🌐 Website Builder</span>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true">⚙️</button>
-          <button v-if="user" class="icon-btn" title="Sign out" @click="handleSignOut">👤</button>
+          <div v-if="user" class="user-menu-wrap">
+            <button class="icon-btn" title="Account" @click="showUserMenu = !showUserMenu">👤</button>
+            <div v-if="showUserMenu" class="user-menu" @click="showUserMenu = false">
+              <div class="user-menu-info">
+                <span class="user-menu-name">{{ user.displayName || 'Signed in' }}</span>
+                <span class="user-menu-email">{{ user.email }}</span>
+              </div>
+              <button class="user-menu-item" @click="handleSignOut">Sign out</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -174,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import AuthGate from './components/AuthGate.vue';
 import MySites from './components/MySites.vue';
 import DescribeStep from './components/steps/DescribeStep.vue';
@@ -200,9 +209,19 @@ const buildMode = ref('wasm'); // 'wasm' or 'messages'
 const messagesEnabled = ref(false); // admin-set, read-only for users
 const showPublishing = ref(false); // collapsible settings section
 const showAdvanced = ref(false); // collapsible settings section
+const showUserMenu = ref(false); // user account dropdown
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
+
+// Close user menu when clicking outside
+function closeUserMenu(e) {
+  if (showUserMenu.value && !e.target.closest('.user-menu-wrap')) {
+    showUserMenu.value = false;
+  }
+}
+onMounted(() => document.addEventListener('click', closeUserMenu));
+onUnmounted(() => document.removeEventListener('click', closeUserMenu));
 
 const steps = ['Describe', 'Upload', 'Style', 'Build', 'Preview', 'Publish'];
 
@@ -486,6 +505,48 @@ body {
   border-radius: 6px;
 }
 .icon-btn:hover { background: var(--bg); }
+
+/* User account dropdown */
+.user-menu-wrap { position: relative; }
+.user-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 200px;
+  z-index: 100;
+  overflow: hidden;
+}
+.user-menu-info {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.user-menu-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.user-menu-email {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.user-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 1rem;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #CC0000;
+}
+.user-menu-item:hover { background: #FFF0F0; }
 
 /* Step dots */
 .step-dots {

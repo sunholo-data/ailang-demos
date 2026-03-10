@@ -48,6 +48,7 @@ const examples = [
   'My photography portfolio — landscapes and weddings',
   'Our family bakery, specialising in celebration cakes',
   'My consultancy for small business marketing',
+  'Our riding stables in Cornwall — lessons, hacks, and pony parties',
 ];
 </script>
 
