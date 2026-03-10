@@ -6,15 +6,15 @@
     <!-- Upload buttons -->
     <div class="upload-buttons">
       <button class="upload-btn" @click="triggerCamera">
-        <span class="upload-icon">📷</span>
+        <SvgIcon name="camera" :size="28" class="upload-icon" />
         <span>Take a photo</span>
       </button>
       <button class="upload-btn" @click="triggerFileUpload">
-        <span class="upload-icon">📁</span>
+        <SvgIcon name="folder" :size="28" class="upload-icon" />
         <span>Upload files</span>
       </button>
       <button class="upload-btn" @click="showTextInput = !showTextInput">
-        <span class="upload-icon">✏️</span>
+        <SvgIcon name="pencil" :size="28" class="upload-icon" />
         <span>Add text</span>
       </button>
     </div>
@@ -58,8 +58,8 @@
             <img :src="item.preview" class="item-thumb" :alt="item.filename" />
             <span class="duration-badge">{{ item.durationLabel }}</span>
           </div>
-          <span v-else-if="item.type === 'document'" class="item-text-icon">📄</span>
-          <span v-else class="item-text-icon">📝</span>
+          <span v-else-if="item.type === 'document'" class="item-text-icon"><SvgIcon name="file-text" :size="28" /></span>
+          <span v-else class="item-text-icon"><SvgIcon name="note" :size="28" /></span>
         </div>
         <div class="item-info">
           <span class="item-name">{{ item.filename || 'Text note' }}</span>
@@ -76,12 +76,12 @@
         >
           {{ item.useOnSite === false ? 'Use as info' : 'Show on website' }}
         </button>
-        <button class="remove-btn" @click="removeItem(i)">✕</button>
+        <button class="remove-btn" @click="removeItem(i)"><SvgIcon name="x" :size="16" /></button>
       </div>
     </div>
 
     <div v-else class="empty-hint">
-      <span class="empty-icon">📸</span>
+      <SvgIcon name="image-plus" :size="40" class="empty-icon" />
       <p>Share some photos, files, or write a few notes about what you'd like on your website.</p>
     </div>
 
@@ -100,6 +100,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import SvgIcon from '../SvgIcon.vue';
 import { resizeImage, createThumbnail, extractVideoThumbnail, formatFileSize, formatDuration } from '../../media.js';
 
 const props = defineProps({ items: { type: Array, default: () => [] } });
@@ -306,7 +307,7 @@ function fileToBase64(file) {
   transform: translateY(-1px);
 }
 .upload-btn:active { transform: translateY(0); }
-.upload-icon { font-size: 1.8rem; }
+.upload-icon { color: var(--text-muted); }
 
 /* Progress bar */
 .progress-bar-container {
@@ -398,7 +399,7 @@ function fileToBase64(file) {
   border-radius: 4px;
   line-height: 1.3;
 }
-.item-text-icon { font-size: 2rem; width: 48px; text-align: center; }
+.item-text-icon { width: 48px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 .item-info { flex: 1; min-width: 0; }
 .item-name { display: block; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-type { font-size: 0.78rem; color: var(--text-muted); text-transform: capitalize; }
@@ -455,18 +456,17 @@ function fileToBase64(file) {
   line-height: 1.6;
 }
 .empty-icon {
-  font-size: 2.5rem;
   display: block;
-  margin-bottom: 0.75rem;
+  margin: 0 auto 0.75rem;
+  color: var(--text-muted);
 }
 
 @media (max-width: 600px) {
   .upload-buttons { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .upload-btn { padding: 1rem 0.5rem; font-size: 0.85rem; }
-  .upload-icon { font-size: 1.4rem; }
   .item-row { gap: 0.5rem; padding: 0.5rem 0.6rem; }
   .item-thumb { width: 40px; height: 40px; }
-  .item-text-icon { font-size: 1.6rem; width: 40px; }
+  .item-text-icon { width: 40px; }
   .item-name { font-size: 0.85rem; }
   .use-toggle { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
   .text-input { font-size: 1rem; } /* 16px prevents iOS zoom */

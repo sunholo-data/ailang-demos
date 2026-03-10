@@ -15,13 +15,13 @@
 
     <!-- Saved confirmation with live link -->
     <div v-if="saved && !deploying" class="success-card">
-      <div class="success-icon">🎉</div>
+      <div class="success-icon"><SvgIcon name="check-circle" :size="48" class="icon-success" /></div>
       <h2>Website published!</h2>
       <p class="success-pages">{{ pageCount }} page{{ pageCount !== 1 ? 's' : '' }} saved</p>
       <div v-if="previewUrl" class="url-row">
         <a :href="previewUrl" target="_blank" class="live-url">{{ previewUrl }}</a>
         <button class="copy-btn" @click="copyLink">
-          {{ copied ? '✓ Copied!' : '📋 Copy link' }}
+          <SvgIcon :name="copied ? 'check' : 'clipboard'" :size="16" /> {{ copied ? 'Copied!' : 'Copy link' }}
         </button>
       </div>
       <p v-if="isLive" class="live-note">Your site is live and anyone with the link can see it.</p>
@@ -36,10 +36,10 @@
     <!-- Actions -->
     <div class="actions-card">
       <button v-if="previewUrl && !deploying" class="btn-primary action-btn" @click="openPreview">
-        ↗ Open in browser
+        <SvgIcon name="external-link" :size="18" /> Open in browser
       </button>
       <button class="btn-secondary action-btn" @click="downloadFiles">
-        ⬇️ Download files
+        <SvgIcon name="download" :size="18" /> Download files
       </button>
     </div>
 
@@ -49,8 +49,8 @@
     </div>
 
     <div class="nav-btns">
-      <button class="btn-secondary" @click="$emit('back')">← Back to preview</button>
-      <button class="btn-secondary" @click="$emit('edit')">✏️ Make changes</button>
+      <button class="btn-secondary" @click="$emit('back')"><SvgIcon name="arrow-left" :size="16" /> Back to preview</button>
+      <button class="btn-secondary" @click="$emit('edit')"><SvgIcon name="pencil" :size="16" /> Make changes</button>
       <button class="btn-primary" @click="$emit('restart')">Start a new website</button>
     </div>
   </div>
@@ -58,6 +58,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import SvgIcon from '../SvgIcon.vue';
 import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
 
 const props = defineProps({
@@ -263,7 +264,8 @@ function downloadString(filename, content, type) {
   padding: 2rem 1.5rem;
   margin-bottom: 1.5rem;
 }
-.success-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+.success-icon { margin-bottom: 0.75rem; }
+.icon-success { color: var(--success); }
 .success-card h2 { margin-bottom: 0.5rem; color: #2D6B4A; }
 .success-pages { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; }
 
@@ -295,6 +297,9 @@ function downloadString(filename, content, type) {
   cursor: pointer;
   min-height: 44px;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 .copy-btn:hover { background: var(--primary-light); }
 .live-note { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
@@ -328,7 +333,7 @@ function downloadString(filename, content, type) {
 
 @media (max-width: 600px) {
   .deploy-card, .success-card { padding: 1.5rem 1rem; }
-  .success-icon { font-size: 2.5rem; }
+  .success-icon { margin-bottom: 0.5rem; }
   .live-url { font-size: 0.88rem; }
   .copy-btn { width: 100%; }
   .info-box { padding: 1rem; }

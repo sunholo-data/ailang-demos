@@ -21,11 +21,12 @@
         </div>
         <div class="style-content">
           <div class="style-top">
-            <span class="style-icon">{{ style.icon }}</span>
+            <SvgIcon :name="style.icon" :size="18" class="style-icon" />
             <span class="style-label">{{ style.label }}</span>
           </div>
           <p class="style-desc">{{ style.description }}</p>
         </div>
+        <span v-if="selectedId === style.id" class="selected-check"><SvgIcon name="check" :size="12" /></span>
       </label>
     </div>
 
@@ -50,6 +51,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import SvgIcon from '../SvgIcon.vue';
 
 const props = defineProps({
   styleId: { type: String, default: 'warm' },
@@ -63,7 +65,7 @@ const notes = ref(props.customNotes);
 const styles = [
   {
     id: 'warm',
-    icon: '☀️',
+    icon: 'sun',
     label: 'Warm & Friendly',
     description: 'Soft earth tones, rounded corners, welcoming. Feels like a cosy shop you want to spend time in.',
     colors: ['#FDF6EE', '#D4845A', '#8B5E3C', '#3D2B1F'],
@@ -71,7 +73,7 @@ const styles = [
   },
   {
     id: 'clean',
-    icon: '✨',
+    icon: 'sparkles',
     label: 'Clean & Modern',
     description: 'Lots of white space, sharp lines, minimal. Professional without being cold.',
     colors: ['#F8F9FA', '#2D2D2D', '#0066CC', '#111111'],
@@ -79,7 +81,7 @@ const styles = [
   },
   {
     id: 'bold',
-    icon: '⚡',
+    icon: 'zap',
     label: 'Bold & Vibrant',
     description: 'Strong colours, large typography, energetic. Makes an immediate impression.',
     colors: ['#1A1A2E', '#E94560', '#F5A623', '#FFFFFF'],
@@ -87,7 +89,7 @@ const styles = [
   },
   {
     id: 'elegant',
-    icon: '🌿',
+    icon: 'leaf',
     label: 'Elegant & Refined',
     description: 'Muted palette, serif fonts, sophisticated. Feels premium and tasteful.',
     colors: ['#F5F0EB', '#8B7355', '#2C2416', '#4A3728'],
@@ -95,7 +97,7 @@ const styles = [
   },
   {
     id: 'fun',
-    icon: '🎉',
+    icon: 'smile',
     label: 'Fun & Playful',
     description: 'Bright colours, friendly shapes, casual. Cheerful and approachable.',
     colors: ['#FFF9C4', '#FF6B6B', '#4ECDC4', '#2D3436'],
@@ -103,7 +105,7 @@ const styles = [
   },
   {
     id: 'auto',
-    icon: '🎲',
+    icon: 'shuffle',
     label: 'Surprise me!',
     description: 'Let the AI analyse your content and pick the best style. You can always change it later.',
     colors: ['#F3EEFF', '#6B52A3', '#E8A87C', '#33302E'],
@@ -140,8 +142,7 @@ const styles = [
   background: var(--primary-soft);
   box-shadow: 0 2px 8px rgba(107,82,163,0.12);
 }
-.style-option.selected::after {
-  content: '✓';
+.selected-check {
   position: absolute;
   right: 0.75rem;
   top: 50%;
@@ -154,8 +155,7 @@ const styles = [
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
+  flex-shrink: 0;
 }
 
 /* Visual preview swatch */
@@ -199,7 +199,7 @@ const styles = [
   gap: 0.4rem;
   margin-bottom: 0.2rem;
 }
-.style-icon { font-size: 1rem; }
+.style-icon { color: var(--primary); flex-shrink: 0; }
 .style-label { font-weight: 600; font-size: 0.95rem; }
 .style-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.35; }
 

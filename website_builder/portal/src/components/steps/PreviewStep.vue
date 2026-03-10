@@ -3,7 +3,7 @@
     <!-- Page tabs -->
     <div class="page-tabs">
       <button class="tab-back" title="Back to My Websites" @click="$emit('dashboard')">
-        &larr;
+        <SvgIcon name="arrow-left" :size="16" />
       </button>
       <button
         v-for="slug in slugs"
@@ -16,9 +16,9 @@
       </button>
       <div class="tab-spacer"></div>
       <button class="tab-action" :title="isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen preview'" @click="toggleFullscreen">
-        {{ isFullscreen ? '⊡' : '⛶' }}
+        <SvgIcon :name="isFullscreen ? 'minimize' : 'maximize'" :size="16" />
       </button>
-      <button class="tab-action" title="Open current page in new tab" @click="openInTab">↗</button>
+      <button class="tab-action" title="Open current page in new tab" @click="openInTab"><SvgIcon name="external-link" :size="16" /></button>
     </div>
 
     <!-- Website preview iframe -->
@@ -43,32 +43,32 @@
         <span class="chat-bar-hint">You can also click on any part of the preview to edit just that section</span>
       </div>
       <div v-if="refining" class="refining-msg">
-        <span class="spinner-inline">⟳</span> {{ refineStatus }}
+        <SvgIcon name="loader" :size="16" class="spinner-inline" /> {{ refineStatus }}
       </div>
       <template v-else>
         <!-- Selected element context chip -->
         <div v-if="selectedElement" class="context-chip">
-          <span>📌 Re: <strong>{{ selectedElement.area || 'selected element' }}</strong></span>
-          <button class="chip-clear" @click="selectedElement = null" title="Clear selection">✕</button>
+          <span><SvgIcon name="pin" :size="14" /> Re: <strong>{{ selectedElement.area || 'selected element' }}</strong></span>
+          <button class="chip-clear" @click="selectedElement = null" title="Clear selection"><SvgIcon name="x" :size="14" /></button>
         </div>
 
         <!-- Pending added content chips -->
         <div v-if="pendingItems.length > 0" class="pending-list">
           <div v-for="(item, i) in pendingItems" :key="i" class="pending-chip">
-            <span>{{ item.type === 'image' ? '📷' : item.type === 'document' ? '📄' : '📝' }} {{ item.label }}</span>
+            <span><SvgIcon :name="item.type === 'image' ? 'camera' : item.type === 'document' ? 'file-text' : 'note'" :size="14" /> {{ item.label }}</span>
             <button
               v-if="item.type === 'image'"
               class="use-toggle-small"
               :class="{ 'content-only': item.useOnSite === false }"
               :title="item.useOnSite === false ? 'Click to show this image on the website' : 'Click to use for content only'"
               @click="item.useOnSite = !item.useOnSite"
-            >{{ item.useOnSite === false ? '📝' : '🖼️' }}</button>
-            <button class="chip-clear" @click="pendingItems.splice(i, 1)" title="Remove">✕</button>
+            ><SvgIcon :name="item.useOnSite === false ? 'note' : 'image-plus'" :size="14" /></button>
+            <button class="chip-clear" @click="pendingItems.splice(i, 1)" title="Remove"><SvgIcon name="x" :size="14" /></button>
           </div>
           <span v-if="pendingStatus" class="pending-status">{{ pendingStatus }}</span>
         </div>
         <div v-else-if="pendingStatus" class="pending-status-row">
-          <span class="spinner-inline">⟳</span> {{ pendingStatus }}
+          <SvgIcon name="loader" :size="16" class="spinner-inline" /> {{ pendingStatus }}
         </div>
 
         <!-- Inline text note input -->
@@ -94,8 +94,8 @@
             :placeholder="selectedElement ? 'What to change about this section?' : 'e.g. more purple, add my phone number, bigger hero photo...'"
             @keydown.enter="sendFeedback"
           />
-          <button class="add-btn" title="Add images, PDFs or text files" @click="triggerAddFile">📎</button>
-          <button class="add-btn" title="Add a text note (address, hours, info...)" @click="showTextInput = !showTextInput">✎</button>
+          <button class="add-btn" title="Add images, PDFs or text files" @click="triggerAddFile"><SvgIcon name="paperclip" :size="18" /></button>
+          <button class="add-btn" title="Add a text note (address, hours, info...)" @click="showTextInput = !showTextInput"><SvgIcon name="edit" :size="18" /></button>
           <button class="send-btn" :disabled="!canSend" @click="sendFeedback">Send</button>
         </div>
         <!-- Hidden file input for adding content (images + PDFs + text files) -->
@@ -109,18 +109,18 @@
       <div v-if="showHistory" class="history-panel">
         <div class="history-header">
           <span>Build history</span>
-          <button class="chip-clear" @click="showHistory = false">✕</button>
+          <button class="chip-clear" @click="showHistory = false"><SvgIcon name="x" :size="14" /></button>
         </div>
         <div class="history-list">
           <div v-for="(entry, i) in history" :key="i" class="history-entry">
-            <span class="history-icon">{{ entry.icon }}</span>
+            <SvgIcon :name="entry.icon" :size="16" class="history-icon" />
             <div class="history-body">
               <div class="history-summary">{{ entry.summary }}</div>
               <div class="history-detail">{{ entry.detail }}</div>
               <div class="history-time">{{ entry.time }}</div>
               <!-- Expand to view attached files/images -->
               <button v-if="entry.items?.length" class="history-files-btn" @click="entry.expanded = !entry.expanded">
-                {{ entry.expanded ? '▲ Hide' : `▼ View ${entry.items.length} file${entry.items.length !== 1 ? 's' : ''}` }}
+                <SvgIcon :name="entry.expanded ? 'chevron-up' : 'chevron-down'" :size="12" /> {{ entry.expanded ? 'Hide' : `View ${entry.items.length} file${entry.items.length !== 1 ? 's' : ''}` }}
               </button>
               <div v-if="entry.expanded && entry.items?.length" class="history-files">
                 <div v-for="(item, j) in entry.items" :key="j" class="history-file" @click="openHistoryItem(item)" title="Click to view">
@@ -130,9 +130,9 @@
                     class="history-thumb"
                     :alt="item.filename || item.label"
                   />
-                  <div v-else-if="item.type === 'video'" class="history-file-icon">🎬</div>
-                  <div v-else-if="item.type === 'document'" class="history-file-icon">📄</div>
-                  <div v-else class="history-file-icon">📝</div>
+                  <div v-else-if="item.type === 'video'" class="history-file-icon"><SvgIcon name="film" :size="20" /></div>
+                  <div v-else-if="item.type === 'document'" class="history-file-icon"><SvgIcon name="file-text" :size="20" /></div>
+                  <div v-else class="history-file-icon"><SvgIcon name="note" :size="20" /></div>
                   <span class="history-file-name">{{ item.filename || item.label || 'Text note' }}</span>
                 </div>
               </div>
@@ -146,7 +146,7 @@
     <teleport to="body">
       <div v-if="lightboxItem" class="lightbox-overlay" @click.self="lightboxItem = null">
         <div class="lightbox-content">
-          <button class="lightbox-close" @click="lightboxItem = null">✕</button>
+          <button class="lightbox-close" @click="lightboxItem = null"><SvgIcon name="x" :size="20" /></button>
           <img v-if="lightboxItem.type === 'image'" :src="lightboxItem.src" class="lightbox-img" :alt="lightboxItem.label" />
           <div v-else class="lightbox-text">
             <p class="lightbox-label">{{ lightboxItem.label }}</p>
@@ -159,7 +159,7 @@
     <!-- Bottom action bar -->
     <div class="action-bar">
       <button class="btn-secondary" @click="$emit('rebuild')">
-        ↩ Rebuild
+        <SvgIcon name="refresh" :size="16" /> Rebuild
       </button>
       <button
         class="btn-history"
@@ -167,7 +167,7 @@
         @click="showHistory = !showHistory"
         title="Build history"
       >
-        📋 {{ history.length }}
+        <SvgIcon name="history" :size="16" /> {{ history.length }}
       </button>
       <button class="btn-primary publish-btn" @click="$emit('publish')">
         Publish
@@ -178,6 +178,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import SvgIcon from '../SvgIcon.vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 import { saveSite, getRepoConfig } from '../../api.js';
 import { normalizeNavLinks, buildSelfContainedHtml } from '../../nav-utils.js';
@@ -473,7 +474,7 @@ onMounted(async () => {
   let siteTitle = 'Website';
   try { siteTitle = JSON.parse(props.generated?.siteJson || '{}')?.title || 'Website'; } catch {}
   const pageList = (props.generated?.slugs || []).map(s => slugLabel(s)).join(', ');
-  pushHistory('🏗️', `Built "${siteTitle}"`,
+  pushHistory('settings', `Built "${siteTitle}"`,
     `${(props.generated?.slugs || []).length} pages (${pageList}) · ${props.items.length} item${props.items.length !== 1 ? 's' : ''}`,
     props.items
   );
@@ -716,7 +717,7 @@ async function sendFeedback() {
 
   // Log to history immediately so the user sees it right away
   const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
-  pushHistory('✏️', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
+  pushHistory('pencil', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
 
   // Route through Claude Code (local sidecar only) or WASM
   // Cloud Run has no ailang CLI, so always use WASM when API is remote
@@ -1248,7 +1249,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   border-bottom: 1px solid var(--border);
 }
 .history-entry:last-child { border-bottom: none; }
-.history-icon { font-size: 1rem; flex-shrink: 0; padding-top: 0.1rem; }
+.history-icon { flex-shrink: 0; color: var(--text-muted); }
 .history-body { flex: 1; min-width: 0; }
 .history-summary {
   font-size: 0.85rem;
@@ -1302,7 +1303,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   border: 1px solid var(--border);
 }
 .history-file-icon {
-  font-size: 1.8rem;
+  color: var(--text-muted);
   width: 64px;
   height: 64px;
   display: flex;

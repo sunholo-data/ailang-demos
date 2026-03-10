@@ -63,9 +63,9 @@
           :class="step.status"
         >
           <span class="progress-icon">
-            <span v-if="step.status === 'done'">✅</span>
-            <span v-else-if="step.status === 'active'" class="spinner">⟳</span>
-            <span v-else>○</span>
+            <SvgIcon v-if="step.status === 'done'" name="check-circle" :size="18" class="icon-done" />
+            <SvgIcon v-else-if="step.status === 'active'" name="loader" :size="18" class="spinner" />
+            <SvgIcon v-else name="circle" :size="18" class="icon-pending" />
           </span>
           <span class="progress-label">{{ step.label }}</span>
         </div>
@@ -114,6 +114,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import SvgIcon from '../SvgIcon.vue';
 import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
@@ -479,7 +480,7 @@ async function startBuild() {
       setStep('save', 'done', 'Save skipped');
     }
 
-    statusMessage.value = 'Your website is ready! 🎉';
+    statusMessage.value = 'Your website is ready!';
     building.value = false;
 
     // Include save info in generated data so PreviewStep/PublishStep know the site is persisted
@@ -818,7 +819,9 @@ function dataURLToBlob(dataURL) {
 .progress-item.done { color: var(--success); }
 .progress-item.active { color: var(--primary); font-weight: 600; }
 
-.progress-icon { font-size: 1.1rem; width: 1.5rem; text-align: center; }
+.progress-icon { width: 1.5rem; display: flex; align-items: center; justify-content: center; }
+.icon-done { color: var(--success); }
+.icon-pending { color: var(--border); }
 
 .spinner {
   display: inline-block;
@@ -917,7 +920,7 @@ function dataURLToBlob(dataURL) {
   .time-estimate { font-size: 0.85rem; padding: 0.65rem 0.85rem; }
   .progress-list { padding: 0.75rem; }
   .progress-item { font-size: 0.9rem; gap: 0.5rem; padding: 0.5rem 0; }
-  .progress-icon { font-size: 1rem; }
+  .progress-icon { width: 1.25rem; }
   .api-key-card { padding: 1rem; }
   .api-key-card-step p { font-size: 0.9rem; }
   .api-key-input { font-size: 1rem; } /* 16px prevents iOS zoom */

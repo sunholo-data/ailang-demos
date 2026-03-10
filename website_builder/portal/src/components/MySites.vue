@@ -11,7 +11,7 @@
 
     <!-- Loading a site into preview -->
     <div v-if="loadingSite" class="loading-site">
-      <span class="spinner">&#x27F3;</span> Loading {{ loadingSite }}...
+      <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
     </div>
 
     <!-- Site cards -->
@@ -26,7 +26,7 @@
           <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
         </div>
         <a v-if="liveBaseUrl" :href="liveBaseUrl + site.slug + '/'" target="_blank" class="live-link">
-          View live site &rarr;
+          View live site <SvgIcon name="external-link" :size="14" />
         </a>
         <div class="site-meta">
           Updated {{ formatDate(site.updatedAt) }}
@@ -36,7 +36,7 @@
             Open
           </button>
           <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
-            &#x2197;
+            <SvgIcon name="external-link" :size="16" />
           </button>
           <button
             class="btn-danger btn-sm"
@@ -44,7 +44,8 @@
             :disabled="deleting === site.slug"
             title="Delete site"
           >
-            {{ deleting === site.slug ? '...' : '&#x1F5D1;' }}
+            <span v-if="deleting === site.slug">...</span>
+            <SvgIcon v-else name="trash" :size="16" />
           </button>
         </div>
 
@@ -70,6 +71,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import SvgIcon from './SvgIcon.vue';
 import { listSites, deleteSite, getSiteFile, siteFileUrl, getRepoConfig } from '../api.js';
 
 const props = defineProps({
@@ -308,7 +310,9 @@ function formatDate(iso) {
 }
 
 .live-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 0.82rem;
   color: var(--primary);
   font-weight: 500;

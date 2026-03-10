@@ -33,7 +33,7 @@
           <div class="settings-section">
             <button class="section-toggle" @click="showPublishing = !showPublishing">
               <span>Where your website goes</span>
-              <span class="toggle-arrow" :class="{ open: showPublishing }">&#9662;</span>
+              <SvgIcon name="chevron-down" :size="14" class="toggle-arrow" :class="{ open: showPublishing }" />
             </button>
             <div v-if="showPublishing" class="section-content">
               <p class="hint" style="margin-top:0">Set a custom GitHub repo for your published sites. Leave blank to use the default.</p>
@@ -57,7 +57,7 @@
           <div class="settings-section">
             <button class="section-toggle" @click="showAdvanced = !showAdvanced">
               <span>Extra options</span>
-              <span class="toggle-arrow" :class="{ open: showAdvanced }">&#9662;</span>
+              <SvgIcon name="chevron-down" :size="14" class="toggle-arrow" :class="{ open: showAdvanced }" />
             </button>
             <div v-if="showAdvanced" class="section-content">
               <label>Contact Form Sheet ID</label>
@@ -100,11 +100,14 @@
     <!-- Authenticated: global header + content -->
     <template v-else>
       <header class="wizard-header">
-        <span class="logo" @click="showDashboard = true" style="cursor:pointer">🌐 Website Builder</span>
+        <span class="logo" @click="showDashboard = true" style="cursor:pointer">
+          <svg class="logo-icon" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
+          Mums Website Builder
+        </span>
         <div class="header-actions">
-          <button class="icon-btn" title="Settings" @click="showSettings = true">⚙️</button>
+          <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
           <div v-if="user" class="user-menu-wrap">
-            <button class="icon-btn" title="Account" @click="showUserMenu = !showUserMenu">👤</button>
+            <button class="icon-btn" title="Account" @click="showUserMenu = !showUserMenu"><SvgIcon name="user" :size="20" /></button>
             <div v-if="showUserMenu" class="user-menu" @click="showUserMenu = false">
               <div class="user-menu-info">
                 <span class="user-menu-name">{{ user.displayName || 'Signed in' }}</span>
@@ -113,6 +116,7 @@
               <button class="user-menu-item" @click="handleSignOut">Sign out</button>
             </div>
           </div>
+          <button v-else class="btn-sign-in" @click="handleHeaderSignIn">Sign in</button>
         </div>
       </header>
 
@@ -137,7 +141,7 @@
           @click="currentStep > i && (currentStep = i)"
         >
           <div class="step-bar-circle">
-            <span v-if="currentStep > i" class="step-check">&#10003;</span>
+            <SvgIcon v-if="currentStep > i" name="check" :size="14" class="step-check" />
             <span v-else>{{ i + 1 }}</span>
           </div>
           <span class="step-bar-label">{{ label }}</span>
@@ -192,12 +196,17 @@
         />
       </div>
     </div>
+      <footer class="app-footer">
+        <svg class="footer-logo" width="16" height="16" viewBox="0 0 300 300" aria-hidden="true"><circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/><circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/><circle cx="153" cy="150" r="80" fill="#e73c17"/></svg>
+        <span>&copy; 2026 Holosun ApS</span>
+      </footer>
     </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import SvgIcon from './components/SvgIcon.vue';
 import AuthGate from './components/AuthGate.vue';
 import MySites from './components/MySites.vue';
 import DescribeStep from './components/steps/DescribeStep.vue';
@@ -206,7 +215,7 @@ import StyleStep from './components/steps/StyleStep.vue';
 import BuildStep from './components/steps/BuildStep.vue';
 import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
-import { onAuthChange, signOutUser, getUserSettings, saveUserSettings } from './firebase.js';
+import { onAuthChange, signOutUser, signInWithGoogle, getUserSettings, saveUserSettings } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
 import { getRepoConfig, saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
@@ -287,6 +296,15 @@ async function handleSignIn(u) {
 function handleSkipAuth() {
   authed.value = true;
   showDashboard.value = true;
+}
+
+async function handleHeaderSignIn() {
+  try {
+    const u = await signInWithGoogle();
+    if (u) handleSignIn(u);
+  } catch (err) {
+    console.warn('[App] Sign-in failed:', err.message);
+  }
 }
 
 async function handleSignOut() {
@@ -534,7 +552,11 @@ body {
   font-weight: 700;
   color: var(--primary);
   padding: 0.25rem 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
+.logo-icon { flex-shrink: 0; }
 .header-actions { display: flex; gap: 0.25rem; }
 .icon-btn {
   background: none;
@@ -551,6 +573,20 @@ body {
   transition: background 0.15s;
 }
 .icon-btn:hover { background: var(--bg); }
+.btn-sign-in {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+  transition: background 0.15s;
+}
+.btn-sign-in:hover { background: var(--primary-light); }
 
 /* User account dropdown */
 .user-menu-wrap { position: relative; }
@@ -764,6 +800,19 @@ body {
   z-index: 5;
 }
 .nav-btns .btn-primary { flex: 1; }
+
+/* ── Footer ────────────────────────────────────────────────────────────────── */
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1.5rem 1rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.footer-logo { flex-shrink: 0; }
 
 /* ── Mobile responsive ─────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
