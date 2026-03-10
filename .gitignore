@@ -20,6 +20,7 @@ Thumbs.db
 
 # Dev symlinks + browser stub (docparse modules, copied in CI)
 /invoice_processor_wasm/ailang/docparse/
+/prompts
 /eval_results
 
 # Website Builder portal
