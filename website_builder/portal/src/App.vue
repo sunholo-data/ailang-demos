@@ -127,14 +127,15 @@
       <!-- Main wizard -->
       <div v-else class="wizard">
 
-      <!-- Step progress indicator -->
+      <!-- Step progress indicator (clickable for completed steps) -->
       <div class="step-dots">
         <span
           v-for="(label, i) in steps"
           :key="i"
           class="dot"
-          :class="{ active: currentStep === i, done: currentStep > i }"
+          :class="{ active: currentStep === i, done: currentStep > i, clickable: currentStep > i }"
           :title="label"
+          @click="currentStep > i && (currentStep = i)"
         />
       </div>
 
@@ -181,6 +182,7 @@
           v-else-if="currentStep === 5"
           :generated="data.generated"
           @back="currentStep = 4"
+          @edit="currentStep = 0"
           @restart="restart"
         />
       </div>
@@ -576,6 +578,8 @@ body {
 }
 .dot.active { background: var(--primary); transform: scale(1.3); }
 .dot.done { background: var(--primary-light); }
+.dot.clickable { cursor: pointer; }
+.dot.clickable:hover { transform: scale(1.3); background: var(--primary); }
 
 .step-content {
   flex: 1;

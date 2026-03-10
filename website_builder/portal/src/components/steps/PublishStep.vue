@@ -44,8 +44,9 @@
     </div>
 
     <div class="nav-btns">
-      <button class="btn-secondary" @click="$emit('back')">← Back to preview</button>
-      <button class="btn-primary" @click="$emit('restart')">Make another site</button>
+      <button class="btn-secondary" @click="$emit('back')">← Preview</button>
+      <button class="btn-secondary" @click="$emit('edit')">✏️ Edit website</button>
+      <button class="btn-primary" @click="$emit('restart')">+ New site</button>
     </div>
   </div>
 </template>
@@ -57,7 +58,7 @@ import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
 const props = defineProps({
   generated: { type: Object, required: true }
 });
-defineEmits(['back', 'restart']);
+defineEmits(['back', 'restart', 'edit']);
 
 const saving = ref(false);
 const saved = ref(false);
