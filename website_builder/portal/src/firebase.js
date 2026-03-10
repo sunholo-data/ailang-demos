@@ -30,8 +30,8 @@ const FIRESTORE_DB_ID = 'website-builder';
 
 // Allowlist for MVP — update with real emails
 const ALLOWED_EMAILS = [
-  'mark@sunholo.com',
-  // add mum's email here
+  'm@sunholo.com',
+  // add more emails here
 ];
 
 let app;

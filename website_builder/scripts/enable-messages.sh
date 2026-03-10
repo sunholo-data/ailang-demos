@@ -35,6 +35,7 @@ lookup_uid() {
   resp=$(curl -s -X POST \
     "https://identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup" \
     -H "Authorization: Bearer ${TOKEN}" \
+    -H "x-goog-user-project: ${PROJECT}" \
     -H "Content-Type: application/json" \
     -d "{\"email\":[\"${email}\"]}" 2>/dev/null)
 
@@ -55,6 +56,7 @@ set_messages_enabled() {
   curl -s -X PATCH \
     "${FIRESTORE_BASE}/users/${uid}?updateMask.fieldPaths=messagesEnabled" \
     -H "Authorization: Bearer ${TOKEN}" \
+    -H "x-goog-user-project: ${PROJECT}" \
     -H "Content-Type: application/json" \
     -d "{\"fields\":{\"messagesEnabled\":{\"booleanValue\":${enabled}}}}" \
     > /dev/null
@@ -68,6 +70,7 @@ list_enabled_users() {
   resp=$(curl -s -X POST \
     "${FIRESTORE_BASE}:runQuery" \
     -H "Authorization: Bearer ${TOKEN}" \
+    -H "x-goog-user-project: ${PROJECT}" \
     -H "Content-Type: application/json" \
     -d '{
       "structuredQuery": {
