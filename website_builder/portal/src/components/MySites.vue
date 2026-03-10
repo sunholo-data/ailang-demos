@@ -1,64 +1,114 @@
 <template>
   <div class="my-sites">
     <h1>My Websites</h1>
-    <p class="subtitle" v-if="loading">Loading your sites...</p>
-    <p class="subtitle" v-else-if="sites.length === 0 && !error">
-      You haven't built any websites yet. It only takes a few minutes!
-    </p>
-    <p class="subtitle" v-else-if="error">
-      Could not load sites. Is the sidecar running?
-    </p>
 
-    <!-- Loading a site into preview -->
-    <div v-if="loadingSite" class="loading-site">
-      <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
+    <!-- Tabs -->
+    <div class="site-tabs">
+      <button class="site-tab" :class="{ active: activeTab === 'mine' }" @click="activeTab = 'mine'">
+        My Sites
+      </button>
+      <button class="site-tab" :class="{ active: activeTab === 'shared' }" @click="switchToShared">
+        Shared with me
+        <span v-if="sharedSites.length > 0" class="tab-badge">{{ sharedSites.length }}</span>
+      </button>
     </div>
 
-    <!-- Site cards -->
-    <div v-if="sites.length > 0" class="site-grid">
-      <div v-for="site in sites" :key="site.slug" class="site-card">
-        <div class="site-card-header">
-          <h3>{{ site.title }}</h3>
-          <span class="page-count">{{ site.pages.length }} page{{ site.pages.length !== 1 ? 's' : '' }}</span>
-        </div>
-        <p v-if="site.description" class="site-desc">{{ site.description }}</p>
-        <div class="site-pages">
-          <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
-        </div>
-        <a v-if="liveBaseUrl" :href="liveBaseUrl + site.slug + '/'" target="_blank" class="live-link">
-          View live site <SvgIcon name="external-link" :size="14" />
-        </a>
-        <div class="site-meta">
-          Updated {{ formatDate(site.updatedAt) }}
-        </div>
-        <div class="site-actions">
-          <button class="btn-primary btn-sm" @click="viewSite(site)" :disabled="!!loadingSite">
-            Open
-          </button>
-          <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
-            <SvgIcon name="external-link" :size="16" />
-          </button>
-          <button
-            class="btn-danger btn-sm"
-            @click="confirmDelete(site)"
-            :disabled="deleting === site.slug"
-            title="Delete site"
-          >
-            <span v-if="deleting === site.slug">...</span>
-            <SvgIcon v-else name="trash" :size="16" />
-          </button>
-        </div>
+    <!-- My Sites tab -->
+    <template v-if="activeTab === 'mine'">
+      <p class="subtitle" v-if="loading">Loading your sites...</p>
+      <p class="subtitle" v-else-if="sites.length === 0 && !error">
+        You haven't built any websites yet. It only takes a few minutes!
+      </p>
+      <p class="subtitle" v-else-if="error">
+        Could not load sites. Is the sidecar running?
+      </p>
 
-        <!-- Delete confirmation -->
-        <div v-if="deleteConfirm === site.slug" class="delete-confirm">
-          <span>This will permanently delete "{{ site.title }}". Are you sure?</span>
-          <div class="delete-confirm-btns">
-            <button class="btn-danger btn-sm" @click="doDelete(site)">Delete</button>
-            <button class="btn-secondary btn-sm" @click="deleteConfirm = ''">Cancel</button>
+      <!-- Loading a site into preview -->
+      <div v-if="loadingSite" class="loading-site">
+        <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
+      </div>
+
+      <!-- Site cards -->
+      <div v-if="sites.length > 0" class="site-grid">
+        <div v-for="site in sites" :key="site.slug" class="site-card">
+          <div class="site-card-header">
+            <h3>{{ site.title }}</h3>
+            <span class="page-count">{{ site.pages.length }} page{{ site.pages.length !== 1 ? 's' : '' }}</span>
+          </div>
+          <p v-if="site.description" class="site-desc">{{ site.description }}</p>
+          <div class="site-pages">
+            <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
+          </div>
+          <a v-if="liveBaseUrl" :href="liveBaseUrl + site.slug + '/'" target="_blank" class="live-link">
+            View live site <SvgIcon name="external-link" :size="14" />
+          </a>
+          <div class="site-meta">
+            Updated {{ formatDate(site.updatedAt) }}
+          </div>
+          <div class="site-actions">
+            <button class="btn-primary btn-sm" @click="viewSite(site)" :disabled="!!loadingSite">
+              Open
+            </button>
+            <button class="btn-secondary btn-sm" @click="openShareModal(site)" title="Share">
+              <SvgIcon name="share" :size="16" />
+            </button>
+            <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
+              <SvgIcon name="external-link" :size="16" />
+            </button>
+            <button
+              class="btn-danger btn-sm"
+              @click="confirmDelete(site)"
+              :disabled="deleting === site.slug"
+              title="Delete site"
+            >
+              <span v-if="deleting === site.slug">...</span>
+              <SvgIcon v-else name="trash" :size="16" />
+            </button>
+          </div>
+
+          <!-- Delete confirmation -->
+          <div v-if="deleteConfirm === site.slug" class="delete-confirm">
+            <span>This will permanently delete "{{ site.title }}". Are you sure?</span>
+            <div class="delete-confirm-btns">
+              <button class="btn-danger btn-sm" @click="doDelete(site)">Delete</button>
+              <button class="btn-secondary btn-sm" @click="deleteConfirm = ''">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
+
+    <!-- Shared with me tab -->
+    <template v-if="activeTab === 'shared'">
+      <p class="subtitle" v-if="loadingShared">Loading shared sites...</p>
+      <p class="subtitle" v-else-if="sharedSites.length === 0">
+        No one has shared a website with you yet.
+      </p>
+
+      <div v-if="loadingSite" class="loading-site">
+        <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
+      </div>
+
+      <div v-if="sharedSites.length > 0" class="site-grid">
+        <div v-for="site in sharedSites" :key="site.id" class="site-card">
+          <div class="site-card-header">
+            <h3>{{ site.title || site.siteSlug }}</h3>
+            <span class="owner-badge"><SvgIcon name="user" :size="12" /> {{ site.ownerName || site.ownerEmail }}</span>
+          </div>
+          <a v-if="site.liveUrl" :href="site.liveUrl" target="_blank" class="live-link">
+            View live site <SvgIcon name="external-link" :size="14" />
+          </a>
+          <div class="site-actions">
+            <button class="btn-primary btn-sm" @click="viewSharedSite(site)" :disabled="!!loadingSite">
+              Open
+            </button>
+            <button v-if="site.liveUrl" class="btn-secondary btn-sm" @click="openUrl(site.liveUrl)" title="Open in new tab">
+              <SvgIcon name="external-link" :size="16" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Build new -->
     <div class="new-site-section">
@@ -66,25 +116,43 @@
         + Build a new website
       </button>
     </div>
+
+    <!-- Share modal -->
+    <ShareModal
+      v-if="shareTarget"
+      :owner-uid="props.userId"
+      :site-slug="shareTarget.slug"
+      :site-title="shareTarget.title"
+      :live-url="liveBaseUrl ? liveBaseUrl + shareTarget.slug + '/' : ''"
+      @close="shareTarget = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import SvgIcon from './SvgIcon.vue';
+import ShareModal from './ShareModal.vue';
 import { listSites, deleteSite, getSiteFile, siteFileUrl, getRepoConfig } from '../api.js';
+import { getSharedSites, saveSiteMetadata } from '../firebase.js';
 
 const props = defineProps({
-  userId: { type: String, required: true }
+  userId: { type: String, required: true },
+  userEmail: { type: String, default: '' },
+  userName: { type: String, default: '' },
 });
 const emit = defineEmits(['new-site', 'view-site']);
 
+const activeTab = ref('mine');
 const sites = ref([]);
+const sharedSites = ref([]);
 const loading = ref(true);
+const loadingShared = ref(false);
 const loadingSite = ref('');
 const error = ref('');
 const deleteConfirm = ref('');
 const deleting = ref('');
+const shareTarget = ref(null);
 
 const liveBaseUrl = computed(() => {
   const rc = getRepoConfig();
@@ -206,6 +274,118 @@ async function doDelete(site) {
   }
 }
 
+function openUrl(url) {
+  window.open(url, '_blank');
+}
+
+function openShareModal(site) {
+  // Ensure site metadata exists in Firestore before opening modal
+  saveSiteMetadata(props.userId, site.slug, {
+    ownerEmail: props.userEmail,
+    ownerName: props.userName,
+    title: site.title,
+    liveUrl: liveBaseUrl.value ? liveBaseUrl.value + site.slug + '/' : '',
+    sharedWith: [],
+  });
+  shareTarget.value = site;
+}
+
+async function switchToShared() {
+  activeTab.value = 'shared';
+  if (sharedSites.value.length === 0 && props.userEmail) {
+    loadingShared.value = true;
+    sharedSites.value = await getSharedSites(props.userEmail);
+    loadingShared.value = false;
+  }
+}
+
+async function viewSharedSite(site) {
+  loadingSite.value = site.title || site.siteSlug;
+  try {
+    const pageEntries = await Promise.all(
+      ['index'].map(async (page) => {
+        try {
+          const html = await getSiteFile(site.ownerUid, site.siteSlug, `${page}.html`);
+          return [page, html];
+        } catch { return null; }
+      })
+    );
+
+    // Try to discover all pages by fetching file list
+    const filesRes = await fetch(`/api/files/${encodeURIComponent(site.ownerUid)}/${encodeURIComponent(site.siteSlug)}`);
+    let allPages = ['index'];
+    if (filesRes.ok) {
+      const { files } = await filesRes.json();
+      allPages = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+    }
+
+    // Fetch all pages
+    const allEntries = await Promise.all(
+      allPages.map(async (page) => {
+        try {
+          const html = await getSiteFile(site.ownerUid, site.siteSlug, `${page}.html`);
+          return [page, html];
+        } catch { return null; }
+      })
+    );
+    const validPages = allEntries.filter(Boolean);
+
+    // Inline CSS (same pattern as own sites)
+    const cssCache = {};
+    const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
+    const allHrefs = new Set();
+    for (const [, html] of validPages) {
+      let m;
+      while ((m = localCssPattern.exec(html)) !== null) {
+        const href = m[1];
+        if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
+          allHrefs.add(href);
+        }
+      }
+    }
+    await Promise.all([...allHrefs].map(async (href) => {
+      try { cssCache[href] = await getSiteFile(site.ownerUid, site.siteSlug, href); } catch {}
+    }));
+
+    const pages = {};
+    for (const [page, html] of validPages) {
+      pages[page] = html.replace(
+        /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
+        (match, before, href) => {
+          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
+          return cssCache[href] ? `<style>/* ${href} */\n${cssCache[href]}</style>` : match;
+        }
+      );
+    }
+
+    const sorted = [...allPages].sort((a, b) => {
+      if (a === 'index' || a === 'home') return -1;
+      if (b === 'index' || b === 'home') return 1;
+      return a.localeCompare(b);
+    });
+
+    const siteJson = JSON.stringify({
+      title: site.title || site.siteSlug,
+      description: '',
+      pages: sorted.map(s => ({ slug: s, title: s.charAt(0).toUpperCase() + s.slice(1) }))
+    });
+
+    emit('view-site', {
+      siteJson,
+      pages,
+      css: Object.values(cssCache).join('\n'),
+      slugs: sorted,
+      userId: site.ownerUid,
+      siteSlug: site.siteSlug,
+    });
+  } catch (err) {
+    console.error('[MySites] Failed to load shared site:', err);
+    error.value = `Could not load site: ${err.message}`;
+  } finally {
+    loadingSite.value = '';
+  }
+}
+
 function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -230,6 +410,51 @@ function formatDate(iso) {
 }
 .my-sites h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: var(--text); font-weight: 700; }
 .my-sites .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; font-size: 1rem; }
+
+/* Tabs */
+.site-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid var(--border);
+}
+.site-tab {
+  background: none;
+  border: none;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.site-tab:hover { color: var(--primary); }
+.site-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-badge {
+  background: var(--primary);
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.owner-badge {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
 
 .loading-site {
   display: flex;

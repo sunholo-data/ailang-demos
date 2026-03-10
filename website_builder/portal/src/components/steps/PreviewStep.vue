@@ -36,8 +36,60 @@
       </div>
     </div>
 
-    <!-- Feedback chat -->
-    <div class="chat-bar">
+    <!-- Mode tabs: Edit / Comments -->
+    <div class="mode-tabs">
+      <button class="mode-tab" :class="{ active: activeMode === 'edit' }" @click="activeMode = 'edit'">
+        <SvgIcon name="pencil" :size="14" /> Edit
+      </button>
+      <button class="mode-tab" :class="{ active: activeMode === 'comments' }" @click="activeMode = 'comments'">
+        <SvgIcon name="message-circle" :size="14" /> Comments
+        <span v-if="unresolvedCount > 0" class="comment-badge">{{ unresolvedCount }}</span>
+      </button>
+    </div>
+
+    <!-- Comments panel -->
+    <div v-if="activeMode === 'comments'" class="comments-panel">
+      <div v-if="comments.length === 0" class="comments-empty">
+        <SvgIcon name="message-circle" :size="24" class="comments-empty-icon" />
+        <p>No comments yet on this page.</p>
+        <p class="comments-empty-hint">Leave feedback for collaborators below.</p>
+      </div>
+      <div v-else class="comments-list">
+        <div
+          v-for="c in pageComments"
+          :key="c.id"
+          class="comment-item"
+          :class="{ resolved: c.resolved }"
+        >
+          <div class="comment-header">
+            <strong>{{ c.authorName || c.authorEmail || 'Anonymous' }}</strong>
+            <span class="comment-time">{{ formatCommentTime(c.createdAt) }}</span>
+          </div>
+          <p class="comment-text">{{ c.text }}</p>
+          <div class="comment-actions" v-if="!c.resolved">
+            <button class="comment-action-btn" @click="doResolveComment(c.id)" title="Mark resolved">
+              <SvgIcon name="check" :size="14" /> Resolve
+            </button>
+            <button v-if="c.authorUid === ownerUid" class="comment-action-btn danger" @click="doDeleteComment(c.id)" title="Delete">
+              <SvgIcon name="trash" :size="14" />
+            </button>
+          </div>
+          <span v-else class="comment-resolved-badge"><SvgIcon name="check-circle" :size="12" /> Resolved</span>
+        </div>
+      </div>
+      <div class="comment-input-row">
+        <input
+          v-model="commentText"
+          class="chat-input"
+          placeholder="Leave a comment on this page..."
+          @keydown.enter="postComment"
+        />
+        <button class="send-btn" :disabled="!commentText.trim()" @click="postComment">Post</button>
+      </div>
+    </div>
+
+    <!-- Feedback chat (Edit mode) -->
+    <div v-if="activeMode === 'edit'" class="chat-bar">
       <div class="chat-bar-label" v-if="!refining && !selectedElement && !feedback && pendingItems.length === 0">
         <span>Tell the AI what to change</span>
         <span class="chat-bar-hint">You can also click on any part of the preview to edit just that section</span>
@@ -182,12 +234,16 @@ import SvgIcon from '../SvgIcon.vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 import { saveSite, getRepoConfig } from '../../api.js';
 import { normalizeNavLinks, buildSelfContainedHtml } from '../../nav-utils.js';
+import { subscribeToComments, addComment, resolveComment as fbResolveComment, deleteComment as fbDeleteComment } from '../../firebase.js';
 
 const props = defineProps({
   generated: { type: Object, required: true },
   description: { type: String, default: '' },
   siteJson: { type: String, default: '' },
   items: { type: Array, default: () => [] },
+  ownerUid: { type: String, default: '' },
+  userEmail: { type: String, default: '' },
+  userName: { type: String, default: '' },
 });
 const emit = defineEmits(['publish', 'rebuild', 'update-generated', 'dashboard']);
 
@@ -242,6 +298,72 @@ const textNote = ref('');
 const canSend = computed(() =>
   (feedback.value.trim() || pendingItems.value.length > 0) && !refining.value
 );
+
+// ── Comments ────────────────────────────────────────────────────────────────
+const activeMode = ref('edit');
+const comments = ref([]);
+const commentText = ref('');
+let unsubComments = null;
+
+const pageComments = computed(() =>
+  comments.value.filter(c => c.page === currentSlug.value)
+);
+
+const unresolvedCount = computed(() =>
+  comments.value.filter(c => !c.resolved).length
+);
+
+function formatCommentTime(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const diffMin = Math.floor((now - d) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+  return d.toLocaleDateString();
+}
+
+function setupCommentSubscription() {
+  if (unsubComments) unsubComments();
+  const uid = props.ownerUid || props.generated?.userId;
+  const slug = props.generated?.siteSlug;
+  if (!uid || !slug) return;
+  unsubComments = subscribeToComments(uid, slug, (list) => {
+    comments.value = list;
+  });
+}
+
+async function postComment() {
+  const text = commentText.value.trim();
+  if (!text) return;
+  const uid = props.ownerUid || props.generated?.userId;
+  const slug = props.generated?.siteSlug;
+  if (!uid || !slug) return;
+  commentText.value = '';
+  await addComment(uid, slug, {
+    authorUid: props.ownerUid || uid,
+    authorName: props.userName,
+    authorEmail: props.userEmail,
+    page: currentSlug.value,
+    text,
+  });
+}
+
+async function doResolveComment(commentId) {
+  const uid = props.ownerUid || props.generated?.userId;
+  const slug = props.generated?.siteSlug;
+  if (!uid || !slug) return;
+  await fbResolveComment(uid, slug, commentId);
+}
+
+async function doDeleteComment(commentId) {
+  const uid = props.ownerUid || props.generated?.userId;
+  const slug = props.generated?.siteSlug;
+  if (!uid || !slug) return;
+  await fbDeleteComment(uid, slug, commentId);
+}
 
 // When generated changes (e.g. after refine), stay on current slug if it exists
 watch(slugs, (newSlugs) => {
@@ -478,6 +600,9 @@ onMounted(async () => {
     `${(props.generated?.slugs || []).length} pages (${pageList}) · ${props.items.length} item${props.items.length !== 1 ? 's' : ''}`,
     props.items
   );
+
+  // Subscribe to Firestore comments
+  setupCommentSubscription();
 });
 
 // Load a site's pages from the sidecar API (same logic as MySites.viewSite)
@@ -553,6 +678,7 @@ async function loadSiteFromSidecar(userId, siteSlug) {
 }
 onUnmounted(() => {
   window.removeEventListener('message', onIframeMessage);
+  if (unsubComments) unsubComments();
   // Clean up Object URLs to prevent memory leaks
   for (const url of objectURLs.value) {
     URL.revokeObjectURL(url);
@@ -1466,6 +1592,109 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-soft);
+}
+
+/* ── Mode tabs (Edit / Comments) ──────────────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.mode-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+.mode-tab:hover { color: var(--primary); }
+.mode-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.comment-badge {
+  background: var(--primary);
+  color: white;
+  font-size: 0.65rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* ── Comments panel ──────────────────────────────────────────────────────── */
+.comments-panel {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+}
+.comments-empty {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--text-muted);
+}
+.comments-empty-icon { opacity: 0.3; margin-bottom: 0.5rem; }
+.comments-empty p { font-size: 0.9rem; margin: 0; }
+.comments-empty-hint { font-size: 0.8rem; margin-top: 0.25rem; }
+.comments-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 1rem;
+}
+.comment-item {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.comment-item:last-child { border-bottom: none; }
+.comment-item.resolved { opacity: 0.5; }
+.comment-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+.comment-header strong { font-size: 0.85rem; }
+.comment-time { font-size: 0.72rem; color: var(--text-muted); }
+.comment-text { font-size: 0.88rem; line-height: 1.5; margin: 0; color: var(--text); }
+.comment-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.comment-action-btn {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: var(--primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0;
+}
+.comment-action-btn:hover { text-decoration: underline; }
+.comment-action-btn.danger { color: #CC0000; }
+.comment-resolved-badge {
+  font-size: 0.72rem;
+  color: var(--success);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+}
+.comment-input-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--border);
 }
 
 /* ── Mobile responsive ─────────────────────────────────────────────────────── */

@@ -102,10 +102,27 @@ resource "google_firebaserules_ruleset" "website_builder" {
                     .hasAny(['messagesEnabled', 'messagesEndpoint']));
             }
 
-            // Admin-only: site metadata (future use)
+            // Site metadata and sharing
             match /sites/{siteId} {
-              allow read: if request.auth != null;
-              allow write: if false; // Server-side only via Admin SDK
+              allow read: if request.auth != null && (
+                resource.data.ownerUid == request.auth.uid ||
+                request.auth.token.email in resource.data.sharedWith
+              );
+              allow create: if request.auth != null
+                && request.resource.data.ownerUid == request.auth.uid;
+              allow update: if request.auth != null && (
+                resource.data.ownerUid == request.auth.uid ||
+                request.auth.token.email in resource.data.sharedWith
+              );
+
+              // Comments subcollection
+              match /comments/{commentId} {
+                allow read: if request.auth != null;
+                allow create: if request.auth != null
+                  && request.resource.data.authorUid == request.auth.uid;
+                allow update, delete: if request.auth != null
+                  && resource.data.authorUid == request.auth.uid;
+              }
             }
           }
         }

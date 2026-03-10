@@ -124,6 +124,8 @@
       <MySites
         v-if="showDashboard"
         :user-id="userId"
+        :user-email="user?.email || ''"
+        :user-name="user?.displayName || ''"
         @new-site="showDashboard = false"
         @view-site="handleViewSite"
       />
@@ -182,6 +184,9 @@
           :description="data.description"
           :site-json="data.generated?.siteJson"
           :items="data.items"
+          :owner-uid="data.generated?.userId || userId"
+          :user-email="user?.email || ''"
+          :user-name="user?.displayName || ''"
           @publish="currentStep = 5"
           @rebuild="currentStep = 3"
           @update-generated="(g) => data.generated = g"
@@ -190,6 +195,9 @@
         <PublishStep
           v-else-if="currentStep === 5"
           :generated="data.generated"
+          :user-id="userId"
+          :user-name="user?.displayName || ''"
+          :user-email="user?.email || ''"
           @back="currentStep = 4"
           @edit="currentStep = 0"
           @restart="restart"
@@ -215,7 +223,7 @@ import StyleStep from './components/steps/StyleStep.vue';
 import BuildStep from './components/steps/BuildStep.vue';
 import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
-import { onAuthChange, signOutUser, signInWithGoogle, getUserSettings, saveUserSettings } from './firebase.js';
+import { onAuthChange, signOutUser, signInWithGoogle, getUserSettings, saveUserSettings, getSiteMetadata } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
 import { getRepoConfig, saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
@@ -233,6 +241,7 @@ const messagesEnabled = ref(false); // admin-set, read-only for users
 const showPublishing = ref(false); // collapsible settings section
 const showAdvanced = ref(false); // collapsible settings section
 const showUserMenu = ref(false); // user account dropdown
+const pendingSharedSite = ref(''); // ?shared=ownerUid_siteSlug from URL
 
 // User identity: Firebase uid when logged in, 'default' for local dev (skip auth)
 const userId = computed(() => user.value?.uid || 'default');
@@ -268,6 +277,16 @@ onMounted(() => {
     repoOwner.value = rc.owner || '';
     repoName.value = rc.repo || '';
   }
+  // Check for ?shared= URL parameter
+  const params = new URLSearchParams(window.location.search);
+  const sharedParam = params.get('shared');
+  if (sharedParam) {
+    pendingSharedSite.value = sharedParam;
+    // Clean URL without reload
+    const url = new URL(window.location);
+    url.searchParams.delete('shared');
+    history.replaceState({}, '', url.pathname + url.search);
+  }
   // Listen for auth changes — load Firestore settings on sign-in
   onAuthChange(async (u) => {
     user.value = u;
@@ -282,6 +301,11 @@ onMounted(() => {
         if (settings.buildMode) buildMode.value = settings.buildMode;
         if (settings.messagesEnabled) messagesEnabled.value = true;
       }
+      // Handle pending shared site link
+      if (pendingSharedSite.value) {
+        await openSharedSite(pendingSharedSite.value);
+        pendingSharedSite.value = '';
+      }
     }
   });
 });
@@ -293,9 +317,14 @@ async function handleSignIn(u) {
   // Settings loaded by onAuthChange listener
 }
 
-function handleSkipAuth() {
+async function handleSkipAuth() {
   authed.value = true;
   showDashboard.value = true;
+  // Handle pending shared site in dev mode
+  if (pendingSharedSite.value) {
+    await openSharedSite(pendingSharedSite.value);
+    pendingSharedSite.value = '';
+  }
 }
 
 async function handleHeaderSignIn() {
@@ -346,6 +375,55 @@ function handleViewSite(generated) {
   data.value.generated = generated;
   showDashboard.value = false;
   currentStep.value = 4; // jump straight to PreviewStep
+}
+
+async function openSharedSite(docId) {
+  // docId format: ownerUid_siteSlug
+  const sepIdx = docId.indexOf('_');
+  if (sepIdx < 1) return;
+  const ownerUid = docId.substring(0, sepIdx);
+  const siteSlug = docId.substring(sepIdx + 1);
+  try {
+    // Verify we have access via Firestore metadata
+    const meta = await getSiteMetadata(ownerUid, siteSlug);
+    if (!meta) {
+      console.warn('[App] Shared site not found:', docId);
+      return;
+    }
+    // Load site into preview (same as handleViewSite but with ownerUid)
+    const filesRes = await fetch(`/api/files/${encodeURIComponent(ownerUid)}/${encodeURIComponent(siteSlug)}`);
+    if (!filesRes.ok) return;
+    const { files } = await filesRes.json();
+    const htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+    const base = `/api/sites/${encodeURIComponent(ownerUid)}/${encodeURIComponent(siteSlug)}`;
+    const pageEntries = await Promise.all(
+      htmlFiles.map(async (page) => {
+        try {
+          const r = await fetch(`${base}/${page}.html`);
+          return r.ok ? [page, await r.text()] : null;
+        } catch { return null; }
+      })
+    );
+    const validPages = pageEntries.filter(Boolean);
+    const pages = Object.fromEntries(validPages);
+    const sorted = [...htmlFiles].sort((a, b) => {
+      if (a === 'index' || a === 'home') return -1;
+      if (b === 'index' || b === 'home') return 1;
+      return a.localeCompare(b);
+    });
+    data.value.generated = {
+      siteJson: JSON.stringify({ title: meta.title || siteSlug, pages: sorted.map(s => ({ slug: s })) }),
+      pages,
+      css: '',
+      slugs: sorted,
+      userId: ownerUid,
+      siteSlug,
+    };
+    showDashboard.value = false;
+    currentStep.value = 4;
+  } catch (err) {
+    console.warn('[App] Failed to open shared site:', err.message);
+  }
 }
 
 function restart() {

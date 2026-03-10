@@ -13,7 +13,11 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  initializeFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, query, where, getDocs, addDoc,
+  onSnapshot, orderBy, serverTimestamp, arrayUnion, arrayRemove
+} from 'firebase/firestore';
 
 // Firebase config from Terraform output (firebase_web_app_config)
 const firebaseConfig = {
@@ -106,4 +110,106 @@ export async function saveUserSettings(uid, settings) {
   } catch (err) {
     console.warn('Failed to save user settings to Firestore:', err.message);
   }
+}
+
+// ── Firestore: Site Metadata & Sharing ──────────────────────────────────────
+
+export function siteDocId(ownerUid, siteSlug) {
+  return `${ownerUid}_${siteSlug}`;
+}
+
+export async function saveSiteMetadata(ownerUid, siteSlug, metadata) {
+  if (!db) return;
+  try {
+    const id = siteDocId(ownerUid, siteSlug);
+    await setDoc(doc(db, 'sites', id), {
+      ownerUid,
+      siteSlug,
+      ...metadata,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Failed to save site metadata:', err.message);
+  }
+}
+
+export async function getSiteMetadata(ownerUid, siteSlug) {
+  if (!db) return null;
+  try {
+    const snap = await getDoc(doc(db, 'sites', siteDocId(ownerUid, siteSlug)));
+    return snap.exists() ? snap.data() : null;
+  } catch (err) {
+    console.warn('Failed to load site metadata:', err.message);
+    return null;
+  }
+}
+
+export async function shareSite(ownerUid, siteSlug, email) {
+  if (!db) return;
+  const id = siteDocId(ownerUid, siteSlug);
+  await updateDoc(doc(db, 'sites', id), {
+    sharedWith: arrayUnion(email.toLowerCase()),
+  });
+}
+
+export async function unshareSite(ownerUid, siteSlug, email) {
+  if (!db) return;
+  const id = siteDocId(ownerUid, siteSlug);
+  await updateDoc(doc(db, 'sites', id), {
+    sharedWith: arrayRemove(email.toLowerCase()),
+  });
+}
+
+export async function getSharedSites(email) {
+  if (!db || !email) return [];
+  try {
+    const q = query(
+      collection(db, 'sites'),
+      where('sharedWith', 'array-contains', email.toLowerCase())
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn('Failed to load shared sites:', err.message);
+    return [];
+  }
+}
+
+// ── Firestore: Comments ─────────────────────────────────────────────────────
+
+export function subscribeToComments(ownerUid, siteSlug, callback) {
+  if (!db) return () => {};
+  const id = siteDocId(ownerUid, siteSlug);
+  const q = query(
+    collection(db, 'sites', id, 'comments'),
+    orderBy('createdAt', 'asc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, (err) => {
+    console.warn('Comments subscription error:', err.message);
+    callback([]);
+  });
+}
+
+export async function addComment(ownerUid, siteSlug, comment) {
+  if (!db) return;
+  const id = siteDocId(ownerUid, siteSlug);
+  await addDoc(collection(db, 'sites', id, 'comments'), {
+    ...comment,
+    createdAt: serverTimestamp(),
+    resolved: false,
+  });
+}
+
+export async function resolveComment(ownerUid, siteSlug, commentId) {
+  if (!db) return;
+  const id = siteDocId(ownerUid, siteSlug);
+  await updateDoc(doc(db, 'sites', id, 'comments', commentId), { resolved: true });
+}
+
+export async function deleteComment(ownerUid, siteSlug, commentId) {
+  if (!db) return;
+  const id = siteDocId(ownerUid, siteSlug);
+  await deleteDoc(doc(db, 'sites', id, 'comments', commentId));
 }

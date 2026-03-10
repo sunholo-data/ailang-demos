@@ -35,13 +35,26 @@
 
     <!-- Actions -->
     <div class="actions-card">
-      <button v-if="previewUrl && !deploying" class="btn-primary action-btn" @click="openPreview">
+      <button v-if="saved && !deploying" class="btn-primary action-btn" @click="showShareModal = true">
+        <SvgIcon name="share" :size="18" /> Share with someone
+      </button>
+      <button v-if="previewUrl && !deploying" class="btn-secondary action-btn" @click="openPreview">
         <SvgIcon name="external-link" :size="18" /> Open in browser
       </button>
       <button class="btn-secondary action-btn" @click="downloadFiles">
         <SvgIcon name="download" :size="18" /> Download files
       </button>
     </div>
+
+    <!-- Share modal -->
+    <ShareModal
+      v-if="showShareModal"
+      :owner-uid="props.generated?.userId || props.userId || 'default'"
+      :site-slug="props.generated?.siteSlug || ''"
+      :site-title="extractSiteName()"
+      :live-url="previewUrl"
+      @close="showShareModal = false"
+    />
 
     <!-- Tip for custom domain -->
     <div v-if="isLive && !deploying" class="info-box">
@@ -59,10 +72,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
+import ShareModal from '../ShareModal.vue';
 import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
+import { saveSiteMetadata } from '../../firebase.js';
 
 const props = defineProps({
-  generated: { type: Object, required: true }
+  generated: { type: Object, required: true },
+  userId: { type: String, default: 'default' },
+  userName: { type: String, default: '' },
+  userEmail: { type: String, default: '' },
 });
 defineEmits(['back', 'restart', 'edit']);
 
@@ -72,6 +90,7 @@ const deploying = ref(false);
 const saveError = ref('');
 const liveUrl = ref('');
 const copied = ref(false);
+const showShareModal = ref(false);
 let pollTimer = null;
 let copiedTimer = null;
 
@@ -155,6 +174,16 @@ onMounted(async () => {
         props.generated.siteSlug = result.siteSlug;
         props.generated.liveUrl = result.liveUrl || '';
       }
+      // Save site metadata to Firestore for sharing
+      saveSiteMetadata(result.userId, result.siteSlug, {
+        ownerEmail: props.userEmail,
+        ownerName: props.userName,
+        title: siteName,
+        liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
+        sharedWith: [],
+        createdAt: new Date(),
+      });
+
       // Wait for GitHub Pages to deploy
       const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
       if (ghUrl) {
