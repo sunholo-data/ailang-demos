@@ -80,9 +80,9 @@
       </div>
     </div>
 
-    <div v-else class="empty-hint">
+    <div v-else class="empty-hint" @click="triggerFileUpload">
       <SvgIcon name="image-plus" :size="40" class="empty-icon" />
-      <p>Share some photos, files, or write a few notes about what you'd like on your website.</p>
+      <p>Tap here to add photos, files, or use the buttons above to get started.</p>
     </div>
 
     <div class="nav-btns">
@@ -454,6 +454,12 @@ function fileToBase64(file) {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
   line-height: 1.6;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.empty-hint:hover {
+  border-color: var(--primary-light);
+  background: var(--primary-soft);
 }
 .empty-icon {
   display: block;
