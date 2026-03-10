@@ -40,7 +40,9 @@ SIDECAR_PID=""
 
 if [ "$MODE" = "local" ]; then
   # Start Express sidecar (serves API + generated sites)
+  # Set COORDINATOR_URL/COORDINATOR_API_KEY in your environment for cloud messaging
   echo "🔌 Starting sidecar API on port ${SIDECAR_PORT}..."
+  [ -n "$COORDINATOR_URL" ] && echo "   Coordinator: ${COORDINATOR_URL}"
   node server.js &
   SIDECAR_PID=$!
   echo "   API: http://localhost:${SIDECAR_PORT}/api"

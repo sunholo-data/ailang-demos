@@ -174,6 +174,22 @@ resource "google_project_iam_member" "website_builder_firestore" {
   member  = "serviceAccount:ailang-dev-website-builder@${var.project_id}.iam.gserviceaccount.com"
 }
 
+# ── Cloud Run env vars for coordinator messaging ──────────────────────────────
+# Set these on the website-builder Cloud Run service so server.js can send/poll
+# messages via the coordinator REST API instead of the ailang CLI.
+#
+# Example (add to your Cloud Run service Terraform resource):
+#   env {
+#     name  = "COORDINATOR_URL"
+#     value = "https://${PREFIX}-coordinator-HASH.a.run.app"
+#   }
+#   env {
+#     name  = "COORDINATOR_API_KEY"
+#     value_source { secret_key_ref { secret = "coordinator-api-key", version = "latest" } }
+#   }
+#
+# Without COORDINATOR_URL, server.js falls back to `ailang messages send` CLI.
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 # These values go into firebase.js
 

@@ -1,6 +1,6 @@
 /**
  * Express sidecar for Website Builder portal.
- * Bridges the Vue frontend to Claude Code via ailang messages.
+ * Bridges the Vue frontend to the AILANG coordinator via REST API (or ailang CLI fallback).
  * Persists sites locally (git) or to GitHub (GITHUB_TOKEN env var).
  *
  * Endpoints:
@@ -34,6 +34,83 @@ const SITES_DIR = join(WEBSITES_REPO, 'sites');
 const FORMS_JSON_PATH = join(WEBSITES_REPO, 'forms.json');
 const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app';
 const FORM_ENDPOINT_ABS = `${CLOUD_RUN_URL}/api/form-submit`;
+
+// Coordinator REST API (replaces ailang CLI for messaging)
+const COORDINATOR_URL = process.env.COORDINATOR_URL || '';
+const COORDINATOR_API_KEY = process.env.COORDINATOR_API_KEY || '';
+
+/**
+ * Send a message to the AILANG coordinator via REST API.
+ * Falls back to ailang CLI if COORDINATOR_URL is not set.
+ * @param {string} inbox - Target agent inbox
+ * @param {string} title - Message title
+ * @param {string} content - Message content (string or object)
+ * @param {string} from - Sender identity
+ * @returns {Promise<{message_id: string}|null>}
+ */
+async function sendCoordinatorMessage(inbox, title, content, from = 'portal') {
+  const payload = typeof content === 'string' ? content : JSON.stringify(content);
+
+  if (COORDINATOR_URL) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (COORDINATOR_API_KEY) headers['Authorization'] = `Bearer ${COORDINATOR_API_KEY}`;
+
+    const resp = await fetch(`${COORDINATOR_URL}/api/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ inbox, title, content: payload, from }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Coordinator ${resp.status}: ${body}`);
+    }
+    return resp.json();
+  }
+
+  // Fallback: ailang CLI (local dev without coordinator)
+  try {
+    execSync(
+      `ailang messages send ${inbox} '${payload.replace(/'/g, "'\\''")}' --title "${title}" --from ${from}`,
+      { cwd: WEBSITES_REPO, timeout: 10000 }
+    );
+    return { message_id: `cli-${Date.now()}` };
+  } catch (e) {
+    console.error('Failed to send ailang message:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Poll for messages from the coordinator via REST API.
+ * Falls back to ailang CLI if COORDINATOR_URL is not set.
+ * @param {string} inbox - Inbox to poll
+ * @returns {Promise<Array>}
+ */
+async function pollCoordinatorMessages(inbox) {
+  if (COORDINATOR_URL) {
+    const headers = {};
+    if (COORDINATOR_API_KEY) headers['Authorization'] = `Bearer ${COORDINATOR_API_KEY}`;
+
+    const resp = await fetch(
+      `${COORDINATOR_URL}/api/messages?inbox=${encodeURIComponent(inbox)}&status=unread`,
+      { headers }
+    );
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.messages || [];
+  }
+
+  // Fallback: ailang CLI
+  try {
+    const output = execSync(
+      `ailang messages list --inbox ${inbox} --json --unread 2>/dev/null || echo "[]"`,
+      { timeout: 10000, encoding: 'utf-8' }
+    );
+    return JSON.parse(output || '[]');
+  } catch {
+    return [];
+  }
+}
 
 // In-memory rate limiting: IP → { count, resetAt }
 const rateLimitMap = new Map();
@@ -524,7 +601,7 @@ app.post('/api/save', async (req, res) => {
  * Body (JSON): { brief } where brief is the full build brief object.
  * Also accepts files via multipart (field name: "files").
  */
-app.post('/api/build', upload.array('files', 20), (req, res) => {
+app.post('/api/build', upload.array('files', 20), async (req, res) => {
   try {
     const brief = JSON.parse(req.body.brief || '{}');
     const user = brief.user || 'default';
@@ -567,26 +644,23 @@ app.post('/api/build', upload.array('files', 20), (req, res) => {
     const briefPath = join(briefDir, 'brief.json');
     writeFileSync(briefPath, JSON.stringify(brief, null, 2));
 
-    // Send ailang message
-    const msgContent = JSON.stringify({
+    // Send message to coordinator
+    const msgContent = {
       type: 'build',
       briefId,
       briefPath: `staging/${user}/${site}/brief.json`,
       outputDir: brief.outputDir
-    });
+    };
     const title = `Build: ${brief.siteName || 'website'}`;
 
     try {
-      execSync(
-        `ailang messages send website-builder '${msgContent.replace(/'/g, "'\\''")}' --title "${title}" --from portal`,
-        { cwd: WEBSITES_REPO, timeout: 10000 }
-      );
+      const result = await sendCoordinatorMessage('website-builder', title, msgContent);
+      res.json({ briefId, briefPath: `staging/${user}/${site}/brief.json`, messageId: result?.message_id });
     } catch (e) {
-      console.error('Failed to send ailang message:', e.message);
+      console.error('Failed to send coordinator message:', e.message);
       // Continue anyway — brief is saved, can be picked up manually
+      res.json({ briefId, briefPath: `staging/${user}/${site}/brief.json` });
     }
-
-    res.json({ briefId, briefPath: `staging/${user}/${site}/brief.json` });
   } catch (err) {
     console.error('Build error:', err);
     res.status(500).json({ error: err.message });
@@ -596,7 +670,7 @@ app.post('/api/build', upload.array('files', 20), (req, res) => {
 /**
  * POST /api/feedback — Send feedback to Claude Code.
  */
-app.post('/api/feedback', upload.array('files', 10), (req, res) => {
+app.post('/api/feedback', upload.array('files', 10), async (req, res) => {
   try {
     const feedback = JSON.parse(req.body.feedback || '{}');
 
@@ -613,16 +687,12 @@ app.post('/api/feedback', upload.array('files', 10), (req, res) => {
       }
     }
 
-    const msgContent = JSON.stringify(feedback);
     const title = `Feedback: ${(feedback.feedback || '').substring(0, 50)}`;
 
     try {
-      execSync(
-        `ailang messages send website-builder '${msgContent.replace(/'/g, "'\\''")}' --title "${title}" --from portal`,
-        { cwd: WEBSITES_REPO, timeout: 10000 }
-      );
+      await sendCoordinatorMessage('website-builder', title, feedback);
     } catch (e) {
-      console.error('Failed to send ailang message:', e.message);
+      console.error('Failed to send coordinator message:', e.message);
     }
 
     res.json({ ok: true });
@@ -696,16 +766,11 @@ app.post('/api/form-submit', async (req, res) => {
 /**
  * GET /api/status — Poll for response messages from Claude Code.
  */
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   try {
-    const output = execSync(
-      'ailang messages list --inbox portal --json --unread 2>/dev/null || echo "[]"',
-      { timeout: 10000, encoding: 'utf-8' }
-    );
-    const messages = JSON.parse(output || '[]');
+    const messages = await pollCoordinatorMessages('portal');
     res.json({ messages });
   } catch (err) {
-    // If ailang messages fails, return empty
     res.json({ messages: [] });
   }
 });
