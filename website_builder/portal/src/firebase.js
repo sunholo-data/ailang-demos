@@ -28,12 +28,6 @@ const firebaseConfig = {
 // Named Firestore database (not default)
 const FIRESTORE_DB_ID = 'website-builder';
 
-// Allowlist for MVP — update with real emails
-const ALLOWED_EMAILS = [
-  'm@sunholo.com',
-  // add more emails here
-];
-
 let app;
 let auth;
 let db;
@@ -78,8 +72,9 @@ export function onAuthChange(callback) {
 }
 
 export function isAllowed(user) {
-  if (!user) return false;
-  return ALLOWED_EMAILS.includes(user.email) || import.meta.env.DEV;
+  // Any signed-in user is allowed — access is controlled by Firebase Auth
+  // authorized domains and Firestore security rules
+  return !!user;
 }
 
 // ── Firestore: User Settings ─────────────────────────────────────────────────
