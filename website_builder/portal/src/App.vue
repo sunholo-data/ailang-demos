@@ -74,23 +74,26 @@
     <!-- Auth gate -->
     <AuthGate v-if="!authed" @signed-in="handleSignIn" @skip="handleSkipAuth" />
 
-    <!-- Dashboard: show existing sites (if any) before wizard -->
-    <MySites
-      v-else-if="showDashboard"
-      :user-id="userId"
-      @new-site="showDashboard = false"
-      @view-site="handleViewSite"
-    />
-
-    <!-- Main wizard (shown after auth) -->
-    <div v-else class="wizard">
+    <!-- Authenticated: global header + content -->
+    <template v-else>
       <header class="wizard-header">
-        <span class="logo">🌐 Website Builder</span>
+        <span class="logo" @click="showDashboard = true" style="cursor:pointer">🌐 Website Builder</span>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true">⚙️</button>
           <button v-if="user" class="icon-btn" title="Sign out" @click="handleSignOut">👤</button>
         </div>
       </header>
+
+      <!-- Dashboard: show existing sites (if any) before wizard -->
+      <MySites
+        v-if="showDashboard"
+        :user-id="userId"
+        @new-site="showDashboard = false"
+        @view-site="handleViewSite"
+      />
+
+      <!-- Main wizard -->
+      <div v-else class="wizard">
 
       <!-- Step progress indicator -->
       <div class="step-dots">
@@ -149,6 +152,7 @@
         />
       </div>
     </div>
+    </template>
   </div>
 </template>
 
