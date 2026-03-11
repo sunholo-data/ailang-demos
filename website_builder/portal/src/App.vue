@@ -71,16 +71,24 @@
               <template v-if="messagesEnabled">
                 <label style="margin-top:0.75rem">Build Mode</label>
                 <div class="build-mode-toggle">
-                  <label class="radio-label">
-                    <input type="radio" v-model="buildMode" value="wasm" />
-                    Browser (Gemini)
-                    <span class="hint" style="display:block;margin:0">Builds in your browser using AILANG WASM + Gemini API</span>
-                  </label>
-                  <label class="radio-label">
-                    <input type="radio" v-model="buildMode" value="messages" />
-                    AILANG Cloud
-                    <span class="hint" style="display:block;margin:0">Sends brief to AILANG Cloud for higher-quality generation</span>
-                  </label>
+                  <button
+                    class="mode-card"
+                    :class="{ active: buildMode === 'wasm' }"
+                    @click="buildMode = 'wasm'"
+                  >
+                    <SvgIcon name="monitor" :size="20" />
+                    <span class="mode-title">Browser</span>
+                    <span class="mode-desc">AILANG WASM + Gemini</span>
+                  </button>
+                  <button
+                    class="mode-card"
+                    :class="{ active: buildMode === 'messages' }"
+                    @click="buildMode = 'messages'"
+                  >
+                    <SvgIcon name="cloud" :size="20" />
+                    <span class="mode-title">AILANG Cloud</span>
+                    <span class="mode-desc">Higher quality</span>
+                  </button>
                 </div>
               </template>
             </div>
@@ -602,20 +610,31 @@ body {
 .section-content { padding-bottom: 0.5rem; }
 
 /* Build mode toggle */
-.build-mode-toggle { display: flex; flex-direction: column; gap: 0.5rem; }
-.radio-label {
+.build-mode-toggle { display: flex; gap: 0.5rem; }
+.mode-card {
+  flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.6rem 0.8rem;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.85rem 0.5rem;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
   cursor: pointer;
-  font-size: 0.95rem;
-  transition: border-color 0.15s;
+  font-family: inherit;
+  color: var(--text-muted);
+  transition: all 0.15s;
 }
-.radio-label:hover { border-color: var(--primary-light); }
-.radio-label input[type="radio"] { margin-top: 0.15rem; accent-color: var(--primary); }
+.mode-card:hover { border-color: var(--primary-light); background: var(--bg); }
+.mode-card.active {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(107,82,163,0.08), rgba(107,82,163,0.03));
+  color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.mode-title { font-weight: 600; font-size: 0.9rem; }
+.mode-desc { font-size: 0.72rem; opacity: 0.7; }
 
 /* ── Wizard layout ─────────────────────────────────────────────────────────── */
 .wizard {
