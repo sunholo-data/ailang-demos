@@ -102,7 +102,7 @@
       <header class="wizard-header">
         <span class="logo" @click="showDashboard = true" style="cursor:pointer">
           <svg class="logo-icon" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
-          Mums Website Builder
+          Mum's Website Builder
         </span>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
@@ -205,8 +205,17 @@
       </div>
     </div>
       <footer class="app-footer">
-        <svg class="footer-logo" width="16" height="16" viewBox="0 0 300 300" aria-hidden="true"><circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/><circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/><circle cx="153" cy="150" r="80" fill="#e73c17"/></svg>
-        <span>&copy; 2026 Holosun ApS</span>
+        <div class="footer-links">
+          <a href="https://www.sunholo.com" target="_blank">sunholo.com</a>
+          <span class="footer-sep">|</span>
+          <a href="https://www.sunholo.com/ailang-demos/" target="_blank">Demos</a>
+          <span class="footer-sep">|</span>
+          <a href="https://ailang.sunholo.com" target="_blank">AILANG</a>
+        </div>
+        <div class="footer-copy">
+          <svg class="footer-logo" width="16" height="16" viewBox="0 0 300 300" aria-hidden="true"><circle cx="107" cy="150" r="80" fill="#f9a697" opacity="0.3"/><circle cx="130" cy="150" r="80" fill="#e73c17" opacity="0.3"/><circle cx="153" cy="150" r="80" fill="#e73c17"/></svg>
+          <span>&copy; 2026 Holosun ApS</span>
+        </div>
       </footer>
     </template>
   </div>
@@ -882,14 +891,19 @@ body {
 /* ── Footer ────────────────────────────────────────────────────────────────── */
 .app-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   padding: 1.5rem 1rem;
   padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+.footer-links { display: flex; gap: 0.4rem; align-items: center; }
+.footer-links a { color: var(--text-muted); text-decoration: none; }
+.footer-links a:hover { color: var(--primary); text-decoration: underline; }
+.footer-sep { opacity: 0.4; }
+.footer-copy { display: flex; align-items: center; gap: 0.4rem; }
 .footer-logo { flex-shrink: 0; }
 
 /* ── Mobile responsive ─────────────────────────────────────────────────────── */

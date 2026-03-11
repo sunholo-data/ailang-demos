@@ -5,12 +5,17 @@
     <!-- Tabs -->
     <div class="site-tabs">
       <button class="site-tab" :class="{ active: activeTab === 'mine' }" @click="activeTab = 'mine'">
-        My Sites
+        Mine
       </button>
       <button class="site-tab" :class="{ active: activeTab === 'shared' }" @click="switchToShared">
         Shared with me
         <span v-if="sharedSites.length > 0" class="tab-badge">{{ sharedSites.length }}</span>
       </button>
+    </div>
+
+    <!-- Loading a site into preview (shared across tabs) -->
+    <div v-if="loadingSite" class="loading-site">
+      <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
     </div>
 
     <!-- My Sites tab -->
@@ -22,11 +27,6 @@
       <p class="subtitle" v-else-if="error">
         Could not load sites. Is the sidecar running?
       </p>
-
-      <!-- Loading a site into preview -->
-      <div v-if="loadingSite" class="loading-site">
-        <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
-      </div>
 
       <!-- Site cards -->
       <div v-if="sites.length > 0" class="site-grid">
@@ -84,10 +84,6 @@
       <p class="subtitle" v-else-if="sharedSites.length === 0">
         No one has shared a website with you yet.
       </p>
-
-      <div v-if="loadingSite" class="loading-site">
-        <SvgIcon name="loader" :size="18" class="spinner" /> Loading {{ loadingSite }}...
-      </div>
 
       <div v-if="sharedSites.length > 0" class="site-grid">
         <div v-for="site in sharedSites" :key="site.id" class="site-card">

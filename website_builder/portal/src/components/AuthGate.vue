@@ -3,7 +3,7 @@
     <div class="auth-card">
       <div class="brand">
         <svg class="brand-icon" width="48" height="48" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg-auth" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg-auth)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
-        <h1>Mums Website Builder</h1>
+        <h1>Mum's Website Builder</h1>
         <p>Turn your photos, documents, and ideas into a beautiful website — powered by AI.</p>
       </div>
 
