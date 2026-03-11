@@ -6,7 +6,7 @@ import std/result (Ok, Err)
 import std/string (contains, length, trim, stringToInt, join)
 import std/list (map, flatMap, any, concat, length as listLength)
 import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, ChangeBlock, TableCell, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell)
-import docparse/services/zip_extract (readDocxContent, readCoreProperties, readAppProperties, readDocxRelationships, findMediaEntries, readEmbeddedImage, mediaMimeType, findHeaderEntries, findFooterEntries, readZipEntry, findFootnoteEntries, findEndnoteEntries)
+import docparse/services/zip_extract (readDocxContent, readCoreProperties, readAppProperties, readDocxRelationships, findMediaEntries, readEmbeddedImage, mediaMimeType, findHeaderEntries, findFooterEntries, readZipEntry, findFootnoteEntries, findEndnoteEntries, readComments)
 
 -- DOCX Parser
 -- Parses Word document XML into a list of content Blocks.
@@ -439,6 +439,51 @@ func extractImages(filepath: string, entries: [string]) -> [Block] ! {FS} =
       let block = ImageBlock({data: imageData, description: "", mime: mime});
       let moreBlocks = extractImages(filepath, rest);
       block :: moreBlocks
+    }
+  }
+
+-- Extract comments from a DOCX file (word/comments.xml)
+-- Each w:comment becomes a SectionBlock(kind: "comment") with author-prefixed text
+export func parseDocxComments(filepath: string) -> [Block] ! {FS} {
+  let xml = readComments(filepath);
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => {
+      let commentNodes = findAll(root, "w:comment");
+      docxParseCommentNodes(commentNodes)
+    },
+    Err(_) => []
+  }
+}
+
+-- Parse a list of w:comment nodes into SectionBlocks
+-- Prefixed with docx to avoid module scoping collision
+pure func docxParseCommentNodes(nodes: [XmlNode]) -> [Block] =
+  match nodes {
+    [] => [],
+    node :: rest => {
+      let author = getOrElse(getAttr(node, "w:author"), "Unknown");
+      let date = getOrElse(getAttr(node, "w:date"), "");
+      let paragraphs = findAll(node, "w:p");
+      let texts = docxExtractCommentTexts(paragraphs);
+      let commentText = join(" ", texts);
+      let block = SectionBlock({kind: "comment", blocks: [
+        TextBlock({text: "[" ++ author ++ "] " ++ commentText, style: "CommentText", level: 0})
+      ]});
+      block :: docxParseCommentNodes(rest)
+    }
+  }
+
+-- Extract text from comment paragraphs
+pure func docxExtractCommentTexts(paragraphs: [XmlNode]) -> [string] =
+  match paragraphs {
+    [] => [],
+    p :: rest => {
+      let tNodes = findAll(p, "w:t");
+      let pText = join("", map(getText, tNodes));
+      if length(pText) > 0
+      then pText :: docxExtractCommentTexts(rest)
+      else docxExtractCommentTexts(rest)
     }
   }
 

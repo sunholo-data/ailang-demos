@@ -96,6 +96,14 @@ export func findFooterEntries(path: string) -> [string] ! {FS} {
   }
 }
 
+-- Read the comments XML from a DOCX
+export func readComments(path: string) -> string ! {FS} {
+  match readEntry(path, "word/comments.xml") {
+    Ok(content) => content,
+    Err(_) => ""
+  }
+}
+
 -- Find footnotes.xml if present
 export func findFootnoteEntries(path: string) -> [string] ! {FS} {
   match listEntries(path) {

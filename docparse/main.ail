@@ -9,7 +9,7 @@ import std/result (Ok, Err)
 import docparse/types/document (Block, TableCell, SectionBlock, ParsedDocument, ExtractionResult, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell, cellText, countBlocks, filterHeadings, filterTables, filterImages, filterSections)
 import docparse/services/format_router (detectFormat, getExtension, officeType, strategyDescription, needsAI)
 import docparse/services/zip_extract (readDocxContent, readCoreProperties, listOfficeEntries, findMediaEntries, readEmbeddedImage, mediaMimeType)
-import docparse/services/docx_parser (parseDocx, parseDocxMetadata, parseDocxImages, parseDocxHeaders, parseDocxFooters, parseDocxFootnotes, parseDocxEndnotes)
+import docparse/services/docx_parser (parseDocx, parseDocxMetadata, parseDocxImages, parseDocxHeaders, parseDocxFooters, parseDocxFootnotes, parseDocxEndnotes, parseDocxComments)
 import docparse/services/pptx_parser (parsePptx, parsePptxMetadata, parsePptxImages)
 import docparse/services/xlsx_parser (parseXlsx, parseXlsxMetadata)
 import docparse/services/direct_ai_parser (parsePdf, parseImage, parseAudio, parseVideo, parsePdfMetadata)
@@ -46,10 +46,10 @@ import std/env (getArgs)
 --
 -- CAPABILITY BUDGETS:
 --   IO @limit=200  - Console output for results (increased for page-by-page PDF parsing)
---   FS @limit=20   - File reads (ZIP entries) + output write
+--   FS @limit=40   - File reads (ZIP entries) + output write (increased from 20 for complex DOCX with headers/footers)
 --   AI @limit=30   - PDF page-by-page parsing + image descriptions + layout inference
 
-export func main() -> () ! {IO @limit=200, FS @limit=20, AI @limit=30, Env} {
+export func main() -> () ! {IO @limit=200, FS @limit=40, AI @limit=30, Env} {
   println("=== DocParse: Universal Document Parsing ===");
   println("");
 
@@ -140,18 +140,24 @@ func parseWordDocument(filepath: string, useAI: bool, doSummarize: bool) -> () !
   let endnoteBlocks = parseDocxEndnotes(filepath);
   println("Found " ++ show(countBlocks(footnoteBlocks)) ++ " footnotes, " ++ show(countBlocks(endnoteBlocks)) ++ " endnotes.");
 
-  -- Step 2e: Extract embedded images
+  -- Step 2e: Extract comments
+  println("Extracting comments...");
+  let commentBlocks = parseDocxComments(filepath);
+  println("Found " ++ show(countBlocks(commentBlocks)) ++ " comments.");
+
+  -- Step 2f: Extract embedded images
   println("Extracting images...");
   let imageBlocks = parseDocxImages(filepath);
   println("Found " ++ show(countBlocks(imageBlocks)) ++ " embedded images.");
   println("");
 
-  -- Combine all blocks: headers + body + footers + footnotes + endnotes + images
+  -- Combine all blocks: headers + body + footers + footnotes + endnotes + comments + images
   let combinedBlocks = concat(headerBlocks,
     concat(blocks,
       concat(footerBlocks,
         concat(footnoteBlocks,
-          concat(endnoteBlocks, imageBlocks)))));
+          concat(endnoteBlocks,
+            concat(commentBlocks, imageBlocks))))));
 
   -- Step 2f: AI image descriptions (optional)
   let imageCount = countBlocks(filterImages(combinedBlocks));
