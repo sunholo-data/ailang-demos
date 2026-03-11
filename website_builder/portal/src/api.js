@@ -1,6 +1,6 @@
 /**
  * API helper for communicating with the Express sidecar.
- * All website building is done by Claude Code — this module sends briefs
+ * All website building is done by AILANG Cloud — this module sends briefs
  * and polls for responses via ailang messages.
  */
 
@@ -9,7 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 export { API_BASE };
 
 /**
- * POST /api/build — Send a build brief to Claude Code.
+ * POST /api/build — Send a build brief to AILANG Cloud.
  * @param {Object} brief - The build brief (description, style, content, etc.)
  * @returns {Promise<{briefId: string, briefPath: string}>}
  */
@@ -31,7 +31,7 @@ export async function sendBuild(brief) {
 }
 
 /**
- * POST /api/feedback — Send feedback to Claude Code.
+ * POST /api/feedback — Send feedback to AILANG Cloud.
  * @param {Object} feedback - The feedback object
  * @returns {Promise<{ok: boolean}>}
  */
@@ -53,7 +53,7 @@ export async function sendFeedback(feedback) {
 }
 
 /**
- * GET /api/status — Poll for response messages from Claude Code.
+ * GET /api/status — Poll for response messages from AILANG Cloud.
  * @returns {Promise<Array>} Array of message objects
  */
 export async function pollStatus() {

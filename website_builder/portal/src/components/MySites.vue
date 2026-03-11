@@ -287,11 +287,16 @@ function openShareModal(site) {
 }
 
 async function switchToShared() {
-  activeTab.value = 'shared';
-  if (sharedSites.value.length === 0 && props.userEmail) {
+  if (sharedSites.value.length === 0 && props.userEmail && !loadingShared.value) {
     loadingShared.value = true;
-    sharedSites.value = await getSharedSites(props.userEmail);
-    loadingShared.value = false;
+    activeTab.value = 'shared';
+    try {
+      sharedSites.value = await getSharedSites(props.userEmail);
+    } finally {
+      loadingShared.value = false;
+    }
+  } else {
+    activeTab.value = 'shared';
   }
 }
 
@@ -400,6 +405,7 @@ function formatDate(iso) {
 
 <style scoped>
 .my-sites {
+  width: 100%;
   max-width: 600px;
   margin: 0 auto;
   padding: 2rem 1.25rem 6rem;

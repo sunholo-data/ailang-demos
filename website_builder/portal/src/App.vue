@@ -78,8 +78,8 @@
                   </label>
                   <label class="radio-label">
                     <input type="radio" v-model="buildMode" value="messages" />
-                    Cloud (Claude Code)
-                    <span class="hint" style="display:block;margin:0">Sends brief to Claude Code for higher-quality generation</span>
+                    AILANG Cloud
+                    <span class="hint" style="display:block;margin:0">Sends brief to AILANG Cloud for higher-quality generation</span>
                   </label>
                 </div>
               </template>

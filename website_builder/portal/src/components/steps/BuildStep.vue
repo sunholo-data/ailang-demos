@@ -165,7 +165,7 @@ const WASM_STEPS = [
 
 const MESSAGES_STEPS = [
   { id: 'upload', label: 'Uploading your files',           status: 'pending' },
-  { id: 'send',   label: 'Sending to Claude Code',         status: 'pending' },
+  { id: 'send',   label: 'Sending to AILANG Cloud',         status: 'pending' },
   { id: 'build',  label: 'Building your website',          status: 'pending' },
   { id: 'load',   label: 'Loading your website',           status: 'pending' },
 ];
@@ -334,7 +334,7 @@ async function startBuild() {
       const uploaded = uploadMap.get(item.filename);
 
       // Videos: include as a content item with video metadata
-      // Claude Code decides how to embed (poster, <video>, link, etc.)
+      // AILANG Cloud decides how to embed (poster, <video>, link, etc.)
       const videoMeta = {
         type: 'video',
         filename: item.filename,
@@ -502,7 +502,7 @@ async function startBuild() {
   }
 }
 
-// ── Messages (Claude Code) build path ──
+// ── Messages (AILANG Cloud) build path ──
 
 async function buildViaMessages() {
   try {
@@ -526,7 +526,7 @@ async function buildViaMessages() {
       setStep('upload', 'done', 'No media files');
     }
 
-    // 2. Package brief for Claude Code agent (no WASM, no Gemini key needed)
+    // 2. Package brief for AILANG Cloud agent (no WASM, no Gemini key needed)
     setStep('send', 'active', 'Preparing your brief...');
     const stylePrompt = getStylePrompt(props.data.styleId, props.data.customNotes);
 
@@ -573,13 +573,13 @@ async function buildViaMessages() {
     };
 
     // 3. Send to sidecar → coordinator → agent
-    statusMessage.value = 'Sending to Claude Code...';
+    statusMessage.value = 'Sending to AILANG Cloud...';
     const { briefId } = await sendBuild(brief);
     console.log('[WB] Messages build sent, briefId:', briefId);
     setStep('send', 'done', 'Brief sent');
 
     // 4. Poll for completion
-    setStep('build', 'active', 'Claude Code is building your website...');
+    setStep('build', 'active', 'AILANG Cloud is building your website...');
     const startTime = Date.now();
     const completion = await pollForCompletion(briefId, startTime);
     console.log('[WB] Messages build complete:', completion);
@@ -610,7 +610,7 @@ async function pollForCompletion(briefId, startTime) {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-    statusMessage.value = `Claude Code is building your website... (${timeStr})`;
+    statusMessage.value = `AILANG Cloud is building your website... (${timeStr})`;
 
     const messages = await pollStatus();
 

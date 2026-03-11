@@ -845,7 +845,7 @@ async function sendFeedback() {
   const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
   pushHistory('pencil', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
 
-  // Route through Claude Code (local sidecar only) or WASM
+  // Route through AILANG Cloud (local sidecar only) or WASM
   // Cloud Run has no ailang CLI, so always use WASM when API is remote
   const useSidecar = !import.meta.env.VITE_API_URL && !!(props.generated?.userId && props.generated?.siteSlug);
 
@@ -863,7 +863,7 @@ async function sendFeedback() {
   }
 }
 
-// --- Claude Code path: send feedback → coordinator → Claude Code edits files → reload ---
+// --- AILANG Cloud path: send feedback → coordinator → AILANG Cloud edits files → reload ---
 
 async function sendFeedbackViaSidecar(msg, isTargeted) {
   const { userId, siteSlug } = props.generated;
@@ -879,7 +879,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
   }
 
   // 2. POST feedback to sidecar
-  refineStatus.value = 'Sending changes to Claude Code...';
+  refineStatus.value = 'Sending changes to AILANG Cloud...';
   const feedbackBody = {
     user: userId,
     siteName: siteSlug,
@@ -904,8 +904,8 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
   });
   if (!res.ok) throw new Error(`Failed to send feedback: HTTP ${res.status}`);
 
-  // 3. Poll for completion (check for response message from Claude Code)
-  refineStatus.value = 'Claude Code is editing your website...';
+  // 3. Poll for completion (check for response message from AILANG Cloud)
+  refineStatus.value = 'AILANG Cloud is editing your website...';
   const startTime = Date.now();
   const TIMEOUT = 5 * 60 * 1000; // 5 minutes
   const POLL_INTERVAL = 3000;
@@ -914,7 +914,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
   while (!complete && (Date.now() - startTime) < TIMEOUT) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    refineStatus.value = `Claude Code is editing your website... (${elapsed}s)`;
+    refineStatus.value = `AILANG Cloud is editing your website... (${elapsed}s)`;
 
     try {
       const statusRes = await fetch('/api/status');
@@ -933,7 +933,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
   }
 
   if (!complete) {
-    throw new Error('Timed out waiting for Claude Code to finish. Check the coordinator status.');
+    throw new Error('Timed out waiting for AILANG Cloud to finish. Check the coordinator status.');
   }
 
   // 4. Re-fetch updated pages from sidecar
