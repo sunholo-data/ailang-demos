@@ -158,7 +158,7 @@ onMounted(async () => {
     try {
       const siteName = extractSiteName();
       const result = await saveSite({
-        user: 'default',
+        user: props.userId || 'default',
         siteName,
         pages: props.generated.pages,
         css: props.generated.css,
@@ -180,8 +180,6 @@ onMounted(async () => {
         ownerName: props.userName,
         title: siteName,
         liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
-        sharedWith: [],
-        createdAt: new Date(),
       });
 
       // Wait for GitHub Pages to deploy

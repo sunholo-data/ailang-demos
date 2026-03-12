@@ -281,7 +281,6 @@ function openShareModal(site) {
     ownerName: props.userName,
     title: site.title,
     liveUrl: liveBaseUrl.value ? liveBaseUrl.value + site.slug + '/' : '',
-    sharedWith: [],
   });
   shareTarget.value = site;
 }

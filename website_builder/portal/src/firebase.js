@@ -122,12 +122,19 @@ export async function saveSiteMetadata(ownerUid, siteSlug, metadata) {
   if (!db) return;
   try {
     const id = siteDocId(ownerUid, siteSlug);
-    await setDoc(doc(db, 'sites', id), {
+    const ref = doc(db, 'sites', id);
+    // Check if doc exists to set createdAt only on first write
+    const existing = await getDoc(ref);
+    const data = {
       ownerUid,
       siteSlug,
       ...metadata,
       updatedAt: serverTimestamp(),
-    }, { merge: true });
+    };
+    if (!existing.exists()) {
+      data.createdAt = serverTimestamp();
+    }
+    await setDoc(ref, data, { merge: true });
   } catch (err) {
     console.warn('Failed to save site metadata:', err.message);
   }
