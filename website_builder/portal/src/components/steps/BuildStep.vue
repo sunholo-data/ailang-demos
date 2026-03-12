@@ -694,14 +694,18 @@ async function buildViaMessages() {
     setStep('build', 'done', 'Build complete!');
 
     // 5. Merge agent's branch into main (agent pushes to a feature branch)
-    if (completion.branch && completion.branch !== 'main') {
-      setStep('load', 'active', 'Merging build into main...');
-      try {
-        await mergeBranch(completion.branch);
-        console.log('[WB] Merged branch:', completion.branch);
-      } catch (mergeErr) {
-        console.warn('[WB] Branch merge failed (may already be on main):', mergeErr.message);
-      }
+    // Agent reports branch_name but may say "main" even when using a feature branch.
+    // Always try the predictable feature branch name: build/{userId}/{siteSlug}
+    const agentBranch = completion.branch_name || completion.branch;
+    const expectedBranch = `build/${props.userId}/${siteSlug}`;
+    const branchToMerge = (agentBranch && agentBranch !== 'main') ? agentBranch : expectedBranch;
+    setStep('load', 'active', 'Merging build into main...');
+    try {
+      await mergeBranch(branchToMerge);
+      console.log('[WB] Merged branch:', branchToMerge);
+    } catch (mergeErr) {
+      // May fail if agent pushed directly to main — that's fine
+      console.log('[WB] Branch merge skipped (may already be on main):', mergeErr.message);
     }
 
     // 6. Load generated site from GitHub Pages
