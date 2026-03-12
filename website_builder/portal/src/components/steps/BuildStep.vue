@@ -138,7 +138,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, mergeBranch } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, mergeBranch, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -183,9 +183,20 @@ const FRIENDLY_TOOL = {
 };
 
 function connectTaskStream(taskId) {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Derive WebSocket URL from API_BASE (same sidecar, not the static site host)
+  let wsUrl;
   try {
-    ws = new WebSocket(`${proto}//${location.host}/api/ws`);
+    if (API_BASE.startsWith('http')) {
+      const url = new URL(API_BASE);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.pathname = url.pathname.replace(/\/?$/, '/ws');
+      wsUrl = url.toString();
+    } else {
+      // Relative path (local dev) — use location.host
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${proto}//${location.host}${API_BASE}/ws`;
+    }
+    ws = new WebSocket(wsUrl);
   } catch (e) {
     console.log('[WB] WebSocket connect failed:', e.message);
     return;
