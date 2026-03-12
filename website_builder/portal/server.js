@@ -643,13 +643,58 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
     brief.id = briefId;
     brief.outputDir = `sites/${user}/${site}`;
 
+    // Commit media files to GitHub repo so they're available on GitHub Pages.
+    // Copy from staging to sites dir, commit, then update brief with relative paths.
+    const mediaStagingDir = join(STAGING_DIR, user, site, 'media');
+    const mediaFiles = [];
+    if (existsSync(mediaStagingDir)) {
+      const siteMediaDir = join(WEBSITES_REPO, 'sites', user, site, 'media');
+      mkdirSync(siteMediaDir, { recursive: true });
+      for (const f of readdirSync(mediaStagingDir)) {
+        if (f.startsWith('.')) continue;
+        copyFileSync(join(mediaStagingDir, f), join(siteMediaDir, f));
+        mediaFiles.push(`sites/${user}/${site}/media/${f}`);
+      }
+    }
+    // Also handle images saved directly to staging (base64 path above)
+    const stagingDir = join(STAGING_DIR, user, site);
+    if (existsSync(stagingDir)) {
+      const siteDir = join(WEBSITES_REPO, 'sites', user, site);
+      mkdirSync(siteDir, { recursive: true });
+      for (const f of readdirSync(stagingDir)) {
+        if (f.startsWith('.') || f === 'media' || f === 'brief.json') continue;
+        const ext = extname(f).toLowerCase();
+        if (BINARY_EXTS.has(ext)) {
+          copyFileSync(join(stagingDir, f), join(siteDir, f));
+          mediaFiles.push(`sites/${user}/${site}/${f}`);
+        }
+      }
+    }
+    if (mediaFiles.length > 0) {
+      // Commit to main — the agent's feature branch is created from main,
+      // so images will be available when the agent generates HTML
+      await commitToRepo(mediaFiles, `Upload media for ${site}`, { ...brief.repoConfig, branch: 'main' });
+      console.log(`[sidecar] Committed ${mediaFiles.length} media files for ${user}/${site}`);
+    }
+
+    // Replace staging paths with relative paths in the brief so the agent
+    // generates HTML with <img src="media/filename.jpeg"> instead of /api/staging/...
+    if (brief.content?.images) {
+      for (const img of brief.content.images) {
+        if (img.stagingPath) {
+          img.repoPath = `media/${basename(img.stagingPath)}`;
+          delete img.stagingPath;
+        }
+      }
+    }
+
     // Save brief.json to staging
     const briefDir = join(STAGING_DIR, user, site);
     mkdirSync(briefDir, { recursive: true });
     const briefPath = join(briefDir, 'brief.json');
     writeFileSync(briefPath, JSON.stringify(brief, null, 2));
 
-    // Send full brief to coordinator (staging paths in place of base64)
+    // Send full brief to coordinator (repo paths in place of staging paths)
     const msgContent = { ...brief, type: 'build' };
     const title = `Build: ${brief.siteName || 'website'}`;
 
