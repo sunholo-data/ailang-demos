@@ -138,7 +138,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, mergeBranch, API_BASE } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, mergeBranch, getRepoFile, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -783,26 +783,21 @@ async function loadGeneratedSite(completion, userId, siteSlug) {
   const rc = getRepoConfig();
   const baseUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`;
 
-  // Wait for GitHub Pages to deploy
-  statusMessage.value = 'Waiting for GitHub Pages to deploy...';
-  const indexUrl = `${baseUrl}/index.html`;
-  await waitForDeploy(indexUrl);
-
-  // Fetch all HTML + CSS files
+  // Fetch files from GitHub repo via sidecar proxy (avoids CORS issues with GitHub Pages)
+  statusMessage.value = 'Loading your website...';
   const pages = {};
   const slugs = [];
   let css = '';
 
   for (const file of files) {
-    const url = `${baseUrl}/${file}`;
     try {
       if (file.endsWith('.html')) {
         const slug = file.replace('.html', '');
         slugs.push(slug);
         statusMessage.value = `Loading ${file}...`;
-        pages[slug] = await fetch(url, { cache: 'no-store' }).then(r => r.text());
+        pages[slug] = await getRepoFile(userId, siteSlug, file);
       } else if (file.endsWith('.css')) {
-        css = await fetch(url, { cache: 'no-store' }).then(r => r.text());
+        css = await getRepoFile(userId, siteSlug, file);
       }
     } catch (e) {
       console.warn(`[WB] Failed to fetch ${file}:`, e.message);
@@ -812,11 +807,11 @@ async function loadGeneratedSite(completion, userId, siteSlug) {
   // Fallback: if no files list in completion, try fetching index.html + style.css
   if (slugs.length === 0) {
     try {
-      pages['index'] = await fetch(`${baseUrl}/index.html`, { cache: 'no-store' }).then(r => r.text());
+      pages['index'] = await getRepoFile(userId, siteSlug, 'index.html');
       slugs.push('index');
     } catch { /* no index.html available */ }
     try {
-      css = await fetch(`${baseUrl}/style.css`, { cache: 'no-store' }).then(r => r.text());
+      css = await getRepoFile(userId, siteSlug, 'style.css');
     } catch { /* no style.css */ }
   }
 
@@ -833,18 +828,6 @@ async function loadGeneratedSite(completion, userId, siteSlug) {
     siteSlug,
     liveUrl: `${baseUrl}/`,
   };
-}
-
-async function waitForDeploy(url, maxWaitMs = 120000, intervalMs = 5000) {
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    try {
-      const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-      if (resp.ok) return true;
-    } catch { /* keep trying */ }
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
-  return false; // Don't throw — proceed anyway, pages might load
 }
 
 // ── WASM build helpers ──

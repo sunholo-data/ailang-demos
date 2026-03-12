@@ -941,6 +941,31 @@ app.get('/api/files/:user/:site', (req, res) => {
 });
 
 /**
+ * GET /api/repo-file/:user/:site/* — Fetch a site file from the GitHub repo.
+ * Used by AILANG Cloud builds: the agent pushes directly to GitHub, so files
+ * aren't on the sidecar's local disk. This proxies via the GitHub Contents API,
+ * avoiding CORS issues with GitHub Pages.
+ */
+app.get('/api/repo-file/:user/:site/*path', async (req, res) => {
+  if (!process.env.GITHUB_TOKEN) return res.status(501).json({ error: 'No GITHUB_TOKEN configured' });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const rawPath = Array.isArray(req.params.path) ? req.params.path.join('/') : (req.params.path || 'index.html');
+  const repoPath = `sites/${req.params.user}/${req.params.site}/${rawPath}`;
+
+  try {
+    const result = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(repoPath).replace(/%2F/g, '/')}`);
+    const content = Buffer.from(result.content, 'base64').toString('utf-8');
+    const ext = rawPath.split('.').pop();
+    res.type(ext === 'css' ? 'text/css' : 'text/html').send(content);
+  } catch (err) {
+    const status = err.message.includes('404') ? 404 : 500;
+    res.status(status).json({ error: status === 404 ? 'File not found in repo' : err.message });
+  }
+});
+
+/**
  * POST /api/merge-branch — Merge a feature branch into main (or configured branch).
  * Used after AILANG Cloud builds: the agent pushes to a feature branch,
  * and we merge it into main so GitHub Pages can serve the site.

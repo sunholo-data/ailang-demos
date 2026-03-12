@@ -168,6 +168,20 @@ export async function getSiteFile(user, site, file) {
 }
 
 /**
+ * Fetch a file from the GitHub repo via sidecar proxy.
+ * Used by AILANG Cloud builds where files are in GitHub but not on sidecar disk.
+ * @param {string} user
+ * @param {string} site
+ * @param {string} file - e.g. 'index.html', 'style.css'
+ * @returns {Promise<string>} File contents as text
+ */
+export async function getRepoFile(user, site, file) {
+  const res = await fetch(`${API_BASE}/repo-file/${encodeURIComponent(user)}/${encodeURIComponent(site)}/${file}`);
+  if (!res.ok) throw new Error(`Failed to fetch ${file} from repo (${res.status})`);
+  return res.text();
+}
+
+/**
  * POST /api/upload — Upload media files to sidecar staging in batches.
  * @param {Array<{file: File, filename: string}>} mediaItems
  * @param {string} user
