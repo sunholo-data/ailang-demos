@@ -984,8 +984,12 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
 
-  // Connect to dashboard with API key
+  // Connect to dashboard with API key (accept https:// or wss://, normalize to wss)
   const dashUrl = new URL(DASHBOARD_URL);
+  if (dashUrl.protocol === 'https:') dashUrl.protocol = 'wss:';
+  else if (dashUrl.protocol === 'http:') dashUrl.protocol = 'ws:';
+  // Ensure /ws path
+  if (!dashUrl.pathname.endsWith('/ws')) dashUrl.pathname = dashUrl.pathname.replace(/\/?$/, '/ws');
   if (COORDINATOR_API_KEY) dashUrl.searchParams.set('api_key', COORDINATOR_API_KEY);
 
   const upstream = new WebSocket(dashUrl.toString());
