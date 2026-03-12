@@ -138,7 +138,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, mergeBranch } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -682,7 +682,18 @@ async function buildViaMessages() {
     console.log('[WB] Messages build complete:', completion);
     setStep('build', 'done', 'Build complete!');
 
-    // 5. Load generated site from GitHub Pages
+    // 5. Merge agent's branch into main (agent pushes to a feature branch)
+    if (completion.branch && completion.branch !== 'main') {
+      setStep('load', 'active', 'Merging build into main...');
+      try {
+        await mergeBranch(completion.branch);
+        console.log('[WB] Merged branch:', completion.branch);
+      } catch (mergeErr) {
+        console.warn('[WB] Branch merge failed (may already be on main):', mergeErr.message);
+      }
+    }
+
+    // 6. Load generated site from GitHub Pages
     setStep('load', 'active', 'Loading your website...');
     const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
     setStep('load', 'done', 'Loaded!');

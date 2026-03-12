@@ -940,6 +940,38 @@ app.get('/api/files/:user/:site', (req, res) => {
   }
 });
 
+/**
+ * POST /api/merge-branch — Merge a feature branch into main (or configured branch).
+ * Used after AILANG Cloud builds: the agent pushes to a feature branch,
+ * and we merge it into main so GitHub Pages can serve the site.
+ */
+app.post('/api/merge-branch', async (req, res) => {
+  const { branch: sourceBranch } = req.body || {};
+  if (!sourceBranch) return res.status(400).json({ error: 'Missing branch' });
+  if (!process.env.GITHUB_TOKEN) return res.status(501).json({ error: 'No GITHUB_TOKEN configured' });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const targetBranch = process.env.GITHUB_BRANCH || 'main';
+
+  if (sourceBranch === targetBranch) {
+    return res.json({ ok: true, message: 'Already on target branch' });
+  }
+
+  try {
+    const result = await githubApi('POST', `/repos/${owner}/${repo}/merges`, {
+      base: targetBranch,
+      head: sourceBranch,
+      commit_message: `Merge ${sourceBranch} into ${targetBranch}`,
+    });
+    console.log(`[sidecar] Merged ${sourceBranch} → ${targetBranch}: ${result.sha?.substring(0, 7)}`);
+    res.json({ ok: true, sha: result.sha });
+  } catch (err) {
+    console.error(`[sidecar] Merge failed: ${err.message}`);
+    res.status(500).json({ error: `Merge failed: ${err.message}` });
+  }
+});
+
 // ── WebSocket proxy: portal connects here, sidecar relays to dashboard ──
 
 const server = createServer(app);
