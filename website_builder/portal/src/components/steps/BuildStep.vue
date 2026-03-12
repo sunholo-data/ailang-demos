@@ -715,10 +715,14 @@ async function pollForCompletion(correlationId, startTime) {
 
     for (const msg of messages) {
       try {
+        // Skip messages older than this build
+        const msgTime = msg.created_at ? new Date(msg.created_at).getTime() : 0;
+        if (msgTime && msgTime < startTime) continue;
+
         const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
-        // Match by coordinator's correlation_id (links completion back to original message)
-        const isMatch = msg.correlation_id === correlationId
-          || payload.agent_id === 'website-builder';
+        // Match by correlation_id, or by briefId in payload (agent echoes it back)
+        const isMatch = (correlationId && msg.correlation_id === correlationId)
+          || (correlationId && payload.briefId === correlationId);
         if (isMatch) {
           if (payload.status === 'complete' || payload.status === 'completed') {
             return payload;
@@ -738,6 +742,8 @@ async function pollForCompletion(correlationId, startTime) {
       const final = await pollStatus();
       for (const msg of final) {
         try {
+          const msgTime = msg.created_at ? new Date(msg.created_at).getTime() : 0;
+          if (msgTime && msgTime < startTime) continue;
           const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
           if (payload.status === 'complete' || payload.status === 'completed') return payload;
         } catch {}
