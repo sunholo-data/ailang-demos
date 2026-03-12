@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import ShareModal from '../ShareModal.vue';
 import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
@@ -91,7 +91,6 @@ const saveError = ref('');
 const liveUrl = ref('');
 const copied = ref(false);
 const showShareModal = ref(false);
-let pollTimer = null;
 let copiedTimer = null;
 
 const pageCount = computed(() => Object.keys(props.generated?.pages || {}).length);
@@ -113,40 +112,15 @@ const isLive = computed(() => {
   return !!(liveUrl.value || props.generated?.liveUrl || (rc?.owner && rc?.repo));
 });
 
-onUnmounted(() => {
-  if (pollTimer) clearTimeout(pollTimer);
-});
-
-/**
- * Poll a URL until it returns 200 or we time out.
- * GitHub Pages sets access-control-allow-origin: * so fetch works from browser.
- */
-async function waitForLive(url, maxWaitMs = 120000, intervalMs = 5000) {
-  deploying.value = true;
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    try {
-      const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-      if (resp.ok) {
-        deploying.value = false;
-        return true;
-      }
-    } catch { /* network error, keep trying */ }
-    await new Promise(r => { pollTimer = setTimeout(r, intervalMs); });
-  }
-  deploying.value = false;
-  return false;
-}
-
 onMounted(async () => {
   // If already saved (has userId/siteSlug), mark as saved
   if (props.generated?.userId && props.generated?.siteSlug) {
     saved.value = true;
     liveUrl.value = props.generated.liveUrl || '';
-    // If we have a GitHub Pages URL, wait for it to be live
+    // Set the GitHub Pages URL (skip deploy check — CORS blocks HEAD fetches
+    // to github.io, and we already verified files exist via /api/repo-file)
     const ghUrl = buildGitHubPagesUrl();
     if (ghUrl) {
-      await waitForLive(ghUrl);
       liveUrl.value = ghUrl;
     }
     return;
@@ -182,14 +156,9 @@ onMounted(async () => {
         liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
       });
 
-      // Wait for GitHub Pages to deploy
+      // Set GitHub Pages URL (skip deploy check — CORS blocks it)
       const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
-      if (ghUrl) {
-        await waitForLive(ghUrl);
-        liveUrl.value = ghUrl;
-      } else {
-        liveUrl.value = result.liveUrl || '';
-      }
+      liveUrl.value = ghUrl || result.liveUrl || '';
     } catch (err) {
       saveError.value = err.message;
       saving.value = false;
