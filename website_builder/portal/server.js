@@ -20,7 +20,9 @@ import { execSync } from 'child_process';
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'fs';
 import { join, resolve, extname, basename } from 'path';
 import { homedir } from 'os';
+import { createServer } from 'http';
 import { google } from 'googleapis';
+import WebSocket, { WebSocketServer } from 'ws';
 
 const app = express();
 const PORT = process.env.SIDECAR_PORT || 3456;
@@ -38,6 +40,9 @@ const FORM_ENDPOINT_ABS = `${CLOUD_RUN_URL}/api/form-submit`;
 // Coordinator REST API (replaces ailang CLI for messaging)
 const COORDINATOR_URL = process.env.COORDINATOR_URL || '';
 const COORDINATOR_API_KEY = process.env.COORDINATOR_API_KEY || '';
+
+// Dashboard WebSocket (real-time task streaming)
+const DASHBOARD_URL = process.env.DASHBOARD_URL || '';
 
 /**
  * Send a message to the AILANG coordinator via REST API.
@@ -935,8 +940,57 @@ app.get('/api/files/:user/:site', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// ── WebSocket proxy: portal connects here, sidecar relays to dashboard ──
+
+const server = createServer(app);
+
+server.on('upgrade', (req, socket, head) => {
+  if (req.url !== '/api/ws') { socket.destroy(); return; }
+  if (!DASHBOARD_URL) {
+    console.log('[sidecar] WebSocket proxy: no DASHBOARD_URL configured');
+    socket.destroy();
+    return;
+  }
+
+  // Connect to dashboard with API key
+  const dashUrl = new URL(DASHBOARD_URL);
+  if (COORDINATOR_API_KEY) dashUrl.searchParams.set('api_key', COORDINATOR_API_KEY);
+
+  const upstream = new WebSocket(dashUrl.toString());
+  const wss = new WebSocketServer({ noServer: true });
+
+  upstream.on('error', (err) => {
+    console.log('[sidecar] WebSocket upstream error:', err.message);
+    socket.destroy();
+  });
+
+  upstream.on('open', () => {
+    wss.handleUpgrade(req, socket, head, (clientWs) => {
+      console.log('[sidecar] WebSocket proxy connected');
+
+      // Relay: dashboard → client
+      upstream.on('message', (data) => {
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
+      });
+      // Relay: client → dashboard
+      clientWs.on('message', (data) => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(data);
+      });
+      // Cleanup
+      clientWs.on('close', () => {
+        console.log('[sidecar] WebSocket proxy client disconnected');
+        upstream.close();
+      });
+      upstream.on('close', () => {
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.close();
+      });
+    });
+  });
+});
+
+server.listen(PORT, () => {
   console.log(`[sidecar] Website Builder API running on http://localhost:${PORT}`);
   console.log(`[sidecar] Websites repo: ${WEBSITES_REPO}`);
   console.log(`[sidecar] Staging dir: ${STAGING_DIR}`);
+  if (DASHBOARD_URL) console.log(`[sidecar] Dashboard WebSocket proxy: /api/ws → ${DASHBOARD_URL}`);
 });

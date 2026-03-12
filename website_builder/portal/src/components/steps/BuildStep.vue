@@ -71,6 +71,25 @@
         </div>
       </div>
 
+      <!-- Live activity panel (AILANG Cloud builds) -->
+      <div v-if="buildMode === 'messages' && activityLog.length > 0" class="activity-panel">
+        <div class="activity-header" @click="activityExpanded = !activityExpanded">
+          <SvgIcon name="terminal" :size="16" />
+          <span>Live Activity</span>
+          <span class="ws-dot" :class="{ connected: wsConnected }"></span>
+          <SvgIcon :name="activityExpanded ? 'chevron-up' : 'chevron-down'" :size="16" class="activity-toggle" />
+        </div>
+        <div v-if="activityExpanded" class="activity-log" ref="activityLogEl">
+          <div v-for="(entry, i) in activityLog" :key="i" class="activity-entry" :class="entry.type">
+            <SvgIcon v-if="entry.type === 'tool'" name="pencil" :size="14" />
+            <SvgIcon v-else-if="entry.type === 'error'" name="x" :size="14" />
+            <SvgIcon v-else-if="entry.type === 'status'" name="check-circle" :size="14" />
+            <span v-else class="dot-text">&middot;</span>
+            <span class="activity-text">{{ entry.text }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Error state: API key specific -->
       <div v-if="error && isApiKeyError" class="error-box api-key-error">
         <p><strong>API key problem</strong></p>
@@ -113,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
@@ -139,6 +158,80 @@ const needsApiKey = ref(!getApiKey());
 const isApiKeyError = computed(() =>
   error.value && /api.?key/i.test(error.value)
 );
+
+// ── Live activity streaming (AILANG Cloud builds) ──
+const activityLog = ref([]);
+const activityExpanded = ref(true);
+const wsConnected = ref(false);
+const completedViaWs = ref(false);
+const activityLogEl = ref(null);
+let ws = null;
+
+function addActivity(type, text) {
+  activityLog.value.push({ type, text, time: Date.now() });
+  // Keep last 30 entries
+  if (activityLog.value.length > 30) activityLog.value.shift();
+  // Auto-scroll
+  nextTick(() => {
+    if (activityLogEl.value) activityLogEl.value.scrollTop = activityLogEl.value.scrollHeight;
+  });
+}
+
+const FRIENDLY_TOOL = {
+  Write: 'Writing file', Edit: 'Editing file', Read: 'Reading file',
+  Bash: 'Running command', Glob: 'Searching files', Grep: 'Searching code',
+};
+
+function connectTaskStream(taskId) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  try {
+    ws = new WebSocket(`${proto}//${location.host}/api/ws`);
+  } catch (e) {
+    console.log('[WB] WebSocket connect failed:', e.message);
+    return;
+  }
+
+  ws.onopen = () => {
+    wsConnected.value = true;
+    console.log('[WB] WebSocket connected, watching task:', taskId);
+  };
+  ws.onclose = () => { wsConnected.value = false; };
+  ws.onerror = () => { wsConnected.value = false; };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type !== 'task_stream') return;
+      if (msg.data.task_id !== taskId) return;
+
+      const { stream_type, text, tool_name, status, error_msg } = msg.data;
+
+      switch (stream_type) {
+        case 'text':
+          if (text) addActivity('text', text.substring(0, 200));
+          break;
+        case 'tool_use':
+          addActivity('tool', `${FRIENDLY_TOOL[tool_name] || tool_name}...`);
+          break;
+        case 'status':
+          if (status === 'completed' || status === 'failed') {
+            addActivity('status', status === 'completed' ? 'Build complete' : 'Build failed');
+            completedViaWs.value = true;
+          }
+          break;
+        case 'error':
+          if (error_msg) addActivity('error', error_msg);
+          break;
+      }
+    } catch {}
+  };
+}
+
+function closeTaskStream() {
+  if (ws) { ws.close(); ws = null; }
+}
+
+onUnmounted(() => closeTaskStream());
 
 async function saveKeyAndBuild() {
   const key = inlineApiKey.value.trim();
@@ -578,6 +671,10 @@ async function buildViaMessages() {
     console.log('[WB] Messages build sent, briefId:', briefId, 'messageId:', messageId);
     setStep('send', 'done', 'Brief sent');
 
+    // 3b. Connect live activity stream (best-effort — build works without it)
+    const taskId = 'task-' + (messageId || '').substring(0, 8);
+    connectTaskStream(taskId);
+
     // 4. Poll for completion (match by coordinator's correlationID = messageId)
     setStep('build', 'active', 'AILANG Cloud is building your website...');
     const startTime = Date.now();
@@ -590,11 +687,13 @@ async function buildViaMessages() {
     const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
     setStep('load', 'done', 'Loaded!');
 
+    closeTaskStream();
     statusMessage.value = 'Your website is ready!';
     building.value = false;
     emit('done', generated);
 
   } catch (err) {
+    closeTaskStream();
     error.value = err.message;
     building.value = false;
     buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
@@ -630,6 +729,18 @@ async function pollForCompletion(correlationId, startTime) {
       } catch (e) {
         if (e.message.includes('Build failed') || e.message.includes('server')) throw e;
         // JSON parse error — skip this message
+      }
+    }
+
+    // Early exit if WebSocket reported completion (poll next iteration will find it)
+    if (completedViaWs.value) {
+      // One more poll to get the actual completion payload
+      const final = await pollStatus();
+      for (const msg of final) {
+        try {
+          const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
+          if (payload.status === 'complete' || payload.status === 'completed') return payload;
+        } catch {}
       }
     }
 
@@ -919,6 +1030,57 @@ function dataURLToBlob(dataURL) {
 .error-box .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0.5rem; }
 .error-box .hint a { color: var(--primary); }
 
+/* Activity panel (live streaming) */
+.activity-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.activity-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+}
+.activity-header:hover { background: rgba(0,0,0,0.02); }
+.activity-toggle { margin-left: auto; }
+.ws-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.3s;
+}
+.ws-dot.connected { background: #22c55e; }
+.activity-log {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.activity-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.15rem 1rem;
+  color: var(--text-muted);
+}
+.activity-entry.tool { color: var(--primary); }
+.activity-entry.error { color: #ef4444; }
+.activity-entry.status { color: var(--success); font-weight: 600; }
+.dot-text { width: 14px; text-align: center; flex-shrink: 0; font-weight: bold; }
+.activity-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 @media (max-width: 600px) {
   .time-estimate { font-size: 0.85rem; padding: 0.65rem 0.85rem; }
   .progress-list { padding: 0.75rem; }
@@ -927,5 +1089,6 @@ function dataURLToBlob(dataURL) {
   .api-key-card { padding: 1rem; }
   .api-key-card-step p { font-size: 0.9rem; }
   .api-key-input { font-size: 1rem; } /* 16px prevents iOS zoom */
+  .activity-log { max-height: 150px; font-size: 0.75rem; }
 }
 </style>
