@@ -674,6 +674,7 @@ async function buildViaMessages() {
       },
       repoConfig: getRepoConfig(),
       formSheetId: getFormSheetId(),
+      branch: `build/${props.userId}/${siteSlug}`,
     };
 
     // 3. Send to sidecar → coordinator → agent
