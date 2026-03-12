@@ -759,11 +759,13 @@ app.post('/api/form-submit', async (req, res) => {
 });
 
 /**
- * GET /api/status — Poll for response messages from Claude Code.
+ * GET /api/status — Poll for completion messages from AILANG Cloud.
+ * Completions are posted to the agent's own inbox (website-builder),
+ * not a separate "portal" inbox.
  */
 app.get('/api/status', async (req, res) => {
   try {
-    const inbox = req.query.inbox || 'portal';
+    const inbox = req.query.inbox || 'website-builder';
     const messages = await pollCoordinatorMessages(inbox);
     res.json({ messages });
   } catch (err) {

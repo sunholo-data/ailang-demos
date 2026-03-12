@@ -920,11 +920,12 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
       const statusRes = await fetch('/api/status');
       if (statusRes.ok) {
         const { messages } = await statusRes.json();
-        // Look for a response about this site
+        // Look for a completion message from the website-builder agent
         const response = messages.find(m => {
           try {
-            const body = JSON.parse(m.body || '{}');
-            return body.status === 'complete' || body.type === 'feedback-complete';
+            const payload = typeof m.payload === 'string' ? JSON.parse(m.payload) : (m.payload || {});
+            return payload.status === 'completed' || payload.status === 'complete'
+              || payload.type === 'feedback-complete';
           } catch { return false; }
         });
         if (response) complete = true;

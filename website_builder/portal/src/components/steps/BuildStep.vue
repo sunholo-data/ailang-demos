@@ -574,14 +574,14 @@ async function buildViaMessages() {
 
     // 3. Send to sidecar → coordinator → agent
     statusMessage.value = 'Sending to AILANG Cloud...';
-    const { briefId } = await sendBuild(brief);
-    console.log('[WB] Messages build sent, briefId:', briefId);
+    const { briefId, messageId } = await sendBuild(brief);
+    console.log('[WB] Messages build sent, briefId:', briefId, 'messageId:', messageId);
     setStep('send', 'done', 'Brief sent');
 
-    // 4. Poll for completion
+    // 4. Poll for completion (match by coordinator's correlationID = messageId)
     setStep('build', 'active', 'AILANG Cloud is building your website...');
     const startTime = Date.now();
-    const completion = await pollForCompletion(briefId, startTime);
+    const completion = await pollForCompletion(messageId || briefId, startTime);
     console.log('[WB] Messages build complete:', completion);
     setStep('build', 'done', 'Build complete!');
 
@@ -601,7 +601,7 @@ async function buildViaMessages() {
   }
 }
 
-async function pollForCompletion(briefId, startTime) {
+async function pollForCompletion(correlationId, startTime) {
   const POLL_INTERVAL = 5000;
   const MAX_WAIT = 10 * 60 * 1000; // 10 minutes
 
@@ -617,11 +617,14 @@ async function pollForCompletion(briefId, startTime) {
     for (const msg of messages) {
       try {
         const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
-        if (payload.briefId === briefId) {
+        // Match by coordinator's correlation_id (links completion back to original message)
+        const isMatch = msg.correlation_id === correlationId
+          || payload.agent_id === 'website-builder';
+        if (isMatch) {
           if (payload.status === 'complete' || payload.status === 'completed') {
             return payload;
           } else if (payload.status === 'failed' || payload.status === 'error') {
-            throw new Error(payload.error || payload.errorMsg || 'Build failed on the server');
+            throw new Error(payload.error || payload.errorMsg || payload.error_msg || 'Build failed on the server');
           }
         }
       } catch (e) {
