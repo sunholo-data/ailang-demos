@@ -992,8 +992,23 @@ server.on('upgrade', (req, socket, head) => {
   if (!dashUrl.pathname.endsWith('/ws')) dashUrl.pathname = dashUrl.pathname.replace(/\/?$/, '/ws');
   if (COORDINATOR_API_KEY) dashUrl.searchParams.set('api_key', COORDINATOR_API_KEY);
 
+  // Log the target (mask the key)
+  const logUrl = new URL(dashUrl.toString());
+  if (logUrl.searchParams.has('api_key')) logUrl.searchParams.set('api_key', '***');
+  console.log(`[sidecar] WebSocket proxy connecting to: ${logUrl.toString()}`);
+
   const upstream = new WebSocket(dashUrl.toString());
   const wss = new WebSocketServer({ noServer: true });
+
+  upstream.on('unexpected-response', (_req, res) => {
+    console.log(`[sidecar] WebSocket upstream rejected: HTTP ${res.statusCode}`);
+    let body = '';
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => {
+      if (body) console.log(`[sidecar] WebSocket upstream response: ${body.substring(0, 200)}`);
+      socket.destroy();
+    });
+  });
 
   upstream.on('error', (err) => {
     console.log('[sidecar] WebSocket upstream error:', err.message);
