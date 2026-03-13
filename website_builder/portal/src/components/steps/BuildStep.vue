@@ -351,9 +351,12 @@ async function describeVideoThumbnail(item) {
   return describeImageWithGemini(base64, 'image/jpeg');
 }
 
+const builderName = computed(() => props.buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder');
+
 async function startBuild() {
   error.value = '';
   building.value = true;
+  statusMessage.value = `${builderName.value} is getting ready...`;
   buildSteps.value.forEach(s => s.status = 'pending');
 
   if (props.buildMode === 'messages') {
@@ -361,10 +364,10 @@ async function startBuild() {
     return;
   }
 
-  // ── WASM build path ──
+  // ── WASM build path (Gemma Builder) ──
   try {
     // 1. Initialize AILANG WASM
-    setStep('init', 'active', 'Loading AI engine...');
+    setStep('init', 'active', 'Gemma Builder is loading...');
     if (!isReady()) {
       await initAilang((step, msg) => { statusMessage.value = msg; });
     }
@@ -668,7 +671,7 @@ async function buildViaMessages() {
     connectTaskStream(taskId);
 
     // 4. Poll for completion (match by coordinator's correlationID = messageId)
-    setStep('build', 'active', 'AILANG Cloud is building your website...');
+    setStep('build', 'active', 'Sir Claude Fixalot is building your website...');
     const startTime = Date.now();
     const completion = await pollForCompletion(messageId || briefId, startTime);
     console.log('[WB] Messages build complete:', completion);
@@ -698,7 +701,7 @@ async function pollForCompletion(correlationId, startTime) {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-    statusMessage.value = `AILANG Cloud is building your website... (${timeStr})`;
+    statusMessage.value = `Sir Claude Fixalot is building your website... (${timeStr})`;
 
     const messages = await pollStatus();
 

@@ -83,7 +83,7 @@
               />
               <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
 
-              <template v-if="messagesEnabled || anthropicKeyInput.trim()">
+              <template v-if="canUseCloud">
                 <label style="margin-top:0.75rem">Build Mode</label>
                 <div class="build-mode-toggle">
                   <button
@@ -127,6 +127,16 @@
           <svg class="logo-icon" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
           Mum's Website Builder
         </span>
+        <button
+          v-if="canUseCloud"
+          class="persona-badge"
+          :class="buildMode"
+          :title="buildMode === 'messages' ? 'Sir Claude Fixalot — AILANG Cloud (click to switch)' : 'Gemma Builder — Browser AI (click to switch)'"
+          @click="buildMode = buildMode === 'messages' ? 'wasm' : 'messages'"
+        >
+          <SvgIcon :name="buildMode === 'messages' ? 'cloud' : 'monitor'" :size="16" />
+          <span class="persona-name">{{ buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder' }}</span>
+        </button>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
           <div v-if="user" class="user-menu-wrap">
@@ -298,6 +308,8 @@ const data = ref({
   customNotes: '',
   generated: null  // { siteJson, pages: { slug: html }, css }
 });
+
+const canUseCloud = computed(() => messagesEnabled.value || anthropicKeyInput.value.trim());
 
 const showApiKeyBanner = computed(() => {
   return authed.value && !getApiKey() && !showSettings.value;
@@ -695,6 +707,33 @@ body {
 }
 .logo-icon { flex-shrink: 0; }
 .header-actions { display: flex; gap: 0.25rem; }
+.persona-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.persona-badge:hover { border-color: var(--primary-light); background: var(--bg); }
+.persona-badge.messages {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft, rgba(107,82,163,0.06));
+}
+.persona-badge.wasm {
+  border-color: var(--accent, #E8A87C);
+  color: var(--accent-dark, #B8784C);
+  background: var(--accent-light, #FFF4ED);
+}
+.persona-name { letter-spacing: -0.01em; }
 .icon-btn {
   background: none;
   border: none;
@@ -985,6 +1024,8 @@ body {
 
   /* Header */
   .wizard-header { padding: 0.6rem 0.75rem; }
+  .persona-name { display: none; }
+  .persona-badge { padding: 0.35rem; border-radius: 8px; }
   .logo { font-size: 1rem; }
 
   /* Navigation */
