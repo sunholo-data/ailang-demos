@@ -82,12 +82,12 @@ export async function mergeBranch(branch) {
 }
 
 /**
- * GET /api/files/:user/:site — List files in a generated site.
+ * GET /api/files/:user/:site — List files in a generated site (sidecar disk).
  * @param {string} user
  * @param {string} site
  * @returns {Promise<Array>} Array of {name, isDir, ext}
  */
-export async function listSiteFiles(user, site) {
+export async function listLocalFiles(user, site) {
   const res = await fetch(`${API_BASE}/files/${encodeURIComponent(user)}/${encodeURIComponent(site)}`);
   if (!res.ok) return [];
   const data = await res.json();
@@ -185,7 +185,7 @@ export async function getRepoFile(user, site, file) {
  * GET /api/repo-files/:user/:site — List files in a site directory from the GitHub repo.
  * @returns {Promise<string[]>} Array of filenames (e.g. ["index.html", "about.html", "style.css"])
  */
-export async function listSiteFiles(user, site) {
+export async function listRepoFiles(user, site) {
   const res = await fetch(`${API_BASE}/repo-files/${encodeURIComponent(user)}/${encodeURIComponent(site)}`);
   if (!res.ok) throw new Error(`Failed to list site files (${res.status})`);
   return res.json();

@@ -137,8 +137,7 @@ import SvgIcon from '../SvgIcon.vue';
 import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
-import { createThumbnail } from '../../media.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listSiteFiles, API_BASE } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listRepoFiles, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -291,28 +290,25 @@ onMounted(() => {
   }
 });
 
-// Sidecar upload: POST files in batches via multipart FormData
-const SIDECAR_BASE = '/api';
-const UPLOAD_BATCH_SIZE = 5;
+// ── Shared helpers ──
 
-async function uploadFilesToSidecar(mediaItems, user, site) {
-  const results = [];
-  for (let i = 0; i < mediaItems.length; i += UPLOAD_BATCH_SIZE) {
-    const batch = mediaItems.slice(i, i + UPLOAD_BATCH_SIZE);
-    const form = new FormData();
-    for (const item of batch) {
-      form.append('files', item.file, item.filename);
-    }
-    const resp = await fetch(
-      `${SIDECAR_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
-      { method: 'POST', body: form }
-    );
-    if (!resp.ok) throw new Error(`Upload failed (${resp.status}): ${await resp.text()}`);
-    const batchResults = await resp.json();
-    results.push(...batchResults);
-    setStep('upload', 'active', `Uploading files... ${Math.min(i + UPLOAD_BATCH_SIZE, mediaItems.length)}/${mediaItems.length}`);
+function categoriseItems(items) {
+  const imageItems = items.filter(i => i.type === 'image' && i.file);
+  const videoItems = items.filter(i => i.type === 'video' && i.file);
+  const docItems   = items.filter(i => i.type === 'document');
+  const textItems  = items.filter(i => i.type === 'text');
+  const mediaItems = [...imageItems, ...videoItems];
+  return { imageItems, videoItems, docItems, textItems, mediaItems };
+}
+
+function handleBuildError(err) {
+  closeTaskStream();
+  error.value = err.message;
+  building.value = false;
+  buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
+  if (/api.?key/i.test(err.message)) {
+    inlineApiKey.value = '';
   }
-  return results;
 }
 
 // Parallel Gemini image descriptions with concurrency limit
@@ -373,33 +369,24 @@ async function startBuild() {
     }
     setStep('init', 'done', 'AI engine ready');
 
-    // Categorise items
-    const imageItems = props.data.items.filter(i => i.type === 'image' && i.file);
-    const videoItems = props.data.items.filter(i => i.type === 'video' && i.file);
-    const docItems = props.data.items.filter(i => i.type === 'document');
-    const textItems = props.data.items.filter(i => i.type === 'text');
-    const mediaItems = [...imageItems, ...videoItems];
+    const { imageItems, videoItems, docItems, textItems, mediaItems } = categoriseItems(props.data.items);
 
     // 2. Upload media files to sidecar (if sidecar is available)
-    let uploadResults = [];
+    const uploadMap = new Map();
     const hasSidecar = await checkSidecar();
     if (hasSidecar && mediaItems.length > 0) {
       setStep('upload', 'active', `Uploading ${mediaItems.length} files...`);
-      const user = 'default'; // TODO: pass from auth
+      const user = props.userId || 'default';
       const site = slugify(props.data.description);
-      uploadResults = await uploadFilesToSidecar(mediaItems, user, site);
+      const uploadResults = await uploadMedia(mediaItems, user, site, (done, total) => {
+        setStep('upload', 'active', `Uploading files... ${done}/${total}`);
+      });
+      for (const r of uploadResults) uploadMap.set(r.originalName, r);
       setStep('upload', 'done', `${mediaItems.length} files uploaded`);
     } else if (mediaItems.length > 0) {
-      // No sidecar — skip upload, will use base64 fallback for images
       setStep('upload', 'done', 'Skipped (no sidecar)');
     } else {
       setStep('upload', 'done', 'No media files');
-    }
-
-    // Build a lookup: originalName → uploadResult
-    const uploadMap = new Map();
-    for (const r of uploadResults) {
-      uploadMap.set(r.originalName, r);
     }
 
     // 3. Describe images (parallel) + videos (poster thumbnails)
@@ -460,10 +447,10 @@ async function startBuild() {
           const posterBlob = dataURLToBlob(item.preview);
           const posterForm = new FormData();
           posterForm.append('files', posterBlob, posterName);
-          const user = 'default';
+          const user = props.userId || 'default';
           const site = slugify(props.data.description);
           const resp = await fetch(
-            `${SIDECAR_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
+            `${API_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
             { method: 'POST', body: posterForm }
           );
           if (resp.ok) {
@@ -597,12 +584,7 @@ async function startBuild() {
     emit('done', generated);
 
   } catch (err) {
-    error.value = err.message;
-    building.value = false;
-    buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
-    if (/api.?key/i.test(err.message)) {
-      inlineApiKey.value = '';
-    }
+    handleBuildError(err);
   }
 }
 
@@ -610,11 +592,7 @@ async function startBuild() {
 
 async function buildViaMessages() {
   try {
-    const imageItems = props.data.items.filter(i => i.type === 'image' && i.file);
-    const videoItems = props.data.items.filter(i => i.type === 'video' && i.file);
-    const docItems = props.data.items.filter(i => i.type === 'document');
-    const textItems = props.data.items.filter(i => i.type === 'text');
-    const mediaItems = [...imageItems, ...videoItems];
+    const { imageItems, videoItems, docItems, textItems, mediaItems } = categoriseItems(props.data.items);
     const siteSlug = slugify(props.data.description);
 
     // 1. Upload media files to sidecar staging
@@ -705,10 +683,7 @@ async function buildViaMessages() {
     emit('done', generated);
 
   } catch (err) {
-    closeTaskStream();
-    error.value = err.message;
-    building.value = false;
-    buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
+    handleBuildError(err);
   }
 }
 
@@ -777,7 +752,7 @@ async function loadGeneratedSite(completion, userId, siteSlug) {
   if (files.length === 0) {
     try {
       statusMessage.value = 'Discovering pages...';
-      files = await listSiteFiles(userId, siteSlug);
+      files = await listRepoFiles(userId, siteSlug);
       console.log('[WB] Discovered site files from repo:', files);
     } catch (e) {
       console.warn('[WB] Could not list site files:', e.message);
@@ -875,7 +850,7 @@ function getStylePrompt(id, notes) {
 
 async function checkSidecar() {
   try {
-    const resp = await fetch(`${SIDECAR_BASE}/status`, { signal: AbortSignal.timeout(2000) });
+    const resp = await fetch(`${API_BASE}/status`, { signal: AbortSignal.timeout(2000) });
     return resp.ok;
   } catch {
     return false;
