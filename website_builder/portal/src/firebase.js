@@ -154,9 +154,12 @@ export async function getSiteMetadata(ownerUid, siteSlug) {
 export async function shareSite(ownerUid, siteSlug, email) {
   if (!db) return;
   const id = siteDocId(ownerUid, siteSlug);
-  await updateDoc(doc(db, 'sites', id), {
+  // Use setDoc(merge) so it works even if the metadata doc doesn't exist yet
+  await setDoc(doc(db, 'sites', id), {
+    ownerUid,
+    siteSlug,
     sharedWith: arrayUnion(email.toLowerCase()),
-  });
+  }, { merge: true });
 }
 
 export async function unshareSite(ownerUid, siteSlug, email) {

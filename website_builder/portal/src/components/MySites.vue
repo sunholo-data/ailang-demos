@@ -129,7 +129,7 @@
 import { ref, computed, onMounted } from 'vue';
 import SvgIcon from './SvgIcon.vue';
 import ShareModal from './ShareModal.vue';
-import { listSites, deleteSite, getSiteFile, siteFileUrl, getRepoConfig } from '../api.js';
+import { listSites, listRepoSites, deleteSite, getSiteFile, getRepoFile, siteFileUrl, getRepoConfig } from '../api.js';
 import { getSharedSites, saveSiteMetadata } from '../firebase.js';
 
 const props = defineProps({
@@ -158,7 +158,16 @@ const liveBaseUrl = computed(() => {
 
 onMounted(async () => {
   try {
-    sites.value = await listSites(props.userId);
+    // Fetch from both local sidecar disk and GitHub repo in parallel
+    const [local, repo] = await Promise.all([
+      listSites(props.userId).catch(() => []),
+      listRepoSites(props.userId).catch(() => []),
+    ]);
+    // Merge: local wins on duplicates (has richer metadata from brief.json)
+    const bySlug = new Map();
+    for (const s of repo) bySlug.set(s.slug, s);
+    for (const s of local) bySlug.set(s.slug, s); // local overwrites
+    sites.value = [...bySlug.values()];
   } catch (err) {
     console.warn('[MySites] Could not fetch sites:', err.message);
     error.value = err.message;
@@ -169,11 +178,15 @@ onMounted(async () => {
 
 async function viewSite(site) {
   loadingSite.value = site.title;
+  // For GitHub-sourced sites, fetch via repo proxy; for local, use sidecar
+  const fetchFile = site.source === 'github'
+    ? (file) => getRepoFile(props.userId, site.slug, file)
+    : (file) => getSiteFile(props.userId, site.slug, file);
   try {
     // Fetch all pages HTML in parallel
     const pageEntries = await Promise.all(
       site.pages.map(async (page) => {
-        const html = await getSiteFile(props.userId, site.slug, `${page}.html`);
+        const html = await fetchFile(`${page}.html`);
         return [page, html];
       })
     );
@@ -184,7 +197,7 @@ async function viewSite(site) {
     async function fetchCss(href) {
       if (cssCache[href]) return cssCache[href];
       try {
-        cssCache[href] = await getSiteFile(props.userId, site.slug, href);
+        cssCache[href] = await fetchFile(href);
       } catch {}
       return cssCache[href] || '';
     }
@@ -274,9 +287,9 @@ function openUrl(url) {
   window.open(url, '_blank');
 }
 
-function openShareModal(site) {
+async function openShareModal(site) {
   // Ensure site metadata exists in Firestore before opening modal
-  saveSiteMetadata(props.userId, site.slug, {
+  await saveSiteMetadata(props.userId, site.slug, {
     ownerEmail: props.userEmail,
     ownerName: props.userName,
     title: site.title,

@@ -138,6 +138,19 @@ export async function listSites(user) {
 }
 
 /**
+ * GET /api/repo-sites/:user — List all sites for a user from the GitHub repo.
+ * Covers AILANG Cloud builds where the agent pushes to GitHub directly.
+ * @param {string} user
+ * @returns {Promise<Array>} Array of site objects with source: 'github'
+ */
+export async function listRepoSites(user) {
+  const res = await fetch(`${API_BASE}/repo-sites/${encodeURIComponent(user)}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.sites || [];
+}
+
+/**
  * DELETE /api/sites/:user/:site — Delete a saved site.
  * @param {string} user
  * @param {string} site

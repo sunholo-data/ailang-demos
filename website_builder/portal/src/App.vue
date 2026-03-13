@@ -84,25 +84,19 @@
               <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
 
               <template v-if="canUseCloud">
-                <label style="margin-top:0.75rem">Build Mode</label>
+                <label style="margin-top:0.75rem">Builder</label>
                 <div class="build-mode-toggle">
                   <button
+                    v-for="p in availablePersonas"
+                    :key="p.key"
                     class="mode-card"
-                    :class="{ active: buildMode === 'wasm' }"
-                    @click="buildMode = 'wasm'"
+                    :class="{ active: selectedPersona === p.key }"
+                    @click="selectedPersona = p.key"
                   >
-                    <SvgIcon name="monitor" :size="20" />
-                    <span class="mode-title">Browser</span>
-                    <span class="mode-desc">AILANG WASM + Gemini</span>
-                  </button>
-                  <button
-                    class="mode-card"
-                    :class="{ active: buildMode === 'messages' }"
-                    @click="buildMode = 'messages'"
-                  >
-                    <SvgIcon name="cloud" :size="20" />
-                    <span class="mode-title">AILANG Cloud</span>
-                    <span class="mode-desc">Higher quality</span>
+                    <img v-if="p.avatar" :src="p.avatar" :alt="p.name" class="mode-card-avatar" />
+                    <SvgIcon v-else :name="p.icon" :size="20" />
+                    <span class="mode-title">{{ p.name }}</span>
+                    <span class="mode-desc">{{ p.desc }}</span>
                   </button>
                 </div>
               </template>
@@ -127,27 +121,46 @@
           <svg class="logo-icon" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
           Mum's Website Builder
         </span>
-        <button
-          v-if="canUseCloud"
-          class="persona-badge"
-          :class="buildMode"
-          :title="buildMode === 'messages' ? 'Sir Claude Fixalot — AILANG Cloud (click to switch)' : 'Gemma Builder — Browser AI (click to switch)'"
-          @click="buildMode = buildMode === 'messages' ? 'wasm' : 'messages'"
-        >
-          <img
-            v-if="currentPersona.avatar"
-            :src="currentPersona.avatar"
-            :alt="currentPersona.name"
-            class="persona-avatar"
-            @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display=''"
-          />
-          <SvgIcon
-            :name="currentPersona.icon"
-            :size="16"
-            :style="currentPersona.avatar ? { display: 'none' } : {}"
-          />
-          <span class="persona-name">{{ currentPersona.name }}</span>
-        </button>
+        <div v-if="availablePersonas.length > 1" class="persona-picker-wrap">
+          <button
+            class="persona-badge"
+            :class="selectedPersona"
+            :title="`${currentPersona.name} — ${currentPersona.desc} (click to switch)`"
+            @click="showPersonaPicker = !showPersonaPicker"
+          >
+            <img
+              v-if="currentPersona.avatar"
+              :src="currentPersona.avatar"
+              :alt="currentPersona.name"
+              class="persona-avatar"
+              @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display=''"
+            />
+            <SvgIcon
+              :name="currentPersona.icon"
+              :size="16"
+              :style="currentPersona.avatar ? { display: 'none' } : {}"
+            />
+            <span class="persona-name">{{ currentPersona.name }}</span>
+            <SvgIcon name="chevron-down" :size="12" class="persona-chevron" :class="{ open: showPersonaPicker }" />
+          </button>
+          <div v-if="showPersonaPicker" class="persona-dropdown" @click="showPersonaPicker = false">
+            <button
+              v-for="p in availablePersonas"
+              :key="p.key"
+              class="persona-option"
+              :class="{ active: selectedPersona === p.key }"
+              @click="selectedPersona = p.key"
+            >
+              <img v-if="p.avatar" :src="p.avatar" :alt="p.name" class="persona-option-avatar" />
+              <SvgIcon v-else :name="p.icon" :size="18" />
+              <div class="persona-option-info">
+                <span class="persona-option-name">{{ p.name }}</span>
+                <span class="persona-option-desc">{{ p.desc }}</span>
+              </div>
+              <SvgIcon v-if="selectedPersona === p.key" name="check" :size="14" class="persona-check" />
+            </button>
+          </div>
+        </div>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
           <div v-if="user" class="user-menu-wrap">
@@ -291,7 +304,7 @@ const repoOwner = ref('');
 const repoName = ref('');
 const formSheetId = ref('');
 const anthropicKeyInput = ref('');
-const buildMode = ref('wasm'); // 'wasm' or 'messages'
+// buildMode is now computed from selectedPersona (see PERSONAS section)
 const messagesEnabled = ref(false); // admin-set, read-only for users
 const showPublishing = ref(false); // collapsible settings section
 const showAdvanced = ref(false); // collapsible settings section
@@ -305,6 +318,9 @@ const userId = computed(() => user.value?.uid || 'default');
 function closeUserMenu(e) {
   if (showUserMenu.value && !e.target.closest('.user-menu-wrap')) {
     showUserMenu.value = false;
+  }
+  if (showPersonaPicker.value && !e.target.closest('.persona-picker-wrap')) {
+    showPersonaPicker.value = false;
   }
 }
 onMounted(() => document.addEventListener('click', closeUserMenu));
@@ -321,11 +337,21 @@ const data = ref({
 });
 
 const PERSONAS = {
-  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: '/avatars/gemma-builder.png' },
-  messages: { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: '/avatars/sir-claude-fixalot.png' },
+  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: '/avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm' },
+  'messages-admin': { name: 'Claudette Mouser', icon: 'cloud', avatar: '/avatars/claudette-mouser.png', desc: 'AILANG Cloud', buildMode: 'messages' },
+  'messages-byok': { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: '/avatars/sir-claude-fixalot.png', desc: 'Your Claude key', buildMode: 'messages' },
 };
-const currentPersona = computed(() => PERSONAS[buildMode.value] || PERSONAS.wasm);
+const selectedPersona = ref('wasm');
+const buildMode = computed(() => PERSONAS[selectedPersona.value]?.buildMode || 'wasm');
+const currentPersona = computed(() => PERSONAS[selectedPersona.value] || PERSONAS.wasm);
 const canUseCloud = computed(() => messagesEnabled.value || anthropicKeyInput.value.trim());
+const showPersonaPicker = ref(false);
+const availablePersonas = computed(() => {
+  const list = [{ key: 'wasm', ...PERSONAS.wasm }];
+  if (messagesEnabled.value) list.push({ key: 'messages-admin', ...PERSONAS['messages-admin'] });
+  if (anthropicKeyInput.value.trim()) list.push({ key: 'messages-byok', ...PERSONAS['messages-byok'] });
+  return list;
+});
 
 const showApiKeyBanner = computed(() => {
   return authed.value && !getApiKey() && !showSettings.value;
@@ -361,10 +387,17 @@ onMounted(() => {
         if (settings.geminiApiKey) { saveApiKey(settings.geminiApiKey); apiKeyInput.value = settings.geminiApiKey; }
         if (settings.repoConfig) { saveRepoConfig(settings.repoConfig); repoOwner.value = settings.repoConfig.owner || ''; repoName.value = settings.repoConfig.repo || ''; }
         if (settings.formSheetId) { saveFormSheetId(settings.formSheetId); formSheetId.value = settings.formSheetId; }
-        if (settings.buildMode) buildMode.value = settings.buildMode;
+        if (settings.buildMode) {
+          // Backward compat: map old 'messages' to the right persona key
+          if (settings.buildMode === 'messages') {
+            selectedPersona.value = settings.messagesEnabled ? 'messages-admin' : 'messages-byok';
+          } else if (PERSONAS[settings.buildMode]) {
+            selectedPersona.value = settings.buildMode;
+          }
+        }
         if (settings.messagesEnabled) messagesEnabled.value = true;
-        // Auto-select AILANG Cloud when user has Anthropic key (localStorage) but no admin messagesEnabled
-        if (anthropicKeyInput.value && !settings.messagesEnabled && !settings.buildMode) buildMode.value = 'messages';
+        // Auto-select AILANG Cloud when user has Anthropic key but no admin messagesEnabled
+        if (anthropicKeyInput.value && !settings.messagesEnabled && !settings.buildMode) selectedPersona.value = 'messages-byok';
       }
       // Handle pending shared site link
       if (pendingSharedSite.value) {
@@ -416,7 +449,7 @@ async function saveKey() {
   if (anthropicKeyInput.value.trim()) {
     localStorage.setItem('anthropic-api-key', anthropicKeyInput.value.trim());
     // Auto-select AILANG Cloud when key is first added
-    if (buildMode.value === 'wasm' && !messagesEnabled.value) buildMode.value = 'messages';
+    if (selectedPersona.value === 'wasm' && !messagesEnabled.value) selectedPersona.value = 'messages-byok';
   } else {
     localStorage.removeItem('anthropic-api-key');
   }
@@ -433,7 +466,7 @@ async function saveKey() {
       geminiApiKey: apiKeyInput.value.trim() || null,
       repoConfig: rc || null,
       formSheetId: formSheetId.value.trim() || null,
-      buildMode: buildMode.value,
+      buildMode: selectedPersona.value,
     });
   }
   showSettings.value = false;

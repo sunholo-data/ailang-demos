@@ -992,6 +992,48 @@ app.get('/api/files/:user/:site', (req, res) => {
 });
 
 /**
+ * GET /api/repo-sites/:user — List all site directories for a user from the GitHub repo.
+ * Complements the local /api/sites/:user for AILANG Cloud builds (agent pushes to GitHub, not sidecar disk).
+ */
+app.get('/api/repo-sites/:user', async (req, res) => {
+  if (!process.env.GITHUB_TOKEN) return res.json({ sites: [] });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const dirPath = `sites/${req.params.user}`;
+
+  try {
+    const result = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(dirPath).replace(/%2F/g, '/')}`);
+    const dirs = (Array.isArray(result) ? result : []).filter(f => f.type === 'dir');
+
+    // For each site dir, list files to get page names
+    const sites = await Promise.all(dirs.map(async (dir) => {
+      try {
+        const files = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(dirPath + '/' + dir.name).replace(/%2F/g, '/')}`);
+        const fileList = Array.isArray(files) ? files.filter(f => f.type === 'file') : [];
+        const htmlFiles = fileList.filter(f => f.name.endsWith('.html'));
+        return {
+          slug: dir.name,
+          title: dir.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          description: '',
+          pages: htmlFiles.map(f => f.name.replace('.html', '')),
+          fileCount: fileList.length,
+          source: 'github',
+        };
+      } catch {
+        return { slug: dir.name, title: dir.name, pages: [], fileCount: 0, source: 'github' };
+      }
+    }));
+
+    res.json({ sites });
+  } catch (err) {
+    // 404 = no sites dir for this user — not an error
+    if (err.message.includes('404')) return res.json({ sites: [] });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/repo-files/:user/:site — List files in a site directory from the GitHub repo.
  * Used by AILANG Cloud builds to discover what pages the agent created.
  */
