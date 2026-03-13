@@ -279,6 +279,7 @@ jobs:
           # Website Builder portal (Vue SPA + WASM)
           mkdir -p _site/website_builder/wasm
           cp -r website_builder/portal/dist/* _site/website_builder/
+          cp -r website_builder/portal/public/avatars _site/website_builder/avatars
           cp wasm/wasm_exec.js wasm/ailang-repl.js wasm/ailang.wasm _site/website_builder/wasm/
           # AILANG modules fetched at runtime from ailang/ (relative to portal root)
           mkdir -p _site/website_builder/ailang/website_builder/types

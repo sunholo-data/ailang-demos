@@ -89,6 +89,8 @@ mkdir -p "$SITE/website_builder"
 if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
   # Copy built SPA assets
   cp -r "$REPO_ROOT/website_builder/portal/dist/"* "$SITE/website_builder/"
+  # Persona avatars (not in dist due to copyPublicDir: false)
+  cp -r "$REPO_ROOT/website_builder/portal/public/avatars" "$SITE/website_builder/avatars"
   # WASM runtime needed by the portal
   mkdir -p "$SITE/website_builder/wasm"
   ln -sf "$REPO_ROOT/wasm/wasm_exec.js" "$SITE/website_builder/wasm/"

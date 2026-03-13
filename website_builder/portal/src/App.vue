@@ -339,9 +339,9 @@ const data = ref({
 });
 
 const PERSONAS = {
-  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: '/avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm' },
-  'messages-admin': { name: 'Claudette Mouser', icon: 'cloud', avatar: '/avatars/claudette-mouser.png', desc: 'AILANG Cloud', buildMode: 'messages' },
-  'messages-byok': { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: '/avatars/sir-claude-fixalot.png', desc: 'Your Claude key', buildMode: 'messages' },
+  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: './avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm' },
+  'messages-admin': { name: 'Claudette Mouser', icon: 'cloud', avatar: './avatars/claudette-mouser.png', desc: 'AILANG Cloud', buildMode: 'messages' },
+  'messages-byok': { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: './avatars/sir-claude-fixalot.png', desc: 'Your Claude key', buildMode: 'messages' },
 };
 const selectedPersona = ref('wasm');
 const buildMode = computed(() => PERSONAS[selectedPersona.value]?.buildMode || 'wasm');
