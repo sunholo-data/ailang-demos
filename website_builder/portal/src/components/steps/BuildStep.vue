@@ -604,7 +604,8 @@ async function startBuild() {
 async function buildViaMessages() {
   try {
     const { imageItems, videoItems, docItems, textItems, mediaItems } = categoriseItems(props.data.items);
-    const siteSlug = slugify(props.data.description);
+    const uid = Date.now().toString(36).slice(-5);
+    const siteSlug = `${slugify(props.data.description)}-${uid}`;
 
     // 1. Upload media files to sidecar staging
     const uploadMap = new Map();

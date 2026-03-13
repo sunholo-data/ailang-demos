@@ -1026,7 +1026,7 @@ app.get('/api/repo-sites/:user', async (req, res) => {
         const htmlFiles = fileList.filter(f => f.name.endsWith('.html'));
         return {
           slug: dir.name,
-          title: dir.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          title: dir.name.replace(/-[a-z0-9]{5}$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           description: '',
           pages: htmlFiles.map(f => f.name.replace('.html', '')),
           fileCount: fileList.length,
