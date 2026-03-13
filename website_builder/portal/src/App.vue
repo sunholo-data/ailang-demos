@@ -183,6 +183,8 @@
         :user-id="userId"
         :user-email="user?.email || ''"
         :user-name="user?.displayName || ''"
+        :persona-name="currentPersona.name"
+        :persona-avatar="currentPersona.avatar"
         @new-site="showDashboard = false"
         @view-site="handleViewSite"
       />
@@ -204,6 +206,20 @@
             <span v-else>{{ i + 1 }}</span>
           </div>
           <span class="step-bar-label">{{ label }}</span>
+        </div>
+      </div>
+
+      <!-- Persona greeting -->
+      <div v-if="currentStep < 3" class="persona-greeting">
+        <img
+          v-if="currentPersona.avatar"
+          :src="currentPersona.avatar"
+          :alt="currentPersona.name"
+          class="greeting-avatar"
+        />
+        <div class="greeting-bubble">
+          <span class="greeting-text">{{ stepGreeting }}</span>
+          <span class="greeting-name">— {{ currentPersona.name }}</span>
         </div>
       </div>
 
@@ -354,6 +370,13 @@ const availablePersonas = computed(() => {
   if (anthropicKeyInput.value.trim()) list.push({ key: 'messages-byok', ...PERSONAS['messages-byok'] });
   return list;
 });
+
+const STEP_GREETINGS = [
+  'Tell me about your website and I\'ll bring it to life!',
+  'Show me your photos, documents, and ideas!',
+  'Pick a vibe and I\'ll make it beautiful!',
+];
+const stepGreeting = computed(() => STEP_GREETINGS[currentStep.value] || '');
 
 const showApiKeyBanner = computed(() => {
   return authed.value && !getApiKey() && !showSettings.value;
@@ -990,6 +1013,46 @@ body {
 .step-bar-item.clickable { cursor: pointer; }
 .step-bar-item.clickable:hover .step-bar-circle { transform: scale(1.1); }
 
+/* ── Persona greeting strip ───────────────────────────────────────────────── */
+.persona-greeting {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+.greeting-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.greeting-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--bg);
+  border-radius: 14px 14px 14px 4px;
+  padding: 0.65rem 0.9rem;
+  position: relative;
+}
+.greeting-text {
+  font-size: 0.92rem;
+  color: var(--text);
+  line-height: 1.45;
+}
+.greeting-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .step-content {
   flex: 1;
   overflow-y: auto;
@@ -1131,6 +1194,9 @@ body {
   .persona-chevron { display: none; }
   .persona-badge { padding: 0.35rem; border-radius: 8px; }
   .persona-dropdown { left: auto; right: 0; transform: none; min-width: 200px; }
+  .persona-greeting { padding: 0.65rem 0.75rem; gap: 0.65rem; }
+  .greeting-avatar { width: 44px; height: 44px; }
+  .greeting-text { font-size: 0.85rem; }
   .logo { font-size: 1rem; }
 
   /* Navigation */

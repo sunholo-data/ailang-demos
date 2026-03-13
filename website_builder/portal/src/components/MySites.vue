@@ -1,6 +1,18 @@
 <template>
   <div class="my-sites">
-    <h1>My Websites</h1>
+    <!-- Welcome banner with persona -->
+    <div class="welcome-banner">
+      <img
+        v-if="personaAvatar"
+        :src="personaAvatar"
+        :alt="personaName"
+        class="welcome-avatar"
+      />
+      <div class="welcome-text">
+        <h1>My Websites</h1>
+        <p class="welcome-tagline">{{ personaName ? `${personaName} here — ready to build something new!` : 'Build a website in minutes with AI.' }}</p>
+      </div>
+    </div>
 
     <!-- Tabs -->
     <div class="site-tabs">
@@ -31,6 +43,23 @@
       <!-- Site cards -->
       <div v-if="sites.length > 0" class="site-grid">
         <div v-for="site in sites" :key="site.slug" class="site-card">
+          <!-- Live iframe thumbnail -->
+          <div v-if="liveBaseUrl" class="site-thumbnail" @click="viewSite(site)">
+            <iframe
+              :src="liveBaseUrl + site.slug + '/'"
+              sandbox="allow-same-origin"
+              loading="lazy"
+              tabindex="-1"
+              aria-hidden="true"
+            ></iframe>
+            <div class="thumbnail-overlay">
+              <span class="thumbnail-open">Open</span>
+            </div>
+          </div>
+          <div v-else class="site-thumbnail site-thumbnail-placeholder">
+            <SvgIcon name="globe" :size="32" />
+          </div>
+          <div class="site-card-body">
           <div class="site-card-header">
             <h3>{{ site.title }}</h3>
             <span class="page-count">{{ site.pages.length }} page{{ site.pages.length !== 1 ? 's' : '' }}</span>
@@ -74,6 +103,7 @@
               <button class="btn-secondary btn-sm" @click="deleteConfirm = ''">Cancel</button>
             </div>
           </div>
+          </div><!-- /.site-card-body -->
         </div>
       </div>
     </template>
@@ -136,6 +166,8 @@ const props = defineProps({
   userId: { type: String, required: true },
   userEmail: { type: String, default: '' },
   userName: { type: String, default: '' },
+  personaName: { type: String, default: '' },
+  personaAvatar: { type: String, default: '' },
 });
 const emit = defineEmits(['new-site', 'view-site']);
 
@@ -422,7 +454,23 @@ function formatDate(iso) {
   margin: 0 auto;
   padding: 2rem 1.25rem 6rem;
 }
-.my-sites h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: var(--text); font-weight: 700; }
+/* Welcome banner */
+.welcome-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.welcome-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+}
+.welcome-text h1 { font-size: 1.6rem; margin-bottom: 0.15rem; color: var(--text); font-weight: 700; }
+.welcome-tagline { color: var(--text-muted); font-size: 0.92rem; line-height: 1.4; }
 .my-sites .subtitle { color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.6; font-size: 1rem; }
 
 /* Tabs */
@@ -482,9 +530,9 @@ function formatDate(iso) {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .site-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
   margin-bottom: 1.5rem;
 }
 
@@ -492,13 +540,67 @@ function formatDate(iso) {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 .site-card:hover {
   border-color: var(--primary-light);
   transform: translateY(-2px);
   box-shadow: var(--shadow);
+}
+.site-card-body {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+/* Iframe thumbnail */
+.site-thumbnail {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg, #f5f5f5);
+}
+.site-thumbnail iframe {
+  width: 1280px;
+  height: 800px;
+  transform: scale(0.234375); /* 300/1280 */
+  transform-origin: top left;
+  border: none;
+  pointer-events: none;
+}
+.site-thumbnail .thumbnail-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0);
+  transition: background 0.2s;
+}
+.site-thumbnail:hover .thumbnail-overlay {
+  background: rgba(0,0,0,0.35);
+}
+.site-thumbnail .thumbnail-open {
+  opacity: 0;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius);
+  background: var(--primary);
+  transition: opacity 0.2s;
+}
+.site-thumbnail:hover .thumbnail-open {
+  opacity: 1;
+}
+.site-thumbnail-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
 }
 
 .site-card-header {
@@ -615,9 +717,12 @@ function formatDate(iso) {
 
 @media (max-width: 600px) {
   .my-sites { padding: 1.5rem 1rem 5.5rem; }
-  .my-sites h1 { font-size: 1.35rem; }
-  .site-card { padding: 1rem; }
+  .welcome-avatar { width: 52px; height: 52px; }
+  .welcome-text h1 { font-size: 1.35rem; }
+  .welcome-tagline { font-size: 0.85rem; }
+  .site-grid { grid-template-columns: 1fr; }
   .site-card:hover { transform: none; } /* Disable hover lift on mobile (touch devices) */
+  .site-thumbnail { height: 160px; }
   .site-actions { flex-wrap: wrap; }
   .btn-sm { padding: 0.45rem 0.85rem; font-size: 0.85rem; }
   .new-site-section .btn-primary { width: 100%; }
