@@ -46,8 +46,13 @@
 
     <!-- Build in progress / complete -->
     <template v-else>
-      <h1>Building your website...</h1>
-      <p class="subtitle">{{ statusMessage }}</p>
+      <div class="build-header">
+        <img v-if="personaAvatar" :src="personaAvatar" :alt="builderName" class="build-persona-avatar" />
+        <div>
+          <h1>Building your website...</h1>
+          <p class="subtitle">{{ statusMessage }}</p>
+        </div>
+      </div>
 
       <!-- Time estimate -->
       <div v-if="building" class="time-estimate">
@@ -146,6 +151,8 @@ const props = defineProps({
   buildMode: { type: String, default: 'wasm' },
   userId: { type: String, default: 'default' },
   anthropicApiKey: { type: String, default: '' },
+  personaName: { type: String, default: '' },
+  personaAvatar: { type: String, default: '' },
 });
 const emit = defineEmits(['done', 'back']);
 
@@ -351,7 +358,7 @@ async function describeVideoThumbnail(item) {
   return describeImageWithGemini(base64, 'image/jpeg');
 }
 
-const builderName = computed(() => props.buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder');
+const builderName = computed(() => props.personaName || (props.buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder'));
 
 async function startBuild() {
   error.value = '';
@@ -367,7 +374,7 @@ async function startBuild() {
   // ── WASM build path (Gemma Builder) ──
   try {
     // 1. Initialize AILANG WASM
-    setStep('init', 'active', 'Gemma Builder is loading...');
+    setStep('init', 'active', `${builderName.value} is loading...`);
     if (!isReady()) {
       await initAilang((step, msg) => { statusMessage.value = msg; });
     }
@@ -671,7 +678,7 @@ async function buildViaMessages() {
     connectTaskStream(taskId);
 
     // 4. Poll for completion (match by coordinator's correlationID = messageId)
-    setStep('build', 'active', 'Sir Claude Fixalot is building your website...');
+    setStep('build', 'active', `${builderName.value} is building your website...`);
     const startTime = Date.now();
     const completion = await pollForCompletion(messageId || briefId, startTime);
     console.log('[WB] Messages build complete:', completion);
@@ -701,7 +708,7 @@ async function pollForCompletion(correlationId, startTime) {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-    statusMessage.value = `Sir Claude Fixalot is building your website... (${timeStr})`;
+    statusMessage.value = `${builderName.value} is building your website... (${timeStr})`;
 
     const messages = await pollStatus();
 
@@ -889,6 +896,25 @@ function dataURLToBlob(dataURL) {
 </script>
 
 <style scoped>
+/* Build header with persona avatar */
+.build-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.build-header h1 { margin-bottom: 0.3rem; }
+.build-header .subtitle { margin-bottom: 0; }
+.build-persona-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
 /* Time estimate */
 .time-estimate {
   display: flex;
@@ -1081,6 +1107,8 @@ function dataURLToBlob(dataURL) {
   .api-key-card { padding: 1rem; }
   .api-key-card-step p { font-size: 0.9rem; }
   .api-key-input { font-size: 1rem; } /* 16px prevents iOS zoom */
+  .build-persona-avatar { width: 40px; height: 40px; }
+  .build-header { gap: 0.75rem; }
   .activity-log { max-height: 150px; font-size: 0.75rem; }
 }
 </style>

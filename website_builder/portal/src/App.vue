@@ -232,7 +232,9 @@
           :data="data"
           :build-mode="buildMode"
           :user-id="userId"
-          :anthropic-api-key="anthropicKeyInput"
+          :anthropic-api-key="selectedPersona === 'messages-byok' ? anthropicKeyInput : ''"
+          :persona-name="currentPersona.name"
+          :persona-avatar="currentPersona.avatar"
           @done="(result) => { data.generated = result; currentStep = 4 }"
           @back="currentStep = 2"
         />
@@ -772,10 +774,15 @@ body {
   white-space: nowrap;
 }
 .persona-badge:hover { border-color: var(--primary-light); background: var(--bg); }
-.persona-badge.messages {
+.persona-badge.messages-byok {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-soft, rgba(107,82,163,0.06));
+}
+.persona-badge.messages-admin {
+  border-color: #0D9488;
+  color: #0D9488;
+  background: rgba(13,148,136,0.06);
 }
 .persona-badge.wasm {
   border-color: var(--accent, #E8A87C);
@@ -784,6 +791,52 @@ body {
 }
 .persona-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
 .persona-name { letter-spacing: -0.01em; }
+.persona-chevron {
+  opacity: 0.5;
+  transition: transform 0.2s;
+  margin-left: 0.1rem;
+}
+.persona-chevron.open { transform: rotate(180deg); }
+
+/* Persona picker dropdown */
+.persona-picker-wrap { position: relative; }
+.persona-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-elevated);
+  min-width: 220px;
+  z-index: 100;
+  overflow: hidden;
+}
+.persona-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.1s;
+}
+.persona-option:not(:last-child) { border-bottom: 1px solid var(--border); }
+.persona-option:hover { background: var(--bg); }
+.persona-option.active { background: var(--primary-soft); }
+.persona-option-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.persona-option-info { flex: 1; min-width: 0; }
+.persona-option-name { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.persona-option-desc { display: block; font-size: 0.72rem; color: var(--text-muted); }
+.persona-check { color: var(--primary); flex-shrink: 0; }
+
+/* Mode card avatar (settings panel) */
+.mode-card-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .icon-btn {
   background: none;
   border: none;
@@ -1075,7 +1128,9 @@ body {
   /* Header */
   .wizard-header { padding: 0.6rem 0.75rem; }
   .persona-name { display: none; }
+  .persona-chevron { display: none; }
   .persona-badge { padding: 0.35rem; border-radius: 8px; }
+  .persona-dropdown { left: auto; right: 0; transform: none; min-width: 200px; }
   .logo { font-size: 1rem; }
 
   /* Navigation */
