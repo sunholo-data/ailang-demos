@@ -134,8 +134,19 @@
           :title="buildMode === 'messages' ? 'Sir Claude Fixalot — AILANG Cloud (click to switch)' : 'Gemma Builder — Browser AI (click to switch)'"
           @click="buildMode = buildMode === 'messages' ? 'wasm' : 'messages'"
         >
-          <SvgIcon :name="buildMode === 'messages' ? 'cloud' : 'monitor'" :size="16" />
-          <span class="persona-name">{{ buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder' }}</span>
+          <img
+            v-if="currentPersona.avatar"
+            :src="currentPersona.avatar"
+            :alt="currentPersona.name"
+            class="persona-avatar"
+            @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display=''"
+          />
+          <SvgIcon
+            :name="currentPersona.icon"
+            :size="16"
+            :style="currentPersona.avatar ? { display: 'none' } : {}"
+          />
+          <span class="persona-name">{{ currentPersona.name }}</span>
         </button>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
@@ -309,6 +320,11 @@ const data = ref({
   generated: null  // { siteJson, pages: { slug: html }, css }
 });
 
+const PERSONAS = {
+  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: '/avatars/gemma-builder.png' },
+  messages: { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: '/avatars/sir-claude-fixalot.png' },
+};
+const currentPersona = computed(() => PERSONAS[buildMode.value] || PERSONAS.wasm);
 const canUseCloud = computed(() => messagesEnabled.value || anthropicKeyInput.value.trim());
 
 const showApiKeyBanner = computed(() => {
@@ -733,6 +749,7 @@ body {
   color: var(--accent-dark, #B8784C);
   background: var(--accent-light, #FFF4ED);
 }
+.persona-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
 .persona-name { letter-spacing: -0.01em; }
 .icon-btn {
   background: none;
