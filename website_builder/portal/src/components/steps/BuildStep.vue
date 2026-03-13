@@ -145,6 +145,7 @@ const props = defineProps({
   data: { type: Object, required: true },
   buildMode: { type: String, default: 'wasm' },
   userId: { type: String, default: 'default' },
+  anthropicApiKey: { type: String, default: '' },
 });
 const emit = defineEmits(['done', 'back']);
 
@@ -653,6 +654,7 @@ async function buildViaMessages() {
       repoConfig: getRepoConfig(),
       formSheetId: getFormSheetId(),
       branch: 'main',
+      anthropicApiKey: props.anthropicApiKey?.trim() || undefined,
     };
 
     // 3. Send to sidecar → coordinator → agent

@@ -53,7 +53,7 @@ const DASHBOARD_URL = process.env.DASHBOARD_URL || '';
  * @param {string} from - Sender identity
  * @returns {Promise<{message_id: string}|null>}
  */
-async function sendCoordinatorMessage(inbox, title, content, from = 'portal') {
+async function sendCoordinatorMessage(inbox, title, content, from = 'portal', options = {}) {
   const payload = typeof content === 'string' ? content : JSON.stringify(content);
 
   if (COORDINATOR_URL) {
@@ -63,7 +63,7 @@ async function sendCoordinatorMessage(inbox, title, content, from = 'portal') {
     const resp = await fetch(`${COORDINATOR_URL}/api/messages`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ inbox, title, content: payload, from }),
+      body: JSON.stringify({ inbox, title, content: payload, from, ...options }),
     });
     if (!resp.ok) {
       const body = await resp.text();
@@ -688,7 +688,11 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
       }
     }
 
-    // Save brief.json to staging
+    // Extract BYOK key before saving — never persist to disk
+    const anthropicApiKey = brief.anthropicApiKey;
+    delete brief.anthropicApiKey;
+
+    // Save brief.json to staging (key already stripped)
     const briefDir = join(STAGING_DIR, user, site);
     mkdirSync(briefDir, { recursive: true });
     const briefPath = join(briefDir, 'brief.json');
@@ -699,7 +703,9 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
     const title = `Build: ${brief.siteName || 'website'}`;
 
     try {
-      const result = await sendCoordinatorMessage('website-builder', title, msgContent);
+      const opts = {};
+      if (anthropicApiKey) opts.anthropic_api_key = anthropicApiKey;
+      const result = await sendCoordinatorMessage('website-builder', title, msgContent, 'portal', opts);
       res.json({ briefId, briefPath: `staging/${user}/${site}/brief.json`, messageId: result?.message_id });
     } catch (e) {
       console.error('Failed to send coordinator message:', e.message);

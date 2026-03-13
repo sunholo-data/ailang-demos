@@ -29,6 +29,21 @@
           />
           <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Your key stays on your device.</p>
 
+          <label style="margin-top:0.75rem">Your Claude API Key <span class="hint-inline">(optional)</span></label>
+          <input
+            v-model="anthropicKeyInput"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="sk-ant-..."
+            class="api-key-masked"
+            @keydown.enter="saveKey"
+          />
+          <p class="hint">Unlocks AILANG Cloud (higher quality builds powered by Claude). You pay per-token on your <a href="https://console.anthropic.com/" target="_blank">Anthropic account</a>. Your key is encrypted in transit and never stored on our servers.</p>
+
           <!-- Publishing (collapsible) -->
           <div class="settings-section">
             <button class="section-toggle" @click="showPublishing = !showPublishing">
@@ -68,7 +83,7 @@
               />
               <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
 
-              <template v-if="messagesEnabled">
+              <template v-if="messagesEnabled || anthropicKeyInput.trim()">
                 <label style="margin-top:0.75rem">Build Mode</label>
                 <div class="build-mode-toggle">
                   <button
@@ -183,6 +198,7 @@
           :data="data"
           :build-mode="buildMode"
           :user-id="userId"
+          :anthropic-api-key="anthropicKeyInput"
           @done="(result) => { data.generated = result; currentStep = 4 }"
           @back="currentStep = 2"
         />
@@ -253,6 +269,7 @@ const apiKeyInput = ref('');
 const repoOwner = ref('');
 const repoName = ref('');
 const formSheetId = ref('');
+const anthropicKeyInput = ref('');
 const buildMode = ref('wasm'); // 'wasm' or 'messages'
 const messagesEnabled = ref(false); // admin-set, read-only for users
 const showPublishing = ref(false); // collapsible settings section
@@ -288,6 +305,7 @@ const showApiKeyBanner = computed(() => {
 
 onMounted(() => {
   apiKeyInput.value = getApiKey();
+  anthropicKeyInput.value = localStorage.getItem('anthropic-api-key') || '';
   formSheetId.value = getFormSheetId();
   const rc = getRepoConfig();
   if (rc) {
@@ -317,6 +335,8 @@ onMounted(() => {
         if (settings.formSheetId) { saveFormSheetId(settings.formSheetId); formSheetId.value = settings.formSheetId; }
         if (settings.buildMode) buildMode.value = settings.buildMode;
         if (settings.messagesEnabled) messagesEnabled.value = true;
+        // Auto-select AILANG Cloud when user has Anthropic key (localStorage) but no admin messagesEnabled
+        if (anthropicKeyInput.value && !settings.messagesEnabled && !settings.buildMode) buildMode.value = 'messages';
       }
       // Handle pending shared site link
       if (pendingSharedSite.value) {
@@ -364,6 +384,14 @@ async function saveKey() {
   if (apiKeyInput.value.trim()) {
     saveApiKey(apiKeyInput.value);
   }
+  // Save Anthropic key to localStorage
+  if (anthropicKeyInput.value.trim()) {
+    localStorage.setItem('anthropic-api-key', anthropicKeyInput.value.trim());
+    // Auto-select AILANG Cloud when key is first added
+    if (buildMode.value === 'wasm' && !messagesEnabled.value) buildMode.value = 'messages';
+  } else {
+    localStorage.removeItem('anthropic-api-key');
+  }
   // Save repo config if either field is set
   const rc = (repoOwner.value.trim() || repoName.value.trim())
     ? { owner: repoOwner.value.trim() || undefined, repo: repoName.value.trim() || undefined }
@@ -386,6 +414,8 @@ async function saveKey() {
 function clearKey() {
   clearApiKey();
   apiKeyInput.value = '';
+  localStorage.removeItem('anthropic-api-key');
+  anthropicKeyInput.value = '';
 }
 
 function handleViewSite(generated) {
@@ -583,6 +613,7 @@ body {
 .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.5rem 0 1rem; line-height: 1.5; }
 .hint a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
 .hint code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+.hint-inline { font-size: 0.85em; color: var(--text-muted); font-weight: normal; }
 
 /* Collapsible settings sections */
 .settings-section { border-top: 1px solid var(--border); margin-top: 0.75rem; }
