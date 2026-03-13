@@ -699,7 +699,19 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
     writeFileSync(briefPath, JSON.stringify(brief, null, 2));
 
     // Send full brief to coordinator (repo paths in place of staging paths)
-    const msgContent = { ...brief, type: 'build' };
+    const repoConfig = brief.repoConfig || {};
+    const msgContent = {
+      ...brief,
+      type: 'build',
+      instructions: [
+        `You are building a website for a user. Commit ALL files directly to the \`main\` branch. Do NOT create feature branches, do NOT create pull requests.`,
+        `Write files to: sites/${user}/${site}/ in the ${repoConfig.owner || 'sunholo-data'}/${repoConfig.repo || 'sunholo-websites'} repo.`,
+        `Required output: at minimum index.html and style.css. Generate multiple pages if the brief describes them.`,
+        `Use relative paths for all links between pages (e.g. href="about.html") and CSS (e.g. href="style.css").`,
+        `For user-uploaded images, reference them as media/<filename> (they are already committed to the repo).`,
+        `After committing, your task is complete. Do not attempt to deploy — GitHub Pages handles deployment automatically.`,
+      ].join('\n'),
+    };
     const title = `Build: ${brief.siteName || 'website'}`;
 
     try {
@@ -1131,11 +1143,11 @@ server.on('upgrade', (req, socket, head) => {
   else if (dashUrl.protocol === 'http:') dashUrl.protocol = 'ws:';
   // Ensure /ws path
   if (!dashUrl.pathname.endsWith('/ws')) dashUrl.pathname = dashUrl.pathname.replace(/\/?$/, '/ws');
-  if (COORDINATOR_API_KEY) dashUrl.searchParams.set('api_key', COORDINATOR_API_KEY);
+  if (COORDINATOR_API_KEY) dashUrl.searchParams.set('token', COORDINATOR_API_KEY);
 
   // Log the target (mask the key)
   const logUrl = new URL(dashUrl.toString());
-  if (logUrl.searchParams.has('api_key')) logUrl.searchParams.set('api_key', '***');
+  if (logUrl.searchParams.has('token')) logUrl.searchParams.set('token', '***');
   console.log(`[sidecar] WebSocket proxy connecting to: ${logUrl.toString()}`);
 
   const upstream = new WebSocket(dashUrl.toString());

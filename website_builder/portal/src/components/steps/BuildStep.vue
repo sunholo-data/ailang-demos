@@ -719,9 +719,11 @@ async function pollForCompletion(correlationId, startTime) {
         if (msgTime && msgTime < startTime) continue;
 
         const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
-        // Match by correlation_id, or by briefId in payload (agent echoes it back)
+        // Match by correlation_id (primary) or by briefId in payload (fallback)
+        // Completion messages have message_type: "completion" per coordinator spec
         const isMatch = (correlationId && msg.correlation_id === correlationId)
-          || (correlationId && payload.briefId === correlationId);
+          || (correlationId && payload.briefId === correlationId)
+          || (msg.message_type === 'completion' && payload.agent_id === 'website-builder' && msgTime > startTime);
         if (isMatch) {
           if (payload.status === 'complete' || payload.status === 'completed') {
             return payload;
