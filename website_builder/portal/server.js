@@ -986,6 +986,29 @@ app.get('/api/files/:user/:site', (req, res) => {
 });
 
 /**
+ * GET /api/repo-files/:user/:site — List files in a site directory from the GitHub repo.
+ * Used by AILANG Cloud builds to discover what pages the agent created.
+ */
+app.get('/api/repo-files/:user/:site', async (req, res) => {
+  if (!process.env.GITHUB_TOKEN) return res.status(501).json({ error: 'No GITHUB_TOKEN configured' });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const dirPath = `sites/${req.params.user}/${req.params.site}`;
+
+  try {
+    const result = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(dirPath).replace(/%2F/g, '/')}`);
+    const files = (Array.isArray(result) ? result : [])
+      .filter(f => f.type === 'file')
+      .map(f => f.name);
+    res.json(files);
+  } catch (err) {
+    const status = err.message.includes('404') ? 404 : 500;
+    res.status(status).json({ error: status === 404 ? 'Site directory not found in repo' : err.message });
+  }
+});
+
+/**
  * GET /api/repo-file/:user/:site/* — Fetch a site file from the GitHub repo.
  * Used by AILANG Cloud builds: the agent pushes directly to GitHub, so files
  * aren't on the sidecar's local disk. This proxies via the GitHub Contents API,

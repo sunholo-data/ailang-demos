@@ -138,7 +138,7 @@ import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { createThumbnail } from '../../media.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, API_BASE } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listSiteFiles, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -769,9 +769,20 @@ async function pollForCompletion(correlationId, startTime) {
 }
 
 async function loadGeneratedSite(completion, userId, siteSlug) {
-  const files = completion.files || [];
+  let files = completion.files || [];
   const rc = getRepoConfig();
   const baseUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`;
+
+  // If agent didn't return a files list, discover from GitHub repo
+  if (files.length === 0) {
+    try {
+      statusMessage.value = 'Discovering pages...';
+      files = await listSiteFiles(userId, siteSlug);
+      console.log('[WB] Discovered site files from repo:', files);
+    } catch (e) {
+      console.warn('[WB] Could not list site files:', e.message);
+    }
+  }
 
   // Fetch files from GitHub repo via sidecar proxy (avoids CORS issues with GitHub Pages)
   statusMessage.value = 'Loading your website...';
@@ -794,7 +805,7 @@ async function loadGeneratedSite(completion, userId, siteSlug) {
     }
   }
 
-  // Fallback: if no files list in completion, try fetching index.html + style.css
+  // Final fallback: try fetching index.html + style.css directly
   if (slugs.length === 0) {
     try {
       pages['index'] = await getRepoFile(userId, siteSlug, 'index.html');

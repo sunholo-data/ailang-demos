@@ -182,6 +182,16 @@ export async function getRepoFile(user, site, file) {
 }
 
 /**
+ * GET /api/repo-files/:user/:site — List files in a site directory from the GitHub repo.
+ * @returns {Promise<string[]>} Array of filenames (e.g. ["index.html", "about.html", "style.css"])
+ */
+export async function listSiteFiles(user, site) {
+  const res = await fetch(`${API_BASE}/repo-files/${encodeURIComponent(user)}/${encodeURIComponent(site)}`);
+  if (!res.ok) throw new Error(`Failed to list site files (${res.status})`);
+  return res.json();
+}
+
+/**
  * POST /api/upload — Upload media files to sidecar staging in batches.
  * @param {Array<{file: File, filename: string}>} mediaItems
  * @param {string} user
