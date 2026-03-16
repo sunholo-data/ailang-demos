@@ -713,13 +713,13 @@ app.post('/api/build', upload.array('files', 20), async (req, res) => {
     const msgContent = {
       ...brief,
       type: 'build',
+      siteSlug: site,
+      briefId: briefId,
       instructions: [
-        `You are building a website for a user. Commit ALL files directly to the \`main\` branch. Do NOT create feature branches, do NOT create pull requests.`,
-        `Write files to: sites/${user}/${site}/ in the ${repoConfig.owner || 'sunholo-data'}/${repoConfig.repo || 'sunholo-websites'} repo.`,
+        `You are building a website. Write files to the output directory.`,
         `Required output: at minimum index.html and style.css. Generate multiple pages if the brief describes them.`,
         `Use relative paths for all links between pages (e.g. href="about.html") and CSS (e.g. href="style.css").`,
-        `For user-uploaded images, reference them as media/<filename> (they are already committed to the repo).`,
-        `After committing, your task is complete. Do not attempt to deploy — GitHub Pages handles deployment automatically.`,
+        `For user-uploaded images, reference them as media/<filename> (they are already available).`,
       ].join('\n'),
     };
     const title = `Build: ${brief.siteName || 'website'}`;
@@ -1260,38 +1260,6 @@ app.post('/api/site-restore/:user/:site', async (req, res) => {
   } catch (err) {
     console.error(`[sidecar] Restore error: ${err.message}`);
     res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /api/merge-branch — Merge a feature branch into main (or configured branch).
- * Used after AILANG Cloud builds: the agent pushes to a feature branch,
- * and we merge it into main so GitHub Pages can serve the site.
- */
-app.post('/api/merge-branch', async (req, res) => {
-  const { branch: sourceBranch } = req.body || {};
-  if (!sourceBranch) return res.status(400).json({ error: 'Missing branch' });
-  if (!process.env.GITHUB_TOKEN) return res.status(501).json({ error: 'No GITHUB_TOKEN configured' });
-
-  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
-  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
-  const targetBranch = process.env.GITHUB_BRANCH || 'main';
-
-  if (sourceBranch === targetBranch) {
-    return res.json({ ok: true, message: 'Already on target branch' });
-  }
-
-  try {
-    const result = await githubApi('POST', `/repos/${owner}/${repo}/merges`, {
-      base: targetBranch,
-      head: sourceBranch,
-      commit_message: `Merge ${sourceBranch} into ${targetBranch}`,
-    });
-    console.log(`[sidecar] Merged ${sourceBranch} → ${targetBranch}: ${result.sha?.substring(0, 7)}`);
-    res.json({ ok: true, sha: result.sha });
-  } catch (err) {
-    console.error(`[sidecar] Merge failed: ${err.message}`);
-    res.status(500).json({ error: `Merge failed: ${err.message}` });
   }
 });
 

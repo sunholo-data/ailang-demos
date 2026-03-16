@@ -63,23 +63,6 @@ export async function pollStatus() {
   return data.messages || [];
 }
 
-/**
- * POST /api/merge-branch — Merge a feature branch into main.
- * @param {string} branch - The source branch to merge
- * @returns {Promise<{ok: boolean, sha?: string}>}
- */
-export async function mergeBranch(branch) {
-  const res = await fetch(`${API_BASE}/merge-branch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ branch }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Merge failed (${res.status})`);
-  }
-  return res.json();
-}
 
 /**
  * GET /api/files/:user/:site — List files in a generated site (sidecar disk).

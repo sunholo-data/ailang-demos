@@ -818,7 +818,10 @@ async function pollForCompletion(correlationId, startTime) {
 }
 
 async function loadGeneratedSite(completion, userId, siteSlug) {
-  let files = completion.files || [];
+  // Support both formats: bare filenames (files) and full repo paths (changed_files)
+  const prefix = `sites/${userId}/${siteSlug}/`;
+  let files = (completion.files || completion.changed_files || [])
+    .map(f => f.startsWith(prefix) ? f.slice(prefix.length) : f);
   const rc = getRepoConfig();
   const baseUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`;
 
