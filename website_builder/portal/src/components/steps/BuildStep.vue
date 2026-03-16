@@ -235,7 +235,12 @@ function connectTaskStream(taskId) {
 
   ws.onmessage = (event) => {
     try {
-      const msg = JSON.parse(event.data);
+      const raw = typeof event.data === 'string' ? event.data : '';
+      // Log raw data for debugging (first 200 chars)
+      if (raw.length < 100) console.log('[WB] WebSocket raw:', raw);
+      // Skip non-JSON messages (ping frames, length prefixes, etc.)
+      if (!raw.startsWith('{') && !raw.startsWith('[')) return;
+      const msg = JSON.parse(raw);
       console.log('[WB] WebSocket message:', msg.type, msg.data?.stream_type || msg.data?.status || '');
       if (msg.type !== 'task_stream') return;
 
