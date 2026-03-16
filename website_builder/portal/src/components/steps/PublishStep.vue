@@ -56,11 +56,6 @@
       @close="showShareModal = false"
     />
 
-    <!-- Tip for custom domain -->
-    <div v-if="isLive && !deploying" class="info-box">
-      <p>To use a custom domain, configure it in your GitHub repository's Pages settings.</p>
-    </div>
-
     <div class="nav-btns">
       <button class="btn-secondary" @click="$emit('back')"><SvgIcon name="arrow-left" :size="16" /> Back to preview</button>
       <button class="btn-secondary" @click="$emit('edit')"><SvgIcon name="pencil" :size="16" /> Make changes</button>
