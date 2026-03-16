@@ -82,7 +82,8 @@ export function isAllowed(user) {
 }
 
 // ── Firestore: User Settings ─────────────────────────────────────────────────
-// Schema: users/{uid} → { geminiApiKey, repoConfig, formSheetId, buildMode, messagesEnabled, messagesEndpoint }
+// Schema: users/{uid} → { repoConfig, formSheetId, buildMode, messagesEnabled, messagesEndpoint }
+// NOTE: API keys (gemini, anthropic, openai) are stored in localStorage only — never persisted to Firestore.
 
 /**
  * Load user settings from Firestore.

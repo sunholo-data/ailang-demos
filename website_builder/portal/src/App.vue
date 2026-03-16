@@ -14,7 +14,7 @@
           <button class="settings-close" @click="showSettings = false">&times;</button>
         </div>
         <div class="settings-body">
-          <label>Your AI Key</label>
+          <label>Gemini API Key</label>
           <input
             v-model="apiKeyInput"
             type="text"
@@ -27,9 +27,9 @@
             class="api-key-masked"
             @keydown.enter="saveKey"
           />
-          <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Your key stays on your device.</p>
+          <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Unlocks Gemma Builder (browser). Your key stays on your device.</p>
 
-          <label style="margin-top:0.75rem">Your Claude API Key <span class="hint-inline">(optional)</span></label>
+          <label style="margin-top:0.75rem">Claude API Key <span class="hint-inline">(optional)</span></label>
           <input
             v-model="anthropicKeyInput"
             type="text"
@@ -42,7 +42,22 @@
             class="api-key-masked"
             @keydown.enter="saveKey"
           />
-          <p class="hint">Unlocks AILANG Cloud (higher quality builds powered by Claude). You pay per-token on your <a href="https://console.anthropic.com/" target="_blank">Anthropic account</a>. Your key is encrypted in transit and never stored on our servers.</p>
+          <p class="hint">Unlocks AILANG Cloud builds powered by Claude. You pay per-token on your <a href="https://console.anthropic.com/" target="_blank">Anthropic account</a>.</p>
+
+          <label style="margin-top:0.75rem">OpenAI API Key <span class="hint-inline">(optional)</span></label>
+          <input
+            v-model="openaiKeyInput"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="sk-..."
+            class="api-key-masked"
+            @keydown.enter="saveKey"
+          />
+          <p class="hint">Unlocks Opal Cadillac (OpenAI-powered builds). You pay per-token on your <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI account</a>.</p>
 
           <!-- TODO: Custom repo support — add GitHub Owner/Org + Repo Name inputs here
                when user-provided GitHub PAT support is implemented (see server.js TODO) -->
@@ -393,10 +408,13 @@ onMounted(() => {
       anthropicKeyInput.value = '';
       openaiKeyInput.value = '';
       formSheetId.value = '';
+      // Load API keys from localStorage (never stored in Firestore)
+      apiKeyInput.value = getApiKey();
+      anthropicKeyInput.value = localStorage.getItem('anthropic-api-key') || '';
+      openaiKeyInput.value = localStorage.getItem('openai-api-key') || '';
+
       const settings = await getUserSettings(u.uid);
       if (settings) {
-        // Merge Firestore → localStorage (Firestore wins)
-        if (settings.geminiApiKey) { saveApiKey(settings.geminiApiKey); apiKeyInput.value = settings.geminiApiKey; }
         if (settings.repoConfig) { saveRepoConfig(settings.repoConfig); }
         if (settings.formSheetId) { saveFormSheetId(settings.formSheetId); formSheetId.value = settings.formSheetId; }
         if (settings.buildMode) {
@@ -467,10 +485,10 @@ async function handleSignOut() {
 }
 
 async function saveKey() {
+  // Save all keys to localStorage
   if (apiKeyInput.value.trim()) {
     saveApiKey(apiKeyInput.value);
   }
-  // Save Anthropic key to localStorage
   if (anthropicKeyInput.value.trim()) {
     localStorage.setItem('anthropic-api-key', anthropicKeyInput.value.trim());
     // Auto-select AILANG Cloud when key is first added
@@ -478,12 +496,16 @@ async function saveKey() {
   } else {
     localStorage.removeItem('anthropic-api-key');
   }
+  if (openaiKeyInput.value.trim()) {
+    localStorage.setItem('openai-api-key', openaiKeyInput.value.trim());
+  } else {
+    localStorage.removeItem('openai-api-key');
+  }
   saveFormSheetId(formSheetId.value);
 
-  // Persist to Firestore if signed in
+  // Persist non-sensitive settings to Firestore (API keys stay in localStorage only)
   if (user.value?.uid) {
     await saveUserSettings(user.value.uid, {
-      geminiApiKey: apiKeyInput.value.trim() || null,
       formSheetId: formSheetId.value.trim() || null,
       buildMode: selectedPersona.value,
     });
@@ -496,6 +518,8 @@ function clearKey() {
   apiKeyInput.value = '';
   localStorage.removeItem('anthropic-api-key');
   anthropicKeyInput.value = '';
+  localStorage.removeItem('openai-api-key');
+  openaiKeyInput.value = '';
 }
 
 function handleViewSite(generated) {

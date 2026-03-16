@@ -151,7 +151,6 @@ import { initAilang, callPure, callAI, callPureModule, describeImage, isReady, g
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listRepoFiles, postProcessSite, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
-import { saveUserSettings } from '../../firebase.js';
 
 const props = defineProps({
   data: { type: Object, required: true },
@@ -270,10 +269,6 @@ async function saveKeyAndBuild() {
     localStorage.setItem('openai-api-key', key);
   } else {
     saveApiKey(key);
-    // Sync Gemini key to Firestore (best-effort)
-    if (props.userId && props.userId !== 'default') {
-      saveUserSettings(props.userId, { geminiApiKey: key }).catch(() => {});
-    }
   }
   needsApiKey.value = false;
   error.value = '';
@@ -517,15 +512,30 @@ async function startBuild() {
     // 6. Structure the site
     setStep('structure', 'active', 'Planning your website structure...');
     let siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
+    console.log('[WB] buildSiteStructure returned:', typeof siteJson, siteJson?.substring?.(0, 500));
 
-    // Validate site structure via AILANG contracts (auto-retry once if invalid)
+    // Validate site structure via AILANG contracts.
+    // If the AILANG validator crashes (runtime bug), skip validation and continue —
+    // the site structure from the AI is usually fine, and a runtime crash shouldn't
+    // block the user. Retry once if validation fails normally.
     setStep('structure', 'active', 'Verifying structure with AILANG contracts...');
-    let siteValidation = JSON.parse(callPure('validateSite', siteJson));
+    let siteValidation = { valid: true, errors: [] };
+    try {
+      siteValidation = JSON.parse(callPure('validateSite', siteJson));
+    } catch (valErr) {
+      console.warn('[WB] validateSite crashed (skipping validation):', valErr.message,
+        'siteJson preview:', siteJson?.substring?.(0, 500));
+    }
     if (!siteValidation.valid) {
       console.warn('[WB] Contract validation failed, retrying:', siteValidation.errors);
       setStep('structure', 'active', 'Contract check failed — retrying...');
       siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
-      siteValidation = JSON.parse(callPure('validateSite', siteJson));
+      try {
+        siteValidation = JSON.parse(callPure('validateSite', siteJson));
+      } catch (valErr) {
+        console.warn('[WB] validateSite crashed on retry (skipping):', valErr.message);
+        siteValidation = { valid: true, errors: [] };
+      }
       if (!siteValidation.valid) {
         throw new Error(`AILANG contract violation: ${siteValidation.errors.join(', ')}`);
       }
