@@ -32,6 +32,11 @@
 
     <!-- My Sites tab -->
     <template v-if="activeTab === 'mine'">
+      <!-- Top build button (when there are sites to scroll past) -->
+      <button v-if="sites.length > 2" class="btn-primary btn-new-top" @click="$emit('new-site')">
+        + Build a new website
+      </button>
+
       <p class="subtitle" v-if="loading">Loading your sites...</p>
       <p class="subtitle" v-else-if="sites.length === 0 && !error">
         You haven't built any websites yet. It only takes a few minutes!
@@ -784,6 +789,11 @@ function formatDate(iso) {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.btn-new-top {
+  width: 100%;
+  margin-bottom: 1rem;
 }
 
 .new-site-section {
