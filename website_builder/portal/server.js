@@ -1033,9 +1033,15 @@ app.get('/api/repo-sites/:user', async (req, res) => {
     // For each site dir, list files to get page names
     const sites = await Promise.all(dirs.map(async (dir) => {
       try {
-        const files = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(dirPath + '/' + dir.name).replace(/%2F/g, '/')}`);
+        const sitePath = `${dirPath}/${dir.name}`;
+        // Fetch file listing and last commit date in parallel
+        const [files, commits] = await Promise.all([
+          githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(sitePath).replace(/%2F/g, '/')}`),
+          githubApi('GET', `/repos/${owner}/${repo}/commits?path=${encodeURIComponent(sitePath)}&per_page=1`).catch(() => []),
+        ]);
         const fileList = Array.isArray(files) ? files.filter(f => f.type === 'file') : [];
         const htmlFiles = fileList.filter(f => f.name.endsWith('.html'));
+        const lastCommitDate = commits[0]?.commit?.author?.date || '';
         return {
           slug: dir.name,
           title: dir.name.replace(/-[a-z0-9]{5}$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -1043,6 +1049,7 @@ app.get('/api/repo-sites/:user', async (req, res) => {
           pages: htmlFiles.map(f => f.name.replace('.html', '')),
           fileCount: fileList.length,
           source: 'github',
+          updatedAt: lastCommitDate,
         };
       } catch {
         return { slug: dir.name, title: dir.name, pages: [], fileCount: 0, source: 'github' };

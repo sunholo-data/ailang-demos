@@ -77,8 +77,11 @@
             View live site <SvgIcon name="external-link" :size="14" />
           </a>
           <div class="site-meta">
-            <span v-if="site.updatedAt">Updated {{ formatDate(site.updatedAt) }}</span>
-            <span v-if="site.createdAt && site.createdAt !== site.updatedAt" class="site-meta-created"> · Created {{ formatDate(site.createdAt) }}</span>
+            <template v-if="site.updatedAt || site.createdAt">
+              <span v-if="site.updatedAt">Updated {{ formatDate(site.updatedAt) }}</span>
+              <span v-if="site.createdAt && site.createdAt !== site.updatedAt" class="site-meta-created"> · Created {{ formatDate(site.createdAt) }}</span>
+            </template>
+            <span v-else class="site-meta-source">{{ site.source === 'github' ? 'Published' : 'Saved locally' }}</span>
           </div>
           <div class="site-actions">
             <button class="btn-primary btn-sm" @click="viewSite(site)" :disabled="!!loadingSite">
