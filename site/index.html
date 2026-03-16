@@ -495,7 +495,7 @@ updateStatus();
 
       function tryNextFormat() {
         if (tried >= exts.length) {
-          // No screenshot found — load iframe
+          // No screenshot found — load iframe scaled to card width
           const iframe = document.createElement('iframe');
           iframe.src = src;
           iframe.sandbox = 'allow-same-origin';
@@ -504,6 +504,9 @@ updateStatus();
           iframe.setAttribute('aria-hidden', 'true');
           el.innerHTML = '';
           el.appendChild(iframe);
+          // Scale iframe to fit the thumbnail container
+          const scale = el.offsetWidth / 1280;
+          iframe.style.transform = 'scale(' + scale + ')';
           return;
         }
         const img = new Image();

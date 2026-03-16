@@ -408,19 +408,21 @@ body {
 /* -- Card thumbnail (scaled iframe or screenshot) -- */
 .card-thumbnail {
   position: relative;
-  width: 100%;
-  height: 160px;
   margin: -24px -22px 14px -22px;
   width: calc(100% + 44px);
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
   background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 }
 
 .card-thumbnail iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 1280px;
   height: 800px;
-  transform: scale(0.25);
   transform-origin: top left;
   border: none;
   pointer-events: none;
@@ -430,6 +432,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top left;
   display: block;
 }
 
@@ -454,7 +457,10 @@ body {
 }
 
 .card:has(.card-thumbnail) .card-arrow {
-  top: 170px;
+  top: 14px;
+  z-index: 2;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
 .card-name {
@@ -648,8 +654,7 @@ body {
   .hero .subtitle { font-size: 14px; }
   .page { padding: 24px 16px 32px; }
   .card { padding: 20px 18px 18px; }
-  .card-thumbnail { height: 180px; margin: -20px -18px 14px -18px; width: calc(100% + 36px); }
-  .card:has(.card-thumbnail) .card-arrow { top: 190px; }
+  .card-thumbnail { margin: -20px -18px 14px -18px; width: calc(100% + 36px); }
   .header-badge { display: none; }
   .section-intro { padding: 20px 20px; }
   .section-intro-title { font-size: 18px; }
