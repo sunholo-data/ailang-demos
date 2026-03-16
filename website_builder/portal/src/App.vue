@@ -185,9 +185,13 @@
           :selected-persona="selectedPersona"
           :personas="personasWithLockState"
           :anthropic-key="anthropicKeyInput"
+          :gemini-key="apiKeyInput"
+          :openai-key="openaiKeyInput"
           @next="(key) => { selectedPersona = key; currentStep = 4 }"
           @back="currentStep = 2"
           @update:anthropic-key="(k) => { anthropicKeyInput = k; localStorage.setItem('anthropic-api-key', k) }"
+          @update:gemini-key="(k) => { apiKeyInput = k; saveApiKey(k) }"
+          @update:openai-key="(k) => { openaiKeyInput = k; localStorage.setItem('openai-api-key', k) }"
         />
         <BuildStep
           v-else-if="currentStep === 4"
@@ -244,7 +248,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import SvgIcon from './components/SvgIcon.vue';
 import AuthGate from './components/AuthGate.vue';
 import MySites from './components/MySites.vue';
@@ -267,6 +271,7 @@ const showSettings = ref(false);
 const apiKeyInput = ref('');
 const formSheetId = ref('');
 const anthropicKeyInput = ref('');
+const openaiKeyInput = ref('');
 // buildMode is now computed from selectedPersona (see PERSONAS section)
 const messagesEnabled = ref(false); // admin-set, read-only for users
 const showAdvanced = ref(false); // collapsible settings section
@@ -300,7 +305,7 @@ const PERSONAS = [
     key: 'wasm', name: 'Gemma Builder', icon: 'monitor',
     avatar: './avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm',
     detail: 'Builds your website right here in the browser using Google Gemini. Fast and free.',
-    requires: null,
+    requires: { type: 'apikey', provider: 'gemini', storageKey: 'gemini-api-key' },
   },
   {
     key: 'messages-admin', name: 'Claudette Mouser', icon: 'cloud',
@@ -314,13 +319,20 @@ const PERSONAS = [
     detail: 'Uses your own Anthropic API key for premium Claude-powered builds. You pay per-token.',
     requires: { type: 'apikey', provider: 'anthropic', storageKey: 'anthropic-api-key' },
   },
+  {
+    key: 'openai-byok', name: 'Opal Cadillac', icon: 'cloud',
+    avatar: './avatars/opal-cadillac.png', desc: 'Your OpenAI key', buildMode: 'messages',
+    detail: 'Brings OpenAI\'s GPT models to your builds. Uses your own API key — you pay per-token.',
+    requires: { type: 'apikey', provider: 'openai', storageKey: 'openai-api-key' },
+    hidden: true, // unhide when OpenAI build path is implemented
+  },
 ];
 const selectedPersona = ref('wasm');
 const findPersona = (key) => PERSONAS.find(p => p.key === key) || PERSONAS[0];
 const buildMode = computed(() => findPersona(selectedPersona.value).buildMode);
 const currentPersona = computed(() => findPersona(selectedPersona.value));
 const personasWithLockState = computed(() => {
-  return PERSONAS.map(p => {
+  return PERSONAS.filter(p => !p.hidden).map(p => {
     let locked = false, lockReason = '', lockAction = null;
     if (p.requires) {
       if (p.requires.type === 'admin') {
@@ -328,9 +340,14 @@ const personasWithLockState = computed(() => {
         lockReason = 'Needs AILANG Cloud';
         lockAction = 'admin';
       } else if (p.requires.type === 'apikey') {
-        const key = p.requires.provider === 'anthropic' ? anthropicKeyInput.value.trim() : '';
+        let key = '';
+        if (p.requires.provider === 'anthropic') key = anthropicKeyInput.value.trim();
+        else if (p.requires.provider === 'gemini') key = apiKeyInput.value.trim();
+        else if (p.requires.provider === 'openai') key = openaiKeyInput.value.trim();
         locked = !key;
-        lockReason = `Add your ${p.requires.provider === 'anthropic' ? 'Claude' : p.requires.provider} API key to unlock`;
+        const labels = { anthropic: 'Claude', gemini: 'Gemini', openai: 'OpenAI' };
+        const label = labels[p.requires.provider] || p.requires.provider;
+        lockReason = `Add your ${label} API key to unlock`;
         lockAction = 'apikey';
       }
     }
@@ -352,6 +369,7 @@ const showApiKeyBanner = computed(() => {
 onMounted(() => {
   apiKeyInput.value = getApiKey();
   anthropicKeyInput.value = localStorage.getItem('anthropic-api-key') || '';
+  openaiKeyInput.value = localStorage.getItem('openai-api-key') || '';
   formSheetId.value = getFormSheetId();
   // Check for ?shared= URL parameter
   const params = new URLSearchParams(window.location.search);
@@ -732,6 +750,11 @@ body {
   border-color: #0D9488;
   color: #0D9488;
   background: rgba(13,148,136,0.06);
+}
+.persona-badge.openai-byok {
+  border-color: #10A37F;
+  color: #10A37F;
+  background: rgba(16,163,127,0.06);
 }
 .persona-badge.wasm {
   border-color: var(--accent, #E8A87C);

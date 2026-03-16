@@ -31,18 +31,18 @@
           <p class="unlock-reason">{{ p.lockReason }}</p>
           <div class="unlock-row">
             <input
-              v-model="inlineKey"
+              v-model="inlineKeys[p.requires?.provider]"
               type="text"
               inputmode="text"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
-              :placeholder="p.requires?.provider === 'anthropic' ? 'sk-ant-...' : 'API key'"
+              :placeholder="{ anthropic: 'sk-ant-...', gemini: 'AIza...', openai: 'sk-...' }[p.requires?.provider] || 'API key'"
               class="unlock-input api-key-masked"
               @keydown.enter.stop="unlockByok(p.key)"
             />
-            <button class="unlock-btn" :disabled="!inlineKey.trim()" @click.stop="unlockByok(p.key)">Unlock</button>
+            <button class="unlock-btn" :disabled="!(inlineKeys[p.requires?.provider] || '').trim()" @click.stop="unlockByok(p.key)">Unlock</button>
           </div>
         </div>
 
@@ -70,11 +70,18 @@ const props = defineProps({
   selectedPersona: { type: String, default: 'wasm' },
   personas: { type: Array, required: true },
   anthropicKey: { type: String, default: '' },
+  geminiKey: { type: String, default: '' },
+  openaiKey: { type: String, default: '' },
 });
-const emit = defineEmits(['next', 'back', 'update:anthropicKey']);
+const emit = defineEmits(['next', 'back', 'update:anthropicKey', 'update:geminiKey', 'update:openaiKey']);
 
 const selected = ref(props.selectedPersona);
-const inlineKey = ref(props.anthropicKey);
+// Per-provider inline key inputs
+const inlineKeys = ref({
+  anthropic: props.anthropicKey,
+  gemini: props.geminiKey,
+  openai: props.openaiKey,
+});
 
 const canProceed = computed(() => {
   const p = props.personas.find(p => p.key === selected.value);
@@ -82,10 +89,20 @@ const canProceed = computed(() => {
 });
 
 function unlockByok(personaKey) {
-  const key = inlineKey.value.trim();
+  const p = props.personas.find(p => p.key === personaKey);
+  const provider = p?.requires?.provider || 'anthropic';
+  const key = (inlineKeys.value[provider] || '').trim();
   if (!key) return;
-  localStorage.setItem('anthropic-api-key', key);
-  emit('update:anthropicKey', key);
+  if (provider === 'anthropic') {
+    localStorage.setItem('anthropic-api-key', key);
+    emit('update:anthropicKey', key);
+  } else if (provider === 'gemini') {
+    localStorage.setItem('gemini-api-key', key);
+    emit('update:geminiKey', key);
+  } else if (provider === 'openai') {
+    localStorage.setItem('openai-api-key', key);
+    emit('update:openaiKey', key);
+  }
   selected.value = personaKey;
 }
 </script>
