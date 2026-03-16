@@ -308,7 +308,7 @@ body {
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 28px;
   flex: 1;
 }
 
@@ -408,9 +408,9 @@ body {
 /* -- Card thumbnail (scaled iframe or screenshot) -- */
 .card-thumbnail {
   position: relative;
-  margin: -24px -22px 14px -22px;
+  margin: -24px -22px 16px -22px;
   width: calc(100% + 44px);
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
   background: var(--bg-input);
