@@ -453,7 +453,7 @@ body {
 }
 
 .card:has(.card-thumbnail)::before {
-  z-index: 1;
+  display: none;
 }
 
 .card:has(.card-thumbnail) .card-arrow {
