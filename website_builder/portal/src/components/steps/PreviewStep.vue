@@ -696,14 +696,8 @@ function toggleFullscreen() {
 }
 
 function openInTab() {
-  const { userId, siteSlug } = props.generated || {};
-  if (userId && siteSlug) {
-    // Saved site: open sidecar URL where relative slug.html links work natively
-    const page = currentSlug.value === 'home' ? 'index' : currentSlug.value;
-    window.open(`/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}/${page}.html`, '_blank');
-    return;
-  }
-  // Unsaved: build self-contained HTML with embedded multi-page navigation
+  // Always use self-contained HTML from memory — sidecar disk is ephemeral
+  // in production (Cloud Run /tmp), so /api/sites/ URLs are unreliable.
   const allPages = {};
   for (const slug of slugs.value) {
     allPages[slug] = resolveImages(props.generated?.pages?.[slug] || '');
