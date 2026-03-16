@@ -10,7 +10,7 @@
     <div v-if="deploying" class="deploy-card">
       <div class="spinner"></div>
       <h2>Publishing your website</h2>
-      <p class="deploy-note">This usually takes less than 30 seconds...</p>
+      <p class="deploy-note">{{ deployEstimate }}</p>
     </div>
 
     <!-- Saved confirmation with live link -->
@@ -107,6 +107,14 @@ const isLive = computed(() => {
   return !!(liveUrl.value || props.generated?.liveUrl || (rc?.owner && rc?.repo));
 });
 
+const isCloudBuild = computed(() => props.generated?.buildMode === 'messages');
+const deployEstimate = computed(() =>
+  isCloudBuild.value
+    ? 'Cloud builds can take up to 10 minutes — hang tight!'
+    : 'This usually takes less than 30 seconds...'
+);
+const deployMaxWait = computed(() => isCloudBuild.value ? 600000 : 60000);
+
 onMounted(async () => {
   // Always re-save — pages may have been edited inline since last save
   if (props.generated?.pages) {
@@ -145,7 +153,7 @@ onMounted(async () => {
       // Wait for GitHub Pages to deploy before showing "live" state
       if (ghUrl) {
         deploying.value = true;
-        await waitForDeploy(ghUrl);
+        await waitForDeploy(ghUrl, deployMaxWait.value);
         deploying.value = false;
       }
     } catch (err) {

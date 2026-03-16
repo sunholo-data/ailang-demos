@@ -659,7 +659,7 @@ async function startBuild() {
     building.value = false;
 
     // Include save info in generated data so PreviewStep/PublishStep know the site is persisted
-    const generated = { siteJson, pages, css, slugs };
+    const generated = { siteJson, pages, css, slugs, buildMode: 'wasm' };
     if (saveResult) {
       generated.userId = saveResult.userId;
       generated.siteSlug = saveResult.siteSlug;
@@ -769,6 +769,7 @@ async function buildViaMessages() {
     // 6. Load generated site from repo
     statusMessage.value = 'Loading your website...';
     const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
+    generated.buildMode = 'messages';
     setStep('load', 'done', 'Loaded!');
 
     closeTaskStream();
