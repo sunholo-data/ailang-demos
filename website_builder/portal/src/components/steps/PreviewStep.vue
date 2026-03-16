@@ -437,6 +437,8 @@ const imageMap = computed(() => {
 const SELECTION_SCRIPT = `<style>
 [data-wb-h]{outline:2px dashed rgba(124,92,191,0.35)!important;outline-offset:3px!important;cursor:crosshair!important}
 [data-wb-s]{outline:2px solid rgba(124,92,191,0.85)!important;outline-offset:3px!important;box-shadow:0 0 0 4px rgba(124,92,191,0.1)!important}
+[data-wb-editing]{outline:2px solid rgba(59,130,246,0.7)!important;outline-offset:3px!important;background:rgba(59,130,246,0.05)!important;cursor:text!important}
+[data-wb-editing][data-wb-h],[data-wb-editing][data-wb-s]{outline:2px solid rgba(59,130,246,0.7)!important;box-shadow:none!important}
 </style><script>
 function _wbInit(){
 // Link interception (capture phase — fires before any inline onclick or other listeners)
@@ -455,6 +457,8 @@ document.addEventListener('click',function(e){
 },true);
 // Element selection (bubble phase — only for non-link clicks)
 var sel=null;
+var editing=null;
+var EDITABLE='h1,h2,h3,h4,h5,h6,p,span,li,td,th,a,button,label,figcaption';
 function ctx(el){
   var s=el.closest('section,header,footer,article,[class*="hero"],[class*="banner"],[class*="gallery"],[class*="about"],[class*="contact"],[class*="service"],[class*="team"],[class*="feature"]')||el.parentElement||el;
   var h=s&&s.querySelector('h1,h2,h3,h4');
@@ -467,12 +471,43 @@ document.addEventListener('mouseover',function(e){
 });
 document.addEventListener('mouseout',function(e){e.target.removeAttribute('data-wb-h');});
 document.addEventListener('click',function(e){
+  if(editing)return;
   if(e.target.closest('a[href]'))return;
   if(sel)sel.removeAttribute('data-wb-s');
   sel=e.target;
   sel.setAttribute('data-wb-s','1');
   var c=ctx(sel);
   try{parent.postMessage({type:'wb-selected',area:c.area,text:c.text},'*');}catch(err){}
+});
+// Inline text editing — double-click to edit
+document.addEventListener('dblclick',function(e){
+  var el=e.target.closest(EDITABLE);
+  if(!el||editing)return;
+  e.preventDefault();
+  e.stopPropagation();
+  var oldText=el.innerText;
+  var oldOuter=el.outerHTML;
+  editing=el;
+  el.setAttribute('contenteditable','true');
+  el.setAttribute('data-wb-editing','1');
+  el.focus();
+  var r=document.createRange();r.selectNodeContents(el);
+  var s=window.getSelection();s.removeAllRanges();s.addRange(r);
+  function finish(commit){
+    if(!editing)return;
+    el.removeAttribute('contenteditable');
+    el.removeAttribute('data-wb-editing');
+    var newText=el.innerText;
+    if(commit&&newText!==oldText&&newText.trim()){
+      try{parent.postMessage({type:'wb-edited',tagName:el.tagName.toLowerCase(),oldText:oldText,newText:newText,outerSnippet:oldOuter},'*');}catch(err){}
+    }else if(!commit){el.innerText=oldText;}
+    editing=null;
+  }
+  el.addEventListener('keydown',function kh(ev){
+    if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();el.removeEventListener('keydown',kh);finish(true);}
+    if(ev.key==='Escape'){ev.preventDefault();el.removeEventListener('keydown',kh);finish(false);}
+  });
+  el.addEventListener('blur',function(){finish(true);},{once:true});
 });
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_wbInit)}else{_wbInit()}
@@ -570,12 +605,57 @@ function onIframeMessage(e) {
   if (e.data?.type === 'wb-selected') {
     selectedElement.value = { area: e.data.area || '', text: e.data.text || '' };
     console.log('[iframe] element selected:', selectedElement.value);
+  } else if (e.data?.type === 'wb-edited') {
+    applyInlineEdit(e.data);
   } else if (e.data?.type === 'wb-navigate') {
     const href = e.data.href || '';
     const slug = href.replace(/^\//, '').replace(/\.html$/, '').split('?')[0].split('#')[0] || 'home';
     if (slugs.value.includes(slug)) currentSlug.value = slug;
   }
 }
+
+// Apply an inline text edit from the preview iframe
+function applyInlineEdit({ tagName, oldText, newText }) {
+  const slug = currentSlug.value;
+  const html = props.generated?.pages?.[slug];
+  if (!html || !oldText || !newText || oldText === newText) return;
+
+  let updatedHtml = null;
+
+  // Strategy 1: match <tagName ...>...oldText...</tagName>
+  const escapedOld = oldText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tagPattern = new RegExp(
+    `(<${tagName}\\b[^>]*>)([\\s\\S]*?)(${escapedOld})([\\s\\S]*?)(</${tagName}>)`
+  );
+  if (tagPattern.test(html)) {
+    updatedHtml = html.replace(tagPattern, `$1$2${newText}$4$5`);
+  }
+
+  // Strategy 2: match >oldText< (text between tags)
+  if (!updatedHtml) {
+    const betweenTags = new RegExp(`(>\\s*)(${escapedOld})(\\s*<)`);
+    if (betweenTags.test(html)) {
+      updatedHtml = html.replace(betweenTags, `$1${newText}$3`);
+    }
+  }
+
+  // Strategy 3: plain text first occurrence
+  if (!updatedHtml && html.includes(oldText)) {
+    updatedHtml = html.replace(oldText, newText);
+  }
+
+  if (!updatedHtml) {
+    console.warn('[Preview] Could not apply inline edit — text not found in source');
+    return;
+  }
+
+  const newPages = { ...props.generated.pages, [slug]: updatedHtml };
+  emit('update-generated', { ...props.generated, pages: newPages });
+
+  const preview = oldText.length > 40 ? oldText.substring(0, 40) + '...' : oldText;
+  pushHistory('pencil', `Edited: "${preview}"`, `Changed to: "${newText.length > 60 ? newText.substring(0, 60) + '...' : newText}"`);
+}
+
 const loadingFromSidecar = ref(false);
 
 onMounted(async () => {
