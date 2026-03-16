@@ -134,6 +134,21 @@
         </div>
       </div>
 
+      <!-- Error state: deduplicated brief -->
+      <div v-else-if="error && isDedupError" class="error-box dedup-error">
+        <p><strong>We've already built this one!</strong></p>
+        <p>Your description, style, and content are the same as a previous build. To start a new build, try changing something first:</p>
+        <ul class="dedup-suggestions">
+          <li>Update the description to be more specific</li>
+          <li>Choose a different style direction</li>
+          <li>Add or remove some photos</li>
+          <li>Add extra notes in the style step</li>
+        </ul>
+        <div class="btn-row">
+          <button class="btn-secondary" @click="$emit('back')">&larr; Go back and change something</button>
+        </div>
+      </div>
+
       <!-- Error state: generic -->
       <div v-else-if="error" class="error-box">
         <p><strong>Something went wrong</strong></p>
@@ -404,10 +419,13 @@ function categoriseItems(items) {
   return { imageItems, videoItems, docItems, textItems, mediaItems };
 }
 
+const isDedupError = ref(false);
+
 function handleBuildError(err) {
   closeTaskStream();
   stopElapsedTimer();
   error.value = err.message;
+  isDedupError.value = !!err.deduplicated;
   building.value = false;
   buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
   if (/api.?key/i.test(err.message)) {
@@ -889,12 +907,17 @@ async function pollForCompletion(correlationId, startTime) {
         if (isMatch) {
           if (payload.status === 'complete' || payload.status === 'completed') {
             return payload;
+          } else if (payload.status === 'deduplicated') {
+            const err = new Error('This brief is too similar to a previous build. Try changing the description, style, or uploaded content before building again.');
+            err.deduplicated = true;
+            err.originalTaskId = payload.original_task_id || '';
+            throw err;
           } else if (payload.status === 'failed' || payload.status === 'error') {
             throw new Error(payload.error || payload.errorMsg || payload.error_msg || 'Build failed on the server');
           }
         }
       } catch (e) {
-        if (e.message.includes('Build failed') || e.message.includes('server')) throw e;
+        if (e.deduplicated || e.message.includes('Build failed') || e.message.includes('server')) throw e;
         console.warn('[WB] Skipping unparseable message:', e.message, msg);
       }
     }
@@ -1227,6 +1250,18 @@ function dataURLToBlob(dataURL) {
 .error-box .api-key-input { margin: 0.75rem 0 0.25rem; }
 .error-box .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0.5rem; }
 .error-box .hint a { color: var(--primary); }
+
+.dedup-error {
+  background: #FFF8E7;
+  border-color: #F2C46E;
+}
+.dedup-error strong { color: #92610B; }
+.dedup-suggestions {
+  margin: 0.75rem 0 1rem 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+}
 
 /* Elapsed time badge */
 .elapsed-badge {
