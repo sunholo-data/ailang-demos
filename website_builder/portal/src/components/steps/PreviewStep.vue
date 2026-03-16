@@ -536,13 +536,18 @@ function resolveImages(html) {
     });
 }
 
-// When loaded from sidecar (MySites), rewrite relative asset paths to sidecar URLs
-// so they resolve inside srcdoc (which has no base URL).
+// When loaded from sidecar (MySites) or after a cloud build, rewrite relative asset
+// paths so they resolve inside srcdoc (which has no base URL).
+// Prefers GitHub Pages URLs (persistent) over sidecar URLs (ephemeral on Cloud Run).
 function rewriteRelativePaths(html) {
   const { userId, siteSlug } = props.generated || {};
   if (!userId || !siteSlug) return html;
-  const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
-  // Rewrite src=, poster=, and CSS url() with relative paths to sidecar URLs
+  // Prefer GitHub Pages (images are committed there, sidecar /tmp is ephemeral)
+  const rc = getRepoConfig();
+  const base = (rc?.owner && rc?.repo)
+    ? `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`
+    : `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
+  // Rewrite src=, poster=, and CSS url() with relative paths
   const rewriteAttr = (m, pre, path, post) => {
     const clean = path.replace(/^\.\//, '');
     return `${pre}${base}/${clean}${post}`;
