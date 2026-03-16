@@ -61,7 +61,8 @@
 
       <!-- Time estimate -->
       <div v-if="building" class="time-estimate">
-        <span>This usually takes about 1–2 minutes</span>
+        <span>{{ buildMode === 'messages' ? 'Sit back — this usually takes 5–10 minutes' : 'This usually takes about 1–2 minutes' }}</span>
+        <span v-if="building && elapsedTime" class="elapsed-badge">{{ elapsedTime }}</span>
       </div>
 
       <!-- Progress steps -->
@@ -84,24 +85,28 @@
       </div>
 
       <!-- Live activity panel (AILANG Cloud builds) -->
-      <div v-if="buildMode === 'messages' && building" class="activity-panel">
+      <div v-if="buildMode === 'messages'" class="activity-panel">
         <div class="activity-header" @click="activityExpanded = !activityExpanded">
-          <SvgIcon name="terminal" :size="16" />
-          <span>Live Activity</span>
-          <span class="ws-dot" :class="{ connected: wsConnected }"></span>
+          <SvgIcon name="sparkles" :size="16" />
+          <span>{{ building ? 'Your builder is working...' : 'Build activity' }}</span>
+          <span v-if="wsConnected" class="ws-badge connected">live</span>
+          <span v-else-if="building" class="ws-badge">connecting</span>
           <SvgIcon :name="activityExpanded ? 'chevron-up' : 'chevron-down'" :size="16" class="activity-toggle" />
         </div>
         <div v-if="activityExpanded" class="activity-log" ref="activityLogEl">
-          <div v-if="activityLog.length === 0" class="activity-entry text">
-            <span class="dot-text">&middot;</span>
-            <span class="activity-text activity-waiting">Waiting for activity...</span>
+          <div v-if="activityLog.length === 0 && building" class="activity-empty">
+            <div class="activity-pulse"></div>
+            <span>Getting everything ready...</span>
           </div>
           <div v-for="(entry, i) in activityLog" :key="i" class="activity-entry" :class="entry.type">
-            <SvgIcon v-if="entry.type === 'tool'" name="pencil" :size="14" />
-            <SvgIcon v-else-if="entry.type === 'error'" name="x" :size="14" />
-            <SvgIcon v-else-if="entry.type === 'status'" name="check-circle" :size="14" />
-            <span v-else class="dot-text">&middot;</span>
+            <span class="activity-icon">
+              <SvgIcon v-if="entry.type === 'tool'" name="pencil" :size="14" />
+              <SvgIcon v-else-if="entry.type === 'error'" name="x" :size="14" />
+              <SvgIcon v-else-if="entry.type === 'status'" name="check-circle" :size="14" />
+              <span v-else class="activity-dot"></span>
+            </span>
             <span class="activity-text">{{ entry.text }}</span>
+            <span v-if="i === activityLog.length - 1 && building" class="activity-latest">latest</span>
           </div>
         </div>
       </div>
@@ -189,12 +194,34 @@ const completedViaWs = ref(false);
 const activityLogEl = ref(null);
 let ws = null;
 const lastWsActivity = ref(0); // timestamp of last WebSocket event
+const buildStartTime = ref(0);
+const elapsedSeconds = ref(0);
+let elapsedTimer = null;
+
+const elapsedTime = computed(() => {
+  const s = elapsedSeconds.value;
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
+});
+
+function startElapsedTimer() {
+  buildStartTime.value = Date.now();
+  elapsedSeconds.value = 0;
+  elapsedTimer = setInterval(() => {
+    elapsedSeconds.value = Math.floor((Date.now() - buildStartTime.value) / 1000);
+  }, 1000);
+}
+function stopElapsedTimer() {
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+}
 
 function addActivity(type, text) {
   activityLog.value.push({ type, text, time: Date.now() });
   lastWsActivity.value = Date.now();
-  // Keep last 30 entries
-  if (activityLog.value.length > 30) activityLog.value.shift();
+  // Keep last 50 entries (more room for longer cloud builds)
+  if (activityLog.value.length > 50) activityLog.value.shift();
   // Auto-scroll
   nextTick(() => {
     if (activityLogEl.value) activityLogEl.value.scrollTop = activityLogEl.value.scrollHeight;
@@ -202,8 +229,8 @@ function addActivity(type, text) {
 }
 
 const FRIENDLY_TOOL = {
-  Write: 'Writing file', Edit: 'Editing file', Read: 'Reading file',
-  Bash: 'Running command', Glob: 'Searching files', Grep: 'Searching code',
+  Write: 'Creating a page', Edit: 'Refining the design', Read: 'Reviewing your content',
+  Bash: 'Running a task', Glob: 'Looking through files', Grep: 'Searching your content',
 };
 
 function connectTaskStream(taskId) {
@@ -273,7 +300,7 @@ function closeTaskStream() {
   if (ws) { ws.close(); ws = null; }
 }
 
-onUnmounted(() => closeTaskStream());
+onUnmounted(() => { closeTaskStream(); stopElapsedTimer(); });
 
 async function saveKeyAndBuild() {
   const key = inlineApiKey.value.trim();
@@ -336,6 +363,7 @@ function categoriseItems(items) {
 
 function handleBuildError(err) {
   closeTaskStream();
+  stopElapsedTimer();
   error.value = err.message;
   building.value = false;
   buildSteps.value.forEach(s => { if (s.status === 'active') s.status = 'pending'; });
@@ -388,6 +416,7 @@ const builderName = computed(() => props.personaName || (props.buildMode === 'me
 async function startBuild() {
   error.value = '';
   building.value = true;
+  startElapsedTimer();
   statusMessage.value = `${builderName.value} is getting ready...`;
   buildSteps.value.forEach(s => s.status = 'pending');
 
@@ -655,6 +684,7 @@ async function startBuild() {
       setStep('save', 'done', 'Save skipped');
     }
 
+    stopElapsedTimer();
     statusMessage.value = 'Your website is ready!';
     building.value = false;
 
@@ -773,6 +803,7 @@ async function buildViaMessages() {
     setStep('load', 'done', 'Loaded!');
 
     closeTaskStream();
+    stopElapsedTimer();
     statusMessage.value = 'Your website is ready!';
     building.value = false;
     emit('done', generated);
@@ -1154,6 +1185,18 @@ function dataURLToBlob(dataURL) {
 .error-box .hint { font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0.5rem; }
 .error-box .hint a { color: var(--primary); }
 
+/* Elapsed time badge */
+.elapsed-badge {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 0.15rem 0.6rem;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Activity panel (live streaming) */
 .activity-panel {
   background: var(--surface);
@@ -1166,44 +1209,109 @@ function dataURLToBlob(dataURL) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.75rem 1rem;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text);
   user-select: none;
   border-bottom: 1px solid var(--border);
 }
 .activity-header:hover { background: rgba(0,0,0,0.02); }
-.activity-toggle { margin-left: auto; }
-.ws-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.activity-toggle { margin-left: auto; color: var(--text-muted); }
+.ws-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
   background: var(--border);
-  transition: background 0.3s;
+  color: var(--text-muted);
 }
-.ws-dot.connected { background: #22c55e; }
+.ws-badge.connected {
+  background: #dcfce7;
+  color: #16a34a;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 .activity-log {
-  max-height: 200px;
+  max-height: 260px;
   overflow-y: auto;
   padding: 0.5rem 0;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.activity-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.activity-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.4); opacity: 1; }
 }
 .activity-entry {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.15rem 1rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 1.25rem;
   color: var(--text-muted);
+  animation: fade-in 0.3s ease-out;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.activity-icon {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
 }
 .activity-entry.tool { color: var(--primary); }
+.activity-entry.tool .activity-dot { background: var(--primary); }
 .activity-entry.error { color: #ef4444; }
 .activity-entry.status { color: var(--success); font-weight: 600; }
-.dot-text { width: 14px; text-align: center; flex-shrink: 0; font-weight: bold; }
-.activity-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-entry.status .activity-dot { background: var(--success); }
+.activity-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.activity-latest {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary-light);
+  background: var(--primary-soft);
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
 
 @media (max-width: 600px) {
   .time-estimate { font-size: 0.85rem; padding: 0.65rem 0.85rem; }
@@ -1215,6 +1323,8 @@ function dataURLToBlob(dataURL) {
   .api-key-input { font-size: 1rem; } /* 16px prevents iOS zoom */
   .build-persona-avatar { width: 40px; height: 40px; }
   .build-header { gap: 0.75rem; }
-  .activity-log { max-height: 150px; font-size: 0.75rem; }
+  .activity-log { max-height: 180px; font-size: 0.8rem; }
+  .activity-entry { padding: 0.3rem 1rem; }
+  .elapsed-badge { font-size: 0.75rem; }
 }
 </style>
