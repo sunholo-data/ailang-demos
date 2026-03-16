@@ -68,7 +68,7 @@
 import { ref, computed, onMounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import ShareModal from '../ShareModal.vue';
-import { saveSite, siteFileUrl, getRepoConfig } from '../../api.js';
+import { saveSite, siteFileUrl, getRepoConfig, API_BASE } from '../../api.js';
 import { saveSiteMetadata } from '../../firebase.js';
 
 const props = defineProps({
@@ -112,8 +112,6 @@ onMounted(async () => {
   if (props.generated?.userId && props.generated?.siteSlug) {
     saved.value = true;
     liveUrl.value = props.generated.liveUrl || '';
-    // Set the GitHub Pages URL (skip deploy check — CORS blocks HEAD fetches
-    // to github.io, and we already verified files exist via /api/repo-file)
     const ghUrl = buildGitHubPagesUrl();
     if (ghUrl) {
       liveUrl.value = ghUrl;
@@ -151,15 +149,41 @@ onMounted(async () => {
         liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
       });
 
-      // Set GitHub Pages URL (skip deploy check — CORS blocks it)
       const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
       liveUrl.value = ghUrl || result.liveUrl || '';
+
+      // Wait for GitHub Pages to deploy before showing "live" state
+      if (ghUrl) {
+        deploying.value = true;
+        await waitForDeploy(ghUrl);
+        deploying.value = false;
+      }
     } catch (err) {
       saveError.value = err.message;
       saving.value = false;
     }
   }
 });
+
+// Poll GitHub Pages URL via sidecar proxy until the site is deployed (or timeout).
+// GitHub Pages typically deploys within 30s of a commit.
+async function waitForDeploy(ghUrl, maxWait = 60000) {
+  const start = Date.now();
+  const interval = 4000;
+  // Use sidecar to proxy-check the actual GitHub Pages URL (avoids CORS)
+  const checkUrl = `${API_BASE}/check-deploy?url=${encodeURIComponent(ghUrl)}`;
+  while (Date.now() - start < maxWait) {
+    try {
+      const res = await fetch(checkUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.live) return;
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, interval));
+  }
+  // Timeout — show the link anyway, it'll be live shortly
+}
 
 function buildGitHubPagesUrl(userId, siteSlug) {
   const rc = getRepoConfig();

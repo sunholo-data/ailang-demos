@@ -1263,6 +1263,24 @@ app.post('/api/site-restore/:user/:site', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/check-deploy — Check if a GitHub Pages URL is live.
+ * Proxies a HEAD request to avoid CORS issues with github.io.
+ * Returns { live: true/false }.
+ */
+app.get('/api/check-deploy', async (req, res) => {
+  const url = req.query.url;
+  if (!url || !url.includes('github.io')) {
+    return res.status(400).json({ live: false, error: 'Invalid URL' });
+  }
+  try {
+    const resp = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    res.json({ live: resp.ok });
+  } catch {
+    res.json({ live: false });
+  }
+});
+
 // ── WebSocket proxy: portal connects here, sidecar relays to dashboard ──
 
 const server = createServer(app);
