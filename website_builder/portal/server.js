@@ -18,7 +18,7 @@ import express from 'express';
 import multer from 'multer';
 import { execSync } from 'child_process';
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, copyFileSync, rmSync } from 'fs';
-import { join, resolve, extname, basename } from 'path';
+import { join, resolve, extname, basename, dirname } from 'path';
 import { homedir } from 'os';
 import { createServer } from 'http';
 import { google } from 'googleapis';
@@ -26,6 +26,16 @@ import WebSocket, { WebSocketServer } from 'ws';
 
 const app = express();
 const PORT = process.env.SIDECAR_PORT || 3456;
+
+// TODO: Custom repo support
+// Currently all sites publish to the shared repo (sunholo-data/sunholo-websites)
+// using a single GITHUB_TOKEN. To support user-owned repos:
+// 1. User provides a fine-grained GitHub PAT (contents:write scope for their repo)
+// 2. PAT passed in brief as `githubPat`, stripped before writing brief.json to disk
+// 3. `githubApi()` and `commitToRepo()` accept optional `token` parameter
+// 4. For AILANG Cloud: pass as `github_pat` top-level field to coordinator
+// 5. Add POST /api/validate-repo endpoint to verify PAT has push access
+// 6. Re-enable repo config UI in App.vue Settings panel
 
 // Paths
 const WEBSITES_REPO = process.env.WEBSITES_REPO || join(homedir(), 'dev/sunholo/sunholo-websites');
@@ -1090,6 +1100,166 @@ app.get('/api/repo-file/:user/:site/*path', async (req, res) => {
   } catch (err) {
     const status = err.message.includes('404') ? 404 : 500;
     res.status(status).json({ error: status === 404 ? 'File not found in repo' : err.message });
+  }
+});
+
+/**
+ * POST /api/post-process/:user/:site — Normalize agent-committed HTML.
+ * Reads committed files from GitHub, applies normalizeNavLinksServer() + form script
+ * injection, then recommits if any files changed. This makes the agent's output
+ * deterministic regardless of what URLs/links the AI generated.
+ */
+app.post('/api/post-process/:user/:site', async (req, res) => {
+  if (!process.env.GITHUB_TOKEN) return res.json({ fixed: false, reason: 'No GITHUB_TOKEN' });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const { user, site } = req.params;
+  const prefix = `sites/${user}/${site}`;
+
+  try {
+    // 1. List files in the site directory
+    const dirResult = await githubApi('GET',
+      `/repos/${owner}/${repo}/contents/${encodeURIComponent(prefix).replace(/%2F/g, '/')}`);
+    const files = Array.isArray(dirResult) ? dirResult : [];
+    const htmlFiles = files.filter(f => f.name.endsWith('.html'));
+    const allSlugs = htmlFiles.map(f => f.name.replace('.html', ''));
+
+    if (htmlFiles.length === 0) return res.json({ fixed: false, reason: 'No HTML files found' });
+
+    // 2. Fetch each HTML file and apply normalization
+    const siteDir = join(SITES_DIR, user, site);
+    mkdirSync(siteDir, { recursive: true });
+    const changedFiles = [];
+    const formScript = buildFormScriptServer(FORM_ENDPOINT_ABS, site);
+
+    for (const file of htmlFiles) {
+      const raw = Buffer.from(file.content || '', 'base64').toString('utf-8');
+      // If content wasn't inline, fetch it
+      let original = raw;
+      if (!original && file.download_url) {
+        const result = await githubApi('GET',
+          `/repos/${owner}/${repo}/contents/${encodeURIComponent(prefix + '/' + file.name).replace(/%2F/g, '/')}`);
+        original = Buffer.from(result.content, 'base64').toString('utf-8');
+      }
+      if (!original) continue;
+
+      // Apply normalizations
+      let html = normalizeNavLinksServer(original, allSlugs);
+
+      // Inject form handler if not already present
+      if (!html.includes('data-wb-form')) {
+        const bodyClose = html.lastIndexOf('</body>');
+        if (bodyClose >= 0) html = html.slice(0, bodyClose) + formScript + html.slice(bodyClose);
+      }
+
+      if (html !== original) {
+        writeFileSync(join(siteDir, file.name), html, 'utf-8');
+        changedFiles.push(`${prefix}/${file.name}`);
+      }
+    }
+
+    // 3. Recommit if any files changed
+    if (changedFiles.length > 0) {
+      await commitToRepo(changedFiles, `Post-process: normalize links for ${site}`);
+      console.log(`[sidecar] Post-processed ${changedFiles.length} files for ${user}/${site}`);
+    }
+
+    res.json({ fixed: changedFiles.length > 0, filesChanged: changedFiles });
+  } catch (err) {
+    console.warn(`[sidecar] Post-process error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/site-history/:user/:site — List commit history for a site.
+ * Returns commits that touched the site's directory, ordered newest first.
+ */
+app.get('/api/site-history/:user/:site', async (req, res) => {
+  if (!process.env.GITHUB_TOKEN) return res.json({ commits: [] });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const sitePath = `sites/${req.params.user}/${req.params.site}`;
+
+  try {
+    const commits = await githubApi('GET',
+      `/repos/${owner}/${repo}/commits?path=${encodeURIComponent(sitePath)}&per_page=20`);
+    res.json({
+      commits: (Array.isArray(commits) ? commits : []).map(c => ({
+        sha: c.sha,
+        shortSha: c.sha.substring(0, 7),
+        date: c.commit.author.date,
+        message: c.commit.message,
+        author: c.commit.author.name,
+      })),
+    });
+  } catch (err) {
+    console.warn(`[sidecar] Site history error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/site-restore/:user/:site — Restore a site to a previous commit.
+ * Reads the file tree at the given SHA, fetches all file contents, writes to
+ * disk, and commits as a new commit on main (clean overwrite, not git revert).
+ */
+app.post('/api/site-restore/:user/:site', async (req, res) => {
+  const { sha } = req.body || {};
+  if (!sha) return res.status(400).json({ error: 'Missing sha' });
+  if (!process.env.GITHUB_TOKEN) return res.status(501).json({ error: 'No GITHUB_TOKEN' });
+
+  const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+  const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+  const { user, site } = req.params;
+  const prefix = `sites/${user}/${site}`;
+
+  try {
+    // 1. Get the full tree at the given commit
+    const commit = await githubApi('GET', `/repos/${owner}/${repo}/git/commits/${sha}`);
+    const tree = await githubApi('GET', `/repos/${owner}/${repo}/git/trees/${commit.tree.sha}?recursive=1`);
+
+    // 2. Filter to files under our site prefix
+    const siteFiles = (tree.tree || []).filter(
+      item => item.type === 'blob' && item.path.startsWith(prefix + '/')
+    );
+    if (siteFiles.length === 0) {
+      return res.status(404).json({ error: 'No site files found at that commit' });
+    }
+
+    // 3. Fetch each file's content and write to disk
+    const siteDir = join(SITES_DIR, user, site);
+    mkdirSync(siteDir, { recursive: true });
+    const writtenFiles = [];
+
+    for (const file of siteFiles) {
+      const blob = await githubApi('GET', `/repos/${owner}/${repo}/git/blobs/${file.sha}`);
+      const relativePath = file.path.replace(prefix + '/', '');
+
+      // Ensure subdirectories exist (e.g., media/)
+      const destPath = join(siteDir, relativePath);
+      mkdirSync(dirname(destPath), { recursive: true });
+
+      const ext = extname(relativePath).toLowerCase();
+      if (BINARY_EXTS.has(ext)) {
+        writeFileSync(destPath, Buffer.from(blob.content, 'base64'));
+      } else {
+        writeFileSync(destPath, Buffer.from(blob.content, 'base64').toString('utf-8'));
+      }
+      writtenFiles.push(file.path);
+    }
+
+    // 4. Commit the restored files
+    const shortSha = sha.substring(0, 7);
+    await commitToRepo(writtenFiles, `Restore ${site} to version ${shortSha}`);
+
+    console.log(`[sidecar] Restored ${user}/${site} to ${shortSha} (${writtenFiles.length} files)`);
+    res.json({ ok: true, filesRestored: writtenFiles.length, sha: shortSha });
+  } catch (err) {
+    console.error(`[sidecar] Restore error: ${err.message}`);
+    res.status(500).json({ error: err.message });
   }
 });
 

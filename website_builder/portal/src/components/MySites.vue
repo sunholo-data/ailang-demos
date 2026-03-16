@@ -81,6 +81,9 @@
             <button class="btn-secondary btn-sm" @click="openShareModal(site)" title="Share">
               <SvgIcon name="share" :size="16" />
             </button>
+            <button class="btn-secondary btn-sm" @click="historyTarget = site" title="Version history">
+              <SvgIcon name="history" :size="16" />
+            </button>
             <button class="btn-secondary btn-sm" @click="openFullScreen(site)" title="Open in new tab">
               <SvgIcon name="external-link" :size="16" />
             </button>
@@ -117,9 +120,30 @@
 
       <div v-if="sharedSites.length > 0" class="site-grid">
         <div v-for="site in sharedSites" :key="site.id" class="site-card">
+          <!-- Live iframe thumbnail -->
+          <div v-if="site.liveUrl" class="site-thumbnail" @click="viewSharedSite(site)">
+            <iframe
+              :src="site.liveUrl"
+              sandbox="allow-same-origin"
+              loading="lazy"
+              tabindex="-1"
+              aria-hidden="true"
+            ></iframe>
+            <div class="thumbnail-overlay">
+              <span class="thumbnail-open">Open</span>
+            </div>
+          </div>
+          <div v-else class="site-thumbnail site-thumbnail-placeholder">
+            <SvgIcon name="globe" :size="32" />
+          </div>
+          <div class="site-card-body">
           <div class="site-card-header">
             <h3>{{ site.title || site.siteSlug }}</h3>
             <span class="owner-badge"><SvgIcon name="user" :size="12" /> {{ site.ownerName || site.ownerEmail }}</span>
+          </div>
+          <div v-if="site.pages && site.pages.length > 0" class="site-pages">
+            <span class="page-count">{{ site.pages.length }} page{{ site.pages.length !== 1 ? 's' : '' }}</span>
+            <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
           </div>
           <a v-if="site.liveUrl" :href="site.liveUrl" target="_blank" class="live-link">
             View live site <SvgIcon name="external-link" :size="14" />
@@ -132,6 +156,7 @@
               <SvgIcon name="external-link" :size="16" />
             </button>
           </div>
+          </div><!-- /.site-card-body -->
         </div>
       </div>
     </template>
@@ -152,6 +177,16 @@
       :live-url="liveBaseUrl ? liveBaseUrl + shareTarget.slug + '/' : ''"
       @close="shareTarget = null"
     />
+
+    <!-- Version history modal -->
+    <SiteHistoryModal
+      v-if="historyTarget"
+      :user-id="props.userId"
+      :site-slug="historyTarget.slug"
+      :site-title="historyTarget.title"
+      @close="historyTarget = null"
+      @restored="historyTarget = null"
+    />
   </div>
 </template>
 
@@ -159,7 +194,8 @@
 import { ref, computed, onMounted } from 'vue';
 import SvgIcon from './SvgIcon.vue';
 import ShareModal from './ShareModal.vue';
-import { listSites, listRepoSites, deleteSite, getSiteFile, getRepoFile, siteFileUrl, getRepoConfig } from '../api.js';
+import SiteHistoryModal from './SiteHistoryModal.vue';
+import { listSites, listRepoSites, listRepoFiles, deleteSite, getSiteFile, getRepoFile, siteFileUrl, getRepoConfig } from '../api.js';
 import { getSharedSites, saveSiteMetadata } from '../firebase.js';
 
 const props = defineProps({
@@ -181,12 +217,15 @@ const error = ref('');
 const deleteConfirm = ref('');
 const deleting = ref('');
 const shareTarget = ref(null);
+const historyTarget = ref(null);
 
-const liveBaseUrl = computed(() => {
+function liveUrlForUser(userId) {
   const rc = getRepoConfig();
   if (!rc?.owner || !rc?.repo) return '';
-  return `https://${rc.owner}.github.io/${rc.repo}/sites/${props.userId}/`;
-});
+  return `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/`;
+}
+
+const liveBaseUrl = computed(() => liveUrlForUser(props.userId));
 
 onMounted(async () => {
   try {
@@ -335,7 +374,31 @@ async function switchToShared() {
     loadingShared.value = true;
     activeTab.value = 'shared';
     try {
-      sharedSites.value = await getSharedSites(props.userEmail);
+      const raw = await getSharedSites(props.userEmail);
+      // Enrich each shared site with page list and live URL from GitHub
+      sharedSites.value = await Promise.all(raw.map(async (site) => {
+        const base = liveUrlForUser(site.ownerUid);
+        const enriched = {
+          ...site,
+          liveUrl: base ? base + site.siteSlug + '/' : site.liveUrl || '',
+          pages: [],
+        };
+        try {
+          const files = await listRepoFiles(site.ownerUid, site.siteSlug);
+          const fileList = Array.isArray(files) ? files : (files?.files || []);
+          enriched.pages = fileList
+            .filter(f => (f.name || f).toString().endsWith('.html'))
+            .map(f => (f.name || f).toString().replace('.html', ''));
+        } catch {}
+        // Derive display title from slug if missing
+        if (!enriched.title) {
+          enriched.title = (site.siteSlug || '')
+            .replace(/-[a-z0-9]{5}$/, '')
+            .replace(/-/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+        }
+        return enriched;
+      }));
     } finally {
       loadingShared.value = false;
     }
@@ -347,28 +410,17 @@ async function switchToShared() {
 async function viewSharedSite(site) {
   loadingSite.value = site.title || site.siteSlug;
   try {
-    const pageEntries = await Promise.all(
-      ['index'].map(async (page) => {
-        try {
-          const html = await getSiteFile(site.ownerUid, site.siteSlug, `${page}.html`);
-          return [page, html];
-        } catch { return null; }
-      })
-    );
+    // Use GitHub repo for shared sites (other user's files aren't on our sidecar)
+    const fetchFile = (file) => getRepoFile(site.ownerUid, site.siteSlug, file);
 
-    // Try to discover all pages by fetching file list
-    const filesRes = await fetch(`/api/files/${encodeURIComponent(site.ownerUid)}/${encodeURIComponent(site.siteSlug)}`);
-    let allPages = ['index'];
-    if (filesRes.ok) {
-      const { files } = await filesRes.json();
-      allPages = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
-    }
+    // Discover pages from the enriched page list, fall back to index
+    let allPages = site.pages && site.pages.length > 0 ? site.pages : ['index'];
 
     // Fetch all pages
     const allEntries = await Promise.all(
       allPages.map(async (page) => {
         try {
-          const html = await getSiteFile(site.ownerUid, site.siteSlug, `${page}.html`);
+          const html = await fetchFile(`${page}.html`);
           return [page, html];
         } catch { return null; }
       })
@@ -389,7 +441,7 @@ async function viewSharedSite(site) {
       }
     }
     await Promise.all([...allHrefs].map(async (href) => {
-      try { cssCache[href] = await getSiteFile(site.ownerUid, site.siteSlug, href); } catch {}
+      try { cssCache[href] = await fetchFile(href); } catch {}
     }));
 
     const pages = {};

@@ -142,7 +142,7 @@ import SvgIcon from '../SvgIcon.vue';
 import JSZip from 'jszip';
 import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
-import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listRepoFiles, API_BASE } from '../../api.js';
+import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listRepoFiles, postProcessSite, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { saveUserSettings } from '../../firebase.js';
 
@@ -685,8 +685,17 @@ async function buildViaMessages() {
     console.log('[WB] Messages build complete:', completion);
     setStep('build', 'done', 'Build complete!');
 
-    // 5. Load generated site from repo
-    setStep('load', 'active', 'Loading your website...');
+    // 5. Post-process: normalize links + inject form scripts (best-effort)
+    setStep('load', 'active', 'Polishing your website...');
+    try {
+      const pp = await postProcessSite(props.userId, siteSlug);
+      if (pp.fixed) console.log('[WB] Post-processed:', pp.filesChanged);
+    } catch (e) {
+      console.warn('[WB] Post-processing skipped:', e.message);
+    }
+
+    // 6. Load generated site from repo
+    statusMessage.value = 'Loading your website...';
     const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
     setStep('load', 'done', 'Loaded!');
 

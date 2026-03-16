@@ -205,6 +205,42 @@ export async function listRepoFiles(user, site) {
 }
 
 /**
+ * POST /api/post-process/:user/:site — Normalize agent-committed HTML.
+ * Applies link normalization + form script injection, recommits if changed.
+ */
+export async function postProcessSite(user, site) {
+  const res = await fetch(`${API_BASE}/post-process/${encodeURIComponent(user)}/${encodeURIComponent(site)}`, {
+    method: 'POST',
+  });
+  if (!res.ok) return { fixed: false };
+  return res.json();
+}
+
+/**
+ * GET /api/site-history/:user/:site — List commit history for a site.
+ * @returns {Promise<{commits: Array<{sha, shortSha, date, message, author}>}>}
+ */
+export async function getSiteHistory(user, site) {
+  const res = await fetch(`${API_BASE}/site-history/${encodeURIComponent(user)}/${encodeURIComponent(site)}`);
+  if (!res.ok) return { commits: [] };
+  return res.json();
+}
+
+/**
+ * POST /api/site-restore/:user/:site — Restore a site to a previous commit.
+ * @returns {Promise<{ok: boolean, filesRestored: number, sha: string}>}
+ */
+export async function restoreSiteVersion(user, site, sha) {
+  const res = await fetch(`${API_BASE}/site-restore/${encodeURIComponent(user)}/${encodeURIComponent(site)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha }),
+  });
+  if (!res.ok) throw new Error(`Restore failed (${res.status})`);
+  return res.json();
+}
+
+/**
  * POST /api/upload — Upload media files to sidecar staging in batches.
  * @param {Array<{file: File, filename: string}>} mediaItems
  * @param {string} user
@@ -230,7 +266,11 @@ export async function uploadMedia(mediaItems, user, site, onProgress) {
   return results;
 }
 
-// ── GitHub repo config (per-user, stored in localStorage) ──
+// ── GitHub repo config ──
+// Currently hardcoded to the shared demo repo.
+// TODO: Custom repo support — allow users to set their own repo + GitHub PAT.
+// Requires: fine-grained PAT (contents:write scope), passed to sidecar/coordinator.
+// See server.js TODO block for the full roadmap.
 
 const REPO_CONFIG_KEY = 'wb-repo-config';
 
@@ -241,8 +281,7 @@ const DEFAULT_REPO_CONFIG = {
 };
 
 /**
- * Get the user's GitHub repo config.
- * Falls back to project defaults so GitHub Pages links work out of the box.
+ * Get the GitHub repo config for publishing sites.
  * @returns {{ owner: string, repo: string, branch: string }}
  */
 export function getRepoConfig() {
@@ -256,14 +295,12 @@ export function getRepoConfig() {
   return { ...DEFAULT_REPO_CONFIG };
 }
 
-/**
- * Save the user's GitHub repo config.
- * @param {{ owner?: string, repo?: string, branch?: string }} config
- */
+/** @internal Persist repo config from Firestore sync. */
 export function saveRepoConfig(config) {
   localStorage.setItem(REPO_CONFIG_KEY, JSON.stringify(config));
 }
 
+/** @internal Clear repo config. */
 export function clearRepoConfig() {
   localStorage.removeItem(REPO_CONFIG_KEY);
 }

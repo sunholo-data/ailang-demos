@@ -44,29 +44,8 @@
           />
           <p class="hint">Unlocks AILANG Cloud (higher quality builds powered by Claude). You pay per-token on your <a href="https://console.anthropic.com/" target="_blank">Anthropic account</a>. Your key is encrypted in transit and never stored on our servers.</p>
 
-          <!-- Publishing (collapsible) -->
-          <div class="settings-section">
-            <button class="section-toggle" @click="showPublishing = !showPublishing">
-              <span>Where your website goes</span>
-              <SvgIcon name="chevron-down" :size="14" class="toggle-arrow" :class="{ open: showPublishing }" />
-            </button>
-            <div v-if="showPublishing" class="section-content">
-              <p class="hint" style="margin-top:0">Set a custom GitHub repo for your published sites. Leave blank to use the default.</p>
-              <label>GitHub Owner / Org</label>
-              <input
-                v-model="repoOwner"
-                type="text"
-                placeholder="e.g. my-github-username"
-              />
-              <label style="margin-top:0.5rem">Repository Name</label>
-              <input
-                v-model="repoName"
-                type="text"
-                placeholder="e.g. my-websites"
-              />
-              <p class="hint">Sites will be published to <code>https://&lt;owner&gt;.github.io/&lt;repo&gt;/</code></p>
-            </div>
-          </div>
+          <!-- TODO: Custom repo support — add GitHub Owner/Org + Repo Name inputs here
+               when user-provided GitHub PAT support is implemented (see server.js TODO) -->
 
           <!-- Advanced (collapsible) -->
           <div class="settings-section">
@@ -83,23 +62,6 @@
               />
               <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
 
-              <template v-if="canUseCloud">
-                <label style="margin-top:0.75rem">Builder</label>
-                <div class="build-mode-toggle">
-                  <button
-                    v-for="p in availablePersonas"
-                    :key="p.key"
-                    class="mode-card"
-                    :class="{ active: selectedPersona === p.key }"
-                    @click="selectedPersona = p.key"
-                  >
-                    <img v-if="p.avatar" :src="p.avatar" :alt="p.name" class="mode-card-avatar" />
-                    <SvgIcon v-else :name="p.icon" :size="20" />
-                    <span class="mode-title">{{ p.name }}</span>
-                    <span class="mode-desc">{{ p.desc }}</span>
-                  </button>
-                </div>
-              </template>
             </div>
           </div>
 
@@ -121,45 +83,20 @@
           <svg class="logo-icon" width="22" height="22" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="ailg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e73c17"/><stop offset="100%" stop-color="#c08015"/></linearGradient></defs><polygon points="488,256 372,457 140,457 24,256 140,55 372,55" fill="url(#ailg)"/><polygon points="456,256 356,429 156,429 56,256 156,83 356,83" fill="#0f1420"/><text x="256" y="252" text-anchor="middle" dominant-baseline="central" font-family="Georgia,serif" font-size="290" fill="#fff" opacity="0.95">&#x03BB;</text></svg>
           Mum's Website Builder
         </span>
-        <div v-if="availablePersonas.length > 1" class="persona-picker-wrap">
-          <button
-            class="persona-badge"
-            :class="selectedPersona"
-            :title="`${currentPersona.name} — ${currentPersona.desc} (click to switch)`"
-            @click="showPersonaPicker = !showPersonaPicker"
-          >
-            <img
-              v-if="currentPersona.avatar"
-              :src="currentPersona.avatar"
-              :alt="currentPersona.name"
-              class="persona-avatar"
-              @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display=''"
-            />
-            <SvgIcon
-              :name="currentPersona.icon"
-              :size="16"
-              :style="currentPersona.avatar ? { display: 'none' } : {}"
-            />
-            <span class="persona-name">{{ currentPersona.name }}</span>
-            <SvgIcon name="chevron-down" :size="12" class="persona-chevron" :class="{ open: showPersonaPicker }" />
-          </button>
-          <div v-if="showPersonaPicker" class="persona-dropdown" @click="showPersonaPicker = false">
-            <button
-              v-for="p in availablePersonas"
-              :key="p.key"
-              class="persona-option"
-              :class="{ active: selectedPersona === p.key }"
-              @click="selectedPersona = p.key"
-            >
-              <img v-if="p.avatar" :src="p.avatar" :alt="p.name" class="persona-option-avatar" />
-              <SvgIcon v-else :name="p.icon" :size="18" />
-              <div class="persona-option-info">
-                <span class="persona-option-name">{{ p.name }}</span>
-                <span class="persona-option-desc">{{ p.desc }}</span>
-              </div>
-              <SvgIcon v-if="selectedPersona === p.key" name="check" :size="14" class="persona-check" />
-            </button>
-          </div>
+        <div class="persona-badge" :class="selectedPersona" :title="`Building with ${currentPersona.name}`">
+          <img
+            v-if="currentPersona.avatar"
+            :src="currentPersona.avatar"
+            :alt="currentPersona.name"
+            class="persona-avatar"
+            @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display=''"
+          />
+          <SvgIcon
+            :name="currentPersona.icon"
+            :size="16"
+            :style="currentPersona.avatar ? { display: 'none' } : {}"
+          />
+          <span class="persona-name">{{ currentPersona.name }}</span>
         </div>
         <div class="header-actions">
           <button class="icon-btn" title="Settings" @click="showSettings = true"><SvgIcon name="settings" :size="20" /></button>
@@ -243,19 +180,28 @@
           @next="(styleId, notes) => { data.styleId = styleId; data.customNotes = notes; currentStep = 3 }"
           @back="currentStep = 1"
         />
-        <BuildStep
+        <PersonaStep
           v-else-if="currentStep === 3"
+          :selected-persona="selectedPersona"
+          :personas="personasWithLockState"
+          :anthropic-key="anthropicKeyInput"
+          @next="(key) => { selectedPersona = key; currentStep = 4 }"
+          @back="currentStep = 2"
+          @update:anthropic-key="(k) => { anthropicKeyInput = k; localStorage.setItem('anthropic-api-key', k) }"
+        />
+        <BuildStep
+          v-else-if="currentStep === 4"
           :data="data"
           :build-mode="buildMode"
           :user-id="userId"
           :anthropic-api-key="selectedPersona === 'messages-byok' ? anthropicKeyInput : ''"
           :persona-name="currentPersona.name"
           :persona-avatar="currentPersona.avatar"
-          @done="(result) => { data.generated = result; currentStep = 4 }"
-          @back="currentStep = 2"
+          @done="(result) => { data.generated = result; currentStep = 5 }"
+          @back="currentStep = 3"
         />
         <PreviewStep
-          v-else-if="currentStep === 4"
+          v-else-if="currentStep === 5"
           :generated="data.generated"
           :description="data.description"
           :site-json="data.generated?.siteJson"
@@ -263,18 +209,18 @@
           :owner-uid="data.generated?.userId || userId"
           :user-email="user?.email || ''"
           :user-name="user?.displayName || ''"
-          @publish="currentStep = 5"
-          @rebuild="currentStep = 3"
+          @publish="currentStep = 6"
+          @rebuild="currentStep = 4"
           @update-generated="(g) => data.generated = g"
           @dashboard="showDashboard = true"
         />
         <PublishStep
-          v-else-if="currentStep === 5"
+          v-else-if="currentStep === 6"
           :generated="data.generated"
           :user-id="userId"
           :user-name="user?.displayName || ''"
           :user-email="user?.email || ''"
-          @back="currentStep = 4"
+          @back="currentStep = 5"
           @edit="currentStep = 0"
           @restart="restart"
         />
@@ -305,12 +251,13 @@ import MySites from './components/MySites.vue';
 import DescribeStep from './components/steps/DescribeStep.vue';
 import UploadStep from './components/steps/UploadStep.vue';
 import StyleStep from './components/steps/StyleStep.vue';
+import PersonaStep from './components/steps/PersonaStep.vue';
 import BuildStep from './components/steps/BuildStep.vue';
 import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
 import { onAuthChange, signOutUser, signInWithGoogle, getUserSettings, saveUserSettings, getSiteMetadata } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
-import { getRepoConfig, saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
+import { saveRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
 const authed = ref(false);
 const user = ref(null);
@@ -318,13 +265,10 @@ const showDashboard = ref(true); // show MySites first, then wizard
 const currentStep = ref(0);
 const showSettings = ref(false);
 const apiKeyInput = ref('');
-const repoOwner = ref('');
-const repoName = ref('');
 const formSheetId = ref('');
 const anthropicKeyInput = ref('');
 // buildMode is now computed from selectedPersona (see PERSONAS section)
 const messagesEnabled = ref(false); // admin-set, read-only for users
-const showPublishing = ref(false); // collapsible settings section
 const showAdvanced = ref(false); // collapsible settings section
 const showUserMenu = ref(false); // user account dropdown
 const pendingSharedSite = ref(''); // ?shared=ownerUid_siteSlug from URL
@@ -337,14 +281,11 @@ function closeUserMenu(e) {
   if (showUserMenu.value && !e.target.closest('.user-menu-wrap')) {
     showUserMenu.value = false;
   }
-  if (showPersonaPicker.value && !e.target.closest('.persona-picker-wrap')) {
-    showPersonaPicker.value = false;
-  }
 }
 onMounted(() => document.addEventListener('click', closeUserMenu));
 onUnmounted(() => document.removeEventListener('click', closeUserMenu));
 
-const steps = ['Describe', 'Upload', 'Style', 'Build', 'Preview', 'Publish'];
+const steps = ['Describe', 'Upload', 'Style', 'Builder', 'Build', 'Preview', 'Publish'];
 
 const data = ref({
   description: '',
@@ -354,21 +295,47 @@ const data = ref({
   generated: null  // { siteJson, pages: { slug: html }, css }
 });
 
-const PERSONAS = {
-  wasm: { name: 'Gemma Builder', icon: 'monitor', avatar: './avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm' },
-  'messages-admin': { name: 'Claudette Mouser', icon: 'cloud', avatar: './avatars/claudette-mouser.png', desc: 'AILANG Cloud', buildMode: 'messages' },
-  'messages-byok': { name: 'Sir Claude Fixalot', icon: 'cloud', avatar: './avatars/sir-claude-fixalot.png', desc: 'Your Claude key', buildMode: 'messages' },
-};
+const PERSONAS = [
+  {
+    key: 'wasm', name: 'Gemma Builder', icon: 'monitor',
+    avatar: './avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm',
+    detail: 'Builds your website right here in the browser using Google Gemini. Fast and free.',
+    requires: null,
+  },
+  {
+    key: 'messages-admin', name: 'Claudette Mouser', icon: 'cloud',
+    avatar: './avatars/claudette-mouser.png', desc: 'AILANG Cloud', buildMode: 'messages',
+    detail: 'Server-side builds powered by Claude. Higher quality results with smarter layout decisions.',
+    requires: { type: 'admin' },
+  },
+  {
+    key: 'messages-byok', name: 'Sir Claude Fixalot', icon: 'cloud',
+    avatar: './avatars/sir-claude-fixalot.png', desc: 'Your Claude key', buildMode: 'messages',
+    detail: 'Uses your own Anthropic API key for premium Claude-powered builds. You pay per-token.',
+    requires: { type: 'apikey', provider: 'anthropic', storageKey: 'anthropic-api-key' },
+  },
+];
 const selectedPersona = ref('wasm');
-const buildMode = computed(() => PERSONAS[selectedPersona.value]?.buildMode || 'wasm');
-const currentPersona = computed(() => PERSONAS[selectedPersona.value] || PERSONAS.wasm);
-const canUseCloud = computed(() => messagesEnabled.value || anthropicKeyInput.value.trim());
-const showPersonaPicker = ref(false);
-const availablePersonas = computed(() => {
-  const list = [{ key: 'wasm', ...PERSONAS.wasm }];
-  if (messagesEnabled.value) list.push({ key: 'messages-admin', ...PERSONAS['messages-admin'] });
-  if (anthropicKeyInput.value.trim()) list.push({ key: 'messages-byok', ...PERSONAS['messages-byok'] });
-  return list;
+const findPersona = (key) => PERSONAS.find(p => p.key === key) || PERSONAS[0];
+const buildMode = computed(() => findPersona(selectedPersona.value).buildMode);
+const currentPersona = computed(() => findPersona(selectedPersona.value));
+const personasWithLockState = computed(() => {
+  return PERSONAS.map(p => {
+    let locked = false, lockReason = '', lockAction = null;
+    if (p.requires) {
+      if (p.requires.type === 'admin') {
+        locked = !messagesEnabled.value;
+        lockReason = 'Needs AILANG Cloud';
+        lockAction = 'admin';
+      } else if (p.requires.type === 'apikey') {
+        const key = p.requires.provider === 'anthropic' ? anthropicKeyInput.value.trim() : '';
+        locked = !key;
+        lockReason = `Add your ${p.requires.provider === 'anthropic' ? 'Claude' : p.requires.provider} API key to unlock`;
+        lockAction = 'apikey';
+      }
+    }
+    return { ...p, locked, lockReason, lockAction };
+  });
 });
 
 const STEP_GREETINGS = [
@@ -386,11 +353,6 @@ onMounted(() => {
   apiKeyInput.value = getApiKey();
   anthropicKeyInput.value = localStorage.getItem('anthropic-api-key') || '';
   formSheetId.value = getFormSheetId();
-  const rc = getRepoConfig();
-  if (rc) {
-    repoOwner.value = rc.owner || '';
-    repoName.value = rc.repo || '';
-  }
   // Check for ?shared= URL parameter
   const params = new URLSearchParams(window.location.search);
   const sharedParam = params.get('shared');
@@ -410,13 +372,13 @@ onMounted(() => {
       if (settings) {
         // Merge Firestore → localStorage (Firestore wins)
         if (settings.geminiApiKey) { saveApiKey(settings.geminiApiKey); apiKeyInput.value = settings.geminiApiKey; }
-        if (settings.repoConfig) { saveRepoConfig(settings.repoConfig); repoOwner.value = settings.repoConfig.owner || ''; repoName.value = settings.repoConfig.repo || ''; }
+        if (settings.repoConfig) { saveRepoConfig(settings.repoConfig); }
         if (settings.formSheetId) { saveFormSheetId(settings.formSheetId); formSheetId.value = settings.formSheetId; }
         if (settings.buildMode) {
           // Backward compat: map old 'messages' to the right persona key
           if (settings.buildMode === 'messages') {
             selectedPersona.value = settings.messagesEnabled ? 'messages-admin' : 'messages-byok';
-          } else if (PERSONAS[settings.buildMode]) {
+          } else if (PERSONAS.some(p => p.key === settings.buildMode)) {
             selectedPersona.value = settings.buildMode;
           }
         }
@@ -478,18 +440,12 @@ async function saveKey() {
   } else {
     localStorage.removeItem('anthropic-api-key');
   }
-  // Save repo config if either field is set
-  const rc = (repoOwner.value.trim() || repoName.value.trim())
-    ? { owner: repoOwner.value.trim() || undefined, repo: repoName.value.trim() || undefined }
-    : null;
-  if (rc) { saveRepoConfig(rc); } else { clearRepoConfig(); }
   saveFormSheetId(formSheetId.value);
 
   // Persist to Firestore if signed in
   if (user.value?.uid) {
     await saveUserSettings(user.value.uid, {
       geminiApiKey: apiKeyInput.value.trim() || null,
-      repoConfig: rc || null,
       formSheetId: formSheetId.value.trim() || null,
       buildMode: selectedPersona.value,
     });
@@ -507,7 +463,7 @@ function clearKey() {
 function handleViewSite(generated) {
   data.value.generated = generated;
   showDashboard.value = false;
-  currentStep.value = 4; // jump straight to PreviewStep
+  currentStep.value = 5; // jump straight to PreviewStep
 }
 
 async function openSharedSite(docId) {
@@ -553,7 +509,7 @@ async function openSharedSite(docId) {
       siteSlug,
     };
     showDashboard.value = false;
-    currentStep.value = 4;
+    currentStep.value = 5;
   } catch (err) {
     console.warn('[App] Failed to open shared site:', err.message);
   }
@@ -726,33 +682,6 @@ body {
 .toggle-arrow.open { transform: rotate(180deg); }
 .section-content { padding-bottom: 0.5rem; }
 
-/* Build mode toggle */
-.build-mode-toggle { display: flex; gap: 0.5rem; }
-.mode-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.85rem 0.5rem;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  cursor: pointer;
-  font-family: inherit;
-  color: var(--text-muted);
-  transition: all 0.15s;
-}
-.mode-card:hover { border-color: var(--primary-light); background: var(--bg); }
-.mode-card.active {
-  border-color: var(--primary);
-  background: linear-gradient(135deg, rgba(107,82,163,0.08), rgba(107,82,163,0.03));
-  color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
-}
-.mode-title { font-weight: 600; font-size: 0.9rem; }
-.mode-desc { font-size: 0.72rem; opacity: 0.7; }
-
 /* ── Wizard layout ─────────────────────────────────────────────────────────── */
 .wizard {
   display: flex;
@@ -789,14 +718,11 @@ body {
   border: 1.5px solid var(--border);
   border-radius: 20px;
   background: var(--surface);
-  cursor: pointer;
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-muted);
-  transition: all 0.2s;
   white-space: nowrap;
 }
-.persona-badge:hover { border-color: var(--primary-light); background: var(--bg); }
 .persona-badge.messages-byok {
   border-color: var(--primary);
   color: var(--primary);
@@ -814,52 +740,7 @@ body {
 }
 .persona-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
 .persona-name { letter-spacing: -0.01em; }
-.persona-chevron {
-  opacity: 0.5;
-  transition: transform 0.2s;
-  margin-left: 0.1rem;
-}
-.persona-chevron.open { transform: rotate(180deg); }
 
-/* Persona picker dropdown */
-.persona-picker-wrap { position: relative; }
-.persona-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-elevated);
-  min-width: 220px;
-  z-index: 100;
-  overflow: hidden;
-}
-.persona-option {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.65rem 0.85rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  transition: background 0.1s;
-}
-.persona-option:not(:last-child) { border-bottom: 1px solid var(--border); }
-.persona-option:hover { background: var(--bg); }
-.persona-option.active { background: var(--primary-soft); }
-.persona-option-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.persona-option-info { flex: 1; min-width: 0; }
-.persona-option-name { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text); }
-.persona-option-desc { display: block; font-size: 0.72rem; color: var(--text-muted); }
-.persona-check { color: var(--primary); flex-shrink: 0; }
-
-/* Mode card avatar (settings panel) */
-.mode-card-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .icon-btn {
   background: none;
   border: none;
@@ -1191,9 +1072,7 @@ body {
   /* Header */
   .wizard-header { padding: 0.6rem 0.75rem; }
   .persona-name { display: none; }
-  .persona-chevron { display: none; }
   .persona-badge { padding: 0.35rem; border-radius: 8px; }
-  .persona-dropdown { left: auto; right: 0; transform: none; min-width: 200px; }
   .persona-greeting { padding: 0.65rem 0.75rem; gap: 0.65rem; }
   .greeting-avatar { width: 44px; height: 44px; }
   .greeting-text { font-size: 0.85rem; }
