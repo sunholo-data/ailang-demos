@@ -108,18 +108,7 @@ const isLive = computed(() => {
 });
 
 onMounted(async () => {
-  // If already saved (has userId/siteSlug), mark as saved
-  if (props.generated?.userId && props.generated?.siteSlug) {
-    saved.value = true;
-    liveUrl.value = props.generated.liveUrl || '';
-    const ghUrl = buildGitHubPagesUrl();
-    if (ghUrl) {
-      liveUrl.value = ghUrl;
-    }
-    return;
-  }
-
-  // Otherwise try to save now
+  // Always re-save — pages may have been edited inline since last save
   if (props.generated?.pages) {
     saving.value = true;
     try {
