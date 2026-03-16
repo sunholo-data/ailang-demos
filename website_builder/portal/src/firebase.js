@@ -141,6 +141,23 @@ export async function saveSiteMetadata(ownerUid, siteSlug, metadata) {
   }
 }
 
+export async function listUserSitesMeta(ownerUid) {
+  if (!db) return {};
+  try {
+    const q = query(collection(db, 'sites'), where('ownerUid', '==', ownerUid));
+    const snap = await getDocs(q);
+    const meta = {};
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.siteSlug) meta[data.siteSlug] = data;
+    });
+    return meta;
+  } catch (err) {
+    console.warn('Failed to list site metadata:', err.message);
+    return {};
+  }
+}
+
 export async function getSiteMetadata(ownerUid, siteSlug) {
   if (!db) return null;
   try {

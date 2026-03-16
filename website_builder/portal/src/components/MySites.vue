@@ -72,7 +72,8 @@
             View live site <SvgIcon name="external-link" :size="14" />
           </a>
           <div class="site-meta">
-            Updated {{ formatDate(site.updatedAt) }}
+            <span v-if="site.updatedAt">Updated {{ formatDate(site.updatedAt) }}</span>
+            <span v-if="site.createdAt && site.createdAt !== site.updatedAt" class="site-meta-created"> · Created {{ formatDate(site.createdAt) }}</span>
           </div>
           <div class="site-actions">
             <button class="btn-primary btn-sm" @click="viewSite(site)" :disabled="!!loadingSite">
@@ -196,7 +197,7 @@ import SvgIcon from './SvgIcon.vue';
 import ShareModal from './ShareModal.vue';
 import SiteHistoryModal from './SiteHistoryModal.vue';
 import { listSites, listRepoSites, listRepoFiles, deleteSite, getSiteFile, getRepoFile, siteFileUrl, getRepoConfig } from '../api.js';
-import { getSharedSites, saveSiteMetadata } from '../firebase.js';
+import { getSharedSites, saveSiteMetadata, listUserSitesMeta } from '../firebase.js';
 
 const props = defineProps({
   userId: { type: String, required: true },
@@ -229,16 +230,38 @@ const liveBaseUrl = computed(() => liveUrlForUser(props.userId));
 
 onMounted(async () => {
   try {
-    // Fetch from both local sidecar disk and GitHub repo in parallel
-    const [local, repo] = await Promise.all([
+    // Fetch from sidecar, GitHub repo, and Firestore in parallel
+    const [local, repo, meta] = await Promise.all([
       listSites(props.userId).catch(() => []),
       listRepoSites(props.userId).catch(() => []),
+      listUserSitesMeta(props.userId).catch(() => ({})),
     ]);
     // Merge: local wins on duplicates (has richer metadata from brief.json)
     const bySlug = new Map();
     for (const s of repo) bySlug.set(s.slug, s);
     for (const s of local) bySlug.set(s.slug, s); // local overwrites
-    sites.value = [...bySlug.values()];
+    // Enrich with Firestore metadata (timestamps, title)
+    for (const [slug, site] of bySlug) {
+      const m = meta[slug];
+      if (m) {
+        if (m.updatedAt?.toDate) site.updatedAt = m.updatedAt.toDate().toISOString();
+        else if (m.updatedAt) site.updatedAt = m.updatedAt;
+        if (m.createdAt?.toDate) site.createdAt = m.createdAt.toDate().toISOString();
+        else if (m.createdAt) site.createdAt = m.createdAt;
+        if (m.title && !site.title) site.title = m.title;
+      }
+    }
+    // Sort by most recently updated/created first
+    const allSites = [...bySlug.values()];
+    allSites.sort((a, b) => {
+      const aDate = a.updatedAt || a.createdAt || '';
+      const bDate = b.updatedAt || b.createdAt || '';
+      if (!aDate && !bDate) return 0;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return new Date(bDate) - new Date(aDate);
+    });
+    sites.value = allSites;
   } catch (err) {
     console.warn('[MySites] Could not fetch sites:', err.message);
     error.value = err.message;
@@ -720,6 +743,7 @@ function formatDate(iso) {
   color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
+.site-meta-created { opacity: 0.7; }
 
 .site-actions {
   display: flex;
