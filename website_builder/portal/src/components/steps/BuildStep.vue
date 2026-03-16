@@ -73,11 +73,13 @@
           :class="step.status"
         >
           <span class="progress-icon">
-            <SvgIcon v-if="step.status === 'done'" name="check-circle" :size="18" class="icon-done" />
+            <SvgIcon v-if="step.status === 'done' && step.id === 'validate'" name="shield-check" :size="18" class="icon-done icon-contract" />
+            <SvgIcon v-else-if="step.status === 'done'" name="check-circle" :size="18" class="icon-done" />
             <SvgIcon v-else-if="step.status === 'active'" name="loader" :size="18" class="spinner" />
             <SvgIcon v-else name="circle" :size="18" class="icon-pending" />
           </span>
           <span class="progress-label">{{ step.label }}</span>
+          <span v-if="step.id === 'validate' && step.status === 'done'" class="contract-badge">verified by AILANG</span>
         </div>
       </div>
 
@@ -285,6 +287,7 @@ const WASM_STEPS = [
   { id: 'structure', label: 'Planning your pages',         status: 'pending' },
   { id: 'pages',     label: 'Writing your website',        status: 'pending' },
   { id: 'css',       label: 'Making it beautiful',         status: 'pending' },
+  { id: 'validate',  label: 'AILANG contract verification',  status: 'pending' },
   { id: 'save',      label: 'Saving everything',           status: 'pending' },
 ];
 
@@ -513,8 +516,21 @@ async function startBuild() {
 
     // 6. Structure the site
     setStep('structure', 'active', 'Planning your website structure...');
-    const siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
-    setStep('structure', 'done', 'Structure planned');
+    let siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
+
+    // Validate site structure via AILANG contracts (auto-retry once if invalid)
+    setStep('structure', 'active', 'Verifying structure with AILANG contracts...');
+    let siteValidation = JSON.parse(callPure('validateSite', siteJson));
+    if (!siteValidation.valid) {
+      console.warn('[WB] Contract validation failed, retrying:', siteValidation.errors);
+      setStep('structure', 'active', 'Contract check failed — retrying...');
+      siteJson = await callAI('buildSiteStructure', contentJson, props.data.description, stylePrompt);
+      siteValidation = JSON.parse(callPure('validateSite', siteJson));
+      if (!siteValidation.valid) {
+        throw new Error(`AILANG contract violation: ${siteValidation.errors.join(', ')}`);
+      }
+    }
+    setStep('structure', 'done', 'Structure contracts passed');
 
     // 7. Get page slugs
     console.log('[WB] siteJson type:', typeof siteJson, 'length:', String(siteJson).length);
@@ -542,9 +558,15 @@ async function startBuild() {
     const pageEntries = await Promise.all(
       slugs.map(slug =>
         callAI('renderPage', siteJson, slug).then(html => {
+          const normalized = normalizeNavLinks(html, slugs);
+          // Validate HTML structure (warn only — don't block)
+          try {
+            const hv = JSON.parse(callPure('validatePageHtml', normalized));
+            if (!hv.valid) console.warn(`[Validate] ${slug}:`, hv.errors);
+          } catch (ve) { console.warn(`[Validate] ${slug} check failed:`, ve.message); }
           pagesWritten++;
           setStep('pages', 'active', `Writing pages... ${pagesWritten}/${slugs.length} done`);
-          return [slug, normalizeNavLinks(html, slugs)];
+          return [slug, normalized];
         })
       )
     );
@@ -556,7 +578,20 @@ async function startBuild() {
     const css = await callAI('renderCss', siteJson);
     setStep('css', 'done', 'Design complete!');
 
-    // 10. Auto-save to sidecar (silent, best-effort)
+    // 10. AILANG contract verification — scan all pages for safety
+    setStep('validate', 'active', 'Running AILANG contract checks...');
+    let contractsChecked = 0;
+    for (const [slug, html] of pageEntries) {
+      const jsv = JSON.parse(callPure('validatePageJs', html));
+      if (!jsv.safe) {
+        throw new Error(`AILANG safety contract violated in ${slug}: ${jsv.violations.join(', ')}`);
+      }
+      contractsChecked++;
+      setStep('validate', 'active', `Contracts verified: ${contractsChecked}/${pageEntries.length} pages`);
+    }
+    setStep('validate', 'done', `${contractsChecked} pages passed all contracts`);
+
+    // 11. Auto-save to sidecar (silent, best-effort)
     let saveResult = null;
     setStep('save', 'active', 'Saving your website...');
     try {
@@ -980,7 +1015,18 @@ function dataURLToBlob(dataURL) {
 
 .progress-icon { width: 1.5rem; display: flex; align-items: center; justify-content: center; }
 .icon-done { color: var(--success); }
+.icon-contract { color: #0D9488; }
 .icon-pending { color: var(--border); }
+.contract-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #0D9488;
+  background: rgba(13,148,136,0.08);
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+  margin-left: auto;
+}
 
 .spinner {
   display: inline-block;

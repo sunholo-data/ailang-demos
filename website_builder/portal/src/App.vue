@@ -262,7 +262,7 @@ import PreviewStep from './components/steps/PreviewStep.vue';
 import PublishStep from './components/steps/PublishStep.vue';
 import { onAuthChange, signOutUser, signInWithGoogle, getUserSettings, saveUserSettings, getSiteMetadata } from './firebase.js';
 import { getApiKey, saveApiKey, clearApiKey } from './ailang.js';
-import { saveRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
+import { saveRepoConfig, clearRepoConfig, getFormSheetId, saveFormSheetId } from './api.js';
 
 const authed = ref(false);
 const user = ref(null);
@@ -386,6 +386,13 @@ onMounted(() => {
     user.value = u;
     if (u) {
       authed.value = true;
+      // Reset user-specific state before loading new user's settings
+      messagesEnabled.value = false;
+      selectedPersona.value = 'wasm';
+      apiKeyInput.value = '';
+      anthropicKeyInput.value = '';
+      openaiKeyInput.value = '';
+      formSheetId.value = '';
       const settings = await getUserSettings(u.uid);
       if (settings) {
         // Merge Firestore → localStorage (Firestore wins)
@@ -443,6 +450,19 @@ async function handleSignOut() {
   await signOutUser();
   authed.value = false;
   user.value = null;
+  // Clear user-specific localStorage
+  clearApiKey();
+  localStorage.removeItem('anthropic-api-key');
+  localStorage.removeItem('openai-api-key');
+  clearRepoConfig();
+  saveFormSheetId('');
+  // Reset user-specific UI refs
+  apiKeyInput.value = '';
+  anthropicKeyInput.value = '';
+  openaiKeyInput.value = '';
+  formSheetId.value = '';
+  messagesEnabled.value = false;
+  selectedPersona.value = 'wasm';
   restart();
 }
 

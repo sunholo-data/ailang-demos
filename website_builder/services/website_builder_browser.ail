@@ -10,7 +10,7 @@ import std/list (map)
 import website_builder/services/content_extractor (wrapDocumentContent, wrapImageContent, wrapTextContent)
 import website_builder/services/site_structurer (structureSite, refineSite, suggestPages)
 import website_builder/services/html_generator (generatePageHtml, generateSiteCss, extractPageSlugs, extractSiteTitle)
-import website_builder/services/validator (validateAll, validateHtml)
+import website_builder/services/validator (validateAll, validateHtml, validateJavaScript)
 
 -- ── Content Wrapping (pure) ───────────────────────────────────────────
 -- Called from JS for each uploaded item before bundling.
@@ -70,5 +70,14 @@ export func validatePageHtml(html: string) -> string {
   encode(jo([
     kv("valid", jb(v.valid)),
     kv("errors", ja(map(js, v.errors)))
+  ]))
+}
+
+-- Returns {"safe":bool,"violations":["...",...]}
+export func validatePageJs(html: string) -> string {
+  let v = validateJavaScript(html);
+  encode(jo([
+    kv("safe", jb(v.safe)),
+    kv("violations", ja(map(js, v.violations)))
   ]))
 }
