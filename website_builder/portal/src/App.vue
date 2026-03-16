@@ -27,7 +27,7 @@
             class="api-key-masked"
             @keydown.enter="saveKey"
           />
-          <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Unlocks Gemma Builder (browser). Your key stays on your device.</p>
+          <p class="hint">Get a key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Unlocks Gemma Builder (browser). Your key stays on your device.</p>
 
           <label style="margin-top:0.75rem">Claude API Key <span class="hint-inline">(optional)</span></label>
           <input
@@ -320,7 +320,7 @@ const PERSONAS = [
   {
     key: 'wasm', name: 'Gemma Builder', icon: 'monitor',
     avatar: './avatars/gemma-builder.png', desc: 'Browser AI', buildMode: 'wasm',
-    detail: 'Builds your website right here in the browser using Google Gemini. Fast and free.',
+    detail: 'Builds your website right here in the browser using Google Gemini. Fast and lightweight.',
     requires: { type: 'apikey', provider: 'gemini', storageKey: 'gemini-api-key' },
   },
   {
