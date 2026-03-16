@@ -1,6 +1,9 @@
 # AILANG build artifacts
 *.ail.out
 
+# Local dev server output (assembled by scripts/serve.sh)
+_site/
+
 # Generated output files
 ecommerce/data/aggregated_output.json
 
