@@ -1,5 +1,6 @@
 # AILANG build artifacts
 *.ail.out
+.ailang/cache/
 
 # Local dev server output (assembled by scripts/serve.sh)
 _site/
