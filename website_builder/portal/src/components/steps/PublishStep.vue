@@ -49,7 +49,7 @@
     <!-- Share modal -->
     <ShareModal
       v-if="showShareModal"
-      :owner-uid="props.generated?.userId || props.userId || 'default'"
+      :owner-uid="props.userId"
       :site-slug="props.generated?.siteSlug || ''"
       :site-title="extractSiteName()"
       :live-url="previewUrl"
@@ -130,8 +130,8 @@ onMounted(async () => {
         props.generated.siteSlug = result.siteSlug;
         props.generated.liveUrl = result.liveUrl || '';
       }
-      // Save site metadata to Firestore for sharing
-      saveSiteMetadata(result.userId, result.siteSlug, {
+      // Save site metadata to Firestore for sharing (must complete before Share button works)
+      await saveSiteMetadata(result.userId, result.siteSlug, {
         ownerEmail: props.userEmail,
         ownerName: props.userName,
         title: siteName,

@@ -96,8 +96,11 @@ resource "google_firebaserules_ruleset" "website_builder" {
             // Users can read/write their own settings
             match /users/{userId} {
               allow read: if request.auth != null && request.auth.uid == userId;
-              allow write: if request.auth != null && request.auth.uid == userId
-                // Prevent users from self-enabling admin fields
+              // Create: resource.data is null for new docs, so use .keys() not .diff()
+              allow create: if request.auth != null && request.auth.uid == userId
+                && !request.resource.data.keys().hasAny(['messagesEnabled', 'messagesEndpoint']);
+              // Update: resource.data exists, so .diff() is safe
+              allow update: if request.auth != null && request.auth.uid == userId
                 && (!request.resource.data.diff(resource.data).affectedKeys()
                     .hasAny(['messagesEnabled', 'messagesEndpoint']));
             }
@@ -114,6 +117,8 @@ resource "google_firebaserules_ruleset" "website_builder" {
                 resource.data.ownerUid == request.auth.uid ||
                 request.auth.token.email in resource.data.sharedWith
               );
+              allow delete: if request.auth != null
+                && resource.data.ownerUid == request.auth.uid;
 
               // Comments subcollection
               match /comments/{commentId} {
