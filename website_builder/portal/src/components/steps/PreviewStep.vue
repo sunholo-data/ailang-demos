@@ -589,6 +589,11 @@ f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}});
 const htmlWithImages = computed(() => {
   let html = resolveImages(currentHtml.value);
   if (!html) return html;
+  // Inline external CSS for srcdoc preview (srcdoc can't resolve relative href)
+  if (props.generated?.css) {
+    html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
+      `<style>${props.generated.css}</style>`);
+  }
   html = rewriteRelativePaths(html);
   // Inject element selection + nav interception + form handler scripts before </body>
   const siteSlug = props.generated?.siteSlug || 'preview';
@@ -779,8 +784,15 @@ function openInTab() {
   // Always use self-contained HTML from memory — sidecar disk is ephemeral
   // in production (Cloud Run /tmp), so /api/sites/ URLs are unreliable.
   const allPages = {};
+  const css = props.generated?.css || '';
   for (const slug of slugs.value) {
-    allPages[slug] = resolveImages(props.generated?.pages?.[slug] || '');
+    let html = resolveImages(props.generated?.pages?.[slug] || '');
+    // Inline external CSS so the blob preview renders correctly
+    if (css) {
+      html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
+        `<style>${css}</style>`);
+    }
+    allPages[slug] = html;
   }
   const wrapper = buildSelfContainedHtml(allPages, currentSlug.value);
   const blob = new Blob([wrapper], { type: 'text/html' });
