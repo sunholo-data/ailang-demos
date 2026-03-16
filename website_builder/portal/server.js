@@ -526,13 +526,29 @@ app.post('/api/save', async (req, res) => {
 
     const writtenFiles = [];
 
-    // Normalize navigation links + inject form handler script before writing to disk.
+    // Collect known image filenames for path normalization
+    const imageFilenames = new Set();
+    if (images && Array.isArray(images)) {
+      for (const img of images) if (img.filename) imageFilenames.add(img.filename);
+    }
+
+    // Normalize navigation links, image paths, + inject form handler script before writing to disk.
     const allSlugs = Object.keys(pages);
     const formScript = buildFormScriptServer(FORM_ENDPOINT_ABS, slug);
     for (const [pageSlug, rawHtml] of Object.entries(pages)) {
       const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
       const filePath = join(siteDir, `${fileSlug}.html`);
       let html = normalizeNavLinksServer(rawHtml, allSlugs);
+      // Rewrite bare image filenames to media/ paths (WASM builds use bare names)
+      if (imageFilenames.size > 0) {
+        html = html.replace(/(src=["'])([^"'\/]+\.(jpe?g|png|gif|webp|svg|mp4|mov))(["'])/gi, (m, pre, filename, ext, post) => {
+          // Only rewrite if it's a known uploaded image and doesn't already have a path
+          if (imageFilenames.has(filename) || filename.startsWith('media/')) {
+            return filename.startsWith('media/') ? m : `${pre}media/${filename}${post}`;
+          }
+          return m;
+        });
+      }
       // Inject form handler script (for GitHub Pages / standalone)
       if (!html.includes('data-wb-form')) {
         const bodyClose = html.lastIndexOf('</body>');
@@ -549,34 +565,37 @@ app.post('/api/save', async (req, res) => {
       writtenFiles.push(`sites/${user}/${slug}/style.css`);
     }
 
-    // Write images — to site root (AI references by bare filename)
+    // Write images to media/ subdirectory (standardized location for all build paths)
+    const mediaDir = join(siteDir, 'media');
     if (images && Array.isArray(images)) {
+      mkdirSync(mediaDir, { recursive: true });
       for (const img of images) {
         if (img.stagingPath) {
           const src = resolve(WEBSITES_REPO, img.stagingPath);
           if (existsSync(src)) {
-            const dest = join(siteDir, img.filename);
+            const dest = join(mediaDir, img.filename);
             copyFileSync(src, dest);
-            writtenFiles.push(`sites/${user}/${slug}/${img.filename}`);
+            writtenFiles.push(`sites/${user}/${slug}/media/${img.filename}`);
           }
         } else if (img.base64) {
-          const dest = join(siteDir, img.filename);
+          const dest = join(mediaDir, img.filename);
           writeFileSync(dest, Buffer.from(img.base64, 'base64'));
-          writtenFiles.push(`sites/${user}/${slug}/${img.filename}`);
+          writtenFiles.push(`sites/${user}/${slug}/media/${img.filename}`);
         }
       }
     }
 
-    // Copy staged media files (videos, posters, etc.) to site root
+    // Copy staged media files (videos, posters, etc.) to media/ subdirectory
     const mediaStagingDir = join(STAGING_DIR, user, slug, 'media');
     if (existsSync(mediaStagingDir)) {
+      mkdirSync(mediaDir, { recursive: true });
       for (const f of readdirSync(mediaStagingDir)) {
         if (f.startsWith('.')) continue;
         const src = join(mediaStagingDir, f);
-        const dest = join(siteDir, f);
+        const dest = join(mediaDir, f);
         if (!existsSync(dest)) {
           copyFileSync(src, dest);
-          writtenFiles.push(`sites/${user}/${slug}/${f}`);
+          writtenFiles.push(`sites/${user}/${slug}/media/${f}`);
         }
       }
     }

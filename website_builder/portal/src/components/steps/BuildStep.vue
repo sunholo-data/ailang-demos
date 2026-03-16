@@ -727,7 +727,7 @@ async function startBuild() {
       } catch {}
       const formSheet = getFormSheetId();
       saveResult = await saveSite({
-        user: 'default', // TODO: pass from auth
+        user: props.userId || 'default',
         siteName,
         pages,
         css,
