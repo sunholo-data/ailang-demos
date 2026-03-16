@@ -84,7 +84,7 @@
       </div>
 
       <!-- Live activity panel (AILANG Cloud builds) -->
-      <div v-if="buildMode === 'messages' && activityLog.length > 0" class="activity-panel">
+      <div v-if="buildMode === 'messages' && building" class="activity-panel">
         <div class="activity-header" @click="activityExpanded = !activityExpanded">
           <SvgIcon name="terminal" :size="16" />
           <span>Live Activity</span>
@@ -92,6 +92,10 @@
           <SvgIcon :name="activityExpanded ? 'chevron-up' : 'chevron-down'" :size="16" class="activity-toggle" />
         </div>
         <div v-if="activityExpanded" class="activity-log" ref="activityLogEl">
+          <div v-if="activityLog.length === 0" class="activity-entry text">
+            <span class="dot-text">&middot;</span>
+            <span class="activity-text activity-waiting">Waiting for activity...</span>
+          </div>
           <div v-for="(entry, i) in activityLog" :key="i" class="activity-entry" :class="entry.type">
             <SvgIcon v-if="entry.type === 'tool'" name="pencil" :size="14" />
             <SvgIcon v-else-if="entry.type === 'error'" name="x" :size="14" />
@@ -184,9 +188,11 @@ const wsConnected = ref(false);
 const completedViaWs = ref(false);
 const activityLogEl = ref(null);
 let ws = null;
+const lastWsActivity = ref(0); // timestamp of last WebSocket event
 
 function addActivity(type, text) {
   activityLog.value.push({ type, text, time: Date.now() });
+  lastWsActivity.value = Date.now();
   // Keep last 30 entries
   if (activityLog.value.length > 30) activityLog.value.shift();
   // Auto-scroll
@@ -772,16 +778,21 @@ async function buildViaMessages() {
 
 async function pollForCompletion(correlationId, startTime) {
   const POLL_INTERVAL = 5000;
-  const MAX_WAIT = 10 * 60 * 1000; // 10 minutes
+  const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes without activity
+  let lastActivity = Date.now(); // reset on any sign of life
 
-  while (Date.now() - startTime < MAX_WAIT) {
+  while (Date.now() - lastActivity < IDLE_TIMEOUT) {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
     statusMessage.value = `${builderName.value} is building your website... (${timeStr})`;
 
+    // Reset idle timeout on any activity (WebSocket events or poll responses)
+    if (lastWsActivity.value > lastActivity) lastActivity = lastWsActivity.value;
+
     const messages = await pollStatus();
+    if (messages.length > 0) lastActivity = Date.now();
 
     for (const msg of messages) {
       try {
@@ -827,7 +838,7 @@ async function pollForCompletion(correlationId, startTime) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 
-  throw new Error('Build timed out after 10 minutes. The build may still complete — check your sites list later.');
+  throw new Error('Build timed out — no activity for 10 minutes. The build may still complete — check your sites list later.');
 }
 
 async function loadGeneratedSite(completion, userId, siteSlug) {
