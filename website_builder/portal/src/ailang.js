@@ -277,7 +277,7 @@ async function openaiHandler(prompt) {
       model: OPENAI_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
-      max_tokens: 32768,
+      max_completion_tokens: 32768,
       response_format: { type: 'json_object' },
     })
   });
@@ -316,7 +316,7 @@ async function extractDocumentWithOpenAI(base64, mimeType, filename) {
         ]
       }],
       temperature: 0.1,
-      max_tokens: 8192,
+      max_completion_tokens: 8192,
     })
   });
 
@@ -352,7 +352,7 @@ async function describeImageWithOpenAI(base64, mimeType) {
         ]
       }],
       temperature: 0.3,
-      max_tokens: 200,
+      max_completion_tokens: 200,
     })
   });
 
