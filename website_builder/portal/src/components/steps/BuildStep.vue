@@ -804,7 +804,7 @@ async function pollForCompletion(correlationId, startTime) {
         }
       } catch (e) {
         if (e.message.includes('Build failed') || e.message.includes('server')) throw e;
-        // JSON parse error — skip this message
+        console.warn('[WB] Skipping unparseable message:', e.message, msg);
       }
     }
 
@@ -818,7 +818,9 @@ async function pollForCompletion(correlationId, startTime) {
           if (msgTime && msgTime < startTime) continue;
           const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : (msg.payload || {});
           if (payload.status === 'complete' || payload.status === 'completed') return payload;
-        } catch {}
+        } catch (e) {
+          console.warn('[WB] Failed to parse completion message:', e.message, msg);
+        }
       }
     }
 

@@ -1000,11 +1000,16 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
             const payload = typeof m.payload === 'string' ? JSON.parse(m.payload) : (m.payload || {});
             return payload.status === 'completed' || payload.status === 'complete'
               || payload.type === 'feedback-complete';
-          } catch { return false; }
+          } catch (e) {
+            console.warn('[Preview] Skipping unparseable status message:', e.message);
+            return false;
+          }
         });
         if (response) complete = true;
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Preview] Status poll failed:', e.message);
+    }
   }
 
   if (!complete) {
