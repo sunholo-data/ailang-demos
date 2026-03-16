@@ -137,7 +137,7 @@
         :user-name="user?.displayName || ''"
         :persona-name="currentPersona.name"
         :persona-avatar="currentPersona.avatar"
-        @new-site="showDashboard = false"
+        @new-site="startNewSite"
         @view-site="handleViewSite"
       />
 
@@ -575,6 +575,18 @@ async function openSharedSite(docId) {
   } catch (err) {
     console.warn('[App] Failed to open shared site:', err.message);
   }
+}
+
+function startNewSite() {
+  currentStep.value = 0;
+  data.value = {
+    description: '',
+    items: [],
+    styleId: 'warm',
+    customNotes: '',
+    generated: null
+  };
+  showDashboard.value = false;
 }
 
 function restart() {
