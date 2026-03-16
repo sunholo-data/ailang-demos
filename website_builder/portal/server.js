@@ -1330,9 +1330,9 @@ server.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (clientWs) => {
       console.log('[sidecar] WebSocket proxy connected');
 
-      // Relay: dashboard → client
+      // Relay: dashboard → client (convert Buffer to string for browser JSON.parse)
       upstream.on('message', (data) => {
-        if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
+        if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data.toString());
       });
       // Relay: client → dashboard
       clientWs.on('message', (data) => {
