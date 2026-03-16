@@ -98,7 +98,7 @@
             <div class="activity-pulse"></div>
             <span>Getting everything ready...</span>
           </div>
-          <div v-for="(entry, i) in activityLog" :key="i" class="activity-entry" :class="entry.type">
+          <div v-for="(entry, i) in activityLog" :key="entry.time + i" class="activity-entry" :class="[entry.type, { newest: i === 0 && building }]">
             <span class="activity-icon">
               <SvgIcon v-if="entry.type === 'tool'" name="pencil" :size="14" />
               <SvgIcon v-else-if="entry.type === 'error'" name="x" :size="14" />
@@ -106,7 +106,7 @@
               <span v-else class="activity-dot"></span>
             </span>
             <span class="activity-text">{{ entry.text }}</span>
-            <span v-if="i === activityLog.length - 1 && building" class="activity-latest">latest</span>
+            <span class="activity-time">{{ friendlyTimestamp(entry.time) }}</span>
           </div>
         </div>
       </div>
@@ -218,20 +218,63 @@ function stopElapsedTimer() {
 }
 
 function addActivity(type, text) {
-  activityLog.value.push({ type, text, time: Date.now() });
-  lastWsActivity.value = Date.now();
-  // Keep last 50 entries (more room for longer cloud builds)
-  if (activityLog.value.length > 50) activityLog.value.shift();
-  // Auto-scroll
+  const now = Date.now();
+  // Accumulate consecutive text events into a single flowing entry
+  if (type === 'text' && activityLog.value.length > 0 && activityLog.value[0].type === 'text') {
+    const prev = activityLog.value[0];
+    // Merge if the previous text entry is recent (within 10s)
+    if (now - prev.time < 10000) {
+      const separator = prev.text.endsWith('.') || prev.text.endsWith('\n') ? ' ' : '';
+      const merged = prev.text + separator + text;
+      prev.text = merged.length > 1000 ? merged.substring(merged.length - 1000) : merged;
+      prev.time = now;
+      lastWsActivity.value = now;
+      return;
+    }
+  }
+  // Prepend (latest first)
+  activityLog.value.unshift({ type, text, time: now });
+  lastWsActivity.value = now;
+  // Keep last 50 entries
+  if (activityLog.value.length > 50) activityLog.value.pop();
+  // Scroll to top (latest is at top)
   nextTick(() => {
-    if (activityLogEl.value) activityLogEl.value.scrollTop = activityLogEl.value.scrollHeight;
+    if (activityLogEl.value) activityLogEl.value.scrollTop = 0;
   });
 }
 
+// Friendly tool descriptions with detail extraction
 const FRIENDLY_TOOL = {
-  Write: 'Creating a page', Edit: 'Refining the design', Read: 'Reviewing your content',
-  Bash: 'Running a task', Glob: 'Looking through files', Grep: 'Searching your content',
+  Write: 'Creating', Edit: 'Refining', Read: 'Reviewing',
+  Bash: 'Running a task', Glob: 'Looking through files', Grep: 'Searching',
 };
+
+function friendlyToolText(toolName, toolInput) {
+  const base = FRIENDLY_TOOL[toolName] || toolName;
+  // Extract a meaningful detail from tool input
+  if (toolInput) {
+    const fp = toolInput.file_path || toolInput.path || toolInput.command || '';
+    if (fp) {
+      // Show just the filename or last path segment
+      const short = fp.split('/').pop() || fp;
+      return `${base}: ${short}`;
+    }
+    if (toolInput.pattern) return `${base} for "${toolInput.pattern}"`;
+    if (toolInput.content && toolInput.file_path) {
+      return `${base}: ${toolInput.file_path.split('/').pop()}`;
+    }
+  }
+  return base;
+}
+
+function friendlyTimestamp(time) {
+  if (!buildStartTime.value) return '';
+  const elapsed = Math.floor((time - buildStartTime.value) / 1000);
+  if (elapsed < 60) return `${elapsed}s`;
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
 
 function connectTaskStream(taskId) {
   // Derive WebSocket URL from API_BASE (same sidecar, not the static site host)
@@ -271,14 +314,14 @@ function connectTaskStream(taskId) {
       console.log('[WB] WebSocket message:', msg.type, msg.data?.stream_type || msg.data?.status || '');
       if (msg.type !== 'task_stream') return;
 
-      const { stream_type, text, tool_name, status, error_msg } = msg.data || {};
+      const { stream_type, text, tool_name, tool_input, status, error_msg } = msg.data || {};
 
       switch (stream_type) {
         case 'text':
-          if (text) addActivity('text', text.substring(0, 200));
+          if (text) addActivity('text', text.substring(0, 500));
           break;
         case 'tool_use':
-          addActivity('tool', `${FRIENDLY_TOOL[tool_name] || tool_name}...`);
+          addActivity('tool', friendlyToolText(tool_name, tool_input));
           break;
         case 'status':
           if (status === 'completed' || status === 'failed') {
@@ -1267,14 +1310,15 @@ function dataURLToBlob(dataURL) {
 }
 .activity-entry {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.6rem;
   padding: 0.35rem 1.25rem;
   color: var(--text-muted);
   animation: fade-in 0.3s ease-out;
+  line-height: 1.5;
 }
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .activity-icon {
@@ -1283,6 +1327,7 @@ function dataURLToBlob(dataURL) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 0.15rem;
 }
 .activity-dot {
   width: 6px;
@@ -1290,27 +1335,31 @@ function dataURLToBlob(dataURL) {
   border-radius: 50%;
   background: var(--border);
 }
+.activity-entry.newest {
+  background: var(--primary-soft);
+  border-radius: 8px;
+  margin: 0.15rem 0.5rem;
+  padding: 0.4rem 0.75rem;
+}
 .activity-entry.tool { color: var(--primary); }
 .activity-entry.tool .activity-dot { background: var(--primary); }
 .activity-entry.error { color: #ef4444; }
 .activity-entry.status { color: var(--success); font-weight: 600; }
 .activity-entry.status .activity-dot { background: var(--success); }
 .activity-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-.activity-latest {
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--primary-light);
-  background: var(--primary-soft);
-  padding: 0.1rem 0.4rem;
-  border-radius: 6px;
+.activity-time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.7;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: right;
 }
 
 @media (max-width: 600px) {
