@@ -1167,6 +1167,7 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
       await saveSite({
         user: updated.userId,
         siteName: updated.siteSlug,
+        siteSlug: updated.siteSlug,
         pages: newPages,
         css: newCss,
         siteJson: updatedSiteJson,

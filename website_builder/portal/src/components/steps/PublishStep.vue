@@ -116,6 +116,7 @@ onMounted(async () => {
       const result = await saveSite({
         user: props.userId || 'default',
         siteName,
+        siteSlug: props.generated.siteSlug || undefined,
         pages: props.generated.pages,
         css: props.generated.css,
         siteJson: props.generated.siteJson,

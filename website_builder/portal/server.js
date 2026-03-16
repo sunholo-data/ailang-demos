@@ -513,12 +513,14 @@ async function commitToRepo(filePaths, message, repoConfig = {}) {
  */
 app.post('/api/save', async (req, res) => {
   try {
-    const { user = 'default', siteName, pages, css, images, siteJson, description, repoConfig, formSheetId } = req.body;
+    const { user = 'default', siteName, siteSlug: existingSlug, pages, css, images, siteJson, description, repoConfig, formSheetId } = req.body;
     if (!siteName || !pages) {
       return res.status(400).json({ error: 'siteName and pages are required' });
     }
 
-    const slug = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) || 'site';
+    // Use existing slug if provided (preserves the original build slug including any suffix),
+    // otherwise derive one from siteName.
+    const slug = existingSlug || siteName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) || 'site';
     const siteDir = join(SITES_DIR, user, slug);
     mkdirSync(siteDir, { recursive: true });
 
