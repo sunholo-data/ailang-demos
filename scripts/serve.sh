@@ -38,6 +38,9 @@ for svg in "$REPO_ROOT"/site/*.svg; do
   [ -f "$svg" ] && cp "$svg" "$SITE/"
 done
 
+# Thumbnails for hub page cards
+[ -d "$REPO_ROOT/site/thumbnails" ] && ln -s "$REPO_ROOT/site/thumbnails" "$SITE/thumbnails"
+
 # Shared WASM runtime (top-level, used by all demos)
 ln -s "$REPO_ROOT/wasm" "$SITE/wasm"
 

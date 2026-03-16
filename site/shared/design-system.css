@@ -405,6 +405,58 @@ body {
   stroke-linejoin: round;
 }
 
+/* -- Card thumbnail (scaled iframe or screenshot) -- */
+.card-thumbnail {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  margin: -24px -22px 14px -22px;
+  width: calc(100% + 44px);
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.card-thumbnail iframe {
+  width: 1280px;
+  height: 800px;
+  transform: scale(0.25);
+  transform-origin: top left;
+  border: none;
+  pointer-events: none;
+}
+
+.card-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-thumbnail .thumbnail-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+/* When card has thumbnail, adjust top padding */
+.card:has(.card-thumbnail) {
+  padding-top: 0;
+}
+
+.card:has(.card-thumbnail)::before {
+  z-index: 1;
+}
+
+.card:has(.card-thumbnail) .card-arrow {
+  top: 170px;
+}
+
 .card-name {
   font-family: var(--font-display);
   font-size: 17px;
@@ -596,6 +648,8 @@ body {
   .hero .subtitle { font-size: 14px; }
   .page { padding: 24px 16px 32px; }
   .card { padding: 20px 18px 18px; }
+  .card-thumbnail { height: 180px; margin: -20px -18px 14px -18px; width: calc(100% + 36px); }
+  .card:has(.card-thumbnail) .card-arrow { top: 190px; }
   .header-badge { display: none; }
   .section-intro { padding: 20px 20px; }
   .section-intro-title { font-size: 18px; }
