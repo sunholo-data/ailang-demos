@@ -80,72 +80,11 @@ resource "google_firestore_database" "website_builder" {
 }
 
 # ── Firestore Security Rules ─────────────────────────────────────────────────
-# Users can read/write their own doc. messagesEnabled is read-only (admin-set).
-
-resource "google_firebaserules_ruleset" "website_builder" {
-  provider = google-beta
-  project  = var.project_id
-
-  source {
-    files {
-      name    = "firestore.rules"
-      content = <<-EOT
-        rules_version = '2';
-        service cloud.firestore {
-          match /databases/website-builder/documents {
-            // Users can read/write their own settings
-            match /users/{userId} {
-              allow read: if request.auth != null && request.auth.uid == userId;
-              // Create: resource.data is null for new docs, so use .keys() not .diff()
-              allow create: if request.auth != null && request.auth.uid == userId
-                && !request.resource.data.keys().hasAny(['messagesEnabled', 'messagesEndpoint']);
-              // Update: resource.data exists, so .diff() is safe
-              allow update: if request.auth != null && request.auth.uid == userId
-                && (!request.resource.data.diff(resource.data).affectedKeys()
-                    .hasAny(['messagesEnabled', 'messagesEndpoint']));
-            }
-
-            // Site metadata and sharing
-            match /sites/{siteId} {
-              allow read: if request.auth != null && (
-                resource.data.ownerUid == request.auth.uid ||
-                request.auth.token.email in resource.data.sharedWith
-              );
-              allow create: if request.auth != null
-                && request.resource.data.ownerUid == request.auth.uid;
-              allow update: if request.auth != null && (
-                resource.data.ownerUid == request.auth.uid ||
-                request.auth.token.email in resource.data.sharedWith
-              );
-              allow delete: if request.auth != null
-                && resource.data.ownerUid == request.auth.uid;
-
-              // Comments subcollection
-              match /comments/{commentId} {
-                allow read: if request.auth != null;
-                allow create: if request.auth != null
-                  && request.resource.data.authorUid == request.auth.uid;
-                allow update, delete: if request.auth != null
-                  && resource.data.authorUid == request.auth.uid;
-              }
-            }
-          }
-        }
-      EOT
-    }
-  }
-
-  depends_on = [google_firestore_database.website_builder]
-}
-
-resource "google_firebaserules_release" "website_builder" {
-  provider     = google-beta
-  project      = var.project_id
-  name         = "cloud.firestore/website-builder"
-  ruleset_name = google_firebaserules_ruleset.website_builder.name
-
-  depends_on = [google_firebaserules_ruleset.website_builder]
-}
+# Rules are managed in website_builder/firestore.rules and deployed via
+# GitHub Actions CI/CD (firebase deploy --only firestore:rules).
+# See .github/workflows/deploy-invoice-processor.yml → firestore-rules job.
+#
+# DO NOT manage rules via Terraform — the CI/CD pipeline is the source of truth.
 
 # ── Firebase Auth ─────────────────────────────────────────────────────────────
 # Enable Google as a sign-in provider

@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "website-builder",
+      "rules": "website_builder/firestore.rules"
+    }
+  ]
+}
