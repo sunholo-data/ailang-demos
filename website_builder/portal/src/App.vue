@@ -337,7 +337,7 @@ const PERSONAS = [
   },
   {
     key: 'openai-byok', name: 'Opal Cadillac', icon: 'cloud',
-    avatar: './avatars/opal-cadillac.png', desc: 'Your OpenAI key', buildMode: 'messages',
+    avatar: './avatars/opal-cadillac.png', desc: 'Your OpenAI key', buildMode: 'wasm',
     detail: 'Brings OpenAI\'s GPT models to your builds. Uses your own API key — you pay per-token.',
     requires: { type: 'apikey', provider: 'openai', storageKey: 'openai-api-key' },
   },
