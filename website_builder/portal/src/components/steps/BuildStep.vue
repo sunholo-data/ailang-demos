@@ -230,10 +230,10 @@ function connectTaskStream(taskId) {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
+      console.log('[WB] WebSocket message:', msg.type, msg.data?.stream_type || msg.data?.status || '');
       if (msg.type !== 'task_stream') return;
-      if (msg.data.task_id !== taskId) return;
 
-      const { stream_type, text, tool_name, status, error_msg } = msg.data;
+      const { stream_type, text, tool_name, status, error_msg } = msg.data || {};
 
       switch (stream_type) {
         case 'text':
@@ -252,7 +252,9 @@ function connectTaskStream(taskId) {
           if (error_msg) addActivity('error', error_msg);
           break;
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[WB] WebSocket message parse error:', e.message);
+    }
   };
 }
 
@@ -735,8 +737,7 @@ async function buildViaMessages() {
     setStep('send', 'done', 'Brief sent');
 
     // 3b. Connect live activity stream (best-effort — build works without it)
-    const taskId = 'task-' + (messageId || '').substring(0, 8);
-    connectTaskStream(taskId);
+    connectTaskStream(messageId);
 
     // 4. Poll for completion (match by coordinator's correlationID = messageId)
     setStep('build', 'active', `${builderName.value} is building your website...`);
