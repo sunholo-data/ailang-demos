@@ -201,6 +201,7 @@
           :anthropic-api-key="selectedPersona === 'messages-byok' ? anthropicKeyInput : ''"
           :persona-name="currentPersona.name"
           :persona-avatar="currentPersona.avatar"
+          :persona-key="selectedPersona"
           @done="(result) => { data.generated = result; currentStep = 5 }"
           @back="currentStep = 3"
         />
@@ -324,7 +325,6 @@ const PERSONAS = [
     avatar: './avatars/opal-cadillac.png', desc: 'Your OpenAI key', buildMode: 'messages',
     detail: 'Brings OpenAI\'s GPT models to your builds. Uses your own API key — you pay per-token.',
     requires: { type: 'apikey', provider: 'openai', storageKey: 'openai-api-key' },
-    hidden: true, // unhide when OpenAI build path is implemented
   },
 ];
 const selectedPersona = ref('wasm');

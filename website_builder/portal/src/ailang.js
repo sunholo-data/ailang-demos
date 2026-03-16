@@ -31,24 +31,33 @@ const DOCPARSE_MODULES = [
 ];
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = 'gpt-5.4';
 
 let engine = null;
 let ready = false;
 let loadingPromise = null;
+let activeProvider = 'gemini'; // 'gemini' | 'openai'
 
 /**
  * Initialize AILANG WASM engine and load all website builder modules.
  * @param {Function} [onProgress] - Optional callback(step, message)
+ * @param {string} [provider='gemini'] - AI provider: 'gemini' or 'openai'
  */
-export async function initAilang(onProgress) {
-  if (ready) return;
+export async function initAilang(onProgress, provider = 'gemini') {
+  activeProvider = provider;
+  if (ready) {
+    // Already initialized — just swap the AI handler for the new provider
+    setProvider(provider);
+    return;
+  }
   if (loadingPromise) return loadingPromise;
 
-  loadingPromise = _doInit(onProgress);
+  loadingPromise = _doInit(onProgress, provider);
   return loadingPromise;
 }
 
-async function _doInit(onProgress) {
+async function _doInit(onProgress, provider) {
   report(onProgress, 'init', 'Loading AILANG runtime...');
 
   if (typeof AilangREPL === 'undefined') {
@@ -68,10 +77,12 @@ async function _doInit(onProgress) {
     console.log(`Import ${lib}:`, r);
   }
 
-  // Register Gemini as the AI handler
-  report(onProgress, 'ai', 'Registering AI handler...');
-  const aiResult = repl.setAIHandler(geminiHandler);
-  console.log('AI handler registered:', aiResult);
+  // Register AI handler based on provider
+  const handler = provider === 'openai' ? openaiHandler : geminiHandler;
+  const providerName = provider === 'openai' ? 'OpenAI' : 'Gemini';
+  report(onProgress, 'ai', `Registering ${providerName} AI handler...`);
+  const aiResult = repl.setAIHandler(handler);
+  console.log(`${providerName} AI handler registered:`, aiResult);
 
   // Grant AI capability
   repl.grantCapability('AI');
@@ -125,14 +136,19 @@ export function callPureModule(module, funcName, ...args) {
 }
 
 /**
- * Extract text content from a document using Gemini Vision API.
- * Supports PDF and any format Gemini can read via inlineData.
+ * Extract text content from a document using Vision API.
+ * Provider-aware: dispatches to Gemini or OpenAI based on activeProvider.
  * @param {string} base64 - Raw base64 data (no data URL prefix)
  * @param {string} mimeType - e.g. 'application/pdf'
  * @param {string} filename - Original filename for context in the prompt
  * @returns {Promise<string>} Extracted text content
  */
 export async function extractDocumentContent(base64, mimeType, filename) {
+  if (activeProvider === 'openai') return extractDocumentWithOpenAI(base64, mimeType, filename);
+  return extractDocumentWithGemini(base64, mimeType, filename);
+}
+
+async function extractDocumentWithGemini(base64, mimeType, filename) {
   const apiKey = localStorage.getItem('gemini-api-key');
   if (!apiKey) throw new Error('Gemini API key not set — open Settings to add it');
 
@@ -241,6 +257,133 @@ async function geminiHandler(prompt) {
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('No content in Gemini response');
   return text;
+}
+
+/**
+ * OpenAI Chat Completions handler — called by AILANG when AI effect is triggered.
+ * Mirrors geminiHandler but uses OpenAI's API format.
+ */
+async function openaiHandler(prompt) {
+  const apiKey = localStorage.getItem('openai-api-key');
+  if (!apiKey) throw new Error('OpenAI API key not set — open Settings to add it');
+
+  const response = await fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 32768,
+      response_format: { type: 'json_object' },
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('No content in OpenAI response');
+  return text;
+}
+
+/**
+ * Extract text content from a document using OpenAI Vision.
+ */
+async function extractDocumentWithOpenAI(base64, mimeType, filename) {
+  const apiKey = localStorage.getItem('openai-api-key');
+  if (!apiKey) throw new Error('OpenAI API key not set — open Settings to add it');
+
+  const response = await fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+          { type: 'text', text: `Extract all the text content from "${filename}". Return as plain text, preserving structure with headings and paragraphs. Be comprehensive and include all important information.` }
+        ]
+      }],
+      temperature: 0.1,
+      max_tokens: 8192,
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+/**
+ * Describe an image using OpenAI Vision.
+ */
+async function describeImageWithOpenAI(base64, mimeType) {
+  const apiKey = localStorage.getItem('openai-api-key');
+  if (!apiKey) throw new Error('OpenAI API key not set — open Settings to add it');
+
+  const response = await fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+          { type: 'text', text: 'Describe this image in 1-2 sentences, focusing on what it shows and how it could be used on a business website. Be specific and practical.' }
+        ]
+      }],
+      temperature: 0.3,
+      max_tokens: 200,
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI vision error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || 'An image uploaded by the user.';
+}
+
+/**
+ * Swap AI provider without full re-initialization.
+ * Used when user switches persona between builds.
+ */
+export function setProvider(provider) {
+  activeProvider = provider;
+  if (engine) {
+    const handler = provider === 'openai' ? openaiHandler : geminiHandler;
+    engine.repl.setAIHandler(handler);
+    console.log(`[AILANG] Switched AI provider to ${provider}`);
+  }
+}
+
+/**
+ * Provider-aware image description — dispatches to Gemini or OpenAI.
+ */
+export async function describeImage(base64, mimeType) {
+  if (activeProvider === 'openai') return describeImageWithOpenAI(base64, mimeType);
+  return describeImageWithGemini(base64, mimeType);
 }
 
 /**

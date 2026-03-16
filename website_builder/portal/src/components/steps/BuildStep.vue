@@ -3,15 +3,20 @@
     <!-- API key prompt (shown before build starts if key is missing) -->
     <template v-if="needsApiKey">
       <h1>Almost there!</h1>
-      <p class="subtitle">To create your website, we need to connect to Google's AI. You'll need a free API key — it only takes a moment.</p>
+      <p class="subtitle">{{ personaKey === 'openai-byok'
+        ? 'To create your website with OpenAI, you\'ll need an API key.'
+        : 'To create your website, we need to connect to Google\'s AI. You\'ll need a free API key — it only takes a moment.' }}</p>
 
       <div class="api-key-card">
         <div class="api-key-card-step">
           <span class="step-number">1</span>
           <div>
-            <p>Get a free API key from Google:</p>
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="get-key-link">
-              Get your free key (opens Google) &rarr;
+            <p>{{ personaKey === 'openai-byok' ? 'Get an API key from OpenAI:' : 'Get a free API key from Google:' }}</p>
+            <a
+              :href="personaKey === 'openai-byok' ? 'https://platform.openai.com/api-keys' : 'https://aistudio.google.com/apikey'"
+              target="_blank" rel="noopener" class="get-key-link"
+            >
+              {{ personaKey === 'openai-byok' ? 'Get your OpenAI key &rarr;' : 'Get your free key (opens Google) &rarr;' }}
             </a>
           </div>
         </div>
@@ -27,7 +32,7 @@
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
-              placeholder="AIza..."
+              :placeholder="personaKey === 'openai-byok' ? 'sk-...' : 'AIza...'"
               class="api-key-input api-key-masked"
               @keydown.enter="saveKeyAndBuild"
             />
@@ -140,7 +145,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import JSZip from 'jszip';
-import { initAilang, callPure, callAI, callPureModule, describeImageWithGemini, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
+import { initAilang, callPure, callAI, callPureModule, describeImage, isReady, getApiKey, saveApiKey, DOCPARSE_MODULE } from '../../ailang.js';
 import { parseDocumentFile } from '../../../../../invoice_processor_wasm/js/docparse-utils.js';
 import { saveSite, sendBuild, pollStatus, uploadMedia, getRepoConfig, getFormSheetId, getRepoFile, listRepoFiles, postProcessSite, API_BASE } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
@@ -153,6 +158,7 @@ const props = defineProps({
   anthropicApiKey: { type: String, default: '' },
   personaName: { type: String, default: '' },
   personaAvatar: { type: String, default: '' },
+  personaKey: { type: String, default: 'wasm' },
 });
 const emit = defineEmits(['done', 'back']);
 
@@ -160,7 +166,11 @@ const statusMessage = ref('Hang tight — we\'re creating your website!');
 const error = ref('');
 const building = ref(false);
 const inlineApiKey = ref('');
-const needsApiKey = ref(!getApiKey());
+const needsApiKey = ref(
+  props.personaKey === 'openai-byok'
+    ? !localStorage.getItem('openai-api-key')
+    : !getApiKey()
+);
 
 const isApiKeyError = computed(() =>
   error.value && /api.?key/i.test(error.value)
@@ -254,10 +264,14 @@ onUnmounted(() => closeTaskStream());
 async function saveKeyAndBuild() {
   const key = inlineApiKey.value.trim();
   if (!key) return;
-  saveApiKey(key);
-  // Sync to Firestore (best-effort)
-  if (props.userId && props.userId !== 'default') {
-    saveUserSettings(props.userId, { geminiApiKey: key }).catch(() => {});
+  if (props.personaKey === 'openai-byok') {
+    localStorage.setItem('openai-api-key', key);
+  } else {
+    saveApiKey(key);
+    // Sync Gemini key to Firestore (best-effort)
+    if (props.userId && props.userId !== 'default') {
+      saveUserSettings(props.userId, { geminiApiKey: key }).catch(() => {});
+    }
   }
   needsApiKey.value = false;
   error.value = '';
@@ -328,7 +342,7 @@ async function describeImagesParallel(imageItems, concurrency = 3) {
     // Read the resized file as base64 for Gemini (small after resize: ~100-300KB)
     const base64 = await blobToBase64Raw(item.file);
     const mimeType = item.mimeType || 'image/jpeg';
-    const desc = await describeImageWithGemini(base64, mimeType);
+    const desc = await describeImage(base64, mimeType);
     completed++;
     setStep('describe', 'active', `Describing images... ${completed}/${imageItems.length}`);
     descriptions.set(item.filename, desc);
@@ -355,7 +369,7 @@ async function describeVideoThumbnail(item) {
   if (!item.preview) return 'A video uploaded by the user.';
   const base64 = item.preview.split(',')[1];
   if (!base64) return 'A video uploaded by the user.';
-  return describeImageWithGemini(base64, 'image/jpeg');
+  return describeImage(base64, 'image/jpeg');
 }
 
 const builderName = computed(() => props.personaName || (props.buildMode === 'messages' ? 'Sir Claude Fixalot' : 'Gemma Builder'));
@@ -376,7 +390,8 @@ async function startBuild() {
     // 1. Initialize AILANG WASM
     setStep('init', 'active', `${builderName.value} is loading...`);
     if (!isReady()) {
-      await initAilang((step, msg) => { statusMessage.value = msg; });
+      const provider = props.personaKey === 'openai-byok' ? 'openai' : 'gemini';
+      await initAilang((step, msg) => { statusMessage.value = msg; }, provider);
     }
     setStep('init', 'done', 'AI engine ready');
 
