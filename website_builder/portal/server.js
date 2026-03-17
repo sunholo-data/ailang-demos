@@ -603,7 +603,7 @@ app.post('/api/save', async (req, res) => {
       }
     }
 
-    // Write brief.json to staging for MySites metadata
+    // Write brief.json to local staging for sidecar metadata (NOT committed to GitHub)
     const briefDir = join(STAGING_DIR, user, slug);
     mkdirSync(briefDir, { recursive: true });
     const briefPath = join(briefDir, 'brief.json');
@@ -615,7 +615,6 @@ app.post('/api/save', async (req, res) => {
       source: 'wasm',
       ...(formSheetId ? { formSheetId } : {}),
     }, null, 2));
-    writtenFiles.push(`staging/${user}/${slug}/brief.json`);
 
     // Git commit (best-effort, async)
     await commitToRepo(writtenFiles, `Save: ${siteName} (WASM)`, repoConfig);
