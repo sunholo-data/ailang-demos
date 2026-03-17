@@ -209,6 +209,7 @@ import ShareModal from './ShareModal.vue';
 import SiteHistoryModal from './SiteHistoryModal.vue';
 import { listSites, listRepoSites, listRepoFiles, deleteSite, getSiteFile, getRepoFile, siteFileUrl, getRepoConfig } from '../api.js';
 import { getSharedSites, saveSiteMetadata, listUserSitesMeta } from '../firebase.js';
+import { inlineCssAsync, sortSlugs } from '../html-normalize.js';
 
 const props = defineProps({
   userId: { type: String, required: true },
@@ -298,54 +299,11 @@ async function viewSite(site) {
       })
     );
 
-    // Fetch all local CSS files referenced in any page, then inline them.
-    // srcdoc has no base URL so relative <link href="...css"> won't resolve.
-    const cssCache = {};
-    async function fetchCss(href) {
-      if (cssCache[href]) return cssCache[href];
-      try {
-        cssCache[href] = await fetchFile(href);
-      } catch {}
-      return cssCache[href] || '';
-    }
+    // Inline CSS (fetch via same source as pages)
+    const cssFetch = async (href) => { try { return await fetchFile(href); } catch { return ''; } };
+    const { pages, combinedCss } = await inlineCssAsync(pageEntries, cssFetch);
 
-    // Collect all local CSS hrefs from every page
-    const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
-    const allHrefs = new Set();
-    for (const [, html] of pageEntries) {
-      let m;
-      while ((m = localCssPattern.exec(html)) !== null) {
-        const href = m[1];
-        if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
-          allHrefs.add(href);
-        }
-      }
-    }
-    await Promise.all([...allHrefs].map(fetchCss));
-
-    // Inline each local <link rel="stylesheet"> with fetched content
-    const pages = {};
-    let combinedCss = Object.values(cssCache).join('\n');
-    for (const [page, html] of pageEntries) {
-      pages[page] = html.replace(
-        /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
-        (match, before, href, after) => {
-          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
-            return match;
-          }
-          const content = cssCache[href];
-          return content ? `<style>/* ${href} */\n${content}</style>` : match;
-        }
-      );
-    }
-
-    // Sort slugs: index/home first, then alphabetical
-    const sorted = [...site.pages].sort((a, b) => {
-      if (a === 'index' || a === 'home') return -1;
-      if (b === 'index' || b === 'home') return 1;
-      return a.localeCompare(b);
-    });
-
+    const sorted = sortSlugs(site.pages);
     const siteJson = JSON.stringify({
       title: site.title,
       description: site.description,
@@ -463,40 +421,11 @@ async function viewSharedSite(site) {
     );
     const validPages = allEntries.filter(Boolean);
 
-    // Inline CSS (same pattern as own sites)
-    const cssCache = {};
-    const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
-    const allHrefs = new Set();
-    for (const [, html] of validPages) {
-      let m;
-      while ((m = localCssPattern.exec(html)) !== null) {
-        const href = m[1];
-        if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
-          allHrefs.add(href);
-        }
-      }
-    }
-    await Promise.all([...allHrefs].map(async (href) => {
-      try { cssCache[href] = await fetchFile(href); } catch {}
-    }));
+    // Inline CSS
+    const cssFetch = async (href) => { try { return await fetchFile(href); } catch { return ''; } };
+    const { pages, combinedCss } = await inlineCssAsync(validPages, cssFetch);
 
-    const pages = {};
-    for (const [page, html] of validPages) {
-      pages[page] = html.replace(
-        /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
-        (match, before, href) => {
-          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
-          return cssCache[href] ? `<style>/* ${href} */\n${cssCache[href]}</style>` : match;
-        }
-      );
-    }
-
-    const sorted = [...allPages].sort((a, b) => {
-      if (a === 'index' || a === 'home') return -1;
-      if (b === 'index' || b === 'home') return 1;
-      return a.localeCompare(b);
-    });
-
+    const sorted = sortSlugs(allPages);
     const siteJson = JSON.stringify({
       title: site.title || site.siteSlug,
       description: '',
@@ -506,7 +435,7 @@ async function viewSharedSite(site) {
     emit('view-site', {
       siteJson,
       pages,
-      css: Object.values(cssCache).join('\n'),
+      css: combinedCss,
       slugs: sorted,
       userId: site.ownerUid,
       siteSlug: site.siteSlug,

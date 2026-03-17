@@ -234,6 +234,7 @@ import SvgIcon from '../SvgIcon.vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 import { saveSite, getRepoConfig } from '../../api.js';
 import { normalizeNavLinks, buildSelfContainedHtml } from '../../nav-utils.js';
+import { resolveImages as _resolveImages, normalizeHtml, inlineCssAsync, rewriteRelativePaths as _rewriteRelativePaths, sortSlugs } from '../../html-normalize.js';
 import { subscribeToComments, addComment, resolveComment as fbResolveComment, deleteComment as fbDeleteComment } from '../../firebase.js';
 
 const props = defineProps({
@@ -385,6 +386,13 @@ function createObjectURLTracked(blob) {
   return url;
 }
 
+// Build repo context for rewriteRelativePaths from component state
+function buildRepoCtx() {
+  const { userId, siteSlug } = props.generated || {};
+  const rc = getRepoConfig();
+  return { userId: userId || '', siteSlug: siteSlug || '', repoOwner: rc?.owner || '', repoName: rc?.repo || '' };
+}
+
 // Build filename→URI map from original uploaded items + pending + persisted post-build additions
 const imageMap = computed(() => {
   const map = {};
@@ -513,49 +521,14 @@ document.addEventListener('dblclick',function(e){
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_wbInit)}else{_wbInit()}
 \x3c/script>`;
 
-// Resolve image filenames → data URIs in any HTML string
+// Component-local wrapper: resolveImages using the reactive imageMap
 function resolveImages(html) {
-  const map = imageMap.value;
-  if (!html || Object.keys(map).length === 0) return html;
-  const resolve = (val) => {
-    const basename = val.split('/').pop();
-    return map[basename] || map[val] || null;
-  };
-  return html
-    .replace(/src=["']([^"']+)["']/g, (match, src) => {
-      const uri = resolve(src);
-      return uri ? `src="${uri}"` : match;
-    })
-    .replace(/poster=["']([^"']+)["']/g, (match, poster) => {
-      const uri = resolve(poster);
-      return uri ? `poster="${uri}"` : match;
-    })
-    .replace(/data-ref=["']([^"']+)["']/g, (match, ref) => {
-      const uri = resolve(ref);
-      return uri ? `${match} src="${uri}"` : match;
-    });
+  return _resolveImages(html, imageMap.value);
 }
 
-// When loaded from sidecar (MySites) or after a cloud build, rewrite relative asset
-// paths so they resolve inside srcdoc (which has no base URL).
-// Prefers GitHub Pages URLs (persistent) over sidecar URLs (ephemeral on Cloud Run).
+// Component-local wrapper: rewriteRelativePaths using reactive props
 function rewriteRelativePaths(html) {
-  const { userId, siteSlug } = props.generated || {};
-  if (!userId || !siteSlug) return html;
-  // Prefer GitHub Pages (images are committed there, sidecar /tmp is ephemeral)
-  const rc = getRepoConfig();
-  const base = (rc?.owner && rc?.repo)
-    ? `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}`
-    : `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
-  // Rewrite src=, poster=, and CSS url() with relative paths
-  const rewriteAttr = (m, pre, path, post) => {
-    const clean = path.replace(/^\.\//, '');
-    return `${pre}${base}/${clean}${post}`;
-  };
-  return html
-    .replace(/(src=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
-    .replace(/(poster=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
-    .replace(/(url\(["']?)(?!https?:\/\/|data:|blob:|\/\/|#)([^"')]+)(["']?\))/gi, rewriteAttr);
+  return _rewriteRelativePaths(html, buildRepoCtx());
 }
 
 // Form handler script — injected into preview iframe so contact forms work.
@@ -592,14 +565,12 @@ f.appendChild(el);if(btn){btn.disabled=false;btn.textContent=orig;}});
 }
 
 const htmlWithImages = computed(() => {
-  let html = resolveImages(currentHtml.value);
+  let html = normalizeHtml(currentHtml.value, {
+    imageMap: imageMap.value,
+    css: props.generated?.css,
+    repoCtx: buildRepoCtx(),
+  });
   if (!html) return html;
-  // Inline external CSS for srcdoc preview (srcdoc can't resolve relative href)
-  if (props.generated?.css) {
-    html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
-      `<style>${props.generated.css}</style>`);
-  }
-  html = rewriteRelativePaths(html);
   // Inject element selection + nav interception + form handler scripts before </body>
   const siteSlug = props.generated?.siteSlug || 'preview';
   const formScript = buildFormScript('/api/form-submit', siteSlug);
@@ -714,49 +685,18 @@ async function loadSiteFromSidecar(userId, siteSlug) {
     );
     const validPages = pageEntries.filter(Boolean);
 
-    // Inline local CSS
-    const cssCache = {};
-    const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
-    const allHrefs = new Set();
-    for (const [, html] of validPages) {
-      let m;
-      while ((m = localCssPattern.exec(html)) !== null) {
-        const href = m[1];
-        if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
-          allHrefs.add(href);
-        }
-      }
-    }
-    await Promise.all([...allHrefs].map(async (href) => {
-      try {
-        const r = await fetch(`${base}/${href}`);
-        if (r.ok) cssCache[href] = await r.text();
-      } catch {}
-    }));
-
-    const newPages = {};
-    for (const [page, html] of validPages) {
-      newPages[page] = html.replace(
-        /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
-        (match, before, href) => {
-          if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
-          const content = cssCache[href];
-          return content ? `<style>/* ${href} */\n${content}</style>` : match;
-        }
-      );
-    }
-
-    const newSlugs = [...htmlFiles].sort((a, b) => {
-      if (a === 'index' || a === 'home') return -1;
-      if (b === 'index' || b === 'home') return 1;
-      return a.localeCompare(b);
-    });
+    // Inline CSS from sidecar
+    const fetchCss = async (href) => {
+      const r = await fetch(`${base}/${href}`);
+      return r.ok ? r.text() : '';
+    };
+    const { pages: newPages, combinedCss } = await inlineCssAsync(validPages, fetchCss);
 
     emit('update-generated', {
       siteJson: props.generated?.siteJson || '{}',
       pages: newPages,
-      css: Object.values(cssCache).join('\n'),
-      slugs: newSlugs,
+      css: combinedCss,
+      slugs: sortSlugs(htmlFiles),
       userId,
       siteSlug,
     });
@@ -789,18 +729,9 @@ function openInTab() {
   // Always use self-contained HTML from memory — sidecar disk is ephemeral
   // in production (Cloud Run /tmp), so /api/sites/ URLs are unreliable.
   const allPages = {};
-  const css = props.generated?.css || '';
+  const opts = { imageMap: imageMap.value, css: props.generated?.css || '', repoCtx: buildRepoCtx() };
   for (const slug of slugs.value) {
-    let html = resolveImages(props.generated?.pages?.[slug] || '');
-    // Inline external CSS so the blob preview renders correctly
-    if (css) {
-      html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
-        `<style>${css}</style>`);
-    }
-    // Rewrite relative media paths to absolute GitHub Pages URLs so they
-    // resolve from the blob: origin (which has no base URL).
-    html = rewriteRelativePaths(html);
-    allPages[slug] = html;
+    allPages[slug] = normalizeHtml(props.generated?.pages?.[slug] || '', opts);
   }
   const wrapper = buildSelfContainedHtml(allPages, currentSlug.value);
   const blob = new Blob([wrapper], { type: 'text/html' });
@@ -1040,12 +971,10 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
   refineStatus.value = 'Loading updated pages...';
   const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
 
-  // Get file list first (pages may have changed)
   const filesRes = await fetch(`/api/files/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`);
   const { files } = await filesRes.json();
   const htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
 
-  // Fetch all pages
   const pageEntries = await Promise.all(
     htmlFiles.map(async (page) => {
       const r = await fetch(`${base}/${page}.html`);
@@ -1054,48 +983,11 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
     })
   );
 
-  // Fetch CSS
-  const cssCache = {};
-  const validPages = pageEntries.filter(Boolean);
-
-  // Inline local CSS (same logic as MySites)
-  const localCssPattern = /<link[^>]+href=["']([^"']+\.css)["'][^>]*\/?>/gi;
-  const allHrefs = new Set();
-  for (const [, html] of validPages) {
-    let m;
-    while ((m = localCssPattern.exec(html)) !== null) {
-      const href = m[1];
-      if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('//')) {
-        allHrefs.add(href);
-      }
-    }
-  }
-  await Promise.all([...allHrefs].map(async (href) => {
-    try {
-      const r = await fetch(`${base}/${href}`);
-      if (r.ok) cssCache[href] = await r.text();
-    } catch {}
-  }));
-
-  const newPages = {};
-  for (const [page, html] of validPages) {
-    newPages[page] = html.replace(
-      /<link([^>]+)href=["']([^"']+\.css)["']([^>]*)\/?>/gi,
-      (match, before, href) => {
-        if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) return match;
-        const content = cssCache[href];
-        return content ? `<style>/* ${href} */\n${content}</style>` : match;
-      }
-    );
-  }
-
-  const newSlugs = [...htmlFiles].sort((a, b) => {
-    if (a === 'index' || a === 'home') return -1;
-    if (b === 'index' || b === 'home') return 1;
-    return a.localeCompare(b);
-  });
-
-  const combinedCss = Object.values(cssCache).join('\n');
+  const fetchCss = async (href) => {
+    const r = await fetch(`${base}/${href}`);
+    return r.ok ? r.text() : '';
+  };
+  const { pages: newPages, combinedCss } = await inlineCssAsync(pageEntries.filter(Boolean), fetchCss);
 
   pendingItems.value = [];
   if (!isTargeted) selectedElement.value = null;
@@ -1104,7 +996,7 @@ async function sendFeedbackViaSidecar(msg, isTargeted) {
     siteJson: props.generated.siteJson,
     pages: newPages,
     css: combinedCss,
-    slugs: newSlugs,
+    slugs: sortSlugs(htmlFiles),
     userId,
     siteSlug
   });

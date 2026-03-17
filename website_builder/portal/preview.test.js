@@ -1,62 +1,24 @@
 /**
- * Tests for client-side preview image/media resolution.
+ * Tests for html-normalize.js — the shared HTML normalization module.
  *
  * Run: node preview.test.js
  *
- * Tests the three functions that transform HTML for preview and "open in tab":
- *   resolveImages  — maps bare filenames to data URIs / blob URLs via imageMap
- *   rewriteRelativePaths — rewrites relative paths to absolute GitHub Pages URLs
- *   openInTab pipeline — the full composition that must produce self-contained HTML
+ * Tests all functions: resolveImages, inlineCssSync, inlineCssAsync,
+ * rewriteRelativePaths, normalizeHtml, sortSlugs.
+ *
+ * Also includes integration-style tests that simulate every display path
+ * (iframe preview, open-in-tab, load from listing, feedback reload)
+ * to catch CSS/image loss regressions.
  */
 
-// ── Extracted logic (same as PreviewStep.vue) ──
-
-function resolveImages(html, imageMap) {
-  if (!html || Object.keys(imageMap).length === 0) return html;
-  const resolve = (val) => {
-    const basename = val.split('/').pop();
-    return imageMap[basename] || imageMap[val] || null;
-  };
-  return html
-    .replace(/src=["']([^"']+)["']/g, (match, src) => {
-      const uri = resolve(src);
-      return uri ? `src="${uri}"` : match;
-    })
-    .replace(/poster=["']([^"']+)["']/g, (match, poster) => {
-      const uri = resolve(poster);
-      return uri ? `poster="${uri}"` : match;
-    })
-    .replace(/data-ref=["']([^"']+)["']/g, (match, ref) => {
-      const uri = resolve(ref);
-      return uri ? `${match} src="${uri}"` : match;
-    });
-}
-
-function rewriteRelativePaths(html, { userId, siteSlug, repoOwner, repoName }) {
-  if (!userId || !siteSlug) return html;
-  const base = (repoOwner && repoName)
-    ? `https://${repoOwner}.github.io/${repoName}/sites/${userId}/${siteSlug}`
-    : `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
-  const rewriteAttr = (m, pre, path, post) => {
-    const clean = path.replace(/^\.\//, '');
-    return `${pre}${base}/${clean}${post}`;
-  };
-  return html
-    .replace(/(src=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
-    .replace(/(poster=["'])(?!https?:\/\/|data:|blob:|\/\/|#)([^"']+)(["'])/gi, rewriteAttr)
-    .replace(/(url\(["']?)(?!https?:\/\/|data:|blob:|\/\/|#)([^"')]+)(["']?\))/gi, rewriteAttr);
-}
-
-// Simulates the openInTab pipeline: resolveImages → inline CSS → rewriteRelativePaths
-function openInTabPipeline(html, css, imageMap, repoCtx) {
-  let result = resolveImages(html, imageMap);
-  if (css) {
-    result = result.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
-      `<style>${css}</style>`);
-  }
-  result = rewriteRelativePaths(result, repoCtx);
-  return result;
-}
+import {
+  resolveImages,
+  inlineCssSync,
+  inlineCssAsync,
+  rewriteRelativePaths,
+  normalizeHtml,
+  sortSlugs,
+} from './src/html-normalize.js';
 
 // ── Test harness ──
 
@@ -93,6 +55,17 @@ function assertNotIncludes(name, actual, substring) {
     console.error(`FAIL: ${name}`);
     console.error(`  expected NOT to contain: ${substring}`);
     console.error(`  actual: ${actual}`);
+  }
+}
+
+function assertDeepEqual(name, actual, expected) {
+  if (JSON.stringify(actual) === JSON.stringify(expected)) {
+    passed++;
+  } else {
+    failed++;
+    console.error(`FAIL: ${name}`);
+    console.error(`  expected: ${JSON.stringify(expected)}`);
+    console.error(`  actual:   ${JSON.stringify(actual)}`);
   }
 }
 
@@ -134,9 +107,6 @@ assert('resolveImages: data URI preserved (not double-replaced)',
   resolveImages('<img src="data:image/gif;base64,R0lGO">', IMAGE_MAP),
   '<img src="data:image/gif;base64,R0lGO">');
 
-// resolveImages uses basename matching, so https://cdn.example.com/photo.jpg
-// matches 'photo.jpg' in the map. This is intentional — uploaded images override
-// any URL with the same filename. Use rewriteRelativePaths to skip absolute URLs.
 assert('resolveImages: absolute URL with matching basename → resolved',
   resolveImages('<img src="https://cdn.example.com/photo.jpg">', IMAGE_MAP),
   '<img src="data:image/jpeg;base64,/9j/abc">');
@@ -156,6 +126,92 @@ assert('resolveImages: null html → null',
 assert('resolveImages: data-ref adds src',
   resolveImages('<div data-ref="photo.jpg"></div>', IMAGE_MAP),
   '<div data-ref="photo.jpg" src="data:image/jpeg;base64,/9j/abc"></div>');
+
+// ════════════════════════════════════════════
+// inlineCssSync
+// ════════════════════════════════════════════
+
+assert('inlineCssSync: replaces link tag with style',
+  inlineCssSync('<head><link rel="stylesheet" href="style.css"></head>', 'body{color:red}'),
+  '<head><style>body{color:red}</style></head>');
+
+assert('inlineCssSync: handles single quotes',
+  inlineCssSync("<link rel='stylesheet' href='style.css'>", 'h1{font-size:2em}'),
+  '<style>h1{font-size:2em}</style>');
+
+// inlineCssSync replaces ALL stylesheet links (it has the CSS text, doesn't
+// distinguish local vs external). The async version preserves external links.
+assert('inlineCssSync: replaces all stylesheet links including external',
+  inlineCssSync('<link rel="stylesheet" href="https://cdn.example.com/lib.css">', 'body{}'),
+  '<style>body{}</style>');
+
+assert('inlineCssSync: no css → no change',
+  inlineCssSync('<link rel="stylesheet" href="style.css">', ''),
+  '<link rel="stylesheet" href="style.css">');
+
+assert('inlineCssSync: no link tag → no change',
+  inlineCssSync('<h1>Hello</h1>', 'body{color:red}'),
+  '<h1>Hello</h1>');
+
+assert('inlineCssSync: null html → null',
+  inlineCssSync(null, 'body{}'),
+  null);
+
+assert('inlineCssSync: multiple link tags all replaced',
+  inlineCssSync('<link rel="stylesheet" href="a.css"><link rel="stylesheet" href="b.css">', 'body{}'),
+  '<style>body{}</style><style>body{}</style>');
+
+assert('inlineCssSync: self-closing link tag',
+  inlineCssSync('<link rel="stylesheet" href="style.css" />', 'body{}'),
+  '<style>body{}</style>');
+
+// ════════════════════════════════════════════
+// inlineCssAsync
+// ════════════════════════════════════════════
+
+const asyncTests = async () => {
+  // Simulate fetching CSS
+  const mockFetch = async (href) => {
+    if (href === 'style.css') return 'body { color: red; }';
+    if (href === 'extra.css') return 'h1 { font-size: 2em; }';
+    return '';
+  };
+
+  const pages = [
+    ['index', '<html><head><link rel="stylesheet" href="style.css"></head><body>Home</body></html>'],
+    ['about', '<html><head><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="extra.css"></head><body>About</body></html>'],
+  ];
+
+  const result = await inlineCssAsync(pages, mockFetch);
+
+  assertIncludes('inlineCssAsync: index has inlined CSS',
+    result.pages['index'], '<style>/* style.css */\nbody { color: red; }</style>');
+  assertNotIncludes('inlineCssAsync: index link tag removed',
+    result.pages['index'], 'href="style.css"');
+
+  assertIncludes('inlineCssAsync: about has both CSS files inlined',
+    result.pages['about'], 'body { color: red; }');
+  assertIncludes('inlineCssAsync: about has extra.css inlined',
+    result.pages['about'], 'h1 { font-size: 2em; }');
+
+  assertIncludes('inlineCssAsync: combinedCss has all CSS',
+    result.combinedCss, 'body { color: red; }');
+  assertIncludes('inlineCssAsync: combinedCss has extra CSS',
+    result.combinedCss, 'h1 { font-size: 2em; }');
+
+  // External CSS links preserved
+  const extPages = [['index', '<link rel="stylesheet" href="https://cdn.example.com/lib.css">']];
+  const extResult = await inlineCssAsync(extPages, mockFetch);
+  assertIncludes('inlineCssAsync: external link preserved',
+    extResult.pages['index'], 'href="https://cdn.example.com/lib.css"');
+
+  // Failed fetch — link tag stays
+  const failFetch = async () => { throw new Error('404'); };
+  const failPages = [['index', '<link rel="stylesheet" href="missing.css">']];
+  const failResult = await inlineCssAsync(failPages, failFetch);
+  assertIncludes('inlineCssAsync: failed fetch leaves link tag',
+    failResult.pages['index'], 'href="missing.css"');
+};
 
 // ════════════════════════════════════════════
 // rewriteRelativePaths
@@ -209,18 +265,13 @@ assert('rewriteRelativePaths: fallback to sidecar URL when no repo config',
   rewriteRelativePaths('<img src="media/photo.jpg">', { userId: 'u', siteSlug: 's', repoOwner: '', repoName: '' }),
   '<img src="/api/sites/u/s/media/photo.jpg">');
 
-// rewriteRelativePaths only handles src=, poster=, and url() — not href=.
-// CSS links are inlined separately (replaced with <style> tags) in the pipeline.
 assert('rewriteRelativePaths: href= NOT rewritten (handled by CSS inlining instead)',
   rewriteRelativePaths('<link rel="stylesheet" href="style.css">', REPO_CTX),
   '<link rel="stylesheet" href="style.css">');
 
 // ════════════════════════════════════════════
-// openInTab pipeline (full composition)
+// normalizeHtml (full pipeline)
 // ════════════════════════════════════════════
-
-// This is the critical test: the pipeline that "open in new tab" uses.
-// It must produce HTML where ALL resources are either inline or absolute URLs.
 
 const WASM_HTML = `<!DOCTYPE html>
 <html><head><title>Test</title>
@@ -236,73 +287,183 @@ const WASM_HTML = `<!DOCTYPE html>
 
 const CSS = 'body { color: red; }';
 
-const result = openInTabPipeline(WASM_HTML, CSS, IMAGE_MAP, REPO_CTX);
+const pipelineResult = normalizeHtml(WASM_HTML, { imageMap: IMAGE_MAP, css: CSS, repoCtx: REPO_CTX });
 
-// Known images should be data URIs (from resolveImages)
-assertIncludes('pipeline: known image → data URI',
-  result, 'src="data:image/jpeg;base64,/9j/abc"');
+assertIncludes('normalizeHtml: known image → data URI',
+  pipelineResult, 'src="data:image/jpeg;base64,/9j/abc"');
 
-// Video src should be blob URL (from resolveImages), then rewriteRelativePaths skips it
-assertIncludes('pipeline: known video → blob URI preserved',
-  result, 'src="blob:http://localhost:5174/abc-123"');
+assertIncludes('normalizeHtml: known video → blob URI preserved',
+  pipelineResult, 'src="blob:http://localhost:5174/abc-123"');
 
-// Poster should be data URI (from resolveImages)
-assertIncludes('pipeline: poster → data URI',
-  result, 'poster="data:image/png;base64,iVBOR"');
+assertIncludes('normalizeHtml: poster → data URI',
+  pipelineResult, 'poster="data:image/png;base64,iVBOR"');
 
-// Unknown image should be rewritten to GitHub Pages URL (resolveImages can't resolve, rewriteRelativePaths kicks in)
-assertIncludes('pipeline: unknown image → GitHub Pages URL',
-  result, `src="${BASE}/unknown.webp"`);
+assertIncludes('normalizeHtml: unknown image → GitHub Pages URL',
+  pipelineResult, `src="${BASE}/unknown.webp"`);
 
-// External URL should be preserved
-assertIncludes('pipeline: external URL preserved',
-  result, 'src="https://cdn.example.com/external.jpg"');
+assertIncludes('normalizeHtml: external URL preserved',
+  pipelineResult, 'src="https://cdn.example.com/external.jpg"');
 
-// CSS should be inlined
-assertIncludes('pipeline: CSS inlined',
-  result, '<style>body { color: red; }</style>');
-assertNotIncludes('pipeline: CSS link removed',
-  result, 'href="style.css"');
+assertIncludes('normalizeHtml: CSS inlined',
+  pipelineResult, '<style>body { color: red; }</style>');
+assertNotIncludes('normalizeHtml: CSS link removed',
+  pipelineResult, 'href="style.css"');
 
-// CSS url() with known image — resolveImages doesn't touch url(), but rewriteRelativePaths does.
-// hero.png was resolved in the src/poster attributes, but url('hero.png') is handled by rewriteRelativePaths
-// (resolveImages only handles src=, poster=, data-ref= — NOT url())
-// After resolveImages: url('hero.png') unchanged. After rewriteRelativePaths: absolute URL.
-// BUT rewriteRelativePaths skips data: URIs. Since hero.png wasn't touched by resolveImages in url(),
-// it gets the GitHub Pages URL.
-assertIncludes('pipeline: CSS url() → GitHub Pages URL',
-  result, `url('${BASE}/hero.png')`);
+assertIncludes('normalizeHtml: CSS url() → GitHub Pages URL',
+  pipelineResult, `url('${BASE}/hero.png')`);
+
+// Partial pipeline — only some options
+assert('normalizeHtml: images only (no css, no repoCtx)',
+  normalizeHtml('<img src="photo.jpg">', { imageMap: IMAGE_MAP }),
+  '<img src="data:image/jpeg;base64,/9j/abc">');
+
+assert('normalizeHtml: css only (no images, no repoCtx)',
+  normalizeHtml('<link rel="stylesheet" href="x.css">', { css: 'h1{}' }),
+  '<style>h1{}</style>');
+
+assert('normalizeHtml: null html → null',
+  normalizeHtml(null, { imageMap: IMAGE_MAP, css: CSS, repoCtx: REPO_CTX }),
+  null);
+
+assert('normalizeHtml: no options → unchanged',
+  normalizeHtml('<img src="photo.jpg">'),
+  '<img src="photo.jpg">');
+
+// ════════════════════════════════════════════
+// sortSlugs
+// ════════════════════════════════════════════
+
+assertDeepEqual('sortSlugs: index first',
+  sortSlugs(['about', 'index', 'contact']),
+  ['index', 'about', 'contact']);
+
+assertDeepEqual('sortSlugs: home first',
+  sortSlugs(['gallery', 'home', 'about']),
+  ['home', 'about', 'gallery']);
+
+assertDeepEqual('sortSlugs: alphabetical after index',
+  sortSlugs(['contact', 'gallery', 'about', 'index']),
+  ['index', 'about', 'contact', 'gallery']);
+
+assertDeepEqual('sortSlugs: empty array',
+  sortSlugs([]),
+  []);
+
+assertDeepEqual('sortSlugs: does not mutate input',
+  (() => { const arr = ['b', 'a']; sortSlugs(arr); return arr; })(),
+  ['b', 'a']);
+
+// ════════════════════════════════════════════
+// Integration: simulate every display path
+// ════════════════════════════════════════════
+
+// These tests ensure that ALL display paths produce HTML with:
+// 1. No bare <link rel="stylesheet"> tags (CSS must be inline)
+// 2. No relative src= attributes (must be data URI, blob, or absolute URL)
+// 3. Images resolved where possible
+
+const SITE_HTML = `<html><head>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<img src="media/photo.jpg">
+<video poster="media/thumb.jpg" src="media/clip.mp4"></video>
+<div style="background: url('media/bg.jpg')"></div>
+</body></html>`;
+
+const SITE_CSS = 'body { margin: 0; background: url(media/bg.jpg); }';
+
+function assertNoRelativePaths(name, html) {
+  // Should have no relative src= (except data: or blob: or absolute)
+  const relSrc = html.match(/src=["'](?!https?:\/\/|data:|blob:)([^"']+)["']/gi);
+  if (relSrc) {
+    failed++;
+    console.error(`FAIL: ${name} — found relative src: ${relSrc.join(', ')}`);
+  } else {
+    passed++;
+  }
+}
+
+function assertNoCssLinkTags(name, html) {
+  const links = html.match(/<link[^>]+rel=["']stylesheet["'][^>]*>/gi);
+  // Allow external links, only flag local ones
+  const localLinks = (links || []).filter(l => !l.includes('http://') && !l.includes('https://'));
+  if (localLinks.length > 0) {
+    failed++;
+    console.error(`FAIL: ${name} — found local CSS link: ${localLinks.join(', ')}`);
+  } else {
+    passed++;
+  }
+}
+
+function assertHasStyles(name, html) {
+  if (html.includes('<style>') || html.includes('<style ')) {
+    passed++;
+  } else {
+    failed++;
+    console.error(`FAIL: ${name} — no <style> tag found`);
+  }
+}
+
+// Path 1: Fresh WASM build → iframe preview (normalizeHtml with all options)
+const path1 = normalizeHtml(SITE_HTML, { imageMap: {}, css: SITE_CSS, repoCtx: REPO_CTX });
+assertNoCssLinkTags('path1 (WASM preview): no local CSS links', path1);
+assertHasStyles('path1 (WASM preview): has inline styles', path1);
+assertNoRelativePaths('path1 (WASM preview): no relative src', path1);
+
+// Path 2: Open in new tab (same as path 1 — normalizeHtml)
+const path2 = normalizeHtml(SITE_HTML, { imageMap: {}, css: SITE_CSS, repoCtx: REPO_CTX });
+assertNoCssLinkTags('path2 (open in tab): no local CSS links', path2);
+assertHasStyles('path2 (open in tab): has inline styles', path2);
+assertNoRelativePaths('path2 (open in tab): no relative src', path2);
+
+// Path 3: Loaded from MySites (CSS already inlined in HTML, repoCtx for remaining paths)
+const preInlined = SITE_HTML.replace(
+  /<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
+  `<style>${SITE_CSS}</style>`
+);
+const path3 = normalizeHtml(preInlined, { imageMap: {}, css: SITE_CSS, repoCtx: REPO_CTX });
+assertNoCssLinkTags('path3 (from listing): no local CSS links', path3);
+assertHasStyles('path3 (from listing): has inline styles', path3);
+assertNoRelativePaths('path3 (from listing): no relative src', path3);
+
+// Path 4: CSS already inlined but url() still relative — rewriteRelativePaths must fix
+const inlinedWithRelUrl = `<html><head><style>body { background: url('media/bg.jpg'); }</style></head>
+<body><img src="media/photo.jpg"></body></html>`;
+const path4 = normalizeHtml(inlinedWithRelUrl, { repoCtx: REPO_CTX });
+assertNoRelativePaths('path4 (pre-inlined CSS): no relative src', path4);
+assertIncludes('path4 (pre-inlined CSS): url() rewritten',
+  path4, `url('${BASE}/media/bg.jpg')`);
+
+// Path 5: Loaded from listing WITHOUT repoCtx (no GitHub Pages URL available)
+// Should still inline CSS even without repoCtx
+const path5 = normalizeHtml(SITE_HTML, { css: SITE_CSS });
+assertNoCssLinkTags('path5 (no repoCtx): no local CSS links', path5);
+assertHasStyles('path5 (no repoCtx): has inline styles', path5);
 
 // ════════════════════════════════════════════
 // Regression: openInTab WITHOUT rewriteRelativePaths
-// This is what was broken before the fix.
 // ════════════════════════════════════════════
 
-function brokenOpenInTab(html, css, imageMap) {
+function brokenPipeline(html, css, imageMap) {
   let result = resolveImages(html, imageMap);
-  if (css) {
-    result = result.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
-      `<style>${css}</style>`);
-  }
-  // Missing: rewriteRelativePaths(result, repoCtx)
+  if (css) result = inlineCssSync(result, css);
+  // Missing: rewriteRelativePaths — this is what was broken
   return result;
 }
 
-const broken = brokenOpenInTab(
+const broken = brokenPipeline(
   '<img src="unknown.webp"><link rel="stylesheet" href="style.css">',
   CSS, IMAGE_MAP
 );
 
-// Without rewriteRelativePaths, unknown images stay as bare filenames — broken in blob context
 assertIncludes('regression: broken pipeline leaves bare filename',
   broken, 'src="unknown.webp"');
 assertNotIncludes('regression: broken pipeline has no GitHub Pages URL',
   broken, 'github.io');
 
-// With the fix, the same input produces absolute URLs
-const fixed = openInTabPipeline(
+const fixed = normalizeHtml(
   '<img src="unknown.webp"><link rel="stylesheet" href="style.css">',
-  CSS, IMAGE_MAP, REPO_CTX
+  { imageMap: IMAGE_MAP, css: CSS, repoCtx: REPO_CTX }
 );
 assertIncludes('regression: fixed pipeline rewrites to GitHub Pages URL',
   fixed, `src="${BASE}/unknown.webp"`);
@@ -321,7 +482,9 @@ assert('resolveImages: media/ + filename with spaces → strips to basename',
   resolveImages('<img src="media/WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg">', SPACE_MAP),
   '<img src="data:image/jpeg;base64,AAAA">');
 
-// ── Results ──
+// ── Run async tests then report ──
 
-console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);
+asyncTests().then(() => {
+  console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+});
