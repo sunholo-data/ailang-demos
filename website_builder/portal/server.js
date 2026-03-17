@@ -155,6 +155,25 @@ function normalizeNavLinksServer(html, slugs) {
   });
 }
 
+/**
+ * Rewrite bare image/video filenames to media/ paths in HTML.
+ * All media files are stored in the media/ subdirectory, but WASM builds
+ * and some AI outputs use bare filenames like src="photo.jpg".
+ * This normalizes them to src="media/photo.jpg".
+ */
+function rewriteMediaPaths(html) {
+  if (!html) return html;
+  // src= and poster= attributes
+  html = html.replace(/((?:src|poster)=["'])([^"'\/]+\.(jpe?g|png|gif|webp|svg|mp4|mov|webm|avi))(["'])/gi, (m, pre, filename, ext, post) => {
+    return filename.startsWith('media/') ? m : `${pre}media/${filename}${post}`;
+  });
+  // CSS url() references
+  html = html.replace(/(url\(["']?)([^"')\/]+\.(jpe?g|png|gif|webp|svg))(["']?\))/gi, (m, pre, filename, ext, post) => {
+    return filename.startsWith('media/') ? m : `${pre}media/${filename}${post}`;
+  });
+  return html;
+}
+
 // ── Google Sheets helpers ──
 
 function loadFormsConfig() {
@@ -526,29 +545,13 @@ app.post('/api/save', async (req, res) => {
 
     const writtenFiles = [];
 
-    // Collect known image filenames for path normalization
-    const imageFilenames = new Set();
-    if (images && Array.isArray(images)) {
-      for (const img of images) if (img.filename) imageFilenames.add(img.filename);
-    }
-
     // Normalize navigation links, image paths, + inject form handler script before writing to disk.
     const allSlugs = Object.keys(pages);
     const formScript = buildFormScriptServer(FORM_ENDPOINT_ABS, slug);
     for (const [pageSlug, rawHtml] of Object.entries(pages)) {
       const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
       const filePath = join(siteDir, `${fileSlug}.html`);
-      let html = normalizeNavLinksServer(rawHtml, allSlugs);
-      // Rewrite bare image filenames to media/ paths (WASM builds use bare names)
-      if (imageFilenames.size > 0) {
-        html = html.replace(/(src=["'])([^"'\/]+\.(jpe?g|png|gif|webp|svg|mp4|mov))(["'])/gi, (m, pre, filename, ext, post) => {
-          // Only rewrite if it's a known uploaded image and doesn't already have a path
-          if (imageFilenames.has(filename) || filename.startsWith('media/')) {
-            return filename.startsWith('media/') ? m : `${pre}media/${filename}${post}`;
-          }
-          return m;
-        });
-      }
+      let html = rewriteMediaPaths(normalizeNavLinksServer(rawHtml, allSlugs));
       // Inject form handler script (for GitHub Pages / standalone)
       if (!html.includes('data-wb-form')) {
         const bodyClose = html.lastIndexOf('</body>');
@@ -1172,8 +1175,8 @@ app.post('/api/post-process/:user/:site', async (req, res) => {
       }
       if (!original) continue;
 
-      // Apply normalizations
-      let html = normalizeNavLinksServer(original, allSlugs);
+      // Apply normalizations (nav links + media path rewriting)
+      let html = rewriteMediaPaths(normalizeNavLinksServer(original, allSlugs));
 
       // Inject form handler if not already present
       if (!html.includes('data-wb-form')) {
