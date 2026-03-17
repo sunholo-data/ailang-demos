@@ -882,11 +882,8 @@ async function pollForCompletion(correlationId, startTime) {
   let lastActivity = Date.now(); // reset on any sign of life
 
   while (Date.now() - lastActivity < IDLE_TIMEOUT) {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-    statusMessage.value = `${builderName.value} is building your website... (${timeStr})`;
+    // Elapsed time is shown by the elapsed-badge, no need to duplicate in status text
+    statusMessage.value = `${builderName.value} is building your website...`;
 
     // Reset idle timeout on any activity (WebSocket events or poll responses)
     if (lastWsActivity.value > lastActivity) lastActivity = lastWsActivity.value;
