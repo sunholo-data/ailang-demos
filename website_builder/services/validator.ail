@@ -2,18 +2,13 @@ module website_builder/services/validator
 
 -- Contract-verified validation for generated website structures.
 -- Every public function has:
---   ensures { result.valid == (countList(result.errors) == 0) }
+--   ensures { result.valid == (listLength(result.errors) == 0) }
 
 import std/string (length, find)
-import std/list (foldl, concat, flatMap, any)
+import std/list (length as listLength, foldl, concat, flatMap, any)
 import std/json (decode, getString, getArray, getObject)
 import std/result (Ok, Err)
 import std/option (Some, None)
-
--- Local list-length helper: avoids the AILANG module scoping bug where
--- std/string.length shadows std/list.length in ensures clause evaluation
--- (WASM runtime resolves `length` globally, causing eq_Int type mismatch).
-pure func countList(xs: [string]) -> int = foldl(\acc _. acc + 1, 0, xs)
 
 -- Helper: check a required string field exists and is non-empty
 pure func checkStringField(json: Json, field: string, errorMsg: string) -> [string] =
@@ -25,7 +20,7 @@ pure func checkStringField(json: Json, field: string, errorMsg: string) -> [stri
 -- Helper: check a required array field exists and is non-empty
 pure func checkArrayField(json: Json, field: string, errorMsg: string) -> [string] =
   match getArray(json, field) {
-    Some(arr) => match arr { [] => [errorMsg], _ => [] },
+    Some(arr) => if listLength(arr) > 0 then [] else [errorMsg],
     None => [errorMsg]
   }
 
@@ -66,16 +61,9 @@ pure func validateTypography(brief: Json) -> [string] =
     None => ["Design brief missing typography"]
   }
 
--- Helper: check if any page has a given slug
-pure func hasPageWithSlug(pages: [Json], slug: string) -> bool =
-  any(\page. match getString(page, "slug") {
-    Some(s) => s == slug,
-    None => false
-  }, pages)
-
 -- Validate site structure has required top-level elements
 export func validateSiteStructure(siteJson: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   match decode(siteJson) {
     Ok(json) => {
@@ -83,7 +71,7 @@ export func validateSiteStructure(siteJson: string) -> {valid: bool, errors: [st
       let pagesErrors = checkArrayField(json, "pages", "Site must have at least one page");
       let designErrors = checkObjectField(json, "designBrief", "Site must have a designBrief");
       let allErrors = concat(titleErrors, concat(pagesErrors, designErrors));
-      {valid: countList(allErrors) == 0, errors: allErrors}
+      {valid: listLength(allErrors) == 0, errors: allErrors}
     },
     Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
   }
@@ -91,14 +79,14 @@ export func validateSiteStructure(siteJson: string) -> {valid: bool, errors: [st
 
 -- Validate that each page has slug, title, and sections
 export func validatePages(siteJson: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   match decode(siteJson) {
     Ok(json) => {
       match getArray(json, "pages") {
         Some(pages) => {
           let errors = flatMap(validateOnePage, pages);
-          {valid: countList(errors) == 0, errors: errors}
+          {valid: listLength(errors) == 0, errors: errors}
         },
         None => {valid: false, errors: ["No pages array found"]}
       }
@@ -109,14 +97,14 @@ export func validatePages(siteJson: string) -> {valid: bool, errors: [string]}
 
 -- Validate design brief has palette with all required colours and typography
 export func validateDesignBrief(siteJson: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   match decode(siteJson) {
     Ok(json) => {
       match getObject(json, "designBrief") {
         Some(brief) => {
           let allErrors = concat(validatePalette(brief), validateTypography(brief));
-          {valid: countList(allErrors) == 0, errors: allErrors}
+          {valid: listLength(allErrors) == 0, errors: allErrors}
         },
         None => {valid: false, errors: ["No designBrief found"]}
       }
@@ -126,14 +114,18 @@ export func validateDesignBrief(siteJson: string) -> {valid: bool, errors: [stri
 }
 
 -- Check that a home page exists (slug: "home")
+-- NOTE: any() with string == is inlined here (not extracted to a helper)
+-- because WASM has a bug where non-exported helper functions with lambdas
+-- using == on strings dispatch to eq_Int instead of eq_String.
 export func validateHasHomePage(siteJson: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   match decode(siteJson) {
     Ok(json) => {
       match getArray(json, "pages") {
         Some(pages) =>
-          if hasPageWithSlug(pages, "home") then {valid: true, errors: []}
+          if any(\page. match getString(page, "slug") { Some(s) => s == "home", None => false }, pages)
+          then {valid: true, errors: []}
           else {valid: false, errors: ["Site must have a home page (slug: home)"]},
         None => {valid: false, errors: ["No pages array"]}
       }
@@ -144,7 +136,7 @@ export func validateHasHomePage(siteJson: string) -> {valid: bool, errors: [stri
 
 -- Validate generated HTML is well-formed (basic structural checks)
 export pure func validateHtml(html: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   let hasDoctype = find(html, "<!DOCTYPE html>") >= 0 || find(html, "<!doctype html>") >= 0;
   let hasHead = find(html, "<head") >= 0;
@@ -157,13 +149,13 @@ export pure func validateHtml(html: string) -> {valid: bool, errors: [string]}
     if hasClosingHtml then [] else ["Missing </html>"]
   ];
   let allErrors = foldl(\acc errs. concat(acc, errs), [], checks);
-  {valid: countList(allErrors) == 0, errors: allErrors}
+  {valid: listLength(allErrors) == 0, errors: allErrors}
 }
 
 -- Validate generated JavaScript is safe for publishing.
 -- Checks for dangerous patterns that could enable XSS, data exfiltration, etc.
 export pure func validateJavaScript(jsCode: string) -> {safe: bool, violations: [string]}
-  ensures { result.safe == (countList(result.violations) == 0) }
+  ensures { result.safe == (listLength(result.violations) == 0) }
 {
   let dangerousPatterns = [
     {pattern: "eval(", label: "eval() -- code injection risk"},
@@ -180,17 +172,17 @@ export pure func validateJavaScript(jsCode: string) -> {safe: bool, violations: 
     \p. if find(jsCode, p.pattern) >= 0 then [p.label] else [],
     dangerousPatterns
   );
-  {safe: countList(violations) == 0, violations: violations}
+  {safe: listLength(violations) == 0, violations: violations}
 }
 
 -- Run all site validators and aggregate errors
 export func validateAll(siteJson: string) -> {valid: bool, errors: [string]}
-  ensures { result.valid == (countList(result.errors) == 0) }
+  ensures { result.valid == (listLength(result.errors) == 0) }
 {
   let r1 = validateSiteStructure(siteJson);
   let r2 = validatePages(siteJson);
   let r3 = validateDesignBrief(siteJson);
   let r4 = validateHasHomePage(siteJson);
   let allErrors = concat(r1.errors, concat(r2.errors, concat(r3.errors, r4.errors)));
-  {valid: countList(allErrors) == 0, errors: allErrors}
+  {valid: listLength(allErrors) == 0, errors: allErrors}
 }
