@@ -797,6 +797,9 @@ function openInTab() {
       html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["'][^"']*\.css["']\s*\/?>/gi,
         `<style>${css}</style>`);
     }
+    // Rewrite relative media paths to absolute GitHub Pages URLs so they
+    // resolve from the blob: origin (which has no base URL).
+    html = rewriteRelativePaths(html);
     allPages[slug] = html;
   }
   const wrapper = buildSelfContainedHtml(allPages, currentSlug.value);
