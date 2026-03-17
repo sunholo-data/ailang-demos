@@ -23,6 +23,11 @@
     <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="handleFiles" />
     <input ref="fileInput" type="file" accept="image/*,video/*,.docx,.pptx,.xlsx,.doc,.pdf" multiple style="display:none" @change="handleFiles" />
 
+    <!-- Size warning -->
+    <div v-if="sizeWarning" class="size-warning">
+      <SvgIcon name="x" :size="16" /> {{ sizeWarning }}
+    </div>
+
     <!-- Processing progress -->
     <div v-if="processing" class="progress-bar-container">
       <div class="progress-text">Getting your photos ready... {{ processedCount }} of {{ totalToProcess }}</div>
@@ -85,6 +90,10 @@
       <p>Tap here to add photos, files, or use the buttons above to get started.</p>
     </div>
 
+    <p v-if="items.length > 0" class="upload-hint">
+      {{ totalSizeLabel }} total · Max 20MB per file · 100MB total
+    </p>
+
     <div class="nav-btns">
       <button class="btn-secondary" @click="$emit('back')">← Back</button>
       <button
@@ -142,16 +151,42 @@ function getDocFormat(filename) {
   return ext in DOC_FORMATS ? ext : 'docx';
 }
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB per file
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total
+const sizeWarning = ref('');
+
 async function handleFiles(e) {
   const files = Array.from(e.target.files || []);
   if (files.length === 0) return;
+  sizeWarning.value = '';
+
+  // Check per-file size limits
+  const oversized = files.filter(f => f.size > MAX_FILE_SIZE);
+  if (oversized.length > 0) {
+    sizeWarning.value = `${oversized.length} file${oversized.length > 1 ? 's' : ''} too large (max ${formatFileSize(MAX_FILE_SIZE)} each): ${oversized.map(f => f.name).join(', ')}`;
+  }
+  const validFiles = files.filter(f => f.size <= MAX_FILE_SIZE);
+
+  // Check total size
+  const currentTotal = items.value.reduce((sum, i) => sum + (i.fileSize || 0), 0);
+  const newTotal = currentTotal + validFiles.reduce((sum, f) => sum + f.size, 0);
+  if (newTotal > MAX_TOTAL_SIZE) {
+    sizeWarning.value = `Total upload size would exceed ${formatFileSize(MAX_TOTAL_SIZE)}. Remove some files first.`;
+    if (e.target) e.target.value = '';
+    return;
+  }
+
+  if (validFiles.length === 0) {
+    if (e.target) e.target.value = '';
+    return;
+  }
 
   processing.value = true;
   processedCount.value = 0;
-  totalToProcess.value = files.length;
+  totalToProcess.value = validFiles.length;
 
   // Process one at a time to limit memory pressure
-  for (const file of files) {
+  for (const file of validFiles) {
     try {
       if (file.type.startsWith('image/')) {
         await processImage(file);
@@ -310,6 +345,27 @@ function fileToBase64(file) {
 .upload-icon { color: var(--text-muted); }
 
 /* Progress bar */
+.upload-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.size-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #FFF3E0;
+  border: 1px solid #FFCC80;
+  border-radius: var(--radius);
+  color: #E65100;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 .progress-bar-container {
   margin-bottom: 1.25rem;
   padding: 0.85rem 1rem;
