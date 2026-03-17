@@ -750,7 +750,7 @@ async function startBuild() {
     building.value = false;
 
     // Include save info in generated data so PreviewStep/PublishStep know the site is persisted
-    const generated = { siteJson, pages, css, slugs, buildMode: 'wasm' };
+    const generated = { siteJson, pages, css, slugs, buildMode: 'wasm', builderName: props.personaName, builderKey: props.personaKey };
     if (saveResult) {
       generated.userId = saveResult.userId;
       generated.siteSlug = saveResult.siteSlug;
@@ -861,6 +861,8 @@ async function buildViaMessages() {
     statusMessage.value = 'Loading your website...';
     const generated = await loadGeneratedSite(completion, props.userId, siteSlug);
     generated.buildMode = 'messages';
+    generated.builderName = props.personaName;
+    generated.builderKey = props.personaKey;
     setStep('load', 'done', 'Loaded!');
 
     closeTaskStream();

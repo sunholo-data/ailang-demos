@@ -69,6 +69,9 @@
             <h3>{{ site.title }}</h3>
             <span class="page-count">{{ site.pages.length }} page{{ site.pages.length !== 1 ? 's' : '' }}</span>
           </div>
+          <span v-if="site.builderName" class="builder-badge" :class="site.builderKey || ''">
+            Built by {{ site.builderName }}
+          </span>
           <p v-if="site.description" class="site-desc">{{ site.description }}</p>
           <div class="site-pages">
             <span v-for="page in site.pages" :key="page" class="page-pill">{{ page }}</span>
@@ -257,6 +260,8 @@ onMounted(async () => {
         if (m.createdAt?.toDate) site.createdAt = m.createdAt.toDate().toISOString();
         else if (m.createdAt) site.createdAt = m.createdAt;
         if (m.title && !site.title) site.title = m.title;
+        if (m.builderName) site.builderName = m.builderName;
+        if (m.builderKey) site.builderKey = m.builderKey;
       }
     }
     // Sort by most recently updated/created first
@@ -752,6 +757,21 @@ function formatDate(iso) {
   margin-bottom: 0.75rem;
 }
 .site-meta-created { opacity: 0.7; }
+
+.builder-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.builder-badge.wasm { background: #E8F5E9; color: #2E7D32; }
+.builder-badge.messages { background: var(--primary-soft); color: var(--primary); }
+.builder-badge.messages-byok { background: #FFF3E0; color: #E65100; }
+.builder-badge.openai-byok { background: #E3F2FD; color: #1565C0; }
 
 .site-actions {
   display: flex;
