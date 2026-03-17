@@ -240,6 +240,8 @@
           :user-id="userId"
           :user-name="user?.displayName || ''"
           :user-email="user?.email || ''"
+          :builder-name="currentPersona.name"
+          :builder-key="selectedPersona"
           @back="currentStep = 5"
           @edit="currentStep = 0"
           @restart="restart"

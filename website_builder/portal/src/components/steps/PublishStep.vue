@@ -76,6 +76,8 @@ const props = defineProps({
   userId: { type: String, default: 'default' },
   userName: { type: String, default: '' },
   userEmail: { type: String, default: '' },
+  builderName: { type: String, default: '' },
+  builderKey: { type: String, default: '' },
 });
 defineEmits(['back', 'restart', 'edit']);
 
@@ -145,8 +147,8 @@ onMounted(async () => {
         ownerName: props.userName,
         title: siteName,
         liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
-        builderName: props.generated.builderName || '',
-        builderKey: props.generated.builderKey || '',
+        builderName: props.builderName || props.generated.builderName || '',
+        builderKey: props.builderKey || props.generated.builderKey || '',
       });
 
       const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
