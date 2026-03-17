@@ -726,8 +726,16 @@ function toggleFullscreen() {
 }
 
 function openInTab() {
-  // Always use self-contained HTML from memory — sidecar disk is ephemeral
-  // in production (Cloud Run /tmp), so /api/sites/ URLs are unreliable.
+  // If published, open the live GitHub Pages URL directly — no blob needed.
+  const { userId, siteSlug } = props.generated || {};
+  const rc = getRepoConfig();
+  if (rc?.owner && rc?.repo && userId && siteSlug) {
+    const pageFile = currentSlug.value === 'index' ? '' : `${currentSlug.value}.html`;
+    const ghUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}/${pageFile}`;
+    window.open(ghUrl, '_blank');
+    return;
+  }
+  // Fallback for unpublished sites: blob with normalized HTML
   const allPages = {};
   const opts = { imageMap: imageMap.value, css: props.generated?.css || '', repoCtx: buildRepoCtx() };
   for (const slug of slugs.value) {
