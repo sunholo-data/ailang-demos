@@ -5,7 +5,7 @@
 <h1 align="center">AILANG Demos</h1>
 
 <p align="center">
-  <strong>Document intelligence, streaming protocols, and contract-verified AI agents</strong><br>
+  <strong>AI website builder, document intelligence, streaming protocols, and contract-verified AI agents</strong><br>
   Built with <a href="https://ailang.sunholo.com/">AILANG</a> — a pure functional language with algebraic effects, contracts, and first-class AI.
 </p>
 
@@ -75,6 +75,18 @@ BigQuery integration with contract-verified SQL generation. AILANG contracts gua
 | Demo | Description |
 |------|-------------|
 | **GA4 Analytics** | BigQuery queries with contract-verified SQL, capability budgets, and ADC auth — run locally via CLI |
+
+### Website Builder & AILANG Cloud
+
+<p align="center">
+  <img src="website_builder/docs/screenshots/builder-selection.png" alt="Website Builder — choose your builder persona" width="520">
+</p>
+
+AI-powered website generation from text descriptions, photos, and documents. The **first public use case for AILANG Cloud** — server-side compute dispatched through AILANG's messaging protocol. Two build modes: WASM (in-browser) and AILANG Cloud (server-side via Coordinator).
+
+| Demo | Live Link | Description |
+|------|-----------|-------------|
+| **Website Builder** | [Try it](https://www.sunholo.com/ailang-demos/website_builder/) | Describe → Upload → Style → Build → Preview → Publish, with WASM and AILANG Cloud build modes |
 
 ---
 
@@ -181,9 +193,37 @@ speak --tools "What's the git status?"    # with tool calling
 
 ### Website Builder
 
-Give it a text description of a business, and it generates a complete multi-page website — site structure, navigation, HTML per page, shared CSS — all via AILANG's `std/ai` effect calling Gemini. The AI output is validated by AILANG contracts (structure has a home page, pages have valid slugs, HTML passes syntax checks) before being written to disk. Style is configurable via 6 preset directions or freeform text.
+Describe your business, upload photos and documents, pick a style, and get a multi-page website generated and published to GitHub Pages. No code required. The **first public use case for AILANG Cloud** — server-side AI compute dispatched through AILANG's messaging protocol.
+
+**[Try Website Builder &rarr;](https://www.sunholo.com/ailang-demos/website_builder/)**
+
+**Two build modes:**
+
+| Mode | How it works | Best for |
+|------|-------------|----------|
+| **Gemma Builder** (WASM) | AILANG runs in the browser via WebAssembly, calls Gemini directly with your API key | Fast iteration, no server needed |
+| **Claudette Mouser** (AILANG Cloud) | Build brief sent to AILANG Coordinator → Cloud Run agent runs the AILANG pipeline server-side | Higher quality, no API key needed |
+
+<p align="center">
+  <img src="website_builder/docs/screenshots/builder-selection.png" alt="Website Builder — choose your builder persona" width="380">
+  &nbsp;&nbsp;
+  <img src="website_builder/docs/screenshots/ailang-cloud-build.png" alt="AILANG Cloud build in progress" width="380">
+</p>
+
+The Cloud path dispatches work via REST API to the AILANG Coordinator, which spins up a Cloud Run job. The portal tracks progress through polling (5s intervals) and an optional WebSocket stream for real-time build updates. Correlation IDs tie requests to completions, so concurrent builds work out of the box. Generated pages are committed to GitHub and served via GitHub Pages.
+
+See the [AILANG Cloud Messaging Guide](https://ailang.sunholo.com/docs/cloud-messaging) for the technical integration pattern.
+
+<p align="center">
+  <img src="website_builder/docs/screenshots/upload-content.png" alt="Upload photos, documents, and text" width="380">
+  &nbsp;&nbsp;
+  <img src="website_builder/docs/screenshots/my-sites-dashboard.png" alt="My Websites dashboard" width="380">
+</p>
+
+**Features:** 7-step wizard (Describe → Upload → Style → Builder → Build → Preview → Publish), 3 builder personas, 6 style directions, media upload (photos, videos, documents), AILANG contract-verified validation, Firebase auth with Google sign-in, site sharing, GitHub Pages publishing, form submission handling via Google Sheets.
 
 ```bash
+# CLI mode (AILANG pipeline directly)
 GENERATE=true GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,AI,Env \
   --ai gemini-2.5-flash website_builder/main.ail "My flower arranging business"
 ```
@@ -275,6 +315,8 @@ demos/
 │   ├── main.ail                 # Content → structure → HTML via Gemini
 │   ├── types/                   # Content ADTs
 │   ├── services/                # Extractor, structurer, validator, generator
+│   ├── portal/                  # Vue 3 SPA + Express sidecar (Cloud Run)
+│   ├── docs/screenshots/        # Portal screenshots
 │   └── output/                  # Generated HTML + CSS
 ├── ecommerce/                   # Ecommerce vertical demo
 │   ├── main.ail                 # AI product recommendations
