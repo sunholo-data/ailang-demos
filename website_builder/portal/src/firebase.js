@@ -124,18 +124,21 @@ export async function saveSiteMetadata(ownerUid, siteSlug, metadata) {
   try {
     const id = siteDocId(ownerUid, siteSlug);
     const ref = doc(db, 'sites', id);
-    // Check if doc exists to set createdAt only on first write
-    const existing = await getDoc(ref);
     const data = {
       ownerUid,
       siteSlug,
       ...metadata,
       updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(), // set on create, overwritten harmlessly on update
     };
-    if (!existing.exists()) {
-      data.createdAt = serverTimestamp();
+    // Try update first (existing doc) — skips createdAt overwrite
+    try {
+      const { createdAt, ...updateData } = data;
+      await updateDoc(ref, updateData);
+    } catch (updateErr) {
+      // Doc doesn't exist yet — create with createdAt
+      await setDoc(ref, data);
     }
-    await setDoc(ref, data, { merge: true });
   } catch (err) {
     console.warn('Failed to save site metadata:', err.message);
   }
