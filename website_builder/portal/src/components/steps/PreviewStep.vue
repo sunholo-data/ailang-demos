@@ -18,7 +18,7 @@
       <button class="tab-action" :title="isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen preview'" @click="toggleFullscreen">
         <SvgIcon :name="isFullscreen ? 'minimize' : 'maximize'" :size="16" />
       </button>
-      <button class="tab-action" title="Open current page in new tab" @click="openInTab"><SvgIcon name="external-link" :size="16" /></button>
+      <button v-if="livePageUrl" class="tab-action" title="Open on GitHub Pages" @click="window.open(livePageUrl, '_blank')"><SvgIcon name="external-link" :size="16" /></button>
     </div>
 
     <!-- Website preview iframe -->
@@ -233,7 +233,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
 import { saveSite, getRepoConfig } from '../../api.js';
-import { normalizeNavLinks, buildSelfContainedHtml } from '../../nav-utils.js';
+import { normalizeNavLinks } from '../../nav-utils.js';
 import { resolveImages as _resolveImages, normalizeHtml, inlineCssAsync, rewriteRelativePaths as _rewriteRelativePaths, sortSlugs } from '../../html-normalize.js';
 import { subscribeToComments, addComment, resolveComment as fbResolveComment, deleteComment as fbDeleteComment } from '../../firebase.js';
 
@@ -725,28 +725,14 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value;
 }
 
-function openInTab() {
-  // If published, open the live GitHub Pages URL directly — no blob needed.
+// GitHub Pages URL for the current page (only available after publish)
+const livePageUrl = computed(() => {
   const { userId, siteSlug } = props.generated || {};
   const rc = getRepoConfig();
-  if (rc?.owner && rc?.repo && userId && siteSlug) {
-    const pageFile = currentSlug.value === 'index' ? '' : `${currentSlug.value}.html`;
-    const ghUrl = `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}/${pageFile}`;
-    window.open(ghUrl, '_blank');
-    return;
-  }
-  // Fallback for unpublished sites: blob with normalized HTML
-  const allPages = {};
-  const opts = { imageMap: imageMap.value, css: props.generated?.css || '', repoCtx: buildRepoCtx() };
-  for (const slug of slugs.value) {
-    allPages[slug] = normalizeHtml(props.generated?.pages?.[slug] || '', opts);
-  }
-  const wrapper = buildSelfContainedHtml(allPages, currentSlug.value);
-  const blob = new Blob([wrapper], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
+  if (!rc?.owner || !rc?.repo || !userId || !siteSlug) return '';
+  const pageFile = currentSlug.value === 'index' ? '' : `${currentSlug.value}.html`;
+  return `https://${rc.owner}.github.io/${rc.repo}/sites/${userId}/${siteSlug}/${pageFile}`;
+});
 
 function openHistoryItem(item) {
   if (item.type === 'image') {
