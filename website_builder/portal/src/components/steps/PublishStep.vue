@@ -133,30 +133,38 @@ onMounted(async () => {
         description: siteName,
         repoConfig: getRepoConfig(),
       });
-      saved.value = true;
-      saving.value = false;
       // Propagate save info back
       if (props.generated) {
         props.generated.userId = result.userId;
         props.generated.siteSlug = result.siteSlug;
         props.generated.liveUrl = result.liveUrl || '';
       }
+
+      const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
+
+      // Transition straight from saving → deploying (skip the success card)
+      // to avoid flashing the URL before GitHub Pages is live.
+      if (ghUrl) {
+        deploying.value = true;
+        saving.value = false;
+        liveUrl.value = ghUrl;
+      } else {
+        saving.value = false;
+        liveUrl.value = result.liveUrl || '';
+      }
+      saved.value = true;
+
       // Save site metadata to Firestore for sharing (must complete before Share button works)
       await saveSiteMetadata(result.userId, result.siteSlug, {
         ownerEmail: props.userEmail,
         ownerName: props.userName,
         title: siteName,
-        liveUrl: buildGitHubPagesUrl(result.userId, result.siteSlug) || result.liveUrl || '',
+        liveUrl: ghUrl || result.liveUrl || '',
         builderName: props.builderName || props.generated.builderName || '',
         builderKey: props.builderKey || props.generated.builderKey || '',
       });
 
-      const ghUrl = buildGitHubPagesUrl(result.userId, result.siteSlug);
-      liveUrl.value = ghUrl || result.liveUrl || '';
-
-      // Wait for GitHub Pages to deploy before showing "live" state
       if (ghUrl) {
-        deploying.value = true;
         await waitForDeploy(ghUrl, deployMaxWait.value);
         deploying.value = false;
       }
