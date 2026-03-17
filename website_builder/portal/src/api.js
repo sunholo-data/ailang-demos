@@ -232,19 +232,20 @@ export async function restoreSiteVersion(user, site, sha) {
  * @returns {Promise<Array<{originalName, storedName, stagingPath, size, mimeType}>>}
  */
 export async function uploadMedia(mediaItems, user, site, onProgress) {
-  const BATCH_SIZE = 5;
+  // Upload one file at a time to stay under Cloud Run's 32MB request limit.
+  // Large images (phone photos) can be 5-15MB each, so batching risks 413 errors.
   const results = [];
-  for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
-    const batch = mediaItems.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < mediaItems.length; i++) {
+    const item = mediaItems[i];
     const form = new FormData();
-    for (const item of batch) form.append('files', item.file, item.filename);
+    form.append('files', item.file, item.filename);
     const resp = await fetch(
       `${API_BASE}/upload?user=${encodeURIComponent(user)}&site=${encodeURIComponent(site)}`,
       { method: 'POST', body: form }
     );
-    if (!resp.ok) throw new Error(`Upload failed (${resp.status}): ${await resp.text()}`);
+    if (!resp.ok) throw new Error(`Upload failed for ${item.filename} (${resp.status}): ${await resp.text()}`);
     results.push(...await resp.json());
-    onProgress?.(Math.min(i + BATCH_SIZE, mediaItems.length), mediaItems.length);
+    onProgress?.(i + 1, mediaItems.length);
   }
   return results;
 }
