@@ -32,7 +32,7 @@ const DOCPARSE_MODULES = [
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = 'gpt-5.4';
+const OPENAI_MODEL = 'gpt-5.4-mini';
 
 let engine = null;
 let ready = false;
