@@ -1138,14 +1138,27 @@ app.get('/api/repo-file/:user/:site/*path', async (req, res) => {
  * Reads committed files from GitHub, applies normalizeNavLinksServer() + form script
  * injection, then recommits if any files changed. This makes the agent's output
  * deterministic regardless of what URLs/links the AI generated.
+ *
+ * Uses a per-site lock to prevent concurrent post-processing of the same site,
+ * and cleans up local disk on commit failure to avoid inconsistent state.
  */
+const postProcessLocks = new Map();
 app.post('/api/post-process/:user/:site', async (req, res) => {
   if (!process.env.GITHUB_TOKEN) return res.json({ fixed: false, reason: 'No GITHUB_TOKEN' });
 
   const owner = process.env.GITHUB_OWNER || 'sunholo-data';
   const repo = process.env.GITHUB_REPO || 'sunholo-websites';
   const { user, site } = req.params;
+  const lockKey = `${user}/${site}`;
+
+  // Per-site lock: reject concurrent requests for the same site
+  if (postProcessLocks.has(lockKey)) {
+    return res.status(409).json({ error: 'Post-processing already in progress for this site' });
+  }
+  postProcessLocks.set(lockKey, true);
+
   const prefix = `sites/${user}/${site}`;
+  const siteDir = join(SITES_DIR, user, site);
 
   try {
     // 1. List files in the site directory
@@ -1158,9 +1171,9 @@ app.post('/api/post-process/:user/:site', async (req, res) => {
     if (htmlFiles.length === 0) return res.json({ fixed: false, reason: 'No HTML files found' });
 
     // 2. Fetch each HTML file and apply normalization
-    const siteDir = join(SITES_DIR, user, site);
     mkdirSync(siteDir, { recursive: true });
     const changedFiles = [];
+    const localFilesWritten = [];
     const formScript = buildFormScriptServer(FORM_ENDPOINT_ABS, site);
 
     for (const file of htmlFiles) {
@@ -1185,20 +1198,31 @@ app.post('/api/post-process/:user/:site', async (req, res) => {
 
       if (html !== original) {
         writeFileSync(join(siteDir, file.name), html, 'utf-8');
+        localFilesWritten.push(join(siteDir, file.name));
         changedFiles.push(`${prefix}/${file.name}`);
       }
     }
 
     // 3. Recommit if any files changed
     if (changedFiles.length > 0) {
-      await commitToRepo(changedFiles, `Post-process: normalize links for ${site}`);
-      console.log(`[sidecar] Post-processed ${changedFiles.length} files for ${user}/${site}`);
+      try {
+        await commitToRepo(changedFiles, `Post-process: normalize links for ${site}`);
+        console.log(`[sidecar] Post-processed ${changedFiles.length} files for ${user}/${site}`);
+      } catch (commitErr) {
+        // Clean up local files written during this run to avoid disk/repo inconsistency
+        for (const f of localFilesWritten) {
+          try { rmSync(f); } catch { /* best effort */ }
+        }
+        throw commitErr;
+      }
     }
 
     res.json({ fixed: changedFiles.length > 0, filesChanged: changedFiles });
   } catch (err) {
     console.warn(`[sidecar] Post-process error: ${err.message}`);
     res.status(500).json({ error: err.message });
+  } finally {
+    postProcessLocks.delete(lockKey);
   }
 });
 

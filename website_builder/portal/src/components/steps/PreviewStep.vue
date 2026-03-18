@@ -232,7 +232,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
 import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
-import { saveSite, getRepoConfig } from '../../api.js';
+import { saveSite, getRepoConfig, getRepoFile, listRepoFiles } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { resolveImages as _resolveImages, normalizeHtml, inlineCssAsync, rewriteRelativePaths as _rewriteRelativePaths, sortSlugs } from '../../html-normalize.js';
 import { subscribeToComments, addComment, resolveComment as fbResolveComment, deleteComment as fbDeleteComment } from '../../firebase.js';
@@ -666,29 +666,54 @@ onMounted(async () => {
   setupCommentSubscription();
 });
 
-// Load a site's pages from the sidecar API (same logic as MySites.viewSite)
+// Load a site's pages from the sidecar API, falling back to GitHub repo.
+// In Cloud build mode, the agent pushes files directly to GitHub — they may
+// not exist on the sidecar's local disk. Try local first, fall back to repo.
 async function loadSiteFromSidecar(userId, siteSlug) {
   loadingFromSidecar.value = true;
   try {
     const base = `/api/sites/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`;
+
+    // Try local file listing first, fall back to GitHub repo listing
+    let htmlFiles;
+    let useRepo = false;
     const filesRes = await fetch(`/api/files/${encodeURIComponent(userId)}/${encodeURIComponent(siteSlug)}`);
-    const { files } = await filesRes.json();
-    const htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+    if (filesRes.ok) {
+      const { files } = await filesRes.json();
+      htmlFiles = files.filter(f => f.ext === '.html').map(f => f.name.replace('.html', ''));
+    }
+    if (!htmlFiles || htmlFiles.length === 0) {
+      try {
+        const repoFiles = await listRepoFiles(userId, siteSlug);
+        htmlFiles = repoFiles.filter(f => f.endsWith('.html')).map(f => f.replace('.html', ''));
+        useRepo = true;
+      } catch { /* no repo files either */ }
+    }
+    if (!htmlFiles || htmlFiles.length === 0) return;
+
+    // Fetch a file, trying local disk first then GitHub repo
+    const fetchFile = async (filename) => {
+      if (!useRepo) {
+        const r = await fetch(`${base}/${filename}`);
+        if (r.ok) return r.text();
+      }
+      // Fall back to repo
+      try { return await getRepoFile(userId, siteSlug, filename); } catch { return null; }
+    };
 
     // Fetch all pages
     const pageEntries = await Promise.all(
       htmlFiles.map(async (page) => {
-        const r = await fetch(`${base}/${page}.html`);
-        if (!r.ok) return null;
-        return [page, await r.text()];
+        const html = await fetchFile(`${page}.html`);
+        return html ? [page, html] : null;
       })
     );
     const validPages = pageEntries.filter(Boolean);
 
-    // Inline CSS from sidecar
+    // Inline CSS — same fallback logic
     const fetchCss = async (href) => {
-      const r = await fetch(`${base}/${href}`);
-      return r.ok ? r.text() : '';
+      const text = await fetchFile(href);
+      return text || '';
     };
     const { pages: newPages, combinedCss } = await inlineCssAsync(validPages, fetchCss);
 
