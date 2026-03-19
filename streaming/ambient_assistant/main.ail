@@ -978,6 +978,9 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
   println("[Tool Async] " ++ fnName ++ " (id=" ++ callId ++ ") completed");
   println("[Tool Result] " ++ truncResult);
 
+  -- Notify via macOS notification (mirrors to Apple Watch)
+  notifyToolComplete(fnName, truncResult);
+
   -- For prefetch: also cache the result
   handlePrefetchCache(fnName, callId, sessionDir, truncResult);
 
@@ -994,6 +997,18 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
 
   -- Clean up pending files
   exec("rm", ["-f", pendingPath, resultPath, donePath])
+}
+
+-- Send a macOS notification when an async tool completes.
+-- Mirrors to Apple Watch for quiet nudges when ambient gathers info.
+func notifyToolComplete(fnName: string, result: string) -> () ! {Process} {
+  let summary = if length(result) > 80 then substring(result, 0, 80) ++ "..." else result;
+  let title = "Ambient: " ++ fnName ++ " complete";
+  let script = "display notification \"" ++ summary ++ "\" with title \"" ++ title ++ "\" sound name \"Tink\"";
+  match exec("osascript", ["-e", script]) {
+    Ok(_) => (),
+    Err(_) => ()
+  }
 }
 
 -- For prefetch tools: cache the result after async completion

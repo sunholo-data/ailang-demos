@@ -1,0 +1,44 @@
+module linkedin/types/linkedin_types
+
+-- LinkedIn API integration types
+
+-- Credentials stored in ~/.ailang/linkedin/credentials.json
+export type LinkedInCreds = {
+  accessToken: string,
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string,
+  orgUrn: string
+}
+
+-- A marketing post loaded from disk
+export type MarketingPost = {
+  slug: string,
+  title: string,
+  body: string,
+  link: string,
+  hashtags: string
+}
+
+-- Result of publishing a post
+export type PostResult = {
+  postUrn: string,
+  slug: string,
+  publishedAt: string
+}
+
+-- A comment on a LinkedIn post (read-only)
+export type LinkedInComment = {
+  commentUrn: string,
+  authorName: string,
+  text: string,
+  createdAt: string,
+  parentPostUrn: string
+}
+
+-- Tracking state for published posts
+export type PostState = {
+  slug: string,
+  postUrn: string,
+  publishedAt: string
+}

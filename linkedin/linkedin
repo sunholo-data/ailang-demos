@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# LinkedIn Marketing CLI — AILANG Demo
+# Publish content to LinkedIn company page, read comments for AILANG Cloud.
+
+# Resolve symlinks to find the real script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+MAIN_AIL="linkedin/main.ail"
+
+# Module list for --check
+MODULES=(
+  linkedin/types/linkedin_types.ail
+  linkedin/services/linkedin_auth.ail
+  linkedin/services/linkedin_content_loader.ail
+  linkedin/services/linkedin_posts.ail
+  linkedin/services/linkedin_comments.ail
+  linkedin/main.ail
+)
+
+usage() {
+  cat <<'EOF'
+LinkedIn Marketing CLI — AILANG Demo
+
+Usage: linkedin <command> [args]
+       linkedin --check
+       linkedin --help
+
+Commands:
+  list                     List all posts with status
+  post <slug>              Publish a post to LinkedIn
+  post --dry-run <slug>    Preview without posting
+  comments                 Fetch comments from all published posts
+  comments --json          JSON output for AILANG Cloud
+  comments <slug>          Comments on specific post
+  status                   Auth status + summary
+  setup                    Show LinkedIn Developer App setup guide
+  auth                     Start OAuth server (ailang serve-api on :8080)
+
+Options:
+  --check           Type-check all modules (no API calls)
+  -h, --help        Show this help
+
+Examples:
+  linkedin list
+  linkedin post --dry-run 01-vision
+  linkedin post 01-vision
+  linkedin comments --json
+  linkedin status
+  linkedin auth              # then open the OAuth URL in browser
+EOF
+}
+
+do_check() {
+  echo "Type-checking all LinkedIn modules..."
+  local fail=0
+  for mod in "${MODULES[@]}"; do
+    local name
+    name="$(basename "$mod")"
+    if ailang check "$mod" 2>&1; then
+      echo "  $name  OK"
+    else
+      echo "  $name  FAIL"
+      fail=1
+    fi
+  done
+  if [ "$fail" -eq 0 ]; then
+    echo "All ${#MODULES[@]} modules type-check clean."
+  else
+    echo "Some modules failed type-checking."
+    exit 1
+  fi
+}
+
+do_auth() {
+  local client_id="${LINKEDIN_CLIENT_ID:-}"
+  if [ -z "$client_id" ]; then
+    echo "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET env vars first."
+    echo ""
+    echo "Example:"
+    echo "  LINKEDIN_CLIENT_ID=xxx LINKEDIN_CLIENT_SECRET=yyy linkedin auth"
+    exit 1
+  fi
+
+  local scope="${LINKEDIN_SCOPE:-w_organization_social r_organization_social}"
+  local auth_url="https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${client_id}&redirect_uri=http://localhost:8080/callback&scope=$(echo "$scope" | tr ' ' '%20')&state=ailang"
+
+  echo "=== LinkedIn OAuth Server ==="
+  echo ""
+  echo "Starting AILANG API server on http://localhost:8080"
+  echo ""
+  echo "Open this URL in your browser to authorize:"
+  echo ""
+  echo "  $auth_url"
+  echo ""
+  echo "After approving, LinkedIn will redirect back here and"
+  echo "the token exchange happens automatically via AILANG."
+  echo ""
+  echo "Press Ctrl+C to stop the server."
+  echo ""
+
+  # Open browser automatically on macOS
+  if command -v open &>/dev/null; then
+    open "$auth_url" &
+  fi
+
+  exec ailang serve-api --port 8080 \
+    --caps IO,FS,Net,Env \
+    --static linkedin/scripts/static \
+    linkedin/scripts/oauth_server.ail
+}
+
+# Parse arguments
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  --check)
+    cd "$PROJECT_DIR"
+    do_check
+    exit 0
+    ;;
+  auth)
+    cd "$PROJECT_DIR"
+    do_auth
+    exit 0
+    ;;
+  "")
+    usage
+    exit 0
+    ;;
+esac
+
+# Run the AILANG CLI
+cd "$PROJECT_DIR"
+exec ailang run --entry main \
+  --caps IO,FS,Net,Env \
+  "$MAIN_AIL" "$@"

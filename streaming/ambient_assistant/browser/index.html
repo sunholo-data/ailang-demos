@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG × Ambient Assistant</title>
 <link rel="icon" type="image/svg+xml" href="../shared/ailang-logo.svg">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -599,6 +602,13 @@
     margin-left: auto;
   }
   .tool-card-badge.done { background: var(--green-dim); color: var(--green); }
+  .tool-card.flash {
+    animation: toolFlash 1.5s ease-out;
+  }
+  @keyframes toolFlash {
+    0% { border-color: var(--green); box-shadow: 0 0 12px var(--green-glow), inset 0 0 12px var(--green-glow); }
+    100% { border-color: var(--border); box-shadow: none; }
+  }
   .tool-card-args { color: var(--text-secondary); font-size: 11px; margin-bottom: 2px; }
   .tool-card-result {
     display: none;
@@ -846,6 +856,7 @@
       <label>Thinking</label>
       <input class="config-input" id="thinkingBudget" type="number" value="-1" min="-1" max="8192" style="max-width:100px" title="Token budget (-1 = off)">
       <label class="config-check"><input type="checkbox" id="chkAutoMic" checked> Auto Mic</label>
+      <label class="config-check"><input type="checkbox" id="chkNotify"> Nudges</label>
     </div>
     <div class="config-row">
       <label>Messages</label>
@@ -1024,6 +1035,60 @@ function cacheDom() {
 // ── NON_BLOCKING tools (async — model continues while tool runs) ──
 const NON_BLOCKING_TOOLS = new Set(['webFetch', 'delegate']);
 
+// ── Notifications (desktop nudges on tool completion) ──
+let notificationsEnabled = false;
+
+function initNotifications() {
+  // Register service worker for PWA install + push
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  const chk = document.getElementById('chkNotify');
+  // Restore preference
+  if (localStorage.getItem('ambient-nudges') === '1' && Notification.permission === 'granted') {
+    chk.checked = true;
+    notificationsEnabled = true;
+  }
+  chk.addEventListener('change', async () => {
+    if (chk.checked) {
+      if (!('Notification' in window)) {
+        addSystemMessage('Notifications not supported in this browser');
+        chk.checked = false;
+        return;
+      }
+      if (Notification.permission === 'default') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          chk.checked = false;
+          addSystemMessage('Notification permission denied');
+          return;
+        }
+      } else if (Notification.permission === 'denied') {
+        chk.checked = false;
+        addSystemMessage('Notifications blocked — enable in browser settings');
+        return;
+      }
+      notificationsEnabled = true;
+      localStorage.setItem('ambient-nudges', '1');
+      addSystemMessage('Nudges enabled — you\'ll get notifications on tool completion');
+    } else {
+      notificationsEnabled = false;
+      localStorage.setItem('ambient-nudges', '0');
+    }
+  });
+}
+
+function notifyToolComplete(name, result) {
+  if (!notificationsEnabled) return;
+  const body = result.length > 120 ? result.substring(0, 120) + '...' : result;
+  new Notification('Ambient: ' + name, {
+    body: body,
+    tag: 'ambient-' + name + '-' + Date.now(),
+    icon: '../shared/ailang-logo.svg',
+    silent: false
+  });
+}
+
 // ── Session state ──
 let turnCount = 0;
 let toolsUsed = new Map();
@@ -1103,12 +1168,19 @@ function addToolCard(name, args) {
 }
 
 function updateToolCard(cardId, result, elapsedMs) {
+  const card = document.getElementById(cardId);
   const badge = document.getElementById(cardId + '-badge');
   const resEl = document.getElementById(cardId + '-result');
   const timing = document.getElementById(cardId + '-timing');
   if (badge) { badge.textContent = 'Done'; badge.classList.add('done'); }
   if (resEl) { resEl.textContent = result.substring(0, 400); resEl.classList.add('visible'); }
   if (timing) { timing.textContent = elapsedMs + 'ms'; timing.classList.add('visible'); }
+  // Green flash to catch the eye
+  if (card) {
+    card.classList.remove('flash');
+    void card.offsetWidth; // force reflow to restart animation
+    card.classList.add('flash');
+  }
 }
 
 // ── Conversation messages ──
@@ -1369,6 +1441,8 @@ async function handleAILANGEvent(event) {
           const result = await dispatchBrowserTool(name, args);
           const elapsed = Math.round(performance.now() - t0);
           updateToolCard(cardId, result, elapsed);
+          // Nudge (Apple Watch / phone notification when tab not focused)
+          notifyToolComplete(name, result);
           // NON_BLOCKING tools get scheduling parameter
           const scheduling = NON_BLOCKING_TOOLS.has(name) ? 'WHEN_IDLE' : undefined;
           sendToolResponse(callId, name, result, scheduling);
@@ -1875,6 +1949,8 @@ window.addEventListener('load', async () => {
   if ($.messagesApiUrl) $.messagesApiUrl.value = localStorage.getItem('messages-api-url') || '';
   if ($.messagesApiKey) $.messagesApiKey.value = localStorage.getItem('messages-api-key') || '';
   core.initWaveform(document.getElementById('waveform'));
+
+  initNotifications();
 
   addSystemMessage('Loading AILANG WASM...');
   await core.initWASM();

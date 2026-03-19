@@ -1,0 +1,17 @@
+{
+  "name": "AILANG Ambient Assistant",
+  "short_name": "Ambient",
+  "description": "Always-listening voice assistant powered by AILANG",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111114",
+  "theme_color": "#e8a830",
+  "icons": [
+    {
+      "src": "../shared/ailang-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

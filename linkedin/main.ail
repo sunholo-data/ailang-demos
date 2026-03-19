@@ -1,0 +1,342 @@
+-- LinkedIn Marketing CLI
+--
+-- Publish marketing content to LinkedIn company page and read comments.
+-- Comments are read-only — forwarded to AILANG Cloud for website content.
+--
+-- Usage:
+--   linkedin list                     List all posts with status
+--   linkedin post 01-vision           Publish a post
+--   linkedin post --dry-run 01-vision Preview without posting
+--   linkedin comments                 Fetch comments from all published posts
+--   linkedin comments --json          JSON output for AILANG Cloud
+--   linkedin comments 01-vision       Comments on specific post
+--   linkedin status                   Auth status + summary
+--   linkedin setup                    Show setup instructions
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=200  - Console output
+--   FS @limit=80   - Load posts + state
+--   Net @limit=30  - Auth + API calls
+--   Env            - Read env vars
+
+module linkedin/main
+
+-- Transitive imports (AILANG requirement: entry module must import all)
+import std/io (println, print)
+import std/env (getEnvOr, getArgs)
+import std/fs (readFile, writeFile, fileExists, listDir)
+import std/net (httpRequest)
+import std/json (encode, decode, getString, getArray, getObject,
+                 jo, kv, js, ja)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length, substring, find, split, join, trim, contains, startsWith)
+import std/list (length as listLength, map, filter, foldl, nth)
+
+import linkedin/types/linkedin_types (
+  LinkedInCreds, MarketingPost, PostResult, LinkedInComment, PostState
+)
+import linkedin/services/linkedin_auth (
+  linkedinGetToken, linkedinGetOrgUrn, linkedinReadCreds
+)
+import linkedin/services/linkedin_posts (
+  linkedinCreatePost, linkedinSaveState, linkedinLoadState, linkedinIsPublished
+)
+import linkedin/services/linkedin_comments (
+  linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson
+)
+import linkedin/services/linkedin_content_loader (
+  linkedinLoadPost, linkedinLoadAllPosts
+)
+
+export func main() -> () ! {IO @limit=200, FS @limit=150, Net @limit=30, Env} {
+  let args = getArgs();
+  match args {
+    [] => linkedinShowUsage(),
+    cmd :: rest => linkedinDispatch(cmd, rest)
+  }
+}
+
+func linkedinShowUsage() -> () ! {IO} {
+  println("LinkedIn Marketing CLI — AILANG Demo");
+  println("");
+  println("Usage:");
+  println("  linkedin list                     List all posts with status");
+  println("  linkedin post <slug>              Publish a post");
+  println("  linkedin post --dry-run <slug>    Preview without posting");
+  println("  linkedin comments                 Fetch all comments");
+  println("  linkedin comments --json          JSON output for AILANG Cloud");
+  println("  linkedin comments <slug>          Comments on specific post");
+  println("  linkedin status                   Auth status + summary");
+  println("  linkedin setup                    Show setup instructions");
+  println("");
+  println("Examples:");
+  println("  linkedin list");
+  println("  linkedin post --dry-run 01-vision");
+  println("  linkedin post 01-vision");
+  println("  linkedin comments --json | ailang messages send")
+}
+
+func linkedinDispatch(cmd: string, rest: [string]) -> () ! {IO, FS, Net, Env} {
+  if cmd == "list" then linkedinCmdList()
+  else if cmd == "post" then linkedinCmdPost(rest)
+  else if cmd == "comments" then linkedinCmdComments(rest)
+  else if cmd == "status" then linkedinCmdStatus()
+  else if cmd == "setup" then linkedinCmdSetup()
+  else {
+    println("Unknown command: " ++ cmd);
+    linkedinShowUsage()
+  }
+}
+
+-- === list command ===
+
+func linkedinCmdList() -> () ! {IO, FS} {
+  println("=== LinkedIn Content Plan ===");
+  println("");
+  let posts = linkedinLoadAllPosts();
+  let total = listLength(posts);
+  println("Found " ++ show(total) ++ " posts with content:");
+  println("");
+  linkedinPrintPostList(posts)
+}
+
+func linkedinPrintPostList(posts: [MarketingPost]) -> () ! {IO, FS} =
+  match posts {
+    [] => {
+      println("");
+      println("Run: linkedin post --dry-run <slug>  to preview")
+    },
+    post :: rest => {
+      let published = linkedinIsPublished(post.slug);
+      let status = if published then "[PUBLISHED]" else "[DRAFT]    ";
+      println("  " ++ status ++ " " ++ post.slug ++ " — " ++ post.title);
+      linkedinPrintPostList(rest)
+    }
+  }
+
+-- === post command ===
+
+func linkedinCmdPost(args: [string]) -> () ! {IO, FS, Net, Env} {
+  match args {
+    [] => println("Usage: linkedin post [--dry-run] <slug>"),
+    flag :: rest => {
+      if flag == "--dry-run" then linkedinDryRun(rest)
+      else linkedinPublishPost(flag)
+    }
+  }
+}
+
+func linkedinDryRun(args: [string]) -> () ! {IO, FS} {
+  match args {
+    [] => println("Usage: linkedin post --dry-run <slug>"),
+    slug :: _ => {
+      match linkedinLoadPost(slug) {
+        Ok(post) => {
+          println("=== DRY RUN: " ++ post.slug ++ " ===");
+          println("");
+          println("Title: " ++ post.title);
+          println("Link:  " ++ post.link);
+          println("");
+          println("--- Post Body ---");
+          println(post.body);
+          println("--- End ---");
+          println("");
+          println("Characters: " ++ show(length(post.body)));
+          let ok = length(post.body) <= 3000;
+          if ok then println("Length: OK (under 3000 char limit)")
+          else println("WARNING: Post exceeds 3000 char LinkedIn limit!")
+        },
+        Err(e) => println("Error: " ++ e)
+      }
+    }
+  }
+}
+
+func linkedinPublishPost(slug: string) -> () ! {IO, FS, Net, Env} {
+  match linkedinLoadPost(slug) {
+    Ok(post) => {
+      let alreadyPublished = linkedinIsPublished(slug);
+      if alreadyPublished then {
+        println("Post " ++ slug ++ " is already published.");
+        println("Use the LinkedIn web UI to edit or delete it.")
+      }
+      else linkedinDoPublish(post)
+    },
+    Err(e) => println("Error loading post: " ++ e)
+  }
+}
+
+func linkedinDoPublish(post: MarketingPost) -> () ! {IO, FS, Net, Env} {
+  println("Publishing: " ++ post.slug ++ " — " ++ post.title);
+  match linkedinGetToken() {
+    Ok(token) => {
+      match linkedinGetOrgUrn() {
+        Ok(orgUrn) => {
+          println("Auth: OK | Org: " ++ orgUrn);
+          match linkedinCreatePost(token, orgUrn, post.body) {
+            Ok(result) => {
+              println("Published! URN: " ++ result.postUrn);
+              linkedinSaveState(post.slug, result.postUrn, "now")
+            },
+            Err(e) => println("Error publishing: " ++ e)
+          }
+        },
+        Err(e) => println("Error: " ++ e)
+      }
+    },
+    Err(e) => println("Auth error: " ++ e)
+  }
+}
+
+-- === comments command ===
+
+func linkedinCmdComments(args: [string]) -> () ! {IO, FS, Net, Env} {
+  let jsonMode = linkedinHasFlag("--json", args);
+  let filteredArgs = filter(\a. a == "--json" == false, args);
+  match filteredArgs {
+    [] => linkedinFetchAllComments(jsonMode),
+    slug :: _ => linkedinFetchPostComments(slug, jsonMode)
+  }
+}
+
+func linkedinHasFlag(flag: string, args: [string]) -> bool =
+  match args {
+    [] => false,
+    a :: rest => if a == flag then true else linkedinHasFlag(flag, rest)
+  }
+
+func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
+  let states = linkedinLoadState();
+  if listLength(states) == 0 then {
+    println("No published posts found. Publish posts first with: linkedin post <slug>")
+  }
+  else {
+    match linkedinGetToken() {
+      Ok(token) => {
+        let comments = linkedinGetAllComments(token, states);
+        linkedinOutputComments(comments, jsonMode)
+      },
+      Err(e) => println("Auth error: " ++ e)
+    }
+  }
+}
+
+func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Net, Env} {
+  let states = linkedinLoadState();
+  let postUrn = linkedinFindUrnForSlug(slug, states);
+  if length(postUrn) == 0 then {
+    println("Post " ++ slug ++ " is not published yet.")
+  }
+  else {
+    match linkedinGetToken() {
+      Ok(token) => {
+        match linkedinGetComments(token, postUrn) {
+          Ok(comments) => linkedinOutputComments(comments, jsonMode),
+          Err(e) => println("Error: " ++ e)
+        }
+      },
+      Err(e) => println("Auth error: " ++ e)
+    }
+  }
+}
+
+func linkedinFindUrnForSlug(slug: string, states: [PostState]) -> string =
+  match states {
+    [] => "",
+    s :: rest => if s.slug == slug then s.postUrn else linkedinFindUrnForSlug(slug, rest)
+  }
+
+func linkedinOutputComments(comments: [LinkedInComment], jsonMode: bool) -> () ! {IO} {
+  if jsonMode then println(linkedinCommentsToJson(comments))
+  else {
+    let count = listLength(comments);
+    println("Found " ++ show(count) ++ " comments:");
+    println("");
+    linkedinPrintComments(comments)
+  }
+}
+
+func linkedinPrintComments(comments: [LinkedInComment]) -> () ! {IO} =
+  match comments {
+    [] => println(""),
+    c :: rest => {
+      println("  [" ++ c.authorName ++ "] " ++ c.text);
+      println("  Post: " ++ c.parentPostUrn ++ " | " ++ c.createdAt);
+      println("");
+      linkedinPrintComments(rest)
+    }
+  }
+
+-- === status command ===
+
+func linkedinCmdStatus() -> () ! {IO, FS, Net, Env} {
+  println("=== LinkedIn Status ===");
+  println("");
+
+  -- Check auth
+  match linkedinGetToken() {
+    Ok(token) => {
+      println("Auth:     OK (token available)");
+      match linkedinGetOrgUrn() {
+        Ok(urn) => println("Org URN:  " ++ urn),
+        Err(e) => println("Org URN:  " ++ e)
+      }
+    },
+    Err(e) => println("Auth:     FAILED — " ++ e)
+  };
+
+  -- Check content
+  let posts = linkedinLoadAllPosts();
+  println("Posts:    " ++ show(listLength(posts)) ++ " with content");
+
+  -- Check published
+  let states = linkedinLoadState();
+  println("Published: " ++ show(listLength(states)));
+  println("")
+}
+
+-- === setup command ===
+
+func linkedinCmdSetup() -> () ! {IO} {
+  println("=== LinkedIn Developer App Setup ===");
+  println("");
+  println("1. Go to https://developer.linkedin.com/");
+  println("   Create an app and associate it with your company page.");
+  println("");
+  println("2. Under Products, request:");
+  println("   - Share on LinkedIn");
+  println("   - Sign In with LinkedIn using OpenID Connect");
+  println("");
+  println("3. Note your client_id and client_secret from Settings > Auth.");
+  println("");
+  println("4. Get your organization URN:");
+  println("   Visit https://www.linkedin.com/company/YOUR_COMPANY/admin/");
+  println("   The org ID is in the URL. URN format: urn:li:organization:12345");
+  println("");
+  println("5. Complete the OAuth flow (one-time, in browser):");
+  println("   Open this URL in your browser (replace CLIENT_ID):");
+  println("");
+  println("   https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=CLIENT_ID&redirect_uri=http://localhost:8080/callback&scope=w_organization_social%20r_organization_social%20openid&state=ailang");
+  println("");
+  println("6. After approving, exchange the code for tokens:");
+  println("   curl -X POST https://www.linkedin.com/oauth/v2/accessToken \\");
+  println("     -d 'grant_type=authorization_code' \\");
+  println("     -d 'code=AUTH_CODE' \\");
+  println("     -d 'client_id=CLIENT_ID' \\");
+  println("     -d 'client_secret=CLIENT_SECRET' \\");
+  println("     -d 'redirect_uri=http://localhost:8080/callback'");
+  println("");
+  println("7. Save credentials to ~/.ailang/linkedin/credentials.json:");
+  println("   {");
+  println("     \"access_token\": \"...\",");
+  println("     \"refresh_token\": \"...\",");
+  println("     \"client_id\": \"...\",");
+  println("     \"client_secret\": \"...\",");
+  println("     \"org_urn\": \"urn:li:organization:YOUR_ORG_ID\"");
+  println("   }");
+  println("");
+  println("8. Test: linkedin status");
+  println("");
+  println("Token lifetime: ~60 days. The CLI auto-refreshes using refresh_token.")
+}

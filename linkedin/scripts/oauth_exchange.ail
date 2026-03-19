@@ -1,0 +1,98 @@
+-- LinkedIn OAuth Token Exchange
+-- Exchanges an authorization code for access + refresh tokens,
+-- then saves credentials to ~/.ailang/linkedin/credentials.json
+--
+-- Env vars required:
+--   LINKEDIN_OAUTH_CODE
+--   LINKEDIN_CLIENT_ID
+--   LINKEDIN_CLIENT_SECRET
+--   LINKEDIN_ORG_URN
+
+module linkedin/scripts/oauth_exchange
+
+import std/io (println)
+import std/env (getEnvOr)
+import std/fs (writeFile)
+import std/net (httpRequest)
+import std/json (decode, getString, encode, jo, kv, js)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length, substring)
+
+export func main() -> () ! {IO @limit=20, FS @limit=5, Net @limit=1, Env} {
+  let code = getEnvOr("LINKEDIN_OAUTH_CODE", "");
+  let clientId = getEnvOr("LINKEDIN_CLIENT_ID", "");
+  let clientSecret = getEnvOr("LINKEDIN_CLIENT_SECRET", "");
+  let orgUrn = getEnvOr("LINKEDIN_ORG_URN", "");
+
+  if length(code) == 0 then println("Error: LINKEDIN_OAUTH_CODE not set")
+  else if length(clientId) == 0 then println("Error: LINKEDIN_CLIENT_ID not set")
+  else if length(clientSecret) == 0 then println("Error: LINKEDIN_CLIENT_SECRET not set")
+  else oauthExchange(code, clientId, clientSecret, orgUrn)
+}
+
+func oauthExchange(code: string, clientId: string, clientSecret: string, orgUrn: string) -> () ! {IO, FS, Net} {
+  let url = "https://www.linkedin.com/oauth/v2/accessToken";
+  let body = "grant_type=authorization_code" ++
+             "&code=" ++ code ++
+             "&client_id=" ++ clientId ++
+             "&client_secret=" ++ clientSecret ++
+             "&redirect_uri=http://localhost:8080/callback";
+  let headers = [
+    { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+  ];
+
+  println("Sending token exchange request...");
+
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then oauthSaveTokens(response.body, clientId, clientSecret, orgUrn)
+      else {
+        println("Error: LinkedIn returned status " ++ show(response.status));
+        println(response.body)
+      }
+    },
+    Err(_) => println("Error: Network error during token exchange")
+  }
+}
+
+func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: string, orgUrn: string) -> () ! {IO, FS} {
+  match decode(responseBody) {
+    Ok(json) => {
+      let accessToken = getOrElse(getString(json, "access_token"), "");
+      let refreshToken = getOrElse(getString(json, "refresh_token"), "");
+
+      if length(accessToken) == 0 then {
+        println("Error: No access_token in response");
+        println(responseBody)
+      }
+      else {
+        let creds = encode(jo([
+          kv("access_token", js(accessToken)),
+          kv("refresh_token", js(refreshToken)),
+          kv("client_id", js(clientId)),
+          kv("client_secret", js(clientSecret)),
+          kv("org_urn", js(orgUrn))
+        ]));
+
+        let home = getEnvOr("HOME", "/tmp");
+        let credsPath = home ++ "/.ailang/linkedin/credentials.json";
+        writeFile(credsPath, creds);
+
+        println("=== Credentials saved to " ++ credsPath ++ " ===");
+        println("Access token:  " ++ oauthTruncate(accessToken));
+        println("Refresh token: " ++ oauthTruncate(refreshToken));
+        println("Org URN:       " ++ orgUrn)
+      }
+    },
+    Err(e) => {
+      println("Error parsing response: " ++ e);
+      println(responseBody)
+    }
+  }
+}
+
+func oauthTruncate(s: string) -> string {
+  if length(s) > 20 then substring(s, 0, 20) ++ "..."
+  else s
+}

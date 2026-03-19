@@ -32,6 +32,13 @@ demos/
 │   ├── voice_analytics/   # Voice → BigQuery queries
 │   ├── voice_docparse/    # Voice → document analysis
 │   └── voice_pipeline/    # STT → LLM → TTS pipeline
+├── linkedin/              # LinkedIn marketing automation
+│   ├── main.ail
+│   ├── services/
+│   └── CLAUDE.md          # LinkedIn API setup guide
+├── marketing/             # 20 LinkedIn posts (YAML frontmatter format)
+│   ├── linkedin-content-plan.md
+│   └── 01-vision/ ... 20-wrap-up/
 ├── scripts/
 │   └── serve.sh           # Local dev server (assembles _site/, symlinks for live editing)
 └── invoice_processor_wasm/ # AILANG WASM runtime (hosts DocParse browser)
@@ -185,8 +192,10 @@ Browser demos should load AILANG modules via `ailangLoadModule()` and use `ailan
 | `docparse` | `~/.local/bin/docparse` | `docparse/docparse` | Document parsing |
 | `ambient` | `~/.local/bin/ambient` | `streaming/ambient_assistant/ambient` | Ambient voice assistant |
 | `speak` | `~/.local/bin/speak` | `streaming/gemini_live/speak` | Text to speech |
+| `linkedin` | `~/.local/bin/linkedin` | `linkedin/linkedin` | LinkedIn marketing |
 
 Install: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`
+Install: `ln -s $(pwd)/linkedin/linkedin ~/.local/bin/linkedin`
 
 Both resolve symlinks to find the repo root, handle ADC auth, and set correct caps automatically.
 

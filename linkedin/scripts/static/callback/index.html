@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LinkedIn OAuth</title>
+  <style>
+    body { font-family: system-ui; padding: 40px; text-align: center; max-width: 600px; margin: 0 auto; }
+    .success { color: #16a34a; }
+    .error { color: #dc2626; }
+    .code { background: #f3f4f6; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all; margin: 16px 0; }
+    .status { margin: 20px 0; padding: 16px; border-radius: 8px; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>LinkedIn OAuth</h1>
+  <div id="status">
+    <div class="spinner"></div>
+    <p>Processing authorization...</p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+    const errorDesc = params.get('error_description');
+    const statusEl = document.getElementById('status');
+
+    if (error) {
+      statusEl.innerHTML = `
+        <h2 class="error">OAuth Error</h2>
+        <p><strong>${error}</strong></p>
+        <p>${errorDesc || ''}</p>
+      `;
+    } else if (code) {
+      statusEl.innerHTML = `
+        <div class="spinner"></div>
+        <p>Exchanging code for tokens...</p>
+        <div class="code">${code.substring(0, 30)}...</div>
+      `;
+
+      // Call the AILANG API to exchange the code
+      fetch('/api/linkedin/scripts/oauth_server/exchangeCode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ args: [code] })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.result && data.result.includes('saved')) {
+          statusEl.innerHTML = `
+            <h2 class="success">Authentication Complete!</h2>
+            <p>${data.result}</p>
+            <p>You can close this tab and test with: <code>linkedin status</code></p>
+          `;
+        } else {
+          statusEl.innerHTML = `
+            <h2 class="error">Token Exchange Failed</h2>
+            <p>${data.result || data.error || JSON.stringify(data)}</p>
+            <p>Code (copy for manual exchange):</p>
+            <div class="code">${code}</div>
+          `;
+        }
+      })
+      .catch(err => {
+        statusEl.innerHTML = `
+          <h2 class="error">Request Failed</h2>
+          <p>${err.message}</p>
+          <p>Code (copy for manual exchange):</p>
+          <div class="code">${code}</div>
+        `;
+      });
+    } else {
+      statusEl.innerHTML = `
+        <h2 class="error">No Code</h2>
+        <p>No authorization code found in the URL.</p>
+      `;
+    }
+  </script>
+</body>
+</html>

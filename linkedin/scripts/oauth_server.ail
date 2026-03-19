@@ -1,0 +1,89 @@
+-- LinkedIn OAuth Server
+-- Run with: ailang serve-api --port 8080 --caps IO,FS,Net,Env \
+--              --static linkedin/scripts/static \
+--              linkedin/scripts/oauth_server.ail
+--
+-- Exposes POST /api/linkedin/scripts/oauth_server/exchangeCode
+-- which the callback HTML page calls with the authorization code.
+--
+-- Env vars required:
+--   LINKEDIN_CLIENT_ID
+--   LINKEDIN_CLIENT_SECRET
+--   LINKEDIN_ORG_URN (default: urn:li:organization:99524184)
+
+module linkedin/scripts/oauth_server
+
+import std/io (println)
+import std/env (getEnvOr)
+import std/fs (writeFile)
+import std/net (httpRequest)
+import std/json (decode, getString, encode, jo, kv, js)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length, substring)
+
+-- Called by the callback HTML page with the authorization code
+export func exchangeCode(code: string) -> string ! {IO, FS, Net, Env} {
+  let clientId = getEnvOr("LINKEDIN_CLIENT_ID", "");
+  let clientSecret = getEnvOr("LINKEDIN_CLIENT_SECRET", "");
+  let orgUrn = getEnvOr("LINKEDIN_ORG_URN", "urn:li:organization:99524184");
+
+  if length(clientId) == 0 then "Error: LINKEDIN_CLIENT_ID env var not set"
+  else if length(clientSecret) == 0 then "Error: LINKEDIN_CLIENT_SECRET env var not set"
+  else oauthDoExchange(code, clientId, clientSecret, orgUrn)
+}
+
+func oauthDoExchange(code: string, clientId: string, clientSecret: string, orgUrn: string) -> string ! {IO, FS, Net} {
+  let url = "https://www.linkedin.com/oauth/v2/accessToken";
+  let body = "grant_type=authorization_code" ++
+             "&code=" ++ code ++
+             "&client_id=" ++ clientId ++
+             "&client_secret=" ++ clientSecret ++
+             "&redirect_uri=http://localhost:8080/callback";
+  let headers = [
+    { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+  ];
+
+  println("Exchanging OAuth code for tokens...");
+
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then oauthSaveTokens(response.body, clientId, clientSecret, orgUrn)
+      else "Error: LinkedIn returned status " ++ show(response.status) ++ " — " ++ response.body
+    },
+    Err(_) => "Error: Network error during token exchange"
+  }
+}
+
+func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: string, orgUrn: string) -> string ! {IO, FS, Env} {
+  match decode(responseBody) {
+    Ok(json) => {
+      let accessToken = getOrElse(getString(json, "access_token"), "");
+      let refreshToken = getOrElse(getString(json, "refresh_token"), "");
+
+      if length(accessToken) == 0 then "Error: No access_token in response — " ++ responseBody
+      else {
+        let creds = encode(jo([
+          kv("access_token", js(accessToken)),
+          kv("refresh_token", js(refreshToken)),
+          kv("client_id", js(clientId)),
+          kv("client_secret", js(clientSecret)),
+          kv("org_urn", js(orgUrn))
+        ]));
+
+        let home = getEnvOr("HOME", "/tmp");
+        let credsPath = home ++ "/.ailang/linkedin/credentials.json";
+        writeFile(credsPath, creds);
+
+        println("Credentials saved to " ++ credsPath);
+        "Credentials saved! Access token: " ++ oauthTruncate(accessToken) ++ " — test with: linkedin status"
+      }
+    },
+    Err(e) => "Error parsing response: " ++ e ++ " — " ++ responseBody
+  }
+}
+
+func oauthTruncate(s: string) -> string {
+  if length(s) > 20 then substring(s, 0, 20) ++ "..."
+  else s
+}

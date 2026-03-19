@@ -1,0 +1,154 @@
+module linkedin/services/linkedin_content_loader
+
+import std/fs (readFile, fileExists, listDir)
+import std/string (length, substring, find, split, trim, contains, startsWith)
+import std/list (length as listLength, map, filter, foldl)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import linkedin/types/linkedin_types (MarketingPost)
+
+-- Load marketing post content from marketing/*/post.md files
+-- Posts use YAML frontmatter format:
+--   ---
+--   title: Post Title
+--   day: 1
+--   demo: Demo Name
+--   link: https://...
+--   assets:
+--     - ...
+--   ---
+--   ...post body...
+--
+-- CAPABILITY BUDGETS:
+--   linkedinLoadPost:     FS @limit=5 (check + read)
+--   linkedinLoadAllPosts: FS @limit=120
+
+-- Known post slugs (ordered)
+func linkedinPostSlugs() -> [string] = [
+  "01-vision", "02-safe-agent", "03-docparse", "04-ambient-assistant",
+  "05-capability-budgets", "06-website-builder", "07-z3-verify", "08-speak-cli",
+  "09-bigquery-analytics", "10-contracts", "11-document-extractor",
+  "12-streaming-protocols", "13-claude-chat", "14-track-changes",
+  "15-mcp-a2a", "16-wasm", "17-voice-docparse", "18-algebraic-effects",
+  "19-ecommerce-fullstack", "20-wrap-up"
+]
+
+-- Load a single post by slug
+export func linkedinLoadPost(slug: string) -> Result[MarketingPost, string] ! {FS @limit=5} {
+  let path = "marketing/" ++ slug ++ "/post.md";
+  let found = fileExists(path);
+  if found then linkedinParsePostFile(slug, path)
+  else Err("Post not found: " ++ path)
+}
+
+func linkedinParsePostFile(slug: string, path: string) -> Result[MarketingPost, string] ! {FS} {
+  let content = readFile(path);
+  let body = linkedinExtractBody(content);
+  if length(body) == 0 then Err("No post body found in " ++ path)
+  else linkedinMakePost(slug, content, body)
+}
+
+func linkedinMakePost(slug: string, content: string, body: string) -> Result[MarketingPost, string] {
+  let title = linkedinGetFrontmatterValue(content, "title:");
+  let link = linkedinGetFrontmatterValue(content, "link:");
+  let hashtags = linkedinExtractHashtags(body);
+  let post: MarketingPost = {
+    slug: slug,
+    title: title,
+    body: body,
+    link: link,
+    hashtags: hashtags
+  };
+  Ok(post)
+}
+
+-- Extract body: everything after the closing "---" of frontmatter
+func linkedinExtractBody(content: string) -> string {
+  -- Find the opening ---
+  let firstSep = find(content, "---");
+  if firstSep < 0 then trim(content)
+  else linkedinFindBodyAfterFrontmatter(content, firstSep)
+}
+
+func linkedinFindBodyAfterFrontmatter(content: string, firstSep: int) -> string {
+  -- Skip past first --- and find the closing ---
+  let afterFirst = substring(content, firstSep + 3, length(content));
+  let secondSep = find(afterFirst, "\n---");
+  if secondSep < 0 then trim(afterFirst)
+  else {
+    -- Body starts after the closing ---\n
+    let afterSecond = substring(afterFirst, secondSep + 4, length(afterFirst));
+    trim(afterSecond)
+  }
+}
+
+-- Extract a value from YAML frontmatter by key
+-- Looks for "key: value" lines between the --- delimiters
+func linkedinGetFrontmatterValue(content: string, key: string) -> string {
+  let firstSep = find(content, "---");
+  if firstSep < 0 then ""
+  else linkedinSearchFrontmatter(content, firstSep, key)
+}
+
+func linkedinSearchFrontmatter(content: string, firstSep: int, key: string) -> string {
+  let afterFirst = substring(content, firstSep + 3, length(content));
+  let secondSep = find(afterFirst, "\n---");
+  if secondSep < 0 then ""
+  else {
+    let frontmatter = substring(afterFirst, 0, secondSep);
+    let lines = split(frontmatter, "\n");
+    linkedinFindKeyValue(lines, key)
+  }
+}
+
+func linkedinFindKeyValue(lines: [string], key: string) -> string =
+  match lines {
+    [] => "",
+    line :: rest => {
+      let trimmed = trim(line);
+      let keyIdx = find(trimmed, key);
+      if keyIdx == 0 then trim(substring(trimmed, length(key), length(trimmed)))
+      else linkedinFindKeyValue(rest, key)
+    }
+  }
+
+-- Extract hashtags line (contains #AI)
+func linkedinExtractHashtags(body: string) -> string {
+  let lines = split(body, "\n");
+  linkedinFindHashtagLine(lines)
+}
+
+func linkedinFindHashtagLine(lines: [string]) -> string =
+  match lines {
+    [] => "",
+    line :: rest => {
+      let trimmed = trim(line);
+      if linkedinIsHashtagLine(trimmed) then trimmed
+      else linkedinFindHashtagLine(rest)
+    }
+  }
+
+func linkedinIsHashtagLine(line: string) -> bool ! {FS} {
+  let idx = find(line, "#AI");
+  idx >= 0
+}
+
+-- Load all posts that have post.md files
+export func linkedinLoadAllPosts() -> [MarketingPost] ! {FS @limit=120} {
+  let slugs = linkedinPostSlugs();
+  linkedinLoadPostList(slugs)
+}
+
+func linkedinLoadPostList(slugs: [string]) -> [MarketingPost] ! {FS} =
+  match slugs {
+    [] => [],
+    slug :: rest => {
+      match linkedinLoadPost(slug) {
+        Ok(post) => {
+          let others = linkedinLoadPostList(rest);
+          post :: others
+        },
+        Err(_) => linkedinLoadPostList(rest)
+      }
+    }
+  }
