@@ -104,6 +104,15 @@
           <button class="chip-clear" @click="selectedElement = null" title="Clear selection"><SvgIcon name="x" :size="14" /></button>
         </div>
 
+        <!-- Quick edit toggle (shown when element is selected + no pending items) -->
+        <div v-if="selectedElement && pendingItems.length === 0" class="quick-edit-toggle">
+          <label class="toggle-label" :title="quickEditMode ? 'Fast direct AI edit (~3-5s)' : 'Full AILANG pipeline (~30-60s)'">
+            <input type="checkbox" v-model="quickEditMode" />
+            <SvgIcon :name="quickEditMode ? 'zap' : 'refresh'" :size="12" />
+            {{ quickEditMode ? 'Quick edit' : 'Full rebuild' }}
+          </label>
+        </div>
+
         <!-- Pending added content chips -->
         <div v-if="pendingItems.length > 0" class="pending-list">
           <div v-for="(item, i) in pendingItems" :key="i" class="pending-chip">
@@ -231,7 +240,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import SvgIcon from '../SvgIcon.vue';
-import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent } from '../../ailang.js';
+import { initAilang, isReady, callAI, callPure, describeImageWithGemini, extractDocumentContent, quickEditHtml } from '../../ailang.js';
 import { saveSite, getRepoConfig, getRepoFile, listRepoFiles } from '../../api.js';
 import { normalizeNavLinks } from '../../nav-utils.js';
 import { resolveImages as _resolveImages, normalizeHtml, inlineCssAsync, rewriteRelativePaths as _rewriteRelativePaths, sortSlugs } from '../../html-normalize.js';
@@ -283,6 +292,9 @@ function now() {
 function pushHistory(icon, summary, detail, items = null) {
   history.value.push({ icon, summary, detail, time: now(), items: items || [], expanded: false });
 }
+
+// Quick edit mode — fast direct AI call for targeted edits (no WASM/Cloud pipeline)
+const quickEditMode = ref(true);
 
 // Element selection (via postMessage from iframe)
 const selectedElement = ref(null); // { area, text }
@@ -885,16 +897,23 @@ async function sendFeedback() {
   const isTargeted = !!selectedElement.value && pendingItems.value.length === 0;
   const msgPreview = msg.length > 300 ? msg.substring(0, 300) + '…' : msg;
 
+  // Quick edit: targeted + no pending items + toggle on → direct AI call (fast path)
+  const useQuickEdit = quickEditMode.value && isTargeted && pendingItems.value.length === 0;
+
   // Log to history immediately so the user sees it right away
   const addedItems = pendingItems.value.filter(i => i.type === 'image' || i.type === 'document' || i.type === 'text');
-  pushHistory('pencil', `"${msgPreview}"`, isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages', addedItems.length > 0 ? [...addedItems] : null);
+  const detail = useQuickEdit
+    ? `Quick edit on ${slugLabel(currentSlug.value)} page`
+    : isTargeted ? `Editing ${slugLabel(currentSlug.value)} page` : 'Editing all pages';
+  pushHistory(useQuickEdit ? 'zap' : 'pencil', `"${msgPreview}"`, detail, addedItems.length > 0 ? [...addedItems] : null);
 
-  // Route through AILANG Cloud (local sidecar only) or WASM
-  // Cloud Run has no ailang CLI, so always use WASM when API is remote
-  const useSidecar = !import.meta.env.VITE_API_URL && !!(props.generated?.userId && props.generated?.siteSlug);
+  // Route: quick edit → sidecar → WASM
+  const useSidecar = !useQuickEdit && !import.meta.env.VITE_API_URL && !!(props.generated?.userId && props.generated?.siteSlug);
 
   try {
-    if (useSidecar) {
+    if (useQuickEdit) {
+      await sendQuickEdit(msg);
+    } else if (useSidecar) {
       await sendFeedbackViaSidecar(msg, isTargeted);
     } else {
       await sendFeedbackViaWasm(msg, isTargeted);
@@ -904,6 +923,47 @@ async function sendFeedback() {
   } finally {
     refining.value = false;
     refineStatus.value = '';
+  }
+}
+
+// --- Quick edit path: direct AI call for fast targeted edits (no WASM/Cloud pipeline) ---
+
+async function sendQuickEdit(msg) {
+  refineStatus.value = 'Applying quick edit...';
+
+  const elementCtx = selectedElement.value
+    ? `${selectedElement.value.area || 'selected element'}: ${selectedElement.value.text || ''}`
+    : '';
+
+  const updatedHtml = await quickEditHtml(currentHtml.value, msg, elementCtx);
+
+  // Apply to just the current page (normalize nav links for consistency)
+  const newPages = {
+    ...props.generated.pages,
+    [currentSlug.value]: normalizeNavLinks(updatedHtml, props.generated.slugs)
+  };
+
+  selectedElement.value = null;
+
+  emit('update-generated', { ...props.generated, pages: newPages });
+
+  // Auto-save (same pattern as WASM path — silent, best-effort)
+  if (props.generated?.userId && props.generated?.siteSlug) {
+    try {
+      await saveSite({
+        user: props.generated.userId,
+        siteName: props.generated.siteSlug,
+        siteSlug: props.generated.siteSlug,
+        pages: newPages,
+        css: props.generated.css,
+        siteJson: props.generated.siteJson,
+        description: props.description,
+        repoConfig: getRepoConfig(),
+      });
+      console.log('[Preview] Auto-saved after quick edit');
+    } catch (err) {
+      console.warn('[Preview] Auto-save after quick edit failed:', err.message);
+    }
   }
 }
 
@@ -1245,6 +1305,26 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   font-size: 0.8rem;
   color: var(--primary);
   margin-bottom: 0.5rem;
+}
+
+/* Quick edit toggle */
+.quick-edit-toggle {
+  margin-bottom: 0.4rem;
+}
+.quick-edit-toggle .toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.quick-edit-toggle .toggle-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 /* Pending items */

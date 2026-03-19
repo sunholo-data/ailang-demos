@@ -407,6 +407,108 @@ function report(onProgress, step, message) {
 }
 
 export function isReady() { return ready; }
+export function getActiveProvider() { return activeProvider; }
+
+/**
+ * Quick edit: send current HTML + instruction to AI, get back modified HTML.
+ * Direct API call — no WASM, no AILANG pipeline. ~3-5 seconds for minor edits.
+ * @param {string} currentHtml - The full HTML of the page being edited
+ * @param {string} instruction - What the user wants to change
+ * @param {string} [elementContext] - Optional: the selected element area/text
+ * @returns {Promise<string>} Modified HTML
+ */
+export async function quickEditHtml(currentHtml, instruction, elementContext) {
+  const sectionHint = elementContext
+    ? `\nThe user selected this section: "${elementContext}"\nFocus your edit on this section.`
+    : '';
+
+  const prompt = `You are editing a website page. Here is the current HTML:
+
+${currentHtml}
+${sectionHint}
+User instruction: ${instruction}
+
+Return the COMPLETE modified HTML page with ONLY the requested change applied.
+Do not add, remove, or restructure any other content unless specifically asked.
+Do not change the overall layout or styling unless specifically asked.
+Return ONLY the raw HTML — no explanation, no markdown fences, no wrapping.`;
+
+  if (activeProvider === 'openai') {
+    return quickEditWithOpenAI(prompt);
+  }
+  return quickEditWithGemini(prompt);
+}
+
+async function quickEditWithGemini(prompt) {
+  const apiKey = localStorage.getItem('gemini-api-key');
+  if (!apiKey) throw new Error('Gemini API key not set — open Settings to add it');
+
+  const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 65536,
+        // No responseMimeType — we want raw HTML, not JSON
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Gemini error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('No content in Gemini response');
+  return stripMarkdownFences(text);
+}
+
+async function quickEditWithOpenAI(prompt) {
+  const apiKey = localStorage.getItem('openai-api-key');
+  if (!apiKey) throw new Error('OpenAI API key not set — open Settings to add it');
+
+  const response = await fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_completion_tokens: 65536,
+      // No response_format — we want raw HTML, not JSON
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI error (${response.status}): ${body.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('No content in OpenAI response');
+  return stripMarkdownFences(text);
+}
+
+/** Strip markdown code fences if the AI wraps the HTML in them */
+function stripMarkdownFences(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('```')) {
+    const firstNewline = trimmed.indexOf('\n');
+    const lastFence = trimmed.lastIndexOf('```');
+    if (lastFence > firstNewline) {
+      return trimmed.substring(firstNewline + 1, lastFence).trim();
+    }
+  }
+  return trimmed;
+}
 
 // Gemini API key helpers — uses same localStorage key as invoice_processor_wasm demos
 export function getApiKey() { return localStorage.getItem('gemini-api-key') || ''; }
