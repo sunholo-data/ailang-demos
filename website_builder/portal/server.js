@@ -174,6 +174,20 @@ function rewriteMediaPaths(html) {
   return html;
 }
 
+/**
+ * Normalize CSS link hrefs that point to subdirectories (e.g., css/style.css,
+ * styles/style.css, ./css/style.css) to just "style.css" at the root.
+ * The save flow always writes CSS as style.css at site root, but AI agents
+ * sometimes generate HTML referencing it in subdirectories.
+ */
+function normalizeCssLinks(html) {
+  if (!html) return html;
+  return html.replace(
+    /(<link\s[^>]*?href=["'])([^"']*\/)(style\.css)(["'])/gi,
+    (m, pre, dir, file, post) => `${pre}${file}${post}`
+  );
+}
+
 // ── Google Sheets helpers ──
 
 function loadFormsConfig() {
@@ -504,9 +518,10 @@ async function commitToRepo(filePaths, message, repoConfig = {}) {
         parents: [headSha]
       });
 
-      // 6. Update branch ref
+      // 6. Update branch ref (force: true handles concurrent commits)
       await githubApi('PATCH', `/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
-        sha: newCommit.sha
+        sha: newCommit.sha,
+        force: true
       });
 
       console.log(`[sidecar] GitHub commit: ${newCommit.sha.substring(0, 7)} — ${message} (${treeItems.length} files)`);
@@ -551,7 +566,7 @@ app.post('/api/save', async (req, res) => {
     for (const [pageSlug, rawHtml] of Object.entries(pages)) {
       const fileSlug = pageSlug === 'home' ? 'index' : pageSlug;
       const filePath = join(siteDir, `${fileSlug}.html`);
-      let html = rewriteMediaPaths(normalizeNavLinksServer(rawHtml, allSlugs));
+      let html = normalizeCssLinks(rewriteMediaPaths(normalizeNavLinksServer(rawHtml, allSlugs)));
       // Inject form handler script (for GitHub Pages / standalone)
       if (!html.includes('data-wb-form')) {
         const bodyClose = html.lastIndexOf('</body>');
@@ -878,7 +893,7 @@ app.get('/api/status', async (req, res) => {
  * GET /api/sites/:user/:site/* — Serve generated website files.
  * Injects the element selection script into HTML files for preview interactivity.
  */
-app.get('/api/sites/:user/:site/*path', (req, res) => {
+app.get('/api/sites/:user/:site/*path', async (req, res) => {
   // Express 5 wildcard returns an array — join it back into a path string
   const rawPath = Array.isArray(req.params.path) ? req.params.path.join('/') : (req.params.path || 'index.html');
   const filePath = resolve(SITES_DIR, req.params.user, req.params.site, rawPath);
@@ -888,13 +903,39 @@ app.get('/api/sites/:user/:site/*path', (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
+  // If not on local disk, try fetching from GitHub and caching locally
+  if (!existsSync(filePath) && process.env.GITHUB_TOKEN) {
+    const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+    const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+    const repoPath = `sites/${req.params.user}/${req.params.site}/${rawPath}`;
+    try {
+      const result = await githubApi('GET',
+        `/repos/${owner}/${repo}/contents/${encodeURIComponent(repoPath).replace(/%2F/g, '/')}`);
+      const ext = extname(rawPath).toLowerCase();
+      const isBinary = BINARY_EXTS.has(ext);
+      const content = isBinary
+        ? Buffer.from(result.content, 'base64')
+        : Buffer.from(result.content, 'base64').toString('utf-8');
+
+      // Cache to local disk for subsequent requests
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, content);
+      console.log(`[sidecar] Cached from GitHub: ${repoPath}`);
+    } catch (err) {
+      // GitHub fetch failed — fall through to 404
+      if (!err.message.includes('404')) {
+        console.warn(`[sidecar] GitHub fallback failed for ${repoPath}: ${err.message}`);
+      }
+    }
+  }
+
   if (!existsSync(filePath)) {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  // Serve HTML files — inject form handler script if not already present
+  // Serve HTML files — normalize CSS links + inject form handler
   if (extname(filePath) === '.html') {
-    let html = readFileSync(filePath, 'utf-8');
+    let html = normalizeCssLinks(readFileSync(filePath, 'utf-8'));
     if (!html.includes('data-wb-form')) {
       const formScript = buildFormScriptServer('/api/form-submit', req.params.site);
       const bodyClose = html.lastIndexOf('</body>');
@@ -910,44 +951,69 @@ app.get('/api/sites/:user/:site/*path', (req, res) => {
 /**
  * GET /api/sites/:user — List all sites for a user.
  */
-app.get('/api/sites/:user', (req, res) => {
+app.get('/api/sites/:user', async (req, res) => {
   const userDir = resolve(SITES_DIR, req.params.user);
-  if (!userDir.startsWith(resolve(SITES_DIR)) || !existsSync(userDir)) {
+  if (!userDir.startsWith(resolve(SITES_DIR))) {
     return res.json({ sites: [] });
   }
 
-  try {
-    const sites = readdirSync(userDir)
-      .filter(f => !f.startsWith('.') && statSync(join(userDir, f)).isDirectory())
-      .map(name => {
-        const siteDir = join(userDir, name);
-        const files = readdirSync(siteDir).filter(f => !f.startsWith('.'));
-        const htmlFiles = files.filter(f => extname(f) === '.html');
-        const stat = statSync(siteDir);
-        // Try to read brief.json from staging for metadata
-        let title = name;
-        let description = '';
-        const briefPath = join(STAGING_DIR, req.params.user, name, 'brief.json');
-        if (existsSync(briefPath)) {
-          try {
-            const brief = JSON.parse(readFileSync(briefPath, 'utf-8'));
-            title = brief.siteName || name;
-            description = brief.description || '';
-          } catch {}
-        }
-        return {
-          slug: name,
-          title,
-          description,
-          pages: htmlFiles.map(f => basename(f, '.html')),
-          fileCount: files.length,
-          updatedAt: stat.mtime.toISOString()
-        };
-      });
-    res.json({ sites });
-  } catch {
-    res.json({ sites: [] });
+  // Collect local sites
+  let localSites = [];
+  if (existsSync(userDir)) {
+    try {
+      localSites = readdirSync(userDir)
+        .filter(f => !f.startsWith('.') && statSync(join(userDir, f)).isDirectory())
+        .map(name => {
+          const siteDir = join(userDir, name);
+          const files = readdirSync(siteDir).filter(f => !f.startsWith('.'));
+          const htmlFiles = files.filter(f => extname(f) === '.html');
+          const stat = statSync(siteDir);
+          let title = name;
+          let description = '';
+          const briefPath = join(STAGING_DIR, req.params.user, name, 'brief.json');
+          if (existsSync(briefPath)) {
+            try {
+              const brief = JSON.parse(readFileSync(briefPath, 'utf-8'));
+              title = brief.siteName || name;
+              description = brief.description || '';
+            } catch {}
+          }
+          return { slug: name, title, description, pages: htmlFiles.map(f => basename(f, '.html')), fileCount: files.length, updatedAt: stat.mtime.toISOString() };
+        });
+    } catch {}
   }
+
+  // Merge with GitHub repo sites (catches sites not cached locally after scale-to-zero)
+  if (process.env.GITHUB_TOKEN) {
+    try {
+      const owner = process.env.GITHUB_OWNER || 'sunholo-data';
+      const repo = process.env.GITHUB_REPO || 'sunholo-websites';
+      const dirPath = `sites/${req.params.user}`;
+      const result = await githubApi('GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(dirPath).replace(/%2F/g, '/')}`);
+      const dirs = (Array.isArray(result) ? result : []).filter(f => f.type === 'dir');
+      const localSlugs = new Set(localSites.map(s => s.slug));
+      for (const dir of dirs) {
+        if (!localSlugs.has(dir.name)) {
+          localSites.push({
+            slug: dir.name,
+            title: dir.name.replace(/-[a-z0-9]{5}$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            description: '',
+            pages: [],
+            fileCount: 0,
+            source: 'github',
+            updatedAt: '',
+          });
+        }
+      }
+    } catch (err) {
+      // 404 = no sites dir for this user — not an error
+      if (!err.message.includes('404')) {
+        console.warn(`[sidecar] GitHub sites list fallback failed: ${err.message}`);
+      }
+    }
+  }
+
+  res.json({ sites: localSites });
 });
 
 /**
@@ -1161,14 +1227,29 @@ app.post('/api/post-process/:user/:site', async (req, res) => {
   const siteDir = join(SITES_DIR, user, site);
 
   try {
-    // 1. List files in the site directory
-    const dirResult = await githubApi('GET',
-      `/repos/${owner}/${repo}/contents/${encodeURIComponent(prefix).replace(/%2F/g, '/')}`);
-    const files = Array.isArray(dirResult) ? dirResult : [];
-    const htmlFiles = files.filter(f => f.name.endsWith('.html'));
-    const allSlugs = htmlFiles.map(f => f.name.replace('.html', ''));
+    // 1. List files in the site directory (retry with backoff — Contents API may lag after commit)
+    const RETRY_DELAYS = [0, 1000, 3000];
+    let htmlFiles = [];
+    let allSlugs = [];
+    for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+      if (attempt > 0) {
+        console.log(`[sidecar] Post-process retry ${attempt} for ${lockKey} (waiting ${RETRY_DELAYS[attempt]}ms)`);
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+      }
+      try {
+        const dirResult = await githubApi('GET',
+          `/repos/${owner}/${repo}/contents/${encodeURIComponent(prefix).replace(/%2F/g, '/')}`);
+        const files = Array.isArray(dirResult) ? dirResult : [];
+        htmlFiles = files.filter(f => f.name.endsWith('.html'));
+        allSlugs = htmlFiles.map(f => f.name.replace('.html', ''));
+        if (htmlFiles.length > 0) break;
+      } catch (err) {
+        if (attempt === RETRY_DELAYS.length - 1) throw err;
+        // 404 on early attempt — repo may not have propagated yet, retry
+      }
+    }
 
-    if (htmlFiles.length === 0) return res.json({ fixed: false, reason: 'No HTML files found' });
+    if (htmlFiles.length === 0) return res.json({ fixed: false, reason: 'No HTML files found after retries' });
 
     // 2. Fetch each HTML file and apply normalization
     mkdirSync(siteDir, { recursive: true });
@@ -1187,8 +1268,8 @@ app.post('/api/post-process/:user/:site', async (req, res) => {
       }
       if (!original) continue;
 
-      // Apply normalizations (nav links + media path rewriting)
-      let html = rewriteMediaPaths(normalizeNavLinksServer(original, allSlugs));
+      // Apply normalizations (nav links + media path rewriting + CSS links)
+      let html = normalizeCssLinks(rewriteMediaPaths(normalizeNavLinksServer(original, allSlugs)));
 
       // Inject form handler if not already present
       if (!html.includes('data-wb-form')) {
