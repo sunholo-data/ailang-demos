@@ -76,7 +76,8 @@ case "${1:-sites}" in
     echo "Deploying rules from: $RULES_FILE"
     echo "Project: $PROJECT | Database: $DATABASE"
     echo ""
-    npx firebase-tools deploy --only firestore:rules --project "$PROJECT" --force
+    # Named databases need --only firestore:<database-name>, NOT firestore:rules
+    npx firebase-tools deploy --only "firestore:${DATABASE}" --project "$PROJECT" --force
     ;;
 
   *)
