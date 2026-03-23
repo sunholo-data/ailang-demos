@@ -206,6 +206,113 @@ assert('full page WASM output',
   rewriteMediaPaths(wasmOutput),
   expectedOutput);
 
+// ── Save pipeline: image handling regression tests ──
+// These test the logic for resolving images from staging paths vs base64 fallback.
+// Mirrors the logic in server.js POST /api/save (lines 588-604).
+
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, copyFileSync } from 'fs';
+import { join, resolve } from 'path';
+import { tmpdir } from 'os';
+
+function processImagePayload(images, websitesRepo, siteMediaDir) {
+  // Same logic as server.js save endpoint
+  const writtenFiles = [];
+  mkdirSync(siteMediaDir, { recursive: true });
+  for (const img of images) {
+    if (img.stagingPath) {
+      const src = resolve(websitesRepo, img.stagingPath);
+      if (existsSync(src)) {
+        const dest = join(siteMediaDir, img.filename);
+        copyFileSync(src, dest);
+        writtenFiles.push(img.filename);
+      } else if (img.base64) {
+        const dest = join(siteMediaDir, img.filename);
+        writeFileSync(dest, Buffer.from(img.base64, 'base64'));
+        writtenFiles.push(img.filename);
+      }
+    } else if (img.base64) {
+      const dest = join(siteMediaDir, img.filename);
+      writeFileSync(dest, Buffer.from(img.base64, 'base64'));
+      writtenFiles.push(img.filename);
+    }
+  }
+  return writtenFiles;
+}
+
+const testDir = join(tmpdir(), `wb-test-${Date.now()}`);
+const stagingDir = join(testDir, 'staging');
+const mediaDir = join(testDir, 'media');
+mkdirSync(stagingDir, { recursive: true });
+
+// Test: base64-only image gets written
+{
+  const dir = join(mediaDir, 'test1');
+  const files = processImagePayload([
+    { filename: 'photo.jpg', base64: Buffer.from('fake-image-data').toString('base64') }
+  ], testDir, dir);
+  assert('base64-only image written', files.length, 1);
+  assert('base64-only filename', files[0], 'photo.jpg');
+  assert('base64-only file exists', existsSync(join(dir, 'photo.jpg')), true);
+}
+
+// Test: staging path exists — uses staging (not base64)
+{
+  const stagingFile = join(stagingDir, 'staged.jpg');
+  writeFileSync(stagingFile, 'staged-data');
+  const dir = join(mediaDir, 'test2');
+  const files = processImagePayload([
+    { filename: 'staged.jpg', stagingPath: 'staging/staged.jpg', base64: Buffer.from('fallback').toString('base64') }
+  ], testDir, dir);
+  assert('staging path used', files.length, 1);
+  assert('staging file content', readFileSync(join(dir, 'staged.jpg'), 'utf-8'), 'staged-data');
+}
+
+// Test: staging path MISSING — falls back to base64 (regression guard)
+{
+  const dir = join(mediaDir, 'test3');
+  const files = processImagePayload([
+    { filename: 'gone.jpg', stagingPath: 'staging/nonexistent.jpg', base64: Buffer.from('fallback-data').toString('base64') }
+  ], testDir, dir);
+  assert('staging miss falls back to base64', files.length, 1);
+  assert('fallback file exists', existsSync(join(dir, 'gone.jpg')), true);
+  assert('fallback file content', readFileSync(join(dir, 'gone.jpg'), 'utf-8'), 'fallback-data');
+}
+
+// Test: staging path MISSING, no base64 — image is lost (should be 0 files)
+{
+  const dir = join(mediaDir, 'test4');
+  const files = processImagePayload([
+    { filename: 'lost.jpg', stagingPath: 'staging/nowhere.jpg' }
+  ], testDir, dir);
+  assert('staging miss no fallback skips image', files.length, 0);
+}
+
+// Test: empty images array — no crash
+{
+  const dir = join(mediaDir, 'test5');
+  const files = processImagePayload([], testDir, dir);
+  assert('empty images array', files.length, 0);
+}
+
+// Test: multiple images, mixed sources
+{
+  const dir = join(mediaDir, 'test6');
+  const stagingFile = join(stagingDir, 'real.png');
+  writeFileSync(stagingFile, 'real-png');
+  const files = processImagePayload([
+    { filename: 'real.png', stagingPath: 'staging/real.png' },
+    { filename: 'inline.jpg', base64: Buffer.from('inline').toString('base64') },
+    { filename: 'fallback.gif', stagingPath: 'staging/missing.gif', base64: Buffer.from('fb').toString('base64') },
+  ], testDir, dir);
+  assert('mixed sources count', files.length, 3);
+  assert('mixed: staging file', readFileSync(join(dir, 'real.png'), 'utf-8'), 'real-png');
+  assert('mixed: base64 file', existsSync(join(dir, 'inline.jpg')), true);
+  assert('mixed: fallback file', existsSync(join(dir, 'fallback.gif')), true);
+}
+
+// Clean up
+rmSync(testDir, { recursive: true, force: true });
+
 // ── Results ──
 
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
