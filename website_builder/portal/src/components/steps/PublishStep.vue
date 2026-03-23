@@ -207,12 +207,18 @@ function buildGitHubPagesUrl(userId, siteSlug) {
 }
 
 function extractSiteName() {
+  // Try siteJson title (WASM builds)
   try {
     const site = JSON.parse(props.generated?.siteJson || '{}');
-    return site.title || 'my-website';
-  } catch {
-    return 'my-website';
-  }
+    if (site.title) return site.title;
+  } catch { /* no siteJson */ }
+  // Try HTML <title> tag (messages/cloud builds where siteJson is empty)
+  const html = Object.values(props.generated?.pages || {})[0] || '';
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (titleMatch?.[1]) return titleMatch[1].trim();
+  // Fall back to slug (humanized) or generic
+  const slug = props.generated?.siteSlug || '';
+  return slug ? slug.replace(/-[a-z0-9]{5}$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'My Website';
 }
 
 async function copyLink() {
