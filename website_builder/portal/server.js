@@ -374,7 +374,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => cb(null, file.originalname)
 });
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024, fieldSize: 50 * 1024 * 1024 } });
 
 // Multer for media uploads — videos up to 50MB (GitHub-friendly)
 const mediaStorage = multer.diskStorage({
