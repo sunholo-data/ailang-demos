@@ -36,3 +36,4 @@ Thumbs.db
 /website_builder/output/*.html
 /website_builder/output/*.css
 benchmarks/
+firebase-debug.log
