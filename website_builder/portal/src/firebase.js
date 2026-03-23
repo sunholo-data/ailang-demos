@@ -95,7 +95,8 @@ export async function getUserSettings(uid) {
     const snap = await getDoc(doc(db, 'users', uid));
     return snap.exists() ? snap.data() : null;
   } catch (err) {
-    console.warn('Failed to load user settings from Firestore:', err.message);
+    console.warn('Failed to load user settings from Firestore:', err.message,
+      '— check that Firestore security rules are deployed (website_builder/scripts/check-firestore.sh deploy-rules)');
     return null;
   }
 }

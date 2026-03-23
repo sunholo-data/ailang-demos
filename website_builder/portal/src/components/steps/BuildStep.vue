@@ -711,7 +711,11 @@ async function startBuild() {
       const mediaPayload = [];
       for (const item of [...imageItems, ...videoItems]) {
         const uploaded = uploadMap.get(item.filename);
-        if (uploaded) {
+        if (uploaded && item.file) {
+          // Include both staging path (fast) and base64 (fallback if Cloud Run instance recycled)
+          const b64 = await blobToBase64Raw(item.file);
+          mediaPayload.push({ filename: item.filename, stagingPath: uploaded.stagingPath, base64: b64 });
+        } else if (uploaded) {
           mediaPayload.push({ filename: item.filename, stagingPath: uploaded.stagingPath });
         } else if (item.file) {
           // No sidecar upload — send as base64
@@ -750,7 +754,8 @@ async function startBuild() {
     building.value = false;
 
     // Include save info in generated data so PreviewStep/PublishStep know the site is persisted
-    const generated = { siteJson, pages, css, slugs, buildMode: 'wasm', builderName: props.personaName, builderKey: props.personaKey };
+    const generated = { siteJson, pages, css, slugs, buildMode: 'wasm', builderName: props.personaName, builderKey: props.personaKey,
+      images: mediaPayload.length > 0 ? mediaPayload : undefined };
     if (saveResult) {
       generated.userId = saveResult.userId;
       generated.siteSlug = saveResult.siteSlug;

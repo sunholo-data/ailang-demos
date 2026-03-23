@@ -594,6 +594,14 @@ app.post('/api/save', async (req, res) => {
             const dest = join(mediaDir, img.filename);
             copyFileSync(src, dest);
             writtenFiles.push(`sites/${user}/${slug}/media/${img.filename}`);
+          } else if (img.base64) {
+            // Staging file gone (Cloud Run instance recycled) — fall back to base64
+            console.warn(`[sidecar] Staging file not found: ${src} — using base64 fallback`);
+            const dest = join(mediaDir, img.filename);
+            writeFileSync(dest, Buffer.from(img.base64, 'base64'));
+            writtenFiles.push(`sites/${user}/${slug}/media/${img.filename}`);
+          } else {
+            console.warn(`[sidecar] Staging file not found and no base64 fallback: ${src}`);
           }
         } else if (img.base64) {
           const dest = join(mediaDir, img.filename);

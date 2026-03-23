@@ -129,6 +129,7 @@ onMounted(async () => {
         siteSlug: props.generated.siteSlug || undefined,
         pages: props.generated.pages,
         css: props.generated.css,
+        images: props.generated.images,
         siteJson: props.generated.siteJson,
         description: siteName,
         repoConfig: getRepoConfig(),
