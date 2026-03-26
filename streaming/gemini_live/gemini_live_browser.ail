@@ -3,25 +3,18 @@ module streaming/gemini_live/gemini_live_browser
 -- Browser streaming module for Gemini Live WebSocket protocol.
 --
 -- Uses std/stream effects to drive the session lifecycle. In the browser,
--- JS registers effect handlers via the native 2-arg WASM API:
+-- JS registers effect handlers via the native 2-arg WASM API.
 --
---   window.ailangSetEffectHandler('IO', { println: (text) => ... });
---   window.ailangSetEffectHandler('Stream', { connect: fn, transmit: fn, ... });
---   await repl.callAsync(MODULE, 'startSession', apiKey, voice, instruction, prompt);
---
--- AILANG drives: connect → transmit(setup) → onEvent → runEventLoop → disconnect.
--- JS bridges Stream ops to browser WebSocket API and processes incoming messages
--- directly (because ailangValueToJS can't convert closures to callable JS functions,
--- so the onEvent callback is acknowledged but not invoked from JS).
---
--- Also exports pure helper functions for protocol message construction/parsing
--- and voice configuration. These work via repl.call() (sync, no effects needed).
+-- Configuration (voices, model defaults) imported from pkg/sunholo/gemini_live.
+-- Protocol message builders and parsers remain local due to AILANG package
+-- inter-function reference limitation (functions within a package module
+-- can't reference each other when loaded as a dependency).
 
 import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
                    StreamConn, StreamEvent,
                    Message, Binary, Opened, Closed, StreamError, Ping)
 import std/io (println)
-import std/json (encode, decode, jo, kv, js, jb, ja, jnum,
+import std/json (encode, decode, jo, kv, js, jb, ja, jnum, Json,
                  get, has, asString, asBool, asArray, getString, getObject, getArray, getBool)
 import std/string (length)
 import std/list (concat)
@@ -29,51 +22,212 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
+-- Package imports — what works without inter-function references
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl, googleAiUrl as pkgGoogleAiUrl)
+
 -- ══════════════════════════════════════════════════════
--- Configuration
+-- Configuration (from package)
 -- ══════════════════════════════════════════════════════
 
-export pure func defaultModel() -> string =
-  "models/gemini-2.5-flash-native-audio-preview-12-2025"
+export pure func defaultModel() -> string = defaultBrowserModel()
 
-export pure func defaultVoice() -> string = "Sulafat"
+export pure func defaultVoice() -> string = pkgDefaultVoice()
 
 export pure func defaultInstruction() -> string =
   "You are a friendly, expressive assistant called AILANG. Speak with a British English accent. Keep responses short and conversational."
 
+export pure func voiceCatalog() -> string = pkgVoiceCatalog()
+
+export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string =
+  pkgAiStudioUrl(apiKey, useAlpha)
+
 -- ══════════════════════════════════════════════════════
--- Voice Catalog
+-- Protocol: Outgoing Messages (local — awaiting AILANG package fix)
 -- ══════════════════════════════════════════════════════
 
-pure func v(name: string, desc: string) -> Json =
-  jo([kv("name", js(name)), kv("desc", js(desc))])
-
-export pure func voiceCatalog() -> string =
-  encode(ja([
-    v("Sulafat", "Warm"), v("Zephyr", "Bright"), v("Puck", "Upbeat"),
-    v("Charon", "Informative"), v("Kore", "Firm"), v("Fenrir", "Excitable"),
-    v("Leda", "Youthful"), v("Orus", "Firm"), v("Aoede", "Breezy"),
-    v("Callirrhoe", "Easy-going"), v("Autonoe", "Bright"), v("Enceladus", "Breathy"),
-    v("Iapetus", "Clear"), v("Umbriel", "Easy-going"), v("Algieba", "Smooth"),
-    v("Despina", "Smooth"), v("Erinome", "Clear"), v("Algenib", "Gravelly"),
-    v("Rasalgethi", "Informative"), v("Laomedeia", "Upbeat"), v("Achernar", "Soft"),
-    v("Alnilam", "Firm"), v("Schedar", "Even"), v("Gacrux", "Mature"),
-    v("Pulcherrima", "Forward"), v("Achird", "Friendly"), v("Zubenelgenubi", "Casual"),
-    v("Vindemiatrix", "Gentle"), v("Sadachbia", "Lively"), v("Sadaltager", "Knowledgeable")
+export pure func buildSetup(model: string, voice: string, instruction: string) -> string =
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
   ]))
+
+export pure func buildSetupWithFeatures(model: string, voice: string, instruction: string,
+    proactive: bool, affective: bool, thinkingBudget: int) -> string {
+  let baseKvs = [
+    kv("model", js(model)),
+    kv("generationConfig", jo([
+      kv("responseModalities", ja([js("AUDIO")])),
+      kv("speechConfig", jo([
+        kv("voiceConfig", jo([
+          kv("prebuiltVoiceConfig", jo([
+            kv("voiceName", js(voice))
+          ]))
+        ]))
+      ]))
+    ])),
+    kv("systemInstruction", jo([
+      kv("parts", ja([jo([kv("text", js(instruction))])]))
+    ])),
+    kv("outputAudioTranscription", jo([])),
+    kv("inputAudioTranscription", jo([]))
+  ];
+  let proactiveKvs = if proactive then
+    [kv("proactivity", jo([kv("proactiveAudio", jb(true))]))]
+  else [];
+  let affectiveKvs = if affective then
+    [kv("enableAffectiveDialog", jb(true))]
+  else [];
+  let thinkingKvs = if thinkingBudget >= 0 then
+    [kv("thinkingConfig", jo([kv("thinkingBudget", jnum(intToFloat(thinkingBudget)))]))]
+  else [];
+  let allKvs = concat(concat(concat(baseKvs, proactiveKvs), affectiveKvs), thinkingKvs);
+  encode(jo([kv("setup", jo(allKvs))]))
+}
+
+export pure func buildSetupWithTools(model: string, voice: string, instruction: string, toolsJson: string) -> string {
+  let toolsVal = match decode(toolsJson) {
+    Ok(arr) => arr,
+    Err(_) => ja([])
+  };
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("tools", toolsVal),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
+  ]))
+}
+
+export pure func buildTextMessage(text: string) -> string =
+  encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(text))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]))
+
+export pure func buildAudioChunk(b64Audio: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("mediaChunks", ja([jo([
+        kv("mimeType", js("audio/pcm;rate=16000")),
+        kv("data", js(b64Audio))
+      ])]))
+    ]))
+  ]))
+
+export pure func buildToolResponse(callId: string, name: string, result: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js(name)),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- ══════════════════════════════════════════════════════
+-- Protocol: Incoming Message Parsing (local)
+-- ══════════════════════════════════════════════════════
+
+export pure func parseMessage(jsonStr: string) -> string {
+  match decode(jsonStr) {
+    Err(e) => encode(jo([kv("type", js("error")), kv("text", js(e))])),
+    Ok(json) => {
+      if has(json, "setupComplete")
+      then encode(jo([kv("type", js("setup"))]))
+      else if has(json, "toolCall") then {
+        let tc = getOrElse(get(json, "toolCall"), jo([]));
+        let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+        encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
+      }
+      else if has(json, "serverContent") then {
+        let sc = getOrElse(get(json, "serverContent"), jo([]));
+        match getBool(sc, "interrupted") {
+          Some(true) => encode(jo([kv("type", js("interrupted"))])),
+          _ => match getBool(sc, "turnComplete") {
+            Some(true) => encode(jo([kv("type", js("turnComplete"))])),
+            _ => {
+              if has(sc, "inputTranscription") then {
+                let it = getOrElse(get(sc, "inputTranscription"), jo([]));
+                let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
+                if length(txt) > 0
+                then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
+                else checkOutputTranscriptLocal(sc)
+              }
+              else checkOutputTranscriptLocal(sc)
+            }
+          }
+        }
+      }
+      else if has(json, "toolCallCancellation")
+      then encode(jo([kv("type", js("toolCallCancellation"))]))
+      else if has(json, "goAway")
+      then encode(jo([kv("type", js("goAway"))]))
+      else encode(jo([kv("type", js("unknown"))]))
+    }
+  }
+}
+
+pure func checkOutputTranscriptLocal(sc: Json) -> string {
+  if has(sc, "outputTranscription") then {
+    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
+    else checkModelTurnLocal(sc)
+  }
+  else checkModelTurnLocal(sc)
+}
+
+pure func checkModelTurnLocal(sc: Json) -> string =
+  match getObject(sc, "modelTurn") {
+    Some(mt) => match get(mt, "parts") {
+      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
+      None => encode(jo([kv("type", js("unknown"))]))
+    },
+    None => encode(jo([kv("type", js("unknown"))]))
+  }
 
 -- ══════════════════════════════════════════════════════
 -- Streaming Session (uses std/stream effects)
 -- ══════════════════════════════════════════════════════
 
--- Start a Gemini Live session via WebSocket.
--- In the browser, JS effect handlers bridge std/stream to the browser WebSocket API.
--- The event handler calls println with JSON events that JS intercepts via IO handler.
---
--- The session stays open after turnComplete (returns true to keep event loop running).
--- JS sends subsequent messages directly through the WebSocket using buildTextMessage/
--- buildAudioChunk for protocol formatting, while AILANG's event handler processes
--- all incoming responses.
 export func startSession(apiKey: string, voice: string, instruction: string, prompt: string) -> string ! {Stream, IO} {
   let model = defaultModel();
   let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
@@ -88,10 +242,6 @@ export func startSession(apiKey: string, voice: string, instruction: string, pro
       match transmit(conn, setupMsg) {
         Ok(_) => {
           println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent. Voice: " ++ voice))])));
-
-          -- Register event handler and run event loop.
-          -- Session stays alive for multiple turns — JS can send additional messages
-          -- through the WebSocket while the event loop processes responses.
           onEvent(conn, \event. handleEvent(event, conn, prompt));
           runEventLoop(conn);
           disconnect(conn);
@@ -110,8 +260,6 @@ export func startSession(apiKey: string, voice: string, instruction: string, pro
   }
 }
 
--- Handle WebSocket events. Returns true to continue, false to stop.
--- Emits JSON events via println for JS to intercept.
 func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string) -> bool ! {Stream, IO} =
   match event {
     Message(msg) => match decode(msg) {
@@ -137,8 +285,6 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string) -> bool !
     Ping(_) => true
   }
 
--- Dispatch parsed JSON messages.
--- Uses nested match to avoid if/then/else comment parsing issues.
 func handleJsonMessage(json: Json, conn: StreamConn, prompt: string) -> bool ! {Stream, IO} =
   if has(json, "setupComplete") then handleSetupComplete(conn, prompt)
   else if has(json, "serverContent") then handleServerContent(json)
@@ -155,9 +301,6 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string) -> bool ! {
 
 func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {Stream, IO} {
   println(encode(jo([kv("type", js("setup"))])));
-  -- Only send a text turn if there's an actual prompt.
-  -- Empty prompt (mic-only connect) must NOT send a turn — otherwise Gemini
-  -- generates a greeting response that overlaps with incoming mic audio.
   if length(prompt) > 0 then {
     let textMsg = buildTextMessage(prompt);
     match transmit(conn, textMsg) {
@@ -233,107 +376,6 @@ func handleToolCallEvent(json: Json) -> bool ! {IO} {
   true
 }
 
--- ══════════════════════════════════════════════════════
--- Protocol: Outgoing Messages (pure helpers)
--- ══════════════════════════════════════════════════════
-
--- Build WebSocket setup message (first message after connect)
-export pure func buildSetup(model: string, voice: string, instruction: string) -> string =
-  encode(jo([
-    kv("setup", jo([
-      kv("model", js(model)),
-      kv("generationConfig", jo([
-        kv("responseModalities", ja([js("AUDIO")])),
-        kv("speechConfig", jo([
-          kv("voiceConfig", jo([
-            kv("prebuiltVoiceConfig", jo([
-              kv("voiceName", js(voice))
-            ]))
-          ]))
-        ]))
-      ])),
-      kv("systemInstruction", jo([
-        kv("parts", ja([jo([kv("text", js(instruction))])]))
-      ])),
-      kv("outputAudioTranscription", jo([])),
-      kv("inputAudioTranscription", jo([]))
-    ]))
-  ]))
-
--- Build WebSocket setup message with Gemini Live v2 features.
--- AI Studio uses v1alpha for proactive/affective, camelCase field names.
--- thinkingBudget: -1 = skip, 0+ = set budget. proactive/affective: true to enable.
-export pure func buildSetupWithFeatures(model: string, voice: string, instruction: string,
-    proactive: bool, affective: bool, thinkingBudget: int) -> string {
-  let baseKvs = [
-    kv("model", js(model)),
-    kv("generationConfig", jo([
-      kv("responseModalities", ja([js("AUDIO")])),
-      kv("speechConfig", jo([
-        kv("voiceConfig", jo([
-          kv("prebuiltVoiceConfig", jo([
-            kv("voiceName", js(voice))
-          ]))
-        ]))
-      ]))
-    ])),
-    kv("systemInstruction", jo([
-      kv("parts", ja([jo([kv("text", js(instruction))])]))
-    ])),
-    kv("outputAudioTranscription", jo([])),
-    kv("inputAudioTranscription", jo([]))
-  ];
-  let proactiveKvs = if proactive then
-    [kv("proactivity", jo([kv("proactiveAudio", jb(true))]))]
-  else [];
-  let affectiveKvs = if affective then
-    [kv("enableAffectiveDialog", jb(true))]
-  else [];
-  let thinkingKvs = if thinkingBudget >= 0 then
-    [kv("thinkingConfig", jo([kv("thinkingBudget", jnum(intToFloat(thinkingBudget)))]))]
-  else [];
-  let allKvs = concat(concat(concat(baseKvs, proactiveKvs), affectiveKvs), thinkingKvs);
-  encode(jo([kv("setup", jo(allKvs))]))
-}
-
--- AI Studio URL for v1alpha (needed for proactive/affective features)
-export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
-  let version = if useAlpha then "v1alpha" else "v1beta";
-  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ version ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
-}
-
--- Build WebSocket setup message with tools (for tool-calling demos)
--- toolsJson is a JSON string: [{"functionDeclarations": [...]}]
-export pure func buildSetupWithTools(model: string, voice: string, instruction: string, toolsJson: string) -> string {
-  let toolsVal = match decode(toolsJson) {
-    Ok(arr) => arr,
-    Err(_) => ja([])
-  };
-  encode(jo([
-    kv("setup", jo([
-      kv("model", js(model)),
-      kv("generationConfig", jo([
-        kv("responseModalities", ja([js("AUDIO")])),
-        kv("speechConfig", jo([
-          kv("voiceConfig", jo([
-            kv("prebuiltVoiceConfig", jo([
-              kv("voiceName", js(voice))
-            ]))
-          ]))
-        ]))
-      ])),
-      kv("systemInstruction", jo([
-        kv("parts", ja([jo([kv("text", js(instruction))])]))
-      ])),
-      kv("tools", toolsVal),
-      kv("outputAudioTranscription", jo([])),
-      kv("inputAudioTranscription", jo([]))
-    ]))
-  ]))
-}
-
--- Start a Gemini Live session with tool declarations.
--- Same as startSession but includes tools in the setup message.
 export func startSessionWithTools(apiKey: string, voice: string, instruction: string, prompt: string, toolsJson: string) -> string ! {Stream, IO} {
   let model = defaultModel();
   let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
@@ -363,119 +405,5 @@ export func startSessionWithTools(apiKey: string, voice: string, instruction: st
       println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed"))])));
       "error"
     }
-  }
-}
-
--- Build text message (user typed input)
-export pure func buildTextMessage(text: string) -> string =
-  encode(jo([
-    kv("clientContent", jo([
-      kv("turns", ja([jo([
-        kv("role", js("user")),
-        kv("parts", ja([jo([kv("text", js(text))])]))
-      ])])),
-      kv("turnComplete", jb(true))
-    ]))
-  ]))
-
--- Build audio chunk message (mic input)
-export pure func buildAudioChunk(b64Audio: string) -> string =
-  encode(jo([
-    kv("realtimeInput", jo([
-      kv("mediaChunks", ja([jo([
-        kv("mimeType", js("audio/pcm;rate=16000")),
-        kv("data", js(b64Audio))
-      ])]))
-    ]))
-  ]))
-
--- Build tool response message
-export pure func buildToolResponse(callId: string, name: string, result: string) -> string =
-  encode(jo([
-    kv("toolResponse", jo([
-      kv("functionResponses", ja([jo([
-        kv("id", js(callId)),
-        kv("name", js(name)),
-        kv("response", jo([kv("result", js(result))]))
-      ])]))
-    ]))
-  ]))
-
--- ══════════════════════════════════════════════════════
--- Protocol: Incoming Message Parsing (pure helper)
--- ══════════════════════════════════════════════════════
-
--- Parse a server message into a simplified JSON event string.
-export pure func parseMessage(jsonStr: string) -> string {
-  match decode(jsonStr) {
-    Err(e) => encode(jo([kv("type", js("error")), kv("text", js(e))])),
-    Ok(json) => {
-      if has(json, "setupComplete")
-      then encode(jo([kv("type", js("setup"))]))
-      else if has(json, "toolCall")
-      then parseToolCall(json)
-      else if has(json, "serverContent")
-      then parseServerContent(json)
-      else encode(jo([kv("type", js("unknown"))]))
-    }
-  }
-}
-
-pure func parseToolCall(json: Json) -> string {
-  let tc = getOrElse(get(json, "toolCall"), jo([]));
-  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
-  encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
-}
-
-pure func parseServerContent(json: Json) -> string {
-  let sc = getOrElse(get(json, "serverContent"), jo([]));
-  match get(sc, "interrupted") {
-    Some(i) => match asBool(i) {
-      Some(true) => encode(jo([kv("type", js("interrupted"))])),
-      _ => parseServerContentInner(sc)
-    },
-    None => parseServerContentInner(sc)
-  }
-}
-
-pure func parseServerContentInner(sc: Json) -> string {
-  match get(sc, "turnComplete") {
-    Some(tc) => match asBool(tc) {
-      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
-      _ => parseContentParts(sc)
-    },
-    None => parseContentParts(sc)
-  }
-}
-
-pure func parseContentParts(sc: Json) -> string {
-  if has(sc, "inputTranscription") then {
-    let it = getOrElse(get(sc, "inputTranscription"), jo([]));
-    let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
-    if length(txt) > 0
-    then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
-    else checkOutputTranscript(sc)
-  }
-  else checkOutputTranscript(sc)
-}
-
-pure func checkOutputTranscript(sc: Json) -> string {
-  if has(sc, "outputTranscription") then {
-    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
-    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
-    if length(txt) > 0
-    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
-    else checkModelTurn(sc)
-  }
-  else checkModelTurn(sc)
-}
-
-pure func checkModelTurn(sc: Json) -> string {
-  match get(sc, "modelTurn") {
-    Some(mt) => match get(mt, "parts") {
-      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
-      None => encode(jo([kv("type", js("unknown"))]))
-    },
-    None => encode(jo([kv("type", js("unknown"))]))
   }
 }

@@ -19,6 +19,7 @@
 #   speak --thinking 1024 "Hard problem"   # enable reasoning with budget
 #   speak --thoughts "Explain this"        # include thought summaries
 #   speak --no-interrupt "Long answer"     # don't interrupt on barge-in
+#   speak --google-ai "Hello"              # use Google AI Studio (needs GOOGLE_API_KEY)
 #   speak --list                           # list active sessions
 #   speak                                  # uses default prompt
 #
@@ -48,6 +49,7 @@ ENABLE_AFFECTIVE=false
 THINKING_BUDGET=""
 ENABLE_THOUGHTS=false
 ENABLE_NO_INTERRUPT=false
+USE_GOOGLE_AI=false
 PROMPT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -90,6 +92,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-interrupt)
       ENABLE_NO_INTERRUPT=true
+      shift
+      ;;
+    --google-ai)
+      USE_GOOGLE_AI=true
       shift
       ;;
     *)
@@ -173,8 +179,18 @@ fi
 # Create session directory
 mkdir -p "$SESSION_DIR"
 
-# Force ADC (unset API key so AILANG doesn't use it instead of ADC)
-export GOOGLE_API_KEY=""
+# Auth: Google AI Studio (API key) or Vertex AI (ADC)
+if $USE_GOOGLE_AI; then
+  if [ -z "${GOOGLE_API_KEY:-}" ]; then
+    echo "Error: --google-ai requires GOOGLE_API_KEY env var"
+    echo "Get a key from https://aistudio.google.com/apikey"
+    exit 1
+  fi
+  # GOOGLE_API_KEY stays set — AILANG main.ail will detect it
+else
+  # Force ADC (unset API key so AILANG doesn't use it instead of ADC)
+  export GOOGLE_API_KEY=""
+fi
 export GEMINI_VOICE="$VOICE"
 export GEMINI_SESSION_DIR="$SESSION_DIR"
 

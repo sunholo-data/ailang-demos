@@ -122,6 +122,9 @@ mkdir -p "$SITE/shared"
 cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/shared/" 2>/dev/null || true
 cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/streaming/shared/" 2>/dev/null || true
 
+# Vendor AILANG package modules (for WASM pkg/ imports)
+"$REPO_ROOT/scripts/vendor-wasm-packages.sh" "$SITE/ailang/pkg"
+
 # Streaming AILANG modules (for WASM demos)
 mkdir -p "$SITE/ailang/streaming/gemini_live"
 ln -sf "$REPO_ROOT/streaming/gemini_live/gemini_live_browser.ail" \

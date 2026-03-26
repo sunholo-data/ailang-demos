@@ -57,8 +57,9 @@ import streaming/ambient_assistant/services/ambient_tools (getAmbientToolDeclara
 import streaming/gemini_live/services/speak_tools (getSpeakToolDeclarations, dispatchTool,
   isPathSafe, containsTraversal, safeCalculate, clampInput,
   isAllowedCommand, validateSubcommands)
-import streaming/gemini_live/services/live_config (buildProactivityConfig, buildAffectiveConfig,
+import pkg/sunholo/gemini_live/config (buildProactivityConfig, buildAffectiveConfig,
   buildThinkingConfig, buildRealtimeInputConfig, buildVadConfig, buildActivityHandlingConfig)
+import pkg/sunholo/gemini_live/endpoints (vertexAiUrl, googleAiUrl)
 import std/math (intToFloat, floatToInt)
 
 -- ============================================================
@@ -84,10 +85,16 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
   -- Auto-enable no-interrupt when mic is on (prevents continuous mic from interrupting model)
   let noInterrupt = if micEnabled then true else noInterrupt;
 
+  let googleApiKey = getEnvOr("GOOGLE_API_KEY", "");
+  let useGoogleAi = length(googleApiKey) > 0;
+  let defaultModel = if useGoogleAi then "gemini-3.1-flash-live-preview"
+    else "gemini-live-2.5-flash-native-audio";
+  let modelName = getEnvOr("GEMINI_MODEL", defaultModel);
+
   println("=== AILANG Ambient Assistant ===");
   let modeLabel = if interactive then "Interactive (type follow-ups)" else "Single prompt";
   println("Mode: " ++ modeLabel ++ " | Only responds when addressed");
-  println("Model: gemini-live-2.5-flash-native-audio");
+  println("Model: " ++ modelName);
   let features = "Proactive"
     ++ (if toolsEnabled then " | Tools" else "")
     ++ (if affectiveEnabled then " | Affective*" else "")
@@ -97,7 +104,7 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
     ++ (if micEnabled then " | Mic" else "")
     ++ (if length(videoMode) > 0 then " | Video:" ++ videoMode else "");
   println("Voice: " ++ voice ++ " | Features: " ++ features);
-  if affectiveEnabled then
+  if affectiveEnabled && useGoogleAi == false then
     println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw Vertex AI WebSocket)")
   else ();
   if thinkingBudget >= 0 then
@@ -105,37 +112,46 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
   else ();
   println("");
 
-  match getDefaultProject() {
-    Ok(projectId) => {
-      match getAccessToken() {
-        Ok(token) => {
-          let region = getEnvOr("GEMINI_REGION", "us-central1");
-          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+  let sessionDir = getEnvOr("GEMINI_SESSION_DIR", "/tmp/ailang_ambient");
+  let handlePath = sessionDir ++ "/session.handle";
 
-          let sessionDir = getEnvOr("GEMINI_SESSION_DIR", "/tmp/ailang_ambient");
-          let handlePath = sessionDir ++ "/session.handle";
+  let newSession = getEnvOr("GEMINI_NEW_SESSION", "");
+  let handle = if newSession == "1" then ""
+    else if fileExists(handlePath) then readFile(handlePath)
+    else "";
+  if length(handle) > 0 then
+    println("Session: Resuming | Dir: " ++ sessionDir)
+  else println("Session: New | Dir: " ++ sessionDir);
 
-          let newSession = getEnvOr("GEMINI_NEW_SESSION", "");
-          let handle = if newSession == "1" then ""
-            else if fileExists(handlePath) then readFile(handlePath)
-            else "";
-          if length(handle) > 0 then
-            println("Session: Resuming | Dir: " ++ sessionDir)
-          else println("Session: New | Dir: " ++ sessionDir);
+  let args = getArgs();
+  let prompt = if listLength(args) > 0 then join(" ", args)
+    else "Hello AILANG! I'm here. Let me know if you hear anything interesting.";
 
-          let args = getArgs();
-          let prompt = if listLength(args) > 0 then join(" ", args)
-            else "Hello AILANG! I'm here. Let me know if you hear anything interesting.";
-          startAmbientSession(token, region, projectId, prompt, voice, handle, sessionDir,
-            toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
-        },
-        Err(e) => {
-          println("Error: ADC authentication failed: " ++ e);
-          println("Run: gcloud auth application-default login")
+  if useGoogleAi then {
+    -- Google AI Studio path: API key in URL, no ADC needed
+    println("Auth: Google AI Studio (API key)");
+    startAmbientSessionGoogleAi(googleApiKey, modelName, prompt, voice, handle, sessionDir,
+      toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
+  } else {
+    -- Vertex AI path: ADC Bearer token
+    match getDefaultProject() {
+      Ok(projectId) => {
+        match getAccessToken() {
+          Ok(token) => {
+            let region = getEnvOr("GEMINI_REGION", "us-central1");
+            println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+            startAmbientSession(token, region, projectId, modelName, prompt, voice, handle, sessionDir,
+              toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
+          },
+          Err(e) => {
+            println("Error: ADC authentication failed: " ++ e);
+            println("Run: gcloud auth application-default login");
+            println("Or set GOOGLE_API_KEY for Google AI Studio")
+          }
         }
-      }
-    },
-    Err(e) => println("Error: Project detection failed: " ++ e)
+      },
+      Err(e) => println("Error: Project detection failed: " ++ e)
+    }
   }
 }
 
@@ -143,13 +159,30 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
 -- Connection Setup
 -- ============================================================
 
-func geminiLiveUrl(region: string, apiVersion: string) -> string =
-  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform." ++ apiVersion ++ ".LlmBidiService/BidiGenerateContent"
+-- Google AI Studio session: API key auth, models/{name} format
+func startAmbientSessionGoogleAi(apiKey: string, modelName: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
+  let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1beta");
+  let url = googleAiUrl(apiKey, apiVersion);
+  let config = { headers: [] };
+  let modelId = "models/" ++ modelName;
+  runAmbientSession(url, config, modelId, prompt, voice, handle, sessionDir,
+    toolsEnabled, proactiveEnabled, affectiveEnabled, true, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
+}
 
-func startAmbientSession(token: string, region: string, projectId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
+-- Vertex AI session: ADC Bearer token, projects/.../models/{name} format
+func startAmbientSession(token: string, region: string, projectId: string, modelName: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
-  let url = geminiLiveUrl(region, apiVersion);
+  let url = vertexAiUrl(region, apiVersion);
   let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+  let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
+                "/publishers/google/models/" ++ modelName;
+  runAmbientSession(url, config, modelId, prompt, voice, handle, sessionDir,
+    toolsEnabled, proactiveEnabled, affectiveEnabled, false, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
+}
+
+-- Shared session logic for both Google AI Studio and Vertex AI
+func runAmbientSession(url: string, config: {headers: List[{name: string, value: string}]}, modelId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, isGoogleAi: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
+  let apiVersion = getEnvOr("GEMINI_API_VERSION", if isGoogleAi then "v1beta" else "v1");
   let pcmPath = sessionDir ++ "/output.pcm";
   let wavPath = sessionDir ++ "/output.wav";
   let turnTextPath = sessionDir ++ "/turn_text.txt";
@@ -158,11 +191,6 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
   match connect(url, config) {
     Ok(conn) => {
       println("[Connected] " ++ url);
-
-      -- Build ambient setup
-      let modelName = getEnvOr("GEMINI_MODEL", "gemini-live-2.5-flash-native-audio");
-      let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
-                    "/publishers/google/models/" ++ modelName;
       let sessionConfig = if length(handle) > 0 then
         jo([kv("handle", js(handle))])
       else jo([]);
@@ -214,7 +242,8 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
 
       -- Feature configs (proactive always ON for ambient)
       let proactivityKvs = buildProactivityConfig(proactiveEnabled);
-      let affectiveKvs = if affectiveEnabled && apiVersion == "v1alpha"
+      -- Affective dialog: supported on Google AI Studio, not on Vertex AI raw WebSocket
+      let affectiveKvs = if affectiveEnabled && (isGoogleAi || apiVersion == "v1alpha")
         then buildAffectiveConfig(true) else [];
       let activityKvs = buildActivityHandlingConfig(noInterrupt);
       -- VAD: when mic is on, configure speech detection so Gemini fires turnComplete
@@ -299,12 +328,12 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
         -- Spawn sox for streaming audio playback (plays PCM as frames arrive)
         let soxHandle = spawnSoxPlayback();
         selectEvents(sources, \event.
-          handleSelectEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, pcmPath, wavPath, soxHandle));
+          handleSelectEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, pcmPath, wavPath, soxHandle, isGoogleAi));
         -- Close sox stdin on session end (signals EOF, sox flushes and exits)
         closeSoxPlayback(soxHandle)
       } else {
         -- Single-prompt mode: use onEvent + runEventLoop (exits after one turn)
-        onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath));
+        onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi));
         runEventLoop(conn)
       };
       disconnect(conn);
@@ -326,20 +355,20 @@ func startAmbientSession(token: string, region: string, projectId: string, promp
 -- SourceText = user typed a line in the terminal.
 -- SourceBytes("mic", ...) = mic PCM audio chunk.
 -- WebSocket events = responses from Gemini.
-func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, pcmPath: string, wavPath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process, Env} {
+func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, pcmPath: string, wavPath: string, soxHandle: Option[ProcessHandle], isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process, Env} {
   -- Check for completed async tools before processing each event
   checkPendingTools(conn, sessionDir);
   match event {
-    SourceText(source, line) => handleStdinLine(line, conn, sessionDir, setupDonePath, pcmPath, wavPath),
+    SourceText(source, line) => handleStdinLine(line, conn, sessionDir, setupDonePath, pcmPath, wavPath, isGoogleAi),
     SourceBytes(source, data) =>
       if source == "video" then handleVideoBytes(data, conn, sessionDir, setupDonePath)
       else sendMicAudio(data, conn, setupDonePath, sessionDir),
     Message(msg) => match decode(msg) {
-      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle),
+      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle, isGoogleAi),
       Err(_) => true
     },
     Binary(data) => match decode(data) {
-      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle),
+      Ok(json) => handleJsonMessageInteractive(json, conn, prompt, sessionDir, allowedPath, turnDonePath, setupDonePath, soxHandle, isGoogleAi),
       Err(_) => true
     },
     Opened(_) => true,
@@ -358,13 +387,13 @@ func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, ses
 
 -- Handle a line typed by the user in the terminal.
 -- "exit"/"quit" stops the session. Otherwise send as new turn to Gemini.
-func handleStdinLine(line: string, conn: StreamConn, sessionDir: string, setupDonePath: string, pcmPath: string, wavPath: string) -> bool ! {IO, FS, Stream, Process} {
+func handleStdinLine(line: string, conn: StreamConn, sessionDir: string, setupDonePath: string, pcmPath: string, wavPath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process} {
   -- Gate all stdin on setup being complete (prevents race with piped input)
   let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
   if setupReady != "1" then reportWaiting(line)
   else if line == "exit" then handleExitCommand(pcmPath, sessionDir)
   else if line == "quit" then handleExitCommand(pcmPath, sessionDir)
-  else if length(line) > 0 then doSendStdinTurn(line, conn, sessionDir, pcmPath)
+  else if length(line) > 0 then doSendStdinTurn(line, conn, sessionDir, pcmPath, isGoogleAi)
   else true
 }
 
@@ -490,7 +519,7 @@ func sendVideoFrame(jpegB64: string, conn: StreamConn) -> () ! {IO, Stream} {
   }
 }
 
-func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath: string) -> bool ! {IO, FS, Stream} {
+func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream} {
   println("");
   println("[You] " ++ line);
   -- Reset per-turn files for new response
@@ -502,15 +531,19 @@ func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath
   let transcriptPath = sessionDir ++ "/transcript.jsonl";
   appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(line))])) ++ "\n");
   -- Send as new turn to Gemini
-  let textMsg = encode(jo([
-    kv("clientContent", jo([
-      kv("turns", ja([jo([
-        kv("role", js("user")),
-        kv("parts", ja([jo([kv("text", js(line))])]))
-      ])])),
-      kv("turnComplete", jb(true))
-    ]))
-  ]));
+  -- Google AI 3.1 models use realtimeInput.text; Vertex AI uses clientContent.turns
+  let textMsg = if isGoogleAi then
+    encode(jo([kv("realtimeInput", jo([kv("text", js(line))]))]))
+  else
+    encode(jo([
+      kv("clientContent", jo([
+        kv("turns", ja([jo([
+          kv("role", js("user")),
+          kv("parts", ja([jo([kv("text", js(line))])]))
+        ])])),
+        kv("turnComplete", jb(true))
+      ]))
+    ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
     Err(e) => { println("[Error] Send failed: " ++ show(e)); true }
@@ -521,14 +554,14 @@ func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath
 -- Event Handling — Single-prompt (onEvent + runEventLoop)
 -- ============================================================
 
-func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string) -> bool ! {IO, FS, Stream, Process} =
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process} =
   match event {
     Message(msg) => match decode(msg) {
-      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath),
+      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi),
       Err(_) => true
     },
     Binary(data) => match decode(data) {
-      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath),
+      Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi),
       Err(_) => {
         println("[Audio] " ++ show(length(data)) ++ " bytes (PCM 24kHz)");
         true
@@ -551,27 +584,34 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
 -- ============================================================
 
 -- Interactive mode: never disconnect on turnComplete or sessionResumption
-func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Stream, Process, Env} =
+-- Dispatch order: serverContent before usageMetadata (Gemini 3.1 sends both together)
+func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, setupDonePath: string, soxHandle: Option[ProcessHandle], isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process, Env} =
   match getObject(json, "setupComplete") {
     Some(_) => {
       writeFile(setupDonePath, "1");
-      let result = handleSetupComplete(conn, prompt);
+      let result = handleSetupComplete(conn, prompt, isGoogleAi);
       println("Type messages below or 'exit' to quit.");
       println("");
       result
     },
     None => match getObject(json, "sessionResumptionUpdate") {
       Some(sr) => handleSessionResumptionInteractive(sr, sessionDir, soxHandle),
-      None => match getObject(json, "usageMetadata") {
-        Some(um) => handleUsageMetadata(um, sessionDir),
-        None => match getObject(json, "toolCall") {
-          Some(tc) => handleToolCallAsync(tc, conn, sessionDir, allowedPath),
-          None => match getObject(json, "toolCallCancellation") {
-            Some(tcc) => handleToolCallCancellation(tcc),
-            None => match getObject(json, "goAway") {
-              Some(ga) => handleGoAway(ga),
-              None => match getObject(json, "serverContent") {
-                Some(sc) => handleServerContentInteractive(sc, sessionDir, turnDonePath, soxHandle),
+      None => match getObject(json, "toolCall") {
+        Some(tc) => handleToolCallAsync(tc, conn, sessionDir, allowedPath),
+        None => match getObject(json, "toolCallCancellation") {
+          Some(tcc) => handleToolCallCancellation(tcc),
+          None => match getObject(json, "goAway") {
+            Some(ga) => handleGoAway(ga),
+            None => match getObject(json, "serverContent") {
+              Some(sc) => {
+                match getObject(json, "usageMetadata") {
+                  Some(um) => { handleUsageMetadata(um, sessionDir); () },
+                  None => ()
+                };
+                handleServerContentInteractive(sc, sessionDir, turnDonePath, soxHandle)
+              },
+              None => match getObject(json, "usageMetadata") {
+                Some(um) => handleUsageMetadata(um, sessionDir),
                 None => {
                   println("[MSG] " ++ encode(json));
                   true
@@ -585,21 +625,28 @@ func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, 
   }
 
 -- Single-prompt mode: disconnect after turn complete
-func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string) -> bool ! {IO, FS, Stream, Process} =
+-- Dispatch order: serverContent before usageMetadata (Gemini 3.1 sends both together)
+func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process} =
   match getObject(json, "setupComplete") {
-    Some(_) => handleSetupComplete(conn, prompt),
+    Some(_) => handleSetupComplete(conn, prompt, isGoogleAi),
     None => match getObject(json, "sessionResumptionUpdate") {
       Some(sr) => handleSessionResumption(sr, sessionDir, turnDonePath),
-      None => match getObject(json, "usageMetadata") {
-        Some(um) => handleUsageMetadata(um, sessionDir),
-        None => match getObject(json, "toolCall") {
-          Some(tc) => handleToolCall(tc, conn, sessionDir, allowedPath),
-          None => match getObject(json, "toolCallCancellation") {
-            Some(tcc) => handleToolCallCancellation(tcc),
-            None => match getObject(json, "goAway") {
-              Some(ga) => handleGoAway(ga),
-              None => match getObject(json, "serverContent") {
-                Some(sc) => handleServerContent(sc, sessionDir, turnDonePath),
+      None => match getObject(json, "toolCall") {
+        Some(tc) => handleToolCall(tc, conn, sessionDir, allowedPath),
+        None => match getObject(json, "toolCallCancellation") {
+          Some(tcc) => handleToolCallCancellation(tcc),
+          None => match getObject(json, "goAway") {
+            Some(ga) => handleGoAway(ga),
+            None => match getObject(json, "serverContent") {
+              Some(sc) => {
+                match getObject(json, "usageMetadata") {
+                  Some(um) => { handleUsageMetadata(um, sessionDir); () },
+                  None => ()
+                };
+                handleServerContent(sc, sessionDir, turnDonePath)
+              },
+              None => match getObject(json, "usageMetadata") {
+                Some(um) => handleUsageMetadata(um, sessionDir),
                 None => {
                   println("[MSG] " ++ encode(json));
                   true
@@ -616,19 +663,23 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
 -- Message Handlers
 -- ============================================================
 
-func handleSetupComplete(conn: StreamConn, prompt: string) -> bool ! {IO, Stream} {
+-- Google AI 3.1 models use realtimeInput.text; Vertex AI uses clientContent.turns
+func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> bool ! {IO, Stream} {
   println("[Setup Complete] Ambient mode active — listening...");
   println("[Sending] " ++ prompt);
   println("");
-  let textMsg = encode(jo([
-    kv("clientContent", jo([
-      kv("turns", ja([jo([
-        kv("role", js("user")),
-        kv("parts", ja([jo([kv("text", js(prompt))])]))
-      ])])),
-      kv("turnComplete", jb(true))
-    ]))
-  ]));
+  let textMsg = if isGoogleAi then
+    encode(jo([kv("realtimeInput", jo([kv("text", js(prompt))]))]))
+  else
+    encode(jo([
+      kv("clientContent", jo([
+        kv("turns", ja([jo([
+          kv("role", js("user")),
+          kv("parts", ja([jo([kv("text", js(prompt))])]))
+        ])])),
+        kv("turnComplete", jb(true))
+      ]))
+    ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
     Err(e) => { println("[Error] Send failed: " ++ show(e)); false }

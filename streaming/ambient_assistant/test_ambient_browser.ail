@@ -30,7 +30,7 @@ func checkHas(name: string, json: Json, key: string) -> () ! {IO} =
 
 func testDefaults() -> () ! {IO} {
   println("== Defaults ==");
-  check("defaultModel", defaultModel() == "models/gemini-2.5-flash-native-audio-preview-12-2025");
+  check("defaultModel", defaultModel() == "models/gemini-3.1-flash-live-preview");
   check("defaultVoice is Sulafat", defaultVoice() == "Sulafat")
 }
 

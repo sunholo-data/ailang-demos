@@ -183,6 +183,13 @@ jobs:
           cp verify_demo/main.ail invoice_processor_wasm/ailang/verify_demo/
           echo "Copied $(find invoice_processor_wasm/ailang/verify_demo -name '*.ail' | wc -l) verify_demo modules"
 
+      - name: Vendor AILANG package modules
+        run: |
+          # In CI, no local cache — download packages via ailang lock
+          ailang lock
+          scripts/vendor-wasm-packages.sh invoice_processor_wasm/ailang/pkg
+          echo "Vendored $(find invoice_processor_wasm/ailang/pkg -name '*.ail' 2>/dev/null | wc -l) package modules"
+
       - name: Copy streaming modules
         run: |
           # Clean up dev symlinks (absolute paths, dangling in CI)

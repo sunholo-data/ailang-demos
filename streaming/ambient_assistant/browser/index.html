@@ -1326,10 +1326,13 @@ function updateStatsUI(stats) {
 // ── GeminiLiveCore ──
 const WASM_MODULE = 'streaming/ambient_assistant/ambient_browser';
 const core = new GeminiLiveCore({
-  modules: [{
-    name: WASM_MODULE,
-    path: '../../ailang/streaming/ambient_assistant/ambient_browser.ail',
-  }],
+  modules: [
+    // Package dependencies (loaded before main module)
+    { name: 'sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    // Main module
+    { name: WASM_MODULE, path: '../../ailang/streaming/ambient_assistant/ambient_browser.ail' },
+  ],
   playbackRate: 48000,
   sourceRate: 24000,
   micRate: 16000,

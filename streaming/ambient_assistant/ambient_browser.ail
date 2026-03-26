@@ -26,14 +26,17 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
+-- Package imports — what works without inter-function references
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+
 -- ══════════════════════════════════════════════════════
--- Configuration
+-- Configuration (from package)
 -- ══════════════════════════════════════════════════════
 
-export pure func defaultModel() -> string =
-  "models/gemini-2.5-flash-native-audio-preview-12-2025"
+export pure func defaultModel() -> string = defaultBrowserModel()
 
-export pure func defaultVoice() -> string = "Sulafat"
+export pure func defaultVoice() -> string = pkgDefaultVoice()
 
 export pure func ambientInstruction() -> string =
   "You are AILANG, an ambient voice assistant running in a browser. "
@@ -64,36 +67,10 @@ export pure func ambientInstruction() -> string =
     ++ "when ready. While waiting, you can tell the user you are working on it. "
     ++ "For simple tasks (time, calculations, URLs, notes, screenshots) — use the direct tools instead."
 
--- ══════════════════════════════════════════════════════
--- Voice Catalog (re-exported for browser UI)
--- ══════════════════════════════════════════════════════
+export pure func voiceCatalog() -> string = pkgVoiceCatalog()
 
-pure func v(name: string, desc: string) -> Json =
-  jo([kv("name", js(name)), kv("desc", js(desc))])
-
-export pure func voiceCatalog() -> string =
-  encode(ja([
-    v("Sulafat", "Warm"), v("Zephyr", "Bright"), v("Puck", "Upbeat"),
-    v("Charon", "Informative"), v("Kore", "Firm"), v("Fenrir", "Excitable"),
-    v("Leda", "Youthful"), v("Orus", "Firm"), v("Aoede", "Breezy"),
-    v("Callirrhoe", "Easy-going"), v("Autonoe", "Bright"), v("Enceladus", "Breathy"),
-    v("Iapetus", "Clear"), v("Umbriel", "Easy-going"), v("Algieba", "Smooth"),
-    v("Despina", "Smooth"), v("Erinome", "Clear"), v("Algenib", "Gravelly"),
-    v("Rasalgethi", "Informative"), v("Laomedeia", "Upbeat"), v("Achernar", "Soft"),
-    v("Alnilam", "Firm"), v("Schedar", "Even"), v("Gacrux", "Mature"),
-    v("Pulcherrima", "Forward"), v("Achird", "Friendly"), v("Zubenelgenubi", "Casual"),
-    v("Vindemiatrix", "Gentle"), v("Sadachbia", "Lively"), v("Sadaltager", "Knowledgeable")
-  ]))
-
--- ══════════════════════════════════════════════════════
--- URL Builders
--- ══════════════════════════════════════════════════════
-
--- AI Studio URL — v1alpha needed for proactive audio
-export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
-  let version = if useAlpha then "v1alpha" else "v1beta";
-  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ version ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
-}
+export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string =
+  pkgAiStudioUrl(apiKey, useAlpha)
 
 -- ══════════════════════════════════════════════════════
 -- Session (uses std/stream effects)

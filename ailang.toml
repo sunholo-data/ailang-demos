@@ -1,0 +1,15 @@
+[package]
+name = "sunholo/demos"
+version = "0.1.0"
+edition = "1"
+ailang = ">=0.9.2"
+description = "AILANG demos and integration tests"
+
+[dependencies]
+"sunholo/gemini_live" = "0.3.0"
+
+[effects]
+max = ["IO", "FS", "Stream", "Net", "Env", "Process", "AI"]
+
+[metadata]
+tags = ["demos", "streaming", "gemini", "voice"]

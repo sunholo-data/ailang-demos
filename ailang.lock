@@ -1,0 +1,25 @@
+{
+  "ailang_version": "v0.9.2-197-gd1cc0c0e",
+  "generated_at": "2026-03-26T20:24:55.446434Z",
+  "generator": "ailang lock v0.9.2-197-gd1cc0c0e",
+  "packages": [
+    {
+      "ailang": ">=0.9.2",
+      "content_hash": "sha256:c46261afbc0b2267a4505226c0fc74884cb3c8b6bbc6c539f16e9931e4ee16f0",
+      "effects": [],
+      "exports": [
+        "sunholo/gemini_live/config",
+        "sunholo/gemini_live/endpoints",
+        "sunholo/gemini_live/messages",
+        "sunholo/gemini_live/parsers",
+        "sunholo/gemini_live/voices"
+      ],
+      "interface_hash": "sha256:3678e8cdad26783f0299de5b59ee835ab2a4d4cc0a640e3a500c700f13dff7a8",
+      "name": "sunholo/gemini_live",
+      "source": "registry",
+      "version": "0.3.0"
+    }
+  ],
+  "schema": "ailang.lock/v1",
+  "schema_version": "1.0.0"
+}

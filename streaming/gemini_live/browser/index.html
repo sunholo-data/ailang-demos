@@ -616,7 +616,7 @@
     <div class="header-left">
       <a href="../" class="nav-home" title="Back to Streaming Demos"><img src="../shared/ailang-logo.svg" alt="AILANG" class="nav-logo"></a>
       <div class="logo">AILANG<span>×</span>Gemini Live</div>
-      <span class="badge badge-model">gemini-2.5-flash-native-audio</span>
+      <span class="badge badge-model">gemini-3.1-flash-live</span>
       <span class="badge badge-wss" id="wssBadge"><span class="dot"></span>WSS</span>
       <span class="badge badge-fallback" id="fallbackBadge">FALLBACK</span>
     </div>
@@ -834,10 +834,13 @@ function setState(s) {
 // ── GeminiLiveCore instance ──
 const WASM_MODULE = 'streaming/gemini_live/gemini_live_browser';
 const core = new GeminiLiveCore({
-  modules: [{
-    name: WASM_MODULE,
-    path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail',
-  }],
+  modules: [
+    // Package dependencies (loaded before main module)
+    { name: 'sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    // Main module
+    { name: WASM_MODULE, path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
+  ],
   playbackRate: 48000,
   sourceRate: 24000,
   micRate: 16000,
@@ -1082,7 +1085,7 @@ window.addEventListener('load', async () => {
   } else {
     addLog('err', 'AILANG WASM failed to load — streaming requires AILANG');
   }
-  addLog('info', 'Model: <span class="hl">gemini-2.5-flash-native-audio</span>');
+  addLog('info', 'Model: <span class="hl">gemini-3.1-flash-live</span>');
   addLog('info', 'Click <span class="val">Connect</span> to start');
 });
 </script>

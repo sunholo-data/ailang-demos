@@ -14,6 +14,7 @@
 #   ambient --screen "What do you see?"       # with screen capture (needs ffmpeg)
 #   ambient --video "Can you see me?"         # with webcam (needs ffmpeg)
 #   ambient --fps 2 --screen "Watch this"     # custom frame rate (default 1 FPS)
+#   ambient --google-ai "Hello"               # use Google AI Studio (needs GOOGLE_API_KEY)
 #   ambient                                    # uses default prompt
 #
 # All ambient features are pre-enabled by default:
@@ -47,6 +48,7 @@ ENABLE_INTERACTIVE=true
 ENABLE_MIC=false
 ENABLE_VIDEO=""
 VIDEO_FPS=""
+USE_GOOGLE_AI=false
 PROMPT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -85,6 +87,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-interactive)
       ENABLE_INTERACTIVE=false
+      shift
+      ;;
+    --google-ai)
+      USE_GOOGLE_AI=true
       shift
       ;;
     --mic|-m)
@@ -182,8 +188,18 @@ fi
 # Create session directory
 mkdir -p "$SESSION_DIR"
 
-# Force ADC
-export GOOGLE_API_KEY=""
+# Auth: Google AI Studio (API key) or Vertex AI (ADC)
+if $USE_GOOGLE_AI; then
+  if [ -z "${GOOGLE_API_KEY:-}" ]; then
+    echo "Error: --google-ai requires GOOGLE_API_KEY env var"
+    echo "Get a key from https://aistudio.google.com/apikey"
+    exit 1
+  fi
+  # GOOGLE_API_KEY stays set — AILANG main.ail will detect it
+else
+  # Force ADC (unset API key so AILANG doesn't use it instead of ADC)
+  export GOOGLE_API_KEY=""
+fi
 export GEMINI_VOICE="$VOICE"
 export GEMINI_SESSION_DIR="$SESSION_DIR"
 

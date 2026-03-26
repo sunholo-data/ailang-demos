@@ -79,11 +79,14 @@ ambient --mic --screen "What's on my screen?" # + screen capture
 ambient --mic --video "Can you see me?"       # + webcam
 ambient --list                                # list sessions
 
-# Gemini Live — speak CLI
+# Gemini Live — speak CLI (Vertex AI via ADC)
 speak "Tell me a joke"
 speak --voice Charon "What is AILANG?"
 speak --tools "What's the git status?"    # with tool calling
 speak --list                              # show active sessions
+
+# Gemini Live — speak CLI (Google AI Studio via API key)
+GOOGLE_API_KEY=xxx speak --google-ai "Tell me a joke"  # uses gemini-3.1-flash-live
 
 # Claude SSE (needs ANTHROPIC_API_KEY)
 ANTHROPIC_API_KEY=sk-ant-... ailang run --entry main \
@@ -115,7 +118,7 @@ GOOGLE_API_KEY="" ailang run --entry main \
 | Deepgram | `DEEPGRAM_API_KEY=xxx` env var | API key in localStorage |
 | ElevenLabs | `ELEVENLABS_API_KEY=xxx` env var | API key in localStorage |
 
-**Important:** If `GOOGLE_API_KEY` env var is set, AILANG uses it as a Gemini API key instead of ADC. Set `GOOGLE_API_KEY=""` to force ADC.
+**Important:** If `GOOGLE_API_KEY` env var is set, the streaming CLI demos (`speak`, `ambient`) connect to Google AI Studio (with `gemini-3.1-flash-live-preview`) instead of Vertex AI. Use `--google-ai` flag or set `GOOGLE_API_KEY=xxx`. Set `GOOGLE_API_KEY=""` to force ADC/Vertex AI.
 
 ## Streaming Demo Status
 
