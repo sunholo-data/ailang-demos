@@ -6,7 +6,8 @@ import std/net (httpRequest)
 import std/json (decode, encode, getString, getNumber, getArray, jo, kv, js, jb, jnum)
 import std/option (isSome, getOrElse)
 import std/string (trim, split, length, substring)
-import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
+import pkg/sunholo/gcp_auth/project (getDefaultProject)
 import ecommerce/services/bigquery (query, QueryResult)
 import ecommerce/services/ga4_queries (
   topEventsQuery,
@@ -43,7 +44,7 @@ export func main() -> () ! {IO @limit=100, FS @limit=30, Net @limit=20} {
   }
 }
 
-func authenticateAndRun(projectId: string) -> () ! {IO, FS, Net} {
+func authenticateAndRun(projectId: string) -> () ! {IO, Env, FS, Net} {
   match getAccessToken() {
     Ok(token) => runAllQueries(projectId, token),
     Err(e) => println("Authentication failed: " ++ e)

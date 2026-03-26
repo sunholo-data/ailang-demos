@@ -23,7 +23,8 @@ import std/string (length, join)
 import std/list (map, nth, length as listLength)
 import std/fs (readFile, fileExists)
 import std/net (httpRequest)
-import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
+import pkg/sunholo/gcp_auth/project (getDefaultProject)
 
 export func main() -> () ! {IO @limit=100, Stream @limit=200, Net @limit=5, Env} {
   println("=== Gemini SSE Streaming Test ===");

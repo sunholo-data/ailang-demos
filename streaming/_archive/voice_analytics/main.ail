@@ -42,7 +42,8 @@ import std/string (length, join, startsWith)
 import std/list (map, nth, take, length as listLength)
 import std/fs (fileExists, readFile)
 import std/net (httpRequest)
-import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
+import pkg/sunholo/gcp_auth/project (getDefaultProject)
 import streaming/voice_analytics/services/gemini_live (
   connectGemini, sendSetup, sendTextMessage, sendAudioInput,
   parseServerMessage, buildToolResponse

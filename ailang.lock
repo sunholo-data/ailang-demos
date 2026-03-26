@@ -1,8 +1,25 @@
 {
   "ailang_version": "v0.9.2-197-gd1cc0c0e",
-  "generated_at": "2026-03-26T20:24:55.446434Z",
+  "generated_at": "2026-03-26T20:40:11.325809Z",
   "generator": "ailang lock v0.9.2-197-gd1cc0c0e",
   "packages": [
+    {
+      "ailang": ">=0.9.5",
+      "content_hash": "sha256:a3e463d35bba9cfd443bbc7e7c7f74188281be2f943c7983b2ee99f1ed89d13a",
+      "effects": [
+        "Env",
+        "FS",
+        "Net"
+      ],
+      "exports": [
+        "sunholo/gcp_auth/project",
+        "sunholo/gcp_auth/token"
+      ],
+      "interface_hash": "sha256:2e381af52297f5d02ab20b70ebc79d261973b3bc664f91fb11036f086588f137",
+      "name": "sunholo/gcp_auth",
+      "source": "registry",
+      "version": "0.8.0"
+    },
     {
       "ailang": ">=0.9.2",
       "content_hash": "sha256:c46261afbc0b2267a4505226c0fc74884cb3c8b6bbc6c539f16e9931e4ee16f0",

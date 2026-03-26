@@ -6,7 +6,7 @@ import std/json (encode, decode, jo, kv, js, jb, jnum, getString, getNumber, get
 import std/option (Some, None, isSome, getOrElse)
 import std/string (stringToInt)
 import std/result (Ok, Err)
-import ecommerce/services/gcp_auth (getAccessToken)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
 
 -- BigQuery REST API client for AILANG
 -- Executes SQL queries against BigQuery using the jobs.query endpoint
@@ -43,7 +43,7 @@ export func query(projectId: string, sql: string, token: string) -> Result[Query
 
 -- Execute a query with automatic authentication using ADC
 -- Budget: 10 FS ops (auth), 2 Net ops (OAuth + BigQuery)
-export func queryWithAuth(projectId: string, sql: string) -> Result[QueryResult, string] ! {FS @limit=10, Net @limit=2} {
+export func queryWithAuth(projectId: string, sql: string) -> Result[QueryResult, string] ! {Env, FS @limit=10, Net @limit=2} {
   match getAccessToken() {
     Ok(token) => query(projectId, sql, token),
     Err(e) => Err("Authentication failed: " ++ e)

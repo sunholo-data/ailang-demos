@@ -6,7 +6,8 @@ import std/net (httpRequest)
 import std/json (decode, encode, getString, getNumber, getArray, jo, kv, js, jb, jnum)
 import std/option (isSome, getOrElse)
 import std/string (trim, split, length, substring)
-import ecommerce/services/gcp_auth (getAccessToken, getDefaultProject)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
+import pkg/sunholo/gcp_auth/project (getDefaultProject)
 import ecommerce/services/bigquery (query, QueryResult)
 import ecommerce/services/ga4_queries (
   purchaseFunnelQuery,
@@ -56,7 +57,7 @@ export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
   }
 }
 
-func runTrustedPipeline(projectId: string) -> () ! {IO, FS, Net} {
+func runTrustedPipeline(projectId: string) -> () ! {IO, Env, FS, Net} {
   match getAccessToken() {
     Ok(token) => {
       println("Auth: OK (1/5 API calls used)");
