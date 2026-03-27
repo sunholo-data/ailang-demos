@@ -26,9 +26,12 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
--- Package imports — what works without inter-function references
+-- Package imports
 import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
 import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import pkg/sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
+                                         buildToolResponse as pkgBuildToolResponse, buildToolResponseScheduled as pkgBuildToolResponseScheduled)
+import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration (from package)
@@ -342,117 +345,11 @@ pure func ambientToolDeclarations() -> [Json] = [
 ]
 
 -- ══════════════════════════════════════════════════════
--- Protocol: Outgoing Messages (pure helpers)
+-- Protocol: Messages & Parsers (re-exported from package)
 -- ══════════════════════════════════════════════════════
 
-export pure func buildTextMessage(text: string) -> string =
-  encode(jo([
-    kv("clientContent", jo([
-      kv("turns", ja([jo([
-        kv("role", js("user")),
-        kv("parts", ja([jo([kv("text", js(text))])]))
-      ])])),
-      kv("turnComplete", jb(true))
-    ]))
-  ]))
-
-export pure func buildAudioChunk(b64Audio: string) -> string =
-  encode(jo([
-    kv("realtimeInput", jo([
-      kv("mediaChunks", ja([jo([
-        kv("mimeType", js("audio/pcm;rate=16000")),
-        kv("data", js(b64Audio))
-      ])]))
-    ]))
-  ]))
-
-export pure func buildToolResponse(callId: string, name: string, result: string) -> string =
-  encode(jo([
-    kv("toolResponse", jo([
-      kv("functionResponses", ja([jo([
-        kv("id", js(callId)),
-        kv("name", js(name)),
-        kv("response", jo([kv("result", js(result))]))
-      ])]))
-    ]))
-  ]))
-
--- Tool response with scheduling for NON_BLOCKING tools.
--- scheduling: "INTERRUPT" (stop and process), "WHEN_IDLE" (wait), "SILENT" (absorb quietly)
-export pure func buildToolResponseScheduled(callId: string, name: string, result: string, scheduling: string) -> string =
-  encode(jo([
-    kv("toolResponse", jo([
-      kv("functionResponses", ja([jo([
-        kv("id", js(callId)),
-        kv("name", js(name)),
-        kv("response", jo([kv("result", js(result)), kv("scheduling", js(scheduling))]))
-      ])]))
-    ]))
-  ]))
-
--- ══════════════════════════════════════════════════════
--- Protocol: Incoming Message Parsing (pure helper)
--- ══════════════════════════════════════════════════════
-
-export pure func parseMessage(jsonStr: string) -> string {
-  match decode(jsonStr) {
-    Err(e) => encode(jo([kv("type", js("error")), kv("text", js(e))])),
-    Ok(json) => {
-      if has(json, "setupComplete")
-      then encode(jo([kv("type", js("setup"))]))
-      else if has(json, "toolCall") then {
-        let tc = getOrElse(get(json, "toolCall"), jo([]));
-        let calls = getOrElse(get(tc, "functionCalls"), ja([]));
-        encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
-      }
-      else if has(json, "serverContent")
-      then parseServerContentPure(json)
-      else if has(json, "toolCallCancellation")
-      then encode(jo([kv("type", js("toolCallCancellation"))]))
-      else if has(json, "goAway")
-      then encode(jo([kv("type", js("goAway"))]))
-      else encode(jo([kv("type", js("unknown"))]))
-    }
-  }
-}
-
-pure func parseServerContentPure(json: Json) -> string {
-  let sc = getOrElse(get(json, "serverContent"), jo([]));
-  match getBool(sc, "interrupted") {
-    Some(true) => encode(jo([kv("type", js("interrupted"))])),
-    _ => match getBool(sc, "turnComplete") {
-      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
-      _ => {
-        -- Check transcriptions first
-        if has(sc, "inputTranscription") then {
-          let it = getOrElse(get(sc, "inputTranscription"), jo([]));
-          let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
-          if length(txt) > 0
-          then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
-          else checkOutputTranscriptPure(sc)
-        }
-        else checkOutputTranscriptPure(sc)
-      }
-    }
-  }
-}
-
-pure func checkOutputTranscriptPure(sc: Json) -> string {
-  if has(sc, "outputTranscription") then {
-    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
-    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
-    if length(txt) > 0
-    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
-    else checkModelTurnPure(sc)
-  }
-  else checkModelTurnPure(sc)
-}
-
-pure func checkModelTurnPure(sc: Json) -> string =
-  match getObject(sc, "modelTurn") {
-    Some(mt) => match get(mt, "parts") {
-      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
-      None => encode(jo([kv("type", js("unknown"))]))
-    },
-    None => encode(jo([kv("type", js("unknown"))]))
-  }
+export pure func buildTextMessage(text: string) -> string = pkgBuildTextMessage(text)
+export pure func buildAudioChunk(b64Audio: string) -> string = pkgBuildAudioChunk(b64Audio)
+export pure func buildToolResponse(callId: string, name: string, result: string) -> string = pkgBuildToolResponse(callId, name, result)
+export pure func buildToolResponseScheduled(callId: string, name: string, result: string, scheduling: string) -> string = pkgBuildToolResponseScheduled(callId, name, result, scheduling)
+export pure func parseMessage(jsonStr: string) -> string = pkgParseMessage(jsonStr)

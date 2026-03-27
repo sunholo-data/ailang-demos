@@ -6,7 +6,7 @@ ailang = ">=0.9.2"
 description = "AILANG demos and integration tests"
 
 [dependencies]
-"sunholo/gemini_live" = "0.3.0"
+"sunholo/gemini_live" = "0.4.0"
 "sunholo/gcp_auth" = "0.8.0"
 "sunholo/logging" = "0.4.0"
 
