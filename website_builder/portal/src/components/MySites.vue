@@ -248,10 +248,22 @@ onMounted(async () => {
       listRepoSites(props.userId).catch(() => []),
       listUserSitesMeta(props.userId).catch(() => ({})),
     ]);
-    // Merge: local wins on duplicates (has richer metadata from brief.json)
+    // Merge: local wins on duplicates (has richer metadata from brief.json),
+    // BUT if the local entry came from the sidecar's GitHub fallback (i.e. no
+    // files actually on disk — which is the norm on Cloud Run since instances
+    // scale to zero), the repo entry has the real page list. Prefer it.
     const bySlug = new Map();
     for (const s of repo) bySlug.set(s.slug, s);
-    for (const s of local) bySlug.set(s.slug, s); // local overwrites
+    for (const s of local) {
+      const existing = bySlug.get(s.slug);
+      const localIsEmpty = !s.pages || s.pages.length === 0;
+      if (existing && localIsEmpty && existing.pages?.length > 0) {
+        // Keep the repo entry's pages, but fold in any local-only metadata
+        bySlug.set(s.slug, { ...existing, ...s, pages: existing.pages, source: existing.source || 'github' });
+      } else {
+        bySlug.set(s.slug, s);
+      }
+    }
     // Enrich with Firestore metadata (timestamps, title)
     for (const [slug, site] of bySlug) {
       const m = meta[slug];
