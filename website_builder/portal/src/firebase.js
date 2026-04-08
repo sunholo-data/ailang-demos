@@ -1,9 +1,16 @@
 /**
  * Firebase configuration for the Website Builder portal.
- * Uses the ailang-multivac-dev Firebase project.
+ * Uses the ailang-multivac (prod) Firebase project.
  *
- * Config values come from Terraform output (firebase_web_app_config).
- * Run: terraform output firebase_web_app_config
+ * The apiKey here is the **restricted** Terraform-managed Firebase browser
+ * key (M-SEC1). It is allowlisted to sunholo.com referrers and explicitly
+ * denied access to Vertex AI / Gemini APIs at the GCP key restriction layer.
+ *
+ * To read or rotate it:
+ *   cd ailang-multivac && make tf-init ENV=prod
+ *   cd terraform && terraform output -json restricted_firebase_keys
+ *
+ * Other config values come from: terraform output firebase_web_app_config
  *
  * Features:
  *   - Google Auth (sign-in with popup)
@@ -19,14 +26,16 @@ import {
   onSnapshot, orderBy, serverTimestamp, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 
-// Firebase config from Terraform output (firebase_web_app_config)
+// Firebase config from Terraform output (firebase_web_app_config) — prod project.
+// apiKey is the M-SEC1 restricted browser key (terraform output restricted_firebase_keys),
+// allowlisted to sunholo.com referrers and denied Vertex AI / Gemini access.
 const firebaseConfig = {
-  apiKey: "AIzaSyCkvFxVilpZkqao1ntOPQbhwMy2GJI0FIE",
-  authDomain: "ailang-multivac-dev.firebaseapp.com",
-  projectId: "ailang-multivac-dev",
-  storageBucket: "ailang-multivac-dev.appspot.com",
-  messagingSenderId: "812435936917",
-  appId: "1:812435936917:web:2dcf2a315dfc7cb2b66d9c"
+  apiKey: "AIzaSyDfAKOTkQGv7WIuz2SDX9bJesJao1Q7dwM",
+  authDomain: "ailang-multivac.firebaseapp.com",
+  projectId: "ailang-multivac",
+  storageBucket: "ailang-multivac.appspot.com",
+  messagingSenderId: "1032908249524",
+  appId: "1:1032908249524:web:fb3aae1b3626df6b957ae1"
 };
 
 // Named Firestore database (not default)
