@@ -203,9 +203,9 @@ curl -s https://sunholo-voight-kampff.github.io/sunholo-websites/sites/default/t
 | What | URL |
 |------|-----|
 | Portal (SPA) | https://www.sunholo.com/ailang-demos/website_builder/ |
-| Sidecar API | https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app |
-| Generated sites | https://sunholo-voight-kampff.github.io/sunholo-websites/sites/{user}/{site}/ |
-| Sites repo | https://github.com/sunholo-voight-kampff/sunholo-websites |
+| Sidecar API | https://ailang-website-builder-ao6kuhcibq-ew.a.run.app |
+| Generated sites | https://www.sunholo.com/sunholo-websites/sites/{user}/{site}/ |
+| Sites repo | https://github.com/sunholo-data/sunholo-websites |
 
 ### GitHub Pages setup (one-time)
 
@@ -284,21 +284,22 @@ Portal needs a Gemini API key — enter it in Settings after opening.
 
 The portal uses Firebase for authentication (Google sign-in) and Firestore for persisting per-user settings (API keys, repo config, form sheet ID, build mode).
 
-- **Project**: `ailang-multivac-dev`
+- **Project**: `ailang-multivac` (prod). Dev/test still exist in `ailang-multivac-dev` / `ailang-multivac-test` and the admin scripts accept `WEBSITE_BUILDER_PROJECT=...` to target them.
 - **Firestore database**: `website-builder` (named, not default)
-- **Config**: `firebase.js` contains the Firebase API key — this is public by design (see Security below)
-- **Terraform**: `website_builder/scripts/terraform-firebase.tf` provisions all Firebase resources
+- **Config**: `firebase.js` uses the M-SEC1 Terraform-managed restricted browser key from `ailang-multivac`. To read or rotate it: `cd ailang-multivac && make tf-init ENV=prod && cd terraform && terraform output -json restricted_firebase_keys`
+- **Terraform**: live infra is in `ailang-multivac/terraform/firebase.tf` and `terraform/security.tf`. The script `website_builder/scripts/terraform-firebase.tf` is a legacy reference and is no longer applied.
 
-### Security
+### Security (M-SEC1)
 
-The Firebase API key in `firebase.js` is a **client-side identifier**, not a secret. This is standard for all Firebase web apps. It is protected by:
+The Firebase API key in `firebase.js` is a **client-side identifier**, not a secret. The prod key is the Terraform-managed restricted key, defended by:
 
-1. **HTTP referrer restrictions** — the API key only accepts requests from whitelisted domains (`sunholo-voight-kampff.github.io`, `ailang-dev-website-builder-*.a.run.app`, `localhost`)
-2. **API restrictions** — the key is restricted to Identity Toolkit API and Cloud Firestore API only
+1. **HTTP referrer restrictions** — only `https://*.sunholo.com/*`, `https://*.ailang.sunholo.com/*`, and `https://ailang-multivac.firebaseapp.com/*` (the Firebase Auth iframe origin)
+2. **API allowlist** — restricted to Firebase Auth, Firestore, Identity Toolkit, Firebase Hosting/Rules/Storage. Vertex AI / Gemini / Generative Language APIs are explicitly excluded.
 3. **Firestore security rules** — users can only read/write their own document (`users/{uid}`), and cannot self-set admin fields (`messagesEnabled`, `messagesEndpoint`)
 4. **Auth authorized domains** — only whitelisted domains can use Google sign-in
+5. **Project-level kill switch** — `firebasevertexai`, `generativelanguage`, and `aiplatform` (for API key) are disabled at the project level. A leaked key cannot reach AI APIs even if all the above were bypassed.
 
-These restrictions are configured in the GCP Console under APIs & Services > Credentials.
+These restrictions are codified in `ailang-multivac/terraform/security.tf`.
 
 ## Known AILANG Issues Hit During Development
 

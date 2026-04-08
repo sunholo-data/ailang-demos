@@ -75,7 +75,7 @@
                 type="text"
                 placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
               />
-              <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com</code></p>
+              <p class="hint">Share your sheet with: <code style="font-size:0.7em;word-break:break-all">ailang-website-builder@ailang-multivac.iam.gserviceaccount.com</code></p>
 
             </div>
           </div>

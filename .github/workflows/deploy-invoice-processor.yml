@@ -262,7 +262,9 @@ jobs:
 
       - name: Build Website Builder portal
         env:
-          VITE_API_URL: https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app/api
+          # Prod Cloud Run service — matches the prod Firebase project the
+          # portal authenticates against (M-SEC1 restricted key rotation).
+          VITE_API_URL: https://ailang-website-builder-ao6kuhcibq-ew.a.run.app/api
         run: |
           cd website_builder/portal
           npm ci

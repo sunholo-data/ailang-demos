@@ -44,7 +44,7 @@ const SITES_DIR = join(WEBSITES_REPO, 'sites');
 
 // Form submission config
 const FORMS_JSON_PATH = join(WEBSITES_REPO, 'forms.json');
-const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://ailang-dev-website-builder-ejjw6zt3bq-ew.a.run.app';
+const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || 'https://ailang-website-builder-ao6kuhcibq-ew.a.run.app';
 const FORM_ENDPOINT_ABS = `${CLOUD_RUN_URL}/api/form-submit`;
 
 // Coordinator REST API (replaces ailang CLI for messaging)
@@ -222,7 +222,7 @@ async function getOrCreateSheet(siteSlug, requestSheetId) {
     throw new Error(
       'No form spreadsheet configured. Set FORM_SHEET_ID env var or configure in Settings. ' +
       'Create a Google Sheet and share it (Editor) with: ' +
-      'ailang-dev-website-builder@ailang-multivac-dev.iam.gserviceaccount.com'
+      'ailang-website-builder@ailang-multivac.iam.gserviceaccount.com'
     );
   }
 

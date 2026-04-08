@@ -7,6 +7,10 @@
 #   ./website_builder/scripts/enable-messages.sh --list          # show enabled users
 #   ./website_builder/scripts/enable-messages.sh --disable mark@sunholo.com
 #
+# Defaults to the prod website_builder project. Override with:
+#   WEBSITE_BUILDER_PROJECT=ailang-multivac-dev ./enable-messages.sh ...
+#   WEBSITE_BUILDER_PROJECT=ailang-multivac-test ./enable-messages.sh ...
+#
 # Prerequisites:
 #   - gcloud CLI authenticated with Firestore access
 #   - User must have signed in to the portal at least once (creates Firebase Auth account)
@@ -18,7 +22,7 @@
 
 set -euo pipefail
 
-PROJECT="ailang-multivac-dev"
+PROJECT="${WEBSITE_BUILDER_PROJECT:-ailang-multivac}"
 DATABASE="website-builder"
 FIRESTORE_BASE="https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/${DATABASE}/documents"
 

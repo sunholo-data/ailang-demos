@@ -3,14 +3,18 @@
 # Uses ADC (Application Default Credentials) — run `gcloud auth application-default login` first.
 #
 # Usage:
-#   ./check-firestore.sh                  # list recent sites
-#   ./check-firestore.sh sites [UID]      # list sites (optionally for a specific user)
-#   ./check-firestore.sh rules            # show local rules file
-#   ./check-firestore.sh deploy-rules     # deploy rules from firestore.rules
+#   ./check-firestore.sh                       # list recent sites (prod, default)
+#   ./check-firestore.sh sites [UID]           # list sites (optionally for a specific user)
+#   ./check-firestore.sh rules                 # show local rules file
+#   ./check-firestore.sh deploy-rules          # deploy rules from firestore.rules
+#
+# Override the target project with WEBSITE_BUILDER_PROJECT:
+#   WEBSITE_BUILDER_PROJECT=ailang-multivac-dev ./check-firestore.sh
+#   WEBSITE_BUILDER_PROJECT=ailang-multivac-test ./check-firestore.sh
 
 set -euo pipefail
 
-PROJECT="ailang-multivac-dev"
+PROJECT="${WEBSITE_BUILDER_PROJECT:-ailang-multivac}"
 DATABASE="website-builder"
 RULES_FILE="$(dirname "$0")/../firestore.rules"
 
