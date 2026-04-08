@@ -183,6 +183,28 @@ jobs:
           cp verify_demo/main.ail invoice_processor_wasm/ailang/verify_demo/
           echo "Copied $(find invoice_processor_wasm/ailang/verify_demo -name '*.ail' | wc -l) verify_demo modules"
 
+      - name: Install ailang CLI
+        run: |
+          set -euo pipefail
+          # Reuse the same release tag the WASM tarball came from
+          RELEASE_TAG=$(curl -sfL -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/sunholo-data/ailang/releases/latest \
+            | jq -r '.tag_name')
+          echo "Installing ailang ${RELEASE_TAG}"
+          curl -sfL --retry 3 --retry-delay 5 \
+            -o ailang-cli.tar.gz \
+            "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/linux.x64.ailang.tar.gz"
+          mkdir -p .ailang-cli && tar -xzf ailang-cli.tar.gz -C .ailang-cli
+          # Locate the binary (tarball layout may vary) and put it on PATH
+          AILANG_BIN=$(find .ailang-cli -type f -name ailang | head -1)
+          if [ -z "$AILANG_BIN" ]; then
+            echo "::error::ailang binary not found in tarball"
+            tar -tzf ailang-cli.tar.gz
+            exit 1
+          fi
+          install -m 0755 "$AILANG_BIN" /usr/local/bin/ailang
+          ailang --version
+
       - name: Vendor AILANG package modules
         run: |
           # In CI, no local cache — download packages via ailang lock
