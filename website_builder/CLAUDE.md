@@ -301,6 +301,25 @@ The Firebase API key in `firebase.js` is a **client-side identifier**, not a sec
 
 These restrictions are codified in `ailang-multivac/terraform/security.tf`.
 
+### Local development uses the dev Firebase project — never prod
+
+The prod restricted key intentionally **does not** permit `localhost` (or `*.github.io`) at either the M-SEC1 referrer allowlist or the Firebase Auth `authorizedDomains`. Both layers exclude it on purpose:
+
+| Layer | Why localhost is blocked in prod |
+|---|---|
+| API key referrer allowlist | `Referer:` is set by the client and trivially spoofable from non-browser contexts (curl, server-side proxy). Allowing `http://localhost:*` would make the restricted key effectively unrestricted — anyone with the key (it's in the published bundle) could replay it from any environment by setting the header. |
+| Firebase Auth `authorizedDomains` | OAuth redirect targets must be allowlisted. Allowing localhost expands the phishing surface for the Google sign-in flow without delivering working local dev (the Firestore reads would still be rejected by the layer above). |
+
+**Both layers have to be relaxed together for local dev against prod to work, and weakening either one defeats M-SEC1.** If you hit `API_KEY_HTTP_REFERRER_BLOCKED` from `localhost:5174`, the fix is **not** to add `localhost` to the prod allowlist. Use one of these instead:
+
+1. **Run against dev** (the normal path): use `WEBSITE_BUILDER_PROJECT=ailang-multivac-dev` for the admin scripts and point `firebase.js` at the dev project for the duration of your local session. The dev project's restricted key already permits `localhost` and `*.github.io`. Dev exists for exactly this purpose.
+2. **Test the prod sidecar in isolation**: `serve --cloud` swaps only the sidecar API URL — Firebase still resolves to whatever's hardcoded in `firebase.js`. If you only need to debug the Express sidecar against the prod GitHub repo, curl it directly (`curl https://ailang-website-builder-...run.app/api/...`) — no Firebase needed.
+3. **Use a `*.sunholo.com` preview**: any subdomain of sunholo.com passes both layers, so a preview deploy under `preview.sunholo.com` (or similar) would work end-to-end without touching the allowlist.
+
+This is also why the `serve --cloud` flag in `portal/serve` is documented as "use Cloud Run API" (sidecar only) and not "test prod end-to-end" — the Firebase half of prod isn't reachable from `localhost` by design.
+
+> **Drift audit 2026-04-08**: dev's Firebase Auth `authorizedDomains` correctly includes `localhost` + `sunholo-voight-kampff.github.io`; prod correctly does not. This is **not** drift to fix — prod is intentionally tighter. If a future migration audit suggests "add localhost to prod authorizedDomains for parity", that suggestion is wrong.
+
 ## Known AILANG Issues Hit During Development
 
 1. **Multi-statement lambdas in flatMap**: `flatMap(\x. let a = ...; let b = ...; expr, xs)` fails to parse when using block `{ }` syntax inside the lambda. Workaround: extract complex lambda bodies into named helper functions.
