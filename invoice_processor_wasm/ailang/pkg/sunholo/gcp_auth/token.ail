@@ -1,0 +1,121 @@
+-- GCP authentication: get access tokens for service-to-service calls
+--
+-- Three-tier fallback:
+--   1. GOOGLE_ACCESS_TOKEN env var (explicit override, local dev)
+--   2. ADC file (~/.config/gcloud/application_default_credentials.json)
+--   3. Metadata server (http://metadata.google.internal/...) — Cloud Run
+--
+-- Usage:
+--   import pkg/sunholo/gcp_auth/token (getAccessToken, readCredentials, ADCCredentials)
+--
+--   match getAccessToken() {
+--     Ok(token) => -- use token for Bearer auth
+--     Err(e) => println("Auth failed: " ++ e)
+--   }
+
+module sunholo/gcp_auth/token
+
+import std/fs (readFile, fileExists)
+import std/net (httpRequest)
+import std/json (decode, getString)
+import std/option (getOrElse, isSome)
+import std/result (Ok, Err)
+import std/env (getEnvOr)
+import std/string (length, substring, trim)
+-- Debug logging removed — cascades through effect ceilings. Error messages include diagnostic info instead.
+
+-- Parsed ADC credentials
+export type ADCCredentials = {
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string
+}
+
+-- Get the path to ADC credentials file
+-- Uses HOME env var with /tmp fallback
+export func getCredentialsPath() -> string ! {FS, Env} {
+  let home = getEnvOr("HOME", "/tmp");
+  home ++ "/.config/gcloud/application_default_credentials.json"
+}
+
+-- Read and parse ADC credentials from the default location
+export func readCredentials() -> Result[ADCCredentials, string] ! {FS, Env} {
+  let path = getCredentialsPath();
+  let found = fileExists(path);
+  if found then parseCredentialsFile(path) else Err("ADC file not found at: " ++ path)
+}
+
+func parseCredentialsFile(path: string) -> Result[ADCCredentials, string] ! {FS, Env} {
+  let content = readFile(path);
+  match decode(content) {
+    Ok(json) => {
+      let clientId = getOrElse(getString(json, "client_id"), "");
+      let clientSecret = getOrElse(getString(json, "client_secret"), "");
+      let refreshToken = getOrElse(getString(json, "refresh_token"), "");
+      if clientId == "" then Err("Missing client_id in ADC file")
+      else if clientSecret == "" then Err("Missing client_secret in ADC file")
+      else if refreshToken == "" then Err("Missing refresh_token in ADC file")
+      else Ok({ clientId: clientId, clientSecret: clientSecret, refreshToken: refreshToken })
+    },
+    Err(e) => Err("Failed to parse ADC file: " ++ e)
+  }
+}
+
+-- Get an access token via the best available method
+-- Priority: env var → ADC file → metadata server (Cloud Run)
+export func getAccessToken() -> Result[string, string] ! {FS, Net, Env} {
+  let envToken = getEnvOr("GOOGLE_ACCESS_TOKEN", "");
+  if length(envToken) > 0 then Ok(envToken)
+  else {
+    match readCredentials() {
+      Ok(creds) => exchangeRefreshToken(creds),
+      Err(_) => getMetadataToken()
+    }
+  }
+}
+
+-- Get access token from GCP metadata server (Cloud Run, GCE, GKE)
+func getMetadataToken() -> Result[string, string] ! {Net} {
+  let url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+  let headers = [{ name: "Metadata-Flavor", value: "Google" }];
+  match httpRequest("GET", url, headers, "") {
+    Ok(response) =>
+      if response.ok then {
+        match decode(response.body) {
+          Ok(json) => {
+            let tokenOpt = getString(json, "access_token");
+            if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
+            else Err("gcp_auth: metadata ok but no access_token in body: " ++ response.body)
+          },
+          Err(e) => Err("gcp_auth: metadata ok but JSON decode failed: " ++ e ++ " body=" ++ response.body)
+        }
+      } else Err("gcp_auth: metadata status=" ++ show(response.status) ++ " body=" ++ response.body),
+    Err(e) => Err("gcp_auth: metadata httpRequest failed: " ++ show(e))
+  }
+}
+
+func exchangeRefreshToken(creds: ADCCredentials) -> Result[string, string] ! {Net} {
+  let url = "https://oauth2.googleapis.com/token";
+  let body = "client_id=" ++ creds.clientId ++
+             "&client_secret=" ++ creds.clientSecret ++
+             "&refresh_token=" ++ creds.refreshToken ++
+             "&grant_type=refresh_token";
+  let headers = [
+    { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+  ];
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then {
+        match decode(response.body) {
+          Ok(json) => {
+            let tokenOpt = getString(json, "access_token");
+            if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
+            else Err("No access_token in OAuth2 response")
+          },
+          Err(e) => Err("Failed to parse OAuth2 response: " ++ e)
+        }
+      } else Err("OAuth2 request failed with status: " ++ show(response.status))
+    },
+    Err(_) => Err("Network error during OAuth2 token exchange")
+  }
+}

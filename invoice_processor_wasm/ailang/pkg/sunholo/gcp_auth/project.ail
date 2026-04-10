@@ -1,0 +1,79 @@
+-- GCP project detection from gcloud config
+--
+-- Reads the active gcloud configuration to determine the default project.
+-- Falls back to quota_project_id in ADC file if gcloud config not found.
+--
+-- Usage:
+--   import pkg/sunholo/gcp_auth/project (getDefaultProject)
+--
+--   match getDefaultProject() {
+--     Ok(project) => -- use project ID
+--     Err(e) => println("No project: " ++ e)
+--   }
+
+module sunholo/gcp_auth/project
+
+import std/fs (readFile, fileExists)
+import std/json (decode, getString)
+import std/option (getOrElse, isSome)
+import std/result (Ok, Err)
+import std/env (getEnvOr)
+import std/string (trim, split, find, length)
+
+-- Get the default GCP project from gcloud config or ADC file
+-- Checks: GOOGLE_CLOUD_PROJECT env → gcloud active config → ADC quota_project_id
+export func getDefaultProject() -> Result[string, string] ! {FS, Env} {
+  let envProject = getEnvOr("GOOGLE_CLOUD_PROJECT", "");
+  if envProject != "" then Ok(envProject)
+  else {
+    let home = getEnvOr("HOME", "/tmp");
+    let activeConfigPath = home ++ "/.config/gcloud/active_config";
+    let activeFound = fileExists(activeConfigPath);
+    if activeFound then readActiveConfigAndProject(home, activeConfigPath)
+    else tryQuotaProject(home)
+  }
+}
+
+func readActiveConfigAndProject(home: string, activeConfigPath: string) -> Result[string, string] ! {FS} {
+  let activeConfigName = trim(readFile(activeConfigPath));
+  let configPath = home ++ "/.config/gcloud/configurations/config_" ++ activeConfigName;
+  let configFound = fileExists(configPath);
+  if configFound then parseGcloudConfig(configPath)
+  else Err("Config file not found: " ++ configPath)
+}
+
+func parseGcloudConfig(path: string) -> Result[string, string] ! {FS} {
+  let content = readFile(path);
+  findProjectLine(split(content, "\n"))
+}
+
+func findProjectLine(lines: [string]) -> Result[string, string] =
+  match lines {
+    [] => Err("No project found in gcloud config"),
+    line :: rest => {
+      let trimmed = trim(line);
+      if find(trimmed, "project") == 0 then {
+        let parts = split(trimmed, "=");
+        match parts {
+          _ :: value :: _ => Ok(trim(value)),
+          _ => Err("Invalid project line format")
+        }
+      } else findProjectLine(rest)
+    }
+  }
+
+func tryQuotaProject(home: string) -> Result[string, string] ! {FS} {
+  let path = home ++ "/.config/gcloud/application_default_credentials.json";
+  let found = fileExists(path);
+  if found then {
+    let content = readFile(path);
+    match decode(content) {
+      Ok(json) => {
+        let projectOpt = getString(json, "quota_project_id");
+        if isSome(projectOpt) then Ok(getOrElse(projectOpt, ""))
+        else Err("No quota_project_id in ADC file. Run: gcloud auth application-default set-quota-project PROJECT_ID")
+      },
+      Err(e) => Err("Failed to parse ADC file: " ++ e)
+    }
+  } else Err("No gcloud config or ADC file found")
+}

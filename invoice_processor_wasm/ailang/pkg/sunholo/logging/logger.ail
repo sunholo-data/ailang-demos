@@ -1,0 +1,77 @@
+-- Structured logging via Debug effect (ghost effect)
+--
+-- Uses Debug instead of IO: no effect cascade, zero-cost in release mode.
+-- The host collects log entries via DebugContext.Collect() and can route
+-- them to Cloud Logging, stderr, or any log aggregator.
+--
+-- Debug is a ghost effect — callers never need to declare it.
+-- No [effects].max, no --caps Debug, no ! {Debug} needed anywhere.
+--
+-- Each log message is a JSON string with severity + message fields,
+-- so the host can filter by --log-level (debug, info, warn, error, none).
+--
+-- Usage:
+--   import pkg/sunholo/logging/logger (info, warn, err, trace)
+--
+--   info("Server started on port 8080")
+--   warn("Rate limit approaching for user: " ++ userId)
+--   err("Failed to parse document", errorMsg)
+--   trace("Entering request handler")
+--
+--   -- Structured fields:
+--   infoWith("Request handled", [kv("latency_ms", jnum(42)), kv("path", js("/api"))])
+--   errWith("DB timeout", "connection refused", [kv("host", js("db.prod")), kv("retries", jnum(3))])
+
+module sunholo/logging/logger
+
+import std/debug (log, check)
+import std/json (encode, jo, kv, js, jnum)
+
+-- === Core logging functions ===
+
+-- Log at INFO level — operational events, state transitions
+export func info(message: string) -> () =
+  log(encode(jo([kv("severity", js("INFO")), kv("message", js(message))])))
+
+-- Log at WARNING level — degraded states, approaching limits
+export func warn(message: string) -> () =
+  log(encode(jo([kv("severity", js("WARNING")), kv("message", js(message))])))
+
+-- Log at ERROR level with detail — failures, exceptions
+export func err(message: string, detail: string) -> () =
+  log(encode(jo([kv("severity", js("ERROR")), kv("message", js(message)), kv("detail", js(detail))])))
+
+-- Log at DEBUG/TRACE level — verbose diagnostics
+export func trace(message: string) -> () =
+  log(encode(jo([kv("severity", js("DEBUG")), kv("message", js(message))])))
+
+-- === Structured logging with fields ===
+
+-- Log at INFO level with structured key-value fields
+export func infoWith(message: string, fields: [{key: string, value: Json}]) -> () =
+  log(encode(jo([kv("severity", js("INFO")), kv("message", js(message))] ++ fields)))
+
+-- Log at WARNING level with structured key-value fields
+export func warnWith(message: string, fields: [{key: string, value: Json}]) -> () =
+  log(encode(jo([kv("severity", js("WARNING")), kv("message", js(message))] ++ fields)))
+
+-- Log at ERROR level with detail and structured key-value fields
+export func errWith(message: string, detail: string, fields: [{key: string, value: Json}]) -> () =
+  log(encode(jo([kv("severity", js("ERROR")), kv("message", js(message)), kv("detail", js(detail))] ++ fields)))
+
+-- Log at DEBUG/TRACE level with structured key-value fields
+export func traceWith(message: string, fields: [{key: string, value: Json}]) -> () =
+  log(encode(jo([kv("severity", js("DEBUG")), kv("message", js(message))] ++ fields)))
+
+-- === Flexible logging ===
+
+-- Log with arbitrary severity and structured JSON context
+export func withContext(severity: string, message: string, context: Json) -> () =
+  log(encode(jo([kv("severity", js(severity)), kv("message", js(message)), kv("context", context)])))
+
+-- === Assertions ===
+
+-- Check an invariant — recorded but does not throw
+-- Re-exported from std/debug for convenience: one import for all logging needs
+export func verify(condition: bool, message: string) -> () =
+  check(condition, message)

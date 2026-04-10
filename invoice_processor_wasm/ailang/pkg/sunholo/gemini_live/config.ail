@@ -1,0 +1,106 @@
+-- Composable Gemini Live API setup configuration.
+--
+-- Each feature returns a list of KVs that get concat-ed into the setup
+-- message. This keeps the caller focused on event handling and makes
+-- features independently toggleable.
+--
+-- Features:
+--   proactive audio  — model decides when to respond
+--   affective dialog — emotion-aware response tone
+--   thinking         — reasoning with configurable budget
+--   VAD config       — tunable voice activity detection sensitivity
+--   activity handling — control barge-in behavior (interrupt vs no-interrupt)
+
+module sunholo/gemini_live/config
+
+import std/json (jo, kv, js, ja, jb, jnum, Json)
+import std/list (concat, length as listLength)
+import std/math (intToFloat)
+
+-- ============================================================
+-- Proactive Audio
+-- ============================================================
+-- "The model only responds when it's relevant.
+--  Does not respond to non-device directed queries."
+-- Requires native audio model on Vertex AI.
+
+export pure func buildProactivityConfig(enabled: bool) -> [{key: string, value: Json}] =
+  if enabled then
+    [kv("proactivity", jo([kv("proactiveAudio", jb(true))]))]
+  else []
+
+-- ============================================================
+-- Affective Dialog
+-- ============================================================
+-- Model adapts emotional tone to user's input expression.
+
+export pure func buildAffectiveConfig(enabled: bool) -> [{key: string, value: Json}] =
+  if enabled then
+    [kv("enableAffectiveDialog", jb(true))]
+  else []
+
+-- ============================================================
+-- Thinking
+-- ============================================================
+-- Model reasons about responses with configurable token budget.
+-- budget=0 disables thinking. includeThoughts=true returns summaries.
+
+export pure func buildThinkingConfig(budget: int, includeThoughts: bool) -> [{key: string, value: Json}] =
+  if budget >= 0 then {
+    let base = [kv("thinkingBudget", jnum(intToFloat(budget)))];
+    let thoughts = if includeThoughts then [kv("includeThoughts", jb(true))] else [];
+    [kv("thinkingConfig", jo(concat(base, thoughts)))]
+  } else []
+
+-- ============================================================
+-- VAD Configuration
+-- ============================================================
+-- Tunes automatic voice activity detection sensitivity.
+-- startSensitivity/endSensitivity: "START_SENSITIVITY_LOW", "START_SENSITIVITY_HIGH",
+--   "END_SENSITIVITY_LOW", "END_SENSITIVITY_HIGH"
+-- prefixPaddingMs: buffer before speech starts (default 20)
+-- silenceDurationMs: silence threshold before end-of-speech (default 100)
+
+export pure func buildVadConfig(startSensitivity: string, endSensitivity: string,
+                                prefixPaddingMs: int, silenceDurationMs: int)
+  -> [{key: string, value: Json}] =
+  [kv("automaticActivityDetection", jo([
+    kv("startOfSpeechSensitivity", js(startSensitivity)),
+    kv("endOfSpeechSensitivity", js(endSensitivity)),
+    kv("prefixPaddingMs", jnum(intToFloat(prefixPaddingMs))),
+    kv("silenceDurationMs", jnum(intToFloat(silenceDurationMs)))
+  ]))]
+
+-- ============================================================
+-- Activity Handling
+-- ============================================================
+-- Controls barge-in behavior:
+--   "START_OF_ACTIVITY_INTERRUPTS" (default) — user speech interrupts model
+--   "NO_INTERRUPTION" — model keeps speaking even if user talks
+
+export pure func buildActivityHandlingConfig(noInterrupt: bool) -> [{key: string, value: Json}] =
+  if noInterrupt then
+    [kv("activityHandling", js("NO_INTERRUPTION"))]
+  else []
+
+-- ============================================================
+-- Realtime Input Config (wraps VAD + activity handling)
+-- ============================================================
+
+export pure func buildRealtimeInputConfig(vadKvs: [{key: string, value: Json}],
+                                          activityKvs: [{key: string, value: Json}])
+  -> [{key: string, value: Json}] {
+  let combined = concat(vadKvs, activityKvs);
+  if listLength(combined) == 0 then []
+  else [kv("realtimeInputConfig", jo(combined))]
+}
+
+-- ============================================================
+-- Generation Config with optional thinking
+-- ============================================================
+-- Merges thinking config into the generation config KV list.
+
+export pure func mergeThinkingIntoGenConfig(genConfigKvs: [{key: string, value: Json}],
+                                            thinkingKvs: [{key: string, value: Json}])
+  -> [{key: string, value: Json}] =
+  concat(genConfigKvs, thinkingKvs)

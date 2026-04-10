@@ -1,0 +1,42 @@
+-- Gemini Live API voice catalog and model defaults.
+--
+-- 30 prebuilt voices available for native audio output.
+-- Models: 2.5 (Vertex AI), 3.1 (Google AI Studio).
+
+module sunholo/gemini_live/voices
+
+import std/json (encode, jo, kv, js, ja, Json)
+
+-- Default model for Vertex AI (2.5, ADC auth).
+export pure func defaultVertexModel() -> string =
+  "gemini-live-2.5-flash-native-audio"
+
+-- Default model for Google AI Studio (3.1, API key auth).
+export pure func defaultGoogleAiModel() -> string =
+  "gemini-3.1-flash-live-preview"
+
+-- Default model for browser demos (Google AI Studio format with models/ prefix).
+export pure func defaultBrowserModel() -> string =
+  "models/gemini-3.1-flash-live-preview"
+
+-- Default voice name.
+export pure func defaultVoice() -> string = "Sulafat"
+
+-- Voice catalog as JSON array string.
+-- Each entry: {"name": "VoiceName", "desc": "Style description"}
+-- 30 voices total.
+export pure func voiceCatalog() -> string {
+  let v = \n d. jo([kv("name", js(n)), kv("desc", js(d))]);
+  encode(ja([
+    v("Sulafat", "Warm"), v("Zephyr", "Bright"), v("Puck", "Upbeat"),
+    v("Charon", "Informative"), v("Kore", "Firm"), v("Fenrir", "Excitable"),
+    v("Leda", "Youthful"), v("Orus", "Firm"), v("Aoede", "Breezy"),
+    v("Callirrhoe", "Easy-going"), v("Autonoe", "Bright"), v("Enceladus", "Breathy"),
+    v("Iapetus", "Clear"), v("Umbriel", "Easy-going"), v("Algieba", "Smooth"),
+    v("Despina", "Smooth"), v("Erinome", "Clear"), v("Algenib", "Gravelly"),
+    v("Rasalgethi", "Informative"), v("Laomedeia", "Upbeat"), v("Achernar", "Soft"),
+    v("Alnilam", "Firm"), v("Schedar", "Even"), v("Gacrux", "Mature"),
+    v("Pulcherrima", "Forward"), v("Achird", "Friendly"), v("Zubenelgenubi", "Casual"),
+    v("Vindemiatrix", "Gentle"), v("Sadachbia", "Lively"), v("Sadaltager", "Knowledgeable")
+  ]))
+}

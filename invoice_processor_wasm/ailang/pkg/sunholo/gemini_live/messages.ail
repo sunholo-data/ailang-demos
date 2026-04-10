@@ -1,0 +1,205 @@
+-- Gemini Live API outgoing message builders.
+--
+-- Supports two protocol versions:
+--   2.5 (Vertex AI): clientContent.turns for text, realtimeInput.mediaChunks for audio
+--   3.1 (Google AI Studio): realtimeInput.text for text, realtimeInput.audio for audio
+--
+-- All functions are pure — they build JSON strings with no effects.
+
+module sunholo/gemini_live/messages
+
+import std/json (encode, decode, jo, kv, js, jb, ja, jnum, Json)
+import std/list (concat)
+import std/math (intToFloat)
+import std/result (Ok, Err)
+
+-- ══════════════════════════════════════════════════════
+-- Setup Messages (sent immediately after WebSocket connect)
+-- ══════════════════════════════════════════════════════
+
+-- Basic setup: model, voice, system instruction, transcription.
+export pure func buildSetup(model: string, voice: string, instruction: string) -> string =
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
+  ]))
+
+-- Setup with Gemini Live v2 features (proactive, affective, thinking).
+-- thinkingBudget: -1 = skip, 0+ = set budget.
+export pure func buildSetupWithFeatures(model: string, voice: string, instruction: string,
+    proactive: bool, affective: bool, thinkingBudget: int) -> string {
+  let baseKvs = [
+    kv("model", js(model)),
+    kv("generationConfig", jo([
+      kv("responseModalities", ja([js("AUDIO")])),
+      kv("speechConfig", jo([
+        kv("voiceConfig", jo([
+          kv("prebuiltVoiceConfig", jo([
+            kv("voiceName", js(voice))
+          ]))
+        ]))
+      ]))
+    ])),
+    kv("systemInstruction", jo([
+      kv("parts", ja([jo([kv("text", js(instruction))])]))
+    ])),
+    kv("outputAudioTranscription", jo([])),
+    kv("inputAudioTranscription", jo([]))
+  ];
+  let proactiveKvs = if proactive then
+    [kv("proactivity", jo([kv("proactiveAudio", jb(true))]))]
+  else [];
+  let affectiveKvs = if affective then
+    [kv("enableAffectiveDialog", jb(true))]
+  else [];
+  let thinkingKvs = if thinkingBudget >= 0 then
+    [kv("thinkingConfig", jo([kv("thinkingBudget", jnum(intToFloat(thinkingBudget)))]))]
+  else [];
+  let allKvs = concat(concat(concat(baseKvs, proactiveKvs), affectiveKvs), thinkingKvs);
+  encode(jo([kv("setup", jo(allKvs))]))
+}
+
+-- Setup with tool declarations.
+-- toolsJson: JSON string of tool array, e.g. [{"functionDeclarations": [...]}]
+export pure func buildSetupWithTools(model: string, voice: string, instruction: string, toolsJson: string) -> string {
+  let toolsVal = match decode(toolsJson) {
+    Ok(arr) => arr,
+    Err(_) => ja([])
+  };
+  encode(jo([
+    kv("setup", jo([
+      kv("model", js(model)),
+      kv("generationConfig", jo([
+        kv("responseModalities", ja([js("AUDIO")])),
+        kv("speechConfig", jo([
+          kv("voiceConfig", jo([
+            kv("prebuiltVoiceConfig", jo([
+              kv("voiceName", js(voice))
+            ]))
+          ]))
+        ]))
+      ])),
+      kv("systemInstruction", jo([
+        kv("parts", ja([jo([kv("text", js(instruction))])]))
+      ])),
+      kv("tools", toolsVal),
+      kv("outputAudioTranscription", jo([])),
+      kv("inputAudioTranscription", jo([]))
+    ]))
+  ]))
+}
+
+-- ══════════════════════════════════════════════════════
+-- Text Input Messages
+-- ══════════════════════════════════════════════════════
+
+-- Build text message using 2.5 protocol (clientContent.turns).
+-- Use for Vertex AI models (gemini-live-2.5-flash-native-audio).
+export pure func buildTextMessage(text: string) -> string =
+  encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(text))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]))
+
+-- Build text message using 3.1 protocol (realtimeInput.text).
+-- Use for Google AI Studio models (gemini-3.1-flash-live-preview).
+export pure func buildRealtimeText(text: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("text", js(text))
+    ]))
+  ]))
+
+-- ══════════════════════════════════════════════════════
+-- Audio Input Messages
+-- ══════════════════════════════════════════════════════
+
+-- Build audio chunk using 2.5 protocol (realtimeInput.mediaChunks).
+-- Use for Vertex AI models.
+-- b64Audio: base64-encoded PCM audio data.
+export pure func buildAudioChunk(b64Audio: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("mediaChunks", ja([jo([
+        kv("mimeType", js("audio/pcm;rate=16000")),
+        kv("data", js(b64Audio))
+      ])]))
+    ]))
+  ]))
+
+-- Build audio message using 3.1 protocol (realtimeInput.audio).
+-- Use for Google AI Studio models.
+-- b64Audio: base64-encoded audio data.
+-- mimeType: e.g. "audio/pcm;rate=16000"
+export pure func buildRealtimeAudio(b64Audio: string, mimeType: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("audio", jo([
+        kv("data", js(b64Audio)),
+        kv("mimeType", js(mimeType))
+      ]))
+    ]))
+  ]))
+
+-- Build video frame using 3.1 protocol (realtimeInput.video).
+-- b64Video: base64-encoded image/video data.
+-- mimeType: e.g. "image/jpeg"
+export pure func buildRealtimeVideo(b64Video: string, mimeType: string) -> string =
+  encode(jo([
+    kv("realtimeInput", jo([
+      kv("video", jo([
+        kv("data", js(b64Video)),
+        kv("mimeType", js(mimeType))
+      ]))
+    ]))
+  ]))
+
+-- ══════════════════════════════════════════════════════
+-- Tool Response Messages
+-- ══════════════════════════════════════════════════════
+
+-- Build tool response (synchronous tool).
+export pure func buildToolResponse(callId: string, name: string, result: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js(name)),
+        kv("response", jo([kv("result", js(result))]))
+      ])]))
+    ]))
+  ]))
+
+-- Build tool response with scheduling (for NON_BLOCKING async tools).
+-- scheduling: "INTERRUPT" (stop and process), "WHEN_IDLE" (wait), "SILENT" (absorb quietly)
+export pure func buildToolResponseScheduled(callId: string, name: string, result: string, scheduling: string) -> string =
+  encode(jo([
+    kv("toolResponse", jo([
+      kv("functionResponses", ja([jo([
+        kv("id", js(callId)),
+        kv("name", js(name)),
+        kv("response", jo([kv("result", js(result)), kv("scheduling", js(scheduling))]))
+      ])]))
+    ]))
+  ]))

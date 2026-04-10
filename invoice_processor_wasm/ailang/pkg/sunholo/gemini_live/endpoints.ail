@@ -1,0 +1,31 @@
+-- Gemini Live API WebSocket endpoint URL constructors.
+--
+-- Supports two backends:
+--   Vertex AI: ADC Bearer token, regional endpoints
+--   Google AI Studio: API key in URL, global endpoint
+--
+-- API versions:
+--   Vertex AI: "v1" (GA), "v1beta1" (preview features)
+--   Google AI Studio: "v1beta" (standard), "v1alpha" (proactive/affective)
+
+module sunholo/gemini_live/endpoints
+
+-- Vertex AI WebSocket URL.
+-- region: e.g. "us-central1"
+-- apiVersion: e.g. "v1" or "v1beta1"
+-- Returns URL without auth — caller must pass Bearer token as WebSocket header.
+export pure func vertexAiUrl(region: string, apiVersion: string) -> string =
+  "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform." ++ apiVersion ++ ".LlmBidiService/BidiGenerateContent"
+
+-- Google AI Studio WebSocket URL.
+-- apiKey: Google AI Studio API key (included in URL query string)
+-- apiVersion: e.g. "v1beta" or "v1alpha"
+export pure func googleAiUrl(apiKey: string, apiVersion: string) -> string =
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ apiVersion ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
+
+-- Google AI Studio URL with convenience alpha toggle.
+-- useAlpha: true for v1alpha (proactive/affective), false for v1beta
+export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string {
+  let version = if useAlpha then "v1alpha" else "v1beta";
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage." ++ version ++ ".GenerativeService.BidiGenerateContent?key=" ++ apiKey
+}

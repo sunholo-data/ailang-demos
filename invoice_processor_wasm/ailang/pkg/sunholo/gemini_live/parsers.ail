@@ -1,0 +1,91 @@
+-- Gemini Live API incoming message parsers.
+--
+-- Parses server WebSocket messages into simplified JSON event strings.
+-- Works with both 2.5 and 3.1 protocol responses (response format is the same).
+--
+-- All functions are pure — they parse JSON with no effects.
+
+module sunholo/gemini_live/parsers
+
+import std/json (encode, decode, jo, kv, js, ja, jb, jnum, Json,
+                 get, has, asString, asBool, getObject, getBool)
+import std/string (length)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+
+-- Check for model turn (audio/text parts from the model).
+export pure func checkModelTurn(sc: Json) -> string =
+  match getObject(sc, "modelTurn") {
+    Some(mt) => match get(mt, "parts") {
+      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
+      None => encode(jo([kv("type", js("unknown"))]))
+    },
+    None => encode(jo([kv("type", js("unknown"))]))
+  }
+
+-- Check for output transcription, then fall through to model turn.
+export pure func checkOutputTranscript(sc: Json) -> string {
+  if has(sc, "outputTranscription") then {
+    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
+    else checkModelTurn(sc)
+  }
+  else checkModelTurn(sc)
+}
+
+-- Check for transcriptions, then model turn audio/text parts.
+pure func parseContentParts(sc: Json) -> string {
+  if has(sc, "inputTranscription") then {
+    let it = getOrElse(get(sc, "inputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
+    else checkOutputTranscript(sc)
+  }
+  else checkOutputTranscript(sc)
+}
+
+-- Extract tool call information from a server message.
+export pure func parseToolCall(json: Json) -> string {
+  let tc = getOrElse(get(json, "toolCall"), jo([]));
+  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+  encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
+}
+
+-- Parse serverContent into a simplified event.
+-- Checks: interrupted → turnComplete → transcriptions → modelTurn.
+export pure func parseServerContent(json: Json) -> string {
+  let sc = getOrElse(get(json, "serverContent"), jo([]));
+  match getBool(sc, "interrupted") {
+    Some(true) => encode(jo([kv("type", js("interrupted"))])),
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
+      _ => parseContentParts(sc)
+    }
+  }
+}
+
+-- Parse a raw server message JSON string into a simplified event JSON string.
+-- Returns JSON with "type" field: "setup", "toolCall", "interrupted",
+-- "turnComplete", "inputTranscript", "outputTranscript", "modelTurn",
+-- "toolCallCancellation", "goAway", "error", or "unknown".
+export pure func parseMessage(jsonStr: string) -> string {
+  match decode(jsonStr) {
+    Err(e) => encode(jo([kv("type", js("error")), kv("text", js(e))])),
+    Ok(json) => {
+      if has(json, "setupComplete")
+      then encode(jo([kv("type", js("setup"))]))
+      else if has(json, "toolCall")
+      then parseToolCall(json)
+      else if has(json, "serverContent")
+      then parseServerContent(json)
+      else if has(json, "toolCallCancellation")
+      then encode(jo([kv("type", js("toolCallCancellation"))]))
+      else if has(json, "goAway")
+      then encode(jo([kv("type", js("goAway"))]))
+      else encode(jo([kv("type", js("unknown"))]))
+    }
+  }
+}
