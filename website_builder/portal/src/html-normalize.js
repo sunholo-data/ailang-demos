@@ -38,7 +38,7 @@ export function resolveImages(html, imageMap) {
   return html
     .replace(/src=["']([^"']+)["']/g, (match, src) => {
       const uri = resolve(src);
-      return uri ? `src="${uri}"` : match;
+      return uri ? `data-original-src="${src}" src="${uri}"` : match;
     })
     .replace(/poster=["']([^"']+)["']/g, (match, poster) => {
       const uri = resolve(poster);

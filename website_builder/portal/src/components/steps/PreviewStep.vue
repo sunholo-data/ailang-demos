@@ -217,6 +217,35 @@
       </div>
     </teleport>
 
+    <!-- Image picker overlay -->
+    <teleport to="body">
+      <div v-if="showImagePicker" class="image-picker-overlay" @click.self="showImagePicker = null">
+        <div class="image-picker-panel">
+          <div class="image-picker-header">
+            <span>Choose an image</span>
+            <button class="lightbox-close" @click="showImagePicker = null"><SvgIcon name="x" :size="16" /></button>
+          </div>
+          <div class="image-picker-grid">
+            <div
+              v-for="(uri, filename) in imageMap"
+              :key="filename"
+              class="image-picker-item"
+              :class="{ selected: isCurrentPickerImage(filename) }"
+              @click="swapImage(filename)"
+            >
+              <img :src="uri" :alt="filename" />
+              <span class="image-picker-label">{{ filename }}</span>
+            </div>
+            <div class="image-picker-item image-picker-upload" @click="pickerFileInput?.click()">
+              <SvgIcon name="plus" :size="32" />
+              <span class="image-picker-label">Upload new</span>
+            </div>
+          </div>
+          <input ref="pickerFileInput" type="file" accept="image/*" style="display:none" @change="handlePickerUpload" />
+        </div>
+      </div>
+    </teleport>
+
     <!-- Bottom action bar -->
     <div class="action-bar">
       <button class="btn-secondary" @click="$emit('rebuild')">
@@ -305,6 +334,8 @@ const pendingItems = ref([]); // [{ type: 'image'|'text', label, description, ba
 const persistedImages = ref([]); // [{ label, base64, mimeType }]
 const pendingStatus = ref('');
 const addFileInput = ref(null);
+const showImagePicker = ref(null); // { origSrc, alt } when image picker is open
+const pickerFileInput = ref(null);
 const showTextInput = ref(false);
 const textNote = ref('');
 
@@ -493,6 +524,15 @@ document.addEventListener('mouseout',function(e){e.target.removeAttribute('data-
 document.addEventListener('click',function(e){
   if(editing)return;
   if(e.target.closest('a[href]'))return;
+  if(e.target.tagName==='IMG'){
+    e.preventDefault();e.stopPropagation();
+    if(sel)sel.removeAttribute('data-wb-s');
+    sel=e.target;sel.setAttribute('data-wb-s','1');
+    var origSrc=sel.getAttribute('data-original-src')||sel.getAttribute('src')||'';
+    var alt=sel.getAttribute('alt')||'';
+    try{parent.postMessage({type:'wb-image-clicked',origSrc:origSrc,alt:alt},'*');}catch(err){}
+    return;
+  }
   if(sel)sel.removeAttribute('data-wb-s');
   sel=e.target;
   sel.setAttribute('data-wb-s','1');
@@ -598,6 +638,8 @@ function onIframeMessage(e) {
   if (e.data?.type === 'wb-selected') {
     selectedElement.value = { area: e.data.area || '', text: e.data.text || '' };
     console.log('[iframe] element selected:', selectedElement.value);
+  } else if (e.data?.type === 'wb-image-clicked') {
+    showImagePicker.value = { origSrc: e.data.origSrc || '', alt: e.data.alt || '' };
   } else if (e.data?.type === 'wb-edited') {
     applyInlineEdit(e.data);
   } else if (e.data?.type === 'wb-navigate') {
@@ -647,6 +689,98 @@ function applyInlineEdit({ tagName, oldText, newText }) {
 
   const preview = oldText.length > 40 ? oldText.substring(0, 40) + '...' : oldText;
   pushHistory('pencil', `Edited: "${preview}"`, `Changed to: "${newText.length > 60 ? newText.substring(0, 60) + '...' : newText}"`);
+
+  // Auto-save (fire-and-forget, same pattern as quick edit / WASM refinement)
+  if (props.generated?.userId && props.generated?.siteSlug) {
+    saveSite({
+      user: props.generated.userId,
+      siteName: props.generated.siteSlug,
+      siteSlug: props.generated.siteSlug,
+      pages: newPages,
+      css: props.generated.css,
+      images: props.generated.images,
+      siteJson: props.generated.siteJson,
+      description: props.description,
+      repoConfig: getRepoConfig(),
+    }).then(() => console.log('[Preview] Auto-saved after inline edit'))
+      .catch(err => console.warn('[Preview] Auto-save after inline edit failed:', err.message));
+  }
+}
+
+// Check if a filename in the image picker matches the currently-selected image
+function isCurrentPickerImage(filename) {
+  if (!showImagePicker.value) return false;
+  const origSrc = showImagePicker.value.origSrc || '';
+  const origBasename = origSrc.split('/').pop();
+  return filename === origBasename || filename === origSrc;
+}
+
+// Swap an image in the current page's HTML source
+function swapImage(newFilename) {
+  if (!showImagePicker.value) return;
+  const slug = currentSlug.value;
+  const html = props.generated?.pages?.[slug];
+  if (!html) return;
+
+  const origSrc = showImagePicker.value.origSrc || '';
+  if (!origSrc || origSrc.startsWith('data:') || origSrc.startsWith('blob:')) {
+    console.warn('[Preview] Cannot swap — no original filename available');
+    showImagePicker.value = null;
+    return;
+  }
+
+  // Replace the filename in the raw HTML (handles src="photo.jpg" and src="media/photo.jpg")
+  const basename = origSrc.split('/').pop();
+  const escaped = basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`((?:src|poster|data-ref)=["'][^"']*?)${escaped}(["'])`, 'g');
+  const updatedHtml = html.replace(pattern, `$1${newFilename}$2`);
+
+  if (updatedHtml === html) {
+    console.warn('[Preview] Could not locate image in source HTML for swap');
+    showImagePicker.value = null;
+    return;
+  }
+
+  const newPages = { ...props.generated.pages, [slug]: updatedHtml };
+  emit('update-generated', { ...props.generated, pages: newPages });
+
+  pushHistory('image', 'Swapped image', `Replaced ${basename} with ${newFilename}`);
+
+  // Auto-save (fire-and-forget)
+  if (props.generated?.userId && props.generated?.siteSlug) {
+    saveSite({
+      user: props.generated.userId,
+      siteName: props.generated.siteSlug,
+      siteSlug: props.generated.siteSlug,
+      pages: newPages,
+      css: props.generated.css,
+      images: props.generated.images,
+      siteJson: props.generated.siteJson,
+      description: props.description,
+      repoConfig: getRepoConfig(),
+    }).catch(err => console.warn('[Preview] Auto-save after image swap failed:', err.message));
+  }
+
+  showImagePicker.value = null;
+}
+
+// Upload a new image from the image picker overlay
+async function handlePickerUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  e.target.value = ''; // reset for re-use
+
+  const base64 = await fileToBase64(file);
+  const description = await describeImageWithGemini(base64, file.type);
+
+  // Add to pendingItems so it enters imageMap
+  pendingItems.value.push({
+    type: 'image', label: file.name, description, base64,
+    mimeType: file.type, useOnSite: true,
+  });
+
+  // Swap it into the current image slot
+  swapImage(file.name);
 }
 
 const loadingFromSidecar = ref(false);
@@ -655,7 +789,8 @@ onMounted(async () => {
   window.addEventListener('message', onIframeMessage);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (lightboxItem.value) lightboxItem.value = null;
+      if (showImagePicker.value) showImagePicker.value = null;
+      else if (lightboxItem.value) lightboxItem.value = null;
       else isFullscreen.value = false;
     }
   });
@@ -1820,5 +1955,90 @@ async function sendFeedbackViaWasm(msg, isTargeted) {
   .history-panel { max-height: 50vh; }
   .history-entry { padding: 0.4rem 0.75rem; gap: 0.5rem; }
   .history-summary { font-size: 0.8rem; }
+}
+
+/* Image picker overlay */
+.image-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.image-picker-panel {
+  background: var(--surface, #fff);
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90vw;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.image-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  font-weight: 600;
+}
+.image-picker-header .lightbox-close {
+  position: static;
+  color: var(--text-muted, #666);
+}
+.image-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.image-picker-item {
+  cursor: pointer;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.image-picker-item:hover {
+  border-color: var(--primary, #7c5cbf);
+}
+.image-picker-item.selected {
+  border-color: var(--primary, #7c5cbf);
+  opacity: 0.6;
+}
+.image-picker-item img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+.image-picker-label {
+  display: block;
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted, #888);
+}
+.image-picker-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  border: 2px dashed var(--border, #d1d5db);
+  color: var(--text-muted, #888);
+}
+.image-picker-upload:hover {
+  border-color: var(--primary, #7c5cbf);
+  color: var(--primary, #7c5cbf);
 }
 </style>
