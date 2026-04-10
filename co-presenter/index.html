@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG Co-Presenter</title>
+<link rel="icon" type="image/svg+xml" href="../streaming/shared/ailang-logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-panel: #111118;
+  --bg-card: #1a1a24;
+  --bg-input: #12121a;
+  --border: #2a2a35;
+  --text: #e8e5de;
+  --text-secondary: #a09a90;
+  --text-dim: #5a564e;
+  --amber: #e8a830;
+  --amber-bright: #f0c050;
+  --amber-glow: rgba(232,168,48,0.15);
+  --green: #4ade80;
+  --green-glow: rgba(74,222,128,0.12);
+  --green-dim: #0f2e1a;
+  --blue: #70b0ff;
+  --blue-dim: #142640;
+  --purple: #b49aff;
+  --purple-dim: #1e1640;
+  --red: #ff6b6b;
+  --cyan: #38bdf8;
+  --orange: #fb923c;
+  --mono: 'JetBrains Mono', monospace;
+  --display: 'Syne', system-ui, sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+/* ── Layout ── */
+.app{display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr auto;height:100vh}
+.app.trace-open{grid-template-columns:1fr 380px}
+
+/* ── Top bar ── */
+.topbar{
+  grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;
+  padding:8px 20px;border-bottom:1px solid var(--border);background:var(--bg-panel);z-index:10;
+}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.logo{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-0.3px}
+.logo span{color:var(--text-dim);font-weight:400}
+.status-pill{
+  display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;
+  padding:4px 12px;border-radius:20px;background:var(--bg-card);
+  color:var(--text-dim);border:1px solid var(--border);
+  text-transform:uppercase;letter-spacing:0.5px;
+}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim);transition:all .3s}
+.status-pill.listening .status-dot{background:var(--green);box-shadow:0 0 8px rgba(74,222,128,.5)}
+.status-pill.listening{color:var(--green);border-color:rgba(74,222,128,.3)}
+.status-pill.speaking .status-dot{background:var(--amber);box-shadow:0 0 8px rgba(232,168,48,.5)}
+.status-pill.speaking{color:var(--amber);border-color:rgba(232,168,48,.3)}
+.status-pill.thinking .status-dot{background:var(--purple);box-shadow:0 0 8px rgba(180,154,255,.5);animation:pulse-dot 1s ease-in-out infinite}
+.status-pill.thinking{color:var(--purple);border-color:rgba(180,154,255,.3)}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 4px rgba(180,154,255,.3)}50%{box-shadow:0 0 12px rgba(180,154,255,.6)}}
+
+.topbar-right{display:flex;align-items:center;gap:8px}
+.btn{font-family:var(--mono);font-size:11px;font-weight:500;padding:6px 14px;background:none;border:1px solid var(--border);color:var(--text-secondary);border-radius:6px;cursor:pointer;transition:all .2s}
+.btn:hover{border-color:var(--amber);color:var(--amber)}
+.btn-primary{background:var(--amber);color:#000;border-color:var(--amber);font-weight:600}
+.btn-primary:hover{background:var(--amber-bright)}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(255,107,107,.1)}
+.btn-trace{position:relative}
+.btn-trace .badge{position:absolute;top:-4px;right:-4px;background:var(--amber);color:#000;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.btn-trace .badge:empty{display:none}
+
+/* ── Main content area ── */
+.main-area{display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+/* ── Slides embed ── */
+.slides-container{flex:1;position:relative;background:#000;overflow:hidden}
+.slides-container iframe{width:100%;height:100%;border:none}
+.slides-placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;color:var(--text-dim);gap:16px;
+}
+.slides-placeholder .icon{font-size:48px;opacity:.3}
+.slides-placeholder p{font-size:12px;max-width:400px;text-align:center;line-height:1.6}
+
+/* ── Bottom bar ── */
+.bottombar{
+  grid-column:1/-1;display:flex;align-items:center;gap:12px;
+  padding:10px 20px;border-top:1px solid var(--border);background:var(--bg-panel);
+}
+.mic-btn{
+  width:40px;height:40px;border-radius:50%;border:2px solid var(--border);
+  background:var(--bg-card);color:var(--text-dim);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  transition:all .3s;flex-shrink:0;
+}
+.mic-btn.active{border-color:var(--green);color:var(--green);box-shadow:0 0 12px rgba(74,222,128,.3);animation:mic-pulse 2s ease-in-out infinite}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 8px rgba(74,222,128,.2)}50%{box-shadow:0 0 16px rgba(74,222,128,.4)}}
+.ask-btn{
+  padding:8px 20px;border-radius:20px;border:1px solid var(--amber);
+  background:var(--amber-glow);color:var(--amber);font-family:var(--mono);
+  font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;
+  letter-spacing:.5px;text-transform:uppercase;
+}
+.ask-btn:hover{background:var(--amber);color:#000}
+.ask-btn:disabled{opacity:.4;cursor:default}
+
+.transcript-live{
+  flex:1;font-size:11px;color:var(--text-dim);overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis;font-style:italic;
+}
+.transcript-live .highlight{color:var(--cyan)}
+
+.waveform-mini{width:120px;height:32px;flex-shrink:0}
+
+.bottom-stats{display:flex;gap:16px;font-size:10px;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;flex-shrink:0}
+.bottom-stats .stat-val{color:var(--text-secondary);font-weight:600}
+
+/* ── Trace panel ── */
+.trace-panel{
+  display:none;flex-direction:column;border-left:1px solid var(--border);
+  background:var(--bg-panel);overflow:hidden;grid-row:2/3;
+}
+.app.trace-open .trace-panel{display:flex}
+.trace-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.trace-title{font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.trace-subtitle{font-size:10px;color:var(--text-dim);margin-left:8px}
+.trace-controls{display:flex;gap:6px}
+.trace-tab{font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid var(--border);background:none;color:var(--text-dim);cursor:pointer;font-family:var(--mono)}
+.trace-tab.active{background:var(--amber-glow);color:var(--amber);border-color:rgba(232,168,48,.3)}
+
+/* Waterfall */
+.trace-waterfall{flex:1;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.trace-event{
+  display:grid;grid-template-columns:60px 1fr auto;gap:8px;
+  padding:6px 8px;border-radius:4px;margin-bottom:2px;
+  font-size:11px;animation:traceIn .2s ease-out;
+  border-left:3px solid transparent;
+}
+.trace-event:hover{background:rgba(255,255,255,.03)}
+@keyframes traceIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+
+.trace-ts{color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums}
+.trace-label{display:flex;align-items:center;gap:6px}
+.trace-icon{width:14px;text-align:center;font-size:12px;flex-shrink:0}
+.trace-name{color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trace-detail{color:var(--text-dim);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+.trace-duration{color:var(--text-dim);font-size:10px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* Color coding by event type */
+.trace-event[data-type="tool"]{border-left-color:var(--green)}
+.trace-event[data-type="tool"] .trace-name{color:var(--green)}
+.trace-event[data-type="transcript"]{border-left-color:var(--cyan)}
+.trace-event[data-type="transcript"] .trace-name{color:var(--cyan)}
+.trace-event[data-type="session"]{border-left-color:var(--amber)}
+.trace-event[data-type="session"] .trace-name{color:var(--amber)}
+.trace-event[data-type="audio"]{border-left-color:var(--purple)}
+.trace-event[data-type="audio"] .trace-name{color:var(--purple)}
+.trace-event[data-type="error"]{border-left-color:var(--red)}
+.trace-event[data-type="error"] .trace-name{color:var(--red)}
+.trace-event[data-type="fetch"]{border-left-color:var(--orange)}
+.trace-event[data-type="fetch"] .trace-name{color:var(--orange)}
+
+/* Tool result expansion */
+.trace-event .trace-expand{display:none;grid-column:1/-1;margin-top:4px;padding:6px 8px;background:var(--bg-card);border-radius:4px;font-size:10px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
+.trace-event.expanded .trace-expand{display:block}
+
+/* Trace stats bar */
+.trace-stats{
+  display:flex;gap:12px;padding:8px 16px;border-top:1px solid var(--border);
+  font-size:10px;color:var(--text-dim);flex-shrink:0;
+}
+.trace-stats .ts-val{color:var(--amber);font-weight:600}
+
+/* ── Conversation overlay (shows when addressed) ── */
+.conversation-overlay{
+  position:absolute;bottom:0;left:0;right:0;max-height:50%;
+  background:linear-gradient(transparent,var(--bg-panel) 30px);
+  overflow-y:auto;padding:60px 20px 12px;display:none;z-index:5;
+}
+.conversation-overlay.visible{display:block}
+.conv-msg{padding:8px 14px;border-radius:10px;font-size:13px;line-height:1.6;max-width:70%;margin-bottom:6px;animation:msgIn .2s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.conv-heard{background:var(--bg-card);color:var(--text-secondary);align-self:flex-start;border:1px solid var(--border);border-radius:10px 10px 10px 2px}
+.conv-ailang{background:var(--blue-dim);color:var(--blue);margin-left:auto;border:1px solid #1e3050;border-radius:10px 10px 2px 10px}
+.conv-system{color:var(--text-dim);font-size:11px;text-align:center;width:100%}
+
+/* ── Config panel ── */
+.config-panel{
+  position:fixed;top:0;right:-420px;width:400px;height:100vh;z-index:100;
+  background:var(--bg-panel);border-left:1px solid var(--border);
+  transition:right .3s ease;padding:24px;overflow-y:auto;
+}
+.config-panel.open{right:0}
+.config-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none}
+.config-panel.open ~ .config-backdrop{display:block}
+.config-title{font-family:var(--display);font-size:16px;font-weight:700;margin-bottom:20px}
+.config-group{margin-bottom:16px}
+.config-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.config-input{
+  width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;
+}
+.config-input:focus{outline:none;border-color:var(--amber)}
+.config-select{
+  width:100%;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;
+  appearance:none;cursor:pointer;
+}
+.config-hint{font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.4}
+
+/* ── Slide URL input ── */
+.slide-url-bar{
+  display:flex;gap:8px;padding:0 20px;align-items:center;
+}
+.slide-url-bar input{flex:1}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">Co-Presenter <span>by AILANG</span></div>
+      <div class="status-pill" id="statusPill">
+        <span class="status-dot"></span>
+        <span id="statusLabel">Idle</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-trace" id="traceToggle" onclick="toggleTrace()">
+        Trace <span class="badge" id="traceBadge"></span>
+      </button>
+      <button class="btn" id="connectBtn" onclick="toggleConnection()">Connect</button>
+      <button class="btn" onclick="toggleConfig()">Settings</button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main-area">
+    <!-- Slides area -->
+    <div class="slides-container" id="slidesContainer">
+      <div class="slides-placeholder" id="slidesPlaceholder">
+        <div class="icon">&#x1F3AC;</div>
+        <p>Load your presentation deck via Settings, or present on a separate screen.
+        <br>The co-presenter listens and researches in the background.</p>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" class="config-input" id="slideUrlInline" placeholder="Paste presentation URL..." style="width:320px">
+          <button class="btn btn-primary" onclick="loadSlides()">Load</button>
+        </div>
+      </div>
+      <iframe id="slideFrame" style="display:none" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+
+    <!-- Conversation overlay -->
+    <div class="conversation-overlay" id="conversation"></div>
+  </div>
+
+  <!-- Trace panel -->
+  <div class="trace-panel" id="tracePanel">
+    <div class="trace-header">
+      <div>
+        <span class="trace-title">AI Trace</span>
+        <span class="trace-subtitle" id="traceCount">0 events</span>
+      </div>
+      <div class="trace-controls">
+        <button class="trace-tab active" data-tab="all" onclick="filterTrace('all',this)">All</button>
+        <button class="trace-tab" data-tab="tools" onclick="filterTrace('tool',this)">Tools</button>
+        <button class="trace-tab" data-tab="transcript" onclick="filterTrace('transcript',this)">Speech</button>
+      </div>
+    </div>
+    <div class="trace-waterfall" id="traceWaterfall"></div>
+    <div class="trace-stats">
+      <span>Events: <span class="ts-val" id="tsEvents">0</span></span>
+      <span>Tools: <span class="ts-val" id="tsTools">0</span></span>
+      <span>Fetches: <span class="ts-val" id="tsFetches">0</span></span>
+      <span>Duration: <span class="ts-val" id="tsDuration">0:00</span></span>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottombar">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">
+      &#x1F3A4;
+    </button>
+    <button class="ask-btn" id="askBtn" onclick="askAILANG()" disabled title="Ask AILANG what it found">
+      Ask AILANG
+    </button>
+    <div class="transcript-live" id="liveTranscript">
+      <span class="highlight">Waiting...</span> Connect and start mic to begin
+    </div>
+    <canvas class="waveform-mini" id="waveformMini"></canvas>
+    <div class="bottom-stats">
+      <span>Turns: <span class="stat-val" id="sTurns">0</span></span>
+      <span>Cached: <span class="stat-val" id="sCached">0</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- Config panel -->
+<div class="config-panel" id="configPanel">
+  <div class="config-title">Co-Presenter Settings</div>
+  <div class="config-group">
+    <div class="config-label">Gemini API Key</div>
+    <input type="password" class="config-input" id="apiKey" placeholder="AIza...">
+    <div class="config-hint">Google AI Studio key. Stored in localStorage only.</div>
+  </div>
+  <div class="config-group">
+    <div class="config-label">Voice</div>
+    <select class="config-select" id="voiceSelect">
+      <option value="Sulafat">Sulafat (Warm)</option>
+    </select>
+  </div>
+  <div class="config-group">
+    <div class="config-label">Presentation URL (optional)</div>
+    <input type="text" class="config-input" id="slideUrl" placeholder="https://your-slides.example.com">
+    <div class="config-hint">Load a presentation deck in the main area. Works with any URL that allows iframing.</div>
+  </div>
+  <div class="config-group">
+    <div class="config-label">Model (leave blank for default)</div>
+    <input type="text" class="config-input" id="modelInput" placeholder="models/gemini-2.5-flash-live-001">
+    <div class="config-hint">Default: gemini-2.5-flash-live-001. Try gemini-3.1-flash-live-preview for newer features.</div>
+  </div>
+  <div class="config-group">
+    <div class="config-label">Thinking Budget</div>
+    <input type="number" class="config-input" id="thinkingBudget" value="-1" min="-1" max="8192">
+    <div class="config-hint">-1 = disabled. 0+ = thinking tokens. Requires preview model.</div>
+  </div>
+  <div class="config-group">
+    <div class="config-label">AILANG Cloud (Delegate)</div>
+    <input type="text" class="config-input" id="messagesApiUrl" placeholder="https://coordinator.example.com">
+    <input type="password" class="config-input" id="messagesApiKey" placeholder="Bearer token" style="margin-top:6px">
+    <div class="config-hint">For delegate tool — sends complex tasks to AILANG Cloud.</div>
+  </div>
+  <div style="margin-top:24px;display:flex;gap:8px">
+    <button class="btn btn-primary" onclick="saveConfig()">Save</button>
+    <button class="btn" onclick="toggleConfig()">Close</button>
+  </div>
+</div>
+<div class="config-backdrop" onclick="toggleConfig()"></div>
+
+<!-- WASM runtime -->
+<script src="../wasm/wasm_exec.js"></script>
+<script src="../wasm/ailang-repl.js"></script>
+<!-- Shared streaming infrastructure -->
+<script src="../streaming/shared/gemini-live-core.js"></script>
+<script src="../streaming/shared/streaming-ui.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// Co-Presenter — Main Application
+// ═══════════════════════════════════════════════════════
+
+// ── DOM refs ──
+const $ = {
+  app: document.getElementById('app'),
+  statusPill: document.getElementById('statusPill'),
+  statusLabel: document.getElementById('statusLabel'),
+  connectBtn: document.getElementById('connectBtn'),
+  micBtn: document.getElementById('micBtn'),
+  askBtn: document.getElementById('askBtn'),
+  liveTranscript: document.getElementById('liveTranscript'),
+  waveformMini: document.getElementById('waveformMini'),
+  sTurns: document.getElementById('sTurns'),
+  sCached: document.getElementById('sCached'),
+  tracePanel: document.getElementById('tracePanel'),
+  traceToggle: document.getElementById('traceToggle'),
+  traceBadge: document.getElementById('traceBadge'),
+  traceWaterfall: document.getElementById('traceWaterfall'),
+  traceCount: document.getElementById('traceCount'),
+  tsEvents: document.getElementById('tsEvents'),
+  tsTools: document.getElementById('tsTools'),
+  tsFetches: document.getElementById('tsFetches'),
+  tsDuration: document.getElementById('tsDuration'),
+  configPanel: document.getElementById('configPanel'),
+  apiKey: document.getElementById('apiKey'),
+  voiceSelect: document.getElementById('voiceSelect'),
+  slideUrl: document.getElementById('slideUrl'),
+  slideUrlInline: document.getElementById('slideUrlInline'),
+  thinkingBudget: document.getElementById('thinkingBudget'),
+  modelInput: document.getElementById('modelInput'),
+  messagesApiUrl: document.getElementById('messagesApiUrl'),
+  messagesApiKey: document.getElementById('messagesApiKey'),
+  slidesContainer: document.getElementById('slidesContainer'),
+  slidesPlaceholder: document.getElementById('slidesPlaceholder'),
+  slideFrame: document.getElementById('slideFrame'),
+  conversation: document.getElementById('conversation'),
+};
+
+// ── State ──
+const NON_BLOCKING_TOOLS = new Set(['webFetch', 'delegate']);
+const WASM_MODULE = 'co_presenter/co_presenter';
+let sessionStartTime = 0;
+let sessionTimer = null;
+let turnCount = 0;
+let traceEvents = [];
+let traceFilter = 'all';
+let toolStats = { total: 0, fetches: 0, cached: 0 };
+const browserCache = new Map();
+const conversationLog = [];
+const audienceQuestions = [];
+
+// ── GeminiLiveCore (shared infrastructure) ──
+const core = new GeminiLiveCore({
+  wasmPath: '../wasm/ailang.wasm',
+  workletPath: '../streaming/shared/audio-worklet.js',
+  modules: [
+    { name: 'sunholo/gemini_live/voices',    path: '../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'sunholo/gemini_live/endpoints', path: '../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    { name: 'sunholo/gemini_live/messages',  path: '../ailang/pkg/sunholo/gemini_live/messages.ail' },
+    { name: 'sunholo/gemini_live/parsers',   path: '../ailang/pkg/sunholo/gemini_live/parsers.ail' },
+    { name: WASM_MODULE, path: '../ailang/co_presenter/co_presenter.ail' },
+  ],
+  playbackRate: 48000,
+  sourceRate: 24000,
+  micRate: 16000,
+  fftSize: 2048,
+  canvasHeight: 32,
+  localStorageKeys: { apiKey: 'gemini-api-key' },
+  onEvent: handleAILANGEvent,
+  onLog: (type, html) => { console.log('[co-presenter]', type, html); },
+  onStatsUpdate: () => {},
+  onConnectionChange: () => {},
+  onFallbackActivated: () => {},
+  onFallbackDeactivated: () => {},
+  onWasmReady: () => {
+    populateVoices();
+    console.log('[co-presenter] WASM ready');
+    $.statusLabel.textContent = 'Ready';
+  },
+  onWasmError: (e) => {
+    console.error('[co-presenter] WASM error', e);
+    $.statusLabel.textContent = 'WASM Error';
+    $.liveTranscript.innerHTML = '<span style="color:var(--red)">WASM failed: ' + (e.message || e) + '</span>';
+  },
+});
+
+// ── Init ──
+window.addEventListener('DOMContentLoaded', async () => {
+  loadConfig();
+  await core.initWASM();
+  core.initWaveform($.waveformMini);
+});
+
+// ═══════════════════════════════════════════════════════
+// TRACE PANEL
+// ═══════════════════════════════════════════════════════
+
+const TRACE_ICONS = {
+  'session.init': '&#x1F680;', 'ws.connected': '&#x1F50C;', 'setup.sent': '&#x2699;',
+  'setup.complete': '&#x2705;', 'session.end': '&#x1F3C1;', 'session.goaway': '&#x26A0;',
+  'ws.closed': '&#x274C;', 'error': '&#x1F6A8;',
+  'transcript.input': '&#x1F399;', 'transcript.output': '&#x1F50A;',
+  'turn.complete': '&#x21A9;', 'audio.interrupted': '&#x270B;',
+  'tool.call': '&#x1F527;', 'tool.result': '&#x1F4E6;', 'tool.cancelled': '&#x1F6AB;',
+};
+
+function traceType(event) {
+  if (event.startsWith('tool')) return 'tool';
+  if (event.startsWith('transcript')) return 'transcript';
+  if (event.startsWith('session') || event.startsWith('ws') || event.startsWith('setup')) return 'session';
+  if (event.startsWith('audio')) return 'audio';
+  if (event === 'error') return 'error';
+  return 'session';
+}
+
+function addTraceEvent(event, detail, duration) {
+  const now = Date.now();
+  const elapsed = sessionStartTime ? ((now - sessionStartTime) / 1000).toFixed(1) : '0.0';
+  const type = traceType(event);
+
+  const entry = { event, detail, type, elapsed, duration, ts: now };
+  traceEvents.push(entry);
+
+  // Update stats
+  $.tsEvents.textContent = traceEvents.length;
+  $.traceCount.textContent = traceEvents.length + ' events';
+
+  // Update badge if panel is closed
+  if (!$.app.classList.contains('trace-open')) {
+    $.traceBadge.textContent = traceEvents.length;
+  }
+
+  // Render event row
+  if (traceFilter === 'all' || traceFilter === type) {
+    renderTraceRow(entry);
+  }
+}
+
+function renderTraceRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'trace-event';
+  row.dataset.type = entry.type;
+
+  let detailText = '';
+  if (typeof entry.detail === 'string') {
+    detailText = entry.detail;
+  } else if (entry.detail && typeof entry.detail === 'object') {
+    if (Array.isArray(entry.detail)) {
+      detailText = entry.detail.map(c => c.name || '').filter(Boolean).join(', ');
+    } else {
+      const keys = Object.keys(entry.detail);
+      detailText = keys.slice(0, 3).map(k => {
+        const v = entry.detail[k];
+        const vs = typeof v === 'string' ? v : JSON.stringify(v);
+        return k + '=' + (vs || '').substring(0, 40);
+      }).join(' ');
+    }
+  }
+
+  const durationHtml = entry.duration ? '<span class="trace-duration">' + entry.duration + 'ms</span>' : '';
+  const icon = TRACE_ICONS[entry.event] || '&#x25CF;';
+
+  row.innerHTML = `
+    <span class="trace-ts">${entry.elapsed}s</span>
+    <div class="trace-label">
+      <span class="trace-icon">${icon}</span>
+      <span class="trace-name">${entry.event}</span>
+    </div>
+    <span class="trace-detail" title="${escapeHtml(detailText)}">${escapeHtml(detailText)}</span>
+    ${durationHtml}
+    <div class="trace-expand">${escapeHtml(JSON.stringify(entry.detail, null, 2))}</div>
+  `;
+
+  row.onclick = () => row.classList.toggle('expanded');
+  $.traceWaterfall.appendChild(row);
+  $.traceWaterfall.scrollTop = $.traceWaterfall.scrollHeight;
+}
+
+function toggleTrace() {
+  $.app.classList.toggle('trace-open');
+  $.traceBadge.textContent = '';
+}
+
+function filterTrace(type, btn) {
+  traceFilter = type;
+  document.querySelectorAll('.trace-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  // Re-render
+  $.traceWaterfall.innerHTML = '';
+  traceEvents.filter(e => type === 'all' || e.type === type).forEach(renderTraceRow);
+}
+
+// ═══════════════════════════════════════════════════════
+// AILANG EVENT HANDLER
+// ═══════════════════════════════════════════════════════
+
+async function handleAILANGEvent(event) {
+  // Trace events from AILANG module
+  if (event.type === 'trace') {
+    const detail = event.detail || {};
+    addTraceEvent(event.event, detail);
+    return;
+  }
+
+  switch (event.type) {
+    case 'setup':
+      core.sessionReady = true;
+      setStatus('Listening');
+      $.connectBtn.textContent = 'Disconnect';
+      $.askBtn.disabled = false;
+      // Auto-start mic
+      if (!core.isRecording) toggleMic();
+      addTraceEvent('setup.complete', {});
+      break;
+
+    case 'inputTranscript':
+      if (event.text) {
+        conversationLog.push('[Heard] ' + event.text);
+        $.liveTranscript.innerHTML = '<span class="highlight">Heard:</span> ' + escapeHtml(event.text);
+        addTraceEvent('transcript.input', { text: event.text.substring(0, 100) });
+      }
+      break;
+
+    case 'outputTranscript':
+      if (event.text) {
+        conversationLog.push('[AILANG] ' + event.text);
+        showConversation(event.text, 'ailang');
+        addTraceEvent('transcript.output', { text: event.text.substring(0, 100) });
+      }
+      break;
+
+    case 'modelTurn':
+      if (event.parts && Array.isArray(event.parts)) {
+        setStatus('Speaking');
+        event.parts.forEach(part => {
+          if (part.text && !part.thought) {
+            showConversation(part.text, 'ailang');
+          }
+          if (part.inlineData && part.inlineData.data) {
+            core.handleAudioFrame(part.inlineData.data);
+          }
+        });
+      }
+      break;
+
+    case 'turnComplete':
+      turnCount++;
+      $.sTurns.textContent = turnCount;
+      setStatus('Listening');
+      addTraceEvent('turn.complete', { turn: turnCount });
+      break;
+
+    case 'toolCall':
+      if (event.calls && Array.isArray(event.calls)) {
+        setStatus('Thinking');
+        for (const call of event.calls) {
+          const name = call.name || 'unknown';
+          const callId = call.id || '';
+          const args = call.args || {};
+
+          toolStats.total++;
+          $.tsTools.textContent = toolStats.total;
+          addTraceEvent('tool.call', { name, args: summarizeArgs(args) });
+
+          const t0 = performance.now();
+          const result = await dispatchBrowserTool(name, args);
+          const elapsed = Math.round(performance.now() - t0);
+
+          addTraceEvent('tool.result', { name, result: (result || '').substring(0, 120) }, elapsed);
+
+          const scheduling = NON_BLOCKING_TOOLS.has(name) ? 'WHEN_IDLE' : undefined;
+          sendToolResponse(callId, name, result, scheduling);
+        }
+      }
+      break;
+
+    case 'interrupted':
+      core.clearAudioQueue();
+      setStatus('Listening');
+      addTraceEvent('audio.interrupted', {});
+      break;
+
+    case 'toolCallCancellation':
+      addTraceEvent('tool.cancelled', {});
+      break;
+
+    case 'goAway':
+      addTraceEvent('session.goaway', { timeLeft: event.timeLeft || 0 });
+      break;
+
+    case 'closed':
+      core.sessionReady = false;
+      setStatus('Idle');
+      $.connectBtn.textContent = 'Connect';
+      $.askBtn.disabled = true;
+      core.releaseConnectLock();
+      if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+      break;
+
+    case 'error':
+      addTraceEvent('error', { msg: event.text || '' });
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// TOOL DISPATCH (browser-safe)
+// ═══════════════════════════════════════════════════════
+
+async function dispatchBrowserTool(name, args) {
+  switch (name) {
+    case 'currentTime': {
+      const now = new Date();
+      return now.toLocaleString() + ' (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+    }
+    case 'calculate': {
+      const op = args.operation || '';
+      const a = parseFloat(args.a) || 0;
+      const b = parseFloat(args.b) || 0;
+      switch (op) {
+        case 'add': return String(a + b);
+        case 'subtract': return String(a - b);
+        case 'multiply': return String(a * b);
+        case 'divide': return b !== 0 ? String(a / b) : 'Error: division by zero';
+        default: return 'Unknown operation: ' + op;
+      }
+    }
+    case 'cacheResult': {
+      const key = args.key || '';
+      const value = args.value || '';
+      browserCache.set(key, { value, cachedAt: Date.now() });
+      toolStats.cached = browserCache.size;
+      $.sCached.textContent = browserCache.size;
+      return 'Cached \'' + key + '\'';
+    }
+    case 'getCachedResult': {
+      const key = args.key || '';
+      const entry = browserCache.get(key);
+      if (!entry) return 'Not found: no cached data for \'' + key + '\'';
+      return entry.value;
+    }
+    case 'saveNote': {
+      const title = args.title || 'untitled';
+      const content = args.content || '';
+      const notes = JSON.parse(localStorage.getItem('copresenter-notes') || '{}');
+      notes[title] = { content, savedAt: new Date().toISOString() };
+      localStorage.setItem('copresenter-notes', JSON.stringify(notes));
+      return 'Note saved: ' + title;
+    }
+    case 'getSlideContext': {
+      // Try to read slide content from iframe
+      try {
+        const frame = $.slideFrame;
+        if (frame && frame.contentDocument) {
+          const title = frame.contentDocument.title || '';
+          const body = (frame.contentDocument.body?.innerText || '').substring(0, 1000);
+          return 'Slide title: ' + title + '\nContent: ' + body;
+        }
+      } catch (e) { /* cross-origin */ }
+      return 'No slide context available (no presentation loaded or cross-origin restriction).';
+    }
+    case 'audienceQuestion': {
+      const q = args.question || '';
+      const ctx = args.context || '';
+      audienceQuestions.push({ question: q, context: ctx, time: new Date().toLocaleTimeString() });
+      return 'Question logged: ' + q;
+    }
+    case 'webFetch': {
+      let url = args.url || '';
+      if (!url) return 'Error: no URL provided';
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      toolStats.fetches++;
+      $.tsFetches.textContent = toolStats.fetches;
+      addTraceEvent('fetch.start', { url: url.substring(0, 80) });
+      try {
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+        if (!resp.ok) return 'Fetch failed: HTTP ' + resp.status;
+        const text = await resp.text();
+        const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        return clean.substring(0, 4000) || '(empty page)';
+      } catch (e) {
+        return 'Fetch error: ' + e.message;
+      }
+    }
+    case 'delegate': {
+      const task = args.task || '';
+      const inbox = args.inbox || 'coordinator';
+      const category = args.category || 'research';
+      if (!task) return 'Error: no task provided';
+      const apiUrl = localStorage.getItem('copresenter-messages-url');
+      const apiKey = localStorage.getItem('copresenter-messages-key');
+      if (!apiUrl) return 'Messages API not configured. Open Settings and set the AILANG Cloud URL.';
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+        const sendResp = await fetch(apiUrl + '/api/messages', {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            inbox, title: 'Co-Presenter: ' + task.substring(0, 60),
+            content: task + '\n\n--- Context ---\n' + conversationLog.slice(-10).join('\n'),
+            from: 'co-presenter', category, message_type: 'request'
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        if (!sendResp.ok) return 'Delegation failed: HTTP ' + sendResp.status;
+        return 'Task delegated to ' + inbox + '. Results will arrive when ready.';
+      } catch (e) {
+        return 'Delegation error: ' + e.message;
+      }
+    }
+    default:
+      return 'Unknown tool: ' + name;
+  }
+}
+
+function sendToolResponse(callId, name, result, scheduling) {
+  const activeConn = core.getActiveConnection();
+  if (!activeConn) return;
+  let msg;
+  if (scheduling) {
+    msg = core.callAILANG('buildToolResponseScheduled', callId, name, result || '', scheduling);
+  } else {
+    msg = core.callAILANG('buildToolResponse', callId, name, result || '');
+  }
+  if (msg) activeConn.ws.send(msg);
+}
+
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+
+function setStatus(s) {
+  $.statusLabel.textContent = s;
+  $.statusPill.className = 'status-pill ' + s.toLowerCase();
+}
+
+function showConversation(text, role) {
+  $.conversation.classList.add('visible');
+  const div = document.createElement('div');
+  div.className = 'conv-msg conv-' + role;
+  div.textContent = text;
+  $.conversation.appendChild(div);
+  $.conversation.scrollTop = $.conversation.scrollHeight;
+  // Auto-hide after 10s of no new messages
+  clearTimeout(showConversation._timer);
+  showConversation._timer = setTimeout(() => {
+    $.conversation.classList.remove('visible');
+  }, 10000);
+}
+
+function summarizeArgs(args) {
+  if (!args) return '';
+  const entries = Object.entries(args);
+  return entries.slice(0, 2).map(([k, v]) => {
+    const vs = String(v);
+    return k + '=' + (vs.length > 30 ? vs.substring(0, 30) + '...' : vs);
+  }).join(', ');
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function updateSessionDuration() {
+  if (!sessionStartTime) return;
+  const secs = Math.floor((Date.now() - sessionStartTime) / 1000);
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  $.tsDuration.textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+// ── Voice catalog ──
+function populateVoices() {
+  if (!core.wasmReady) return;
+  try {
+    const catalogJson = core.wasmEngine.call(WASM_MODULE, 'voiceCatalog');
+    const voices = JSON.parse(catalogJson.result || '[]');
+    $.voiceSelect.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.desc + ')';
+      $.voiceSelect.appendChild(opt);
+    });
+    const saved = localStorage.getItem('copresenter-voice');
+    if (saved) $.voiceSelect.value = saved;
+    if (!$.voiceSelect.value) $.voiceSelect.value = 'Sulafat';
+  } catch (e) {
+    console.warn('Voice catalog error:', e);
+  }
+}
+
+// ── Config ──
+function toggleConfig() { $.configPanel.classList.toggle('open'); }
+function saveConfig() {
+  const key = $.apiKey.value.trim();
+  if (key) localStorage.setItem('gemini-api-key', key);
+  localStorage.setItem('copresenter-voice', $.voiceSelect.value);
+  if ($.slideUrl.value.trim()) localStorage.setItem('copresenter-slide-url', $.slideUrl.value.trim());
+  localStorage.setItem('copresenter-model', $.modelInput.value.trim());
+  if ($.messagesApiUrl.value.trim()) localStorage.setItem('copresenter-messages-url', $.messagesApiUrl.value.trim());
+  if ($.messagesApiKey.value.trim()) localStorage.setItem('copresenter-messages-key', $.messagesApiKey.value.trim());
+  toggleConfig();
+  // Load slides if URL changed
+  if ($.slideUrl.value.trim()) loadSlides($.slideUrl.value.trim());
+}
+function loadConfig() {
+  $.apiKey.value = localStorage.getItem('gemini-api-key') || '';
+  const savedVoice = localStorage.getItem('copresenter-voice');
+  if (savedVoice) $.voiceSelect.value = savedVoice;
+  $.slideUrl.value = localStorage.getItem('copresenter-slide-url') || '';
+  $.modelInput.value = localStorage.getItem('copresenter-model') || '';
+  $.messagesApiUrl.value = localStorage.getItem('copresenter-messages-url') || '';
+  $.messagesApiKey.value = localStorage.getItem('copresenter-messages-key') || '';
+  // Auto-load slides if URL is saved
+  const savedUrl = localStorage.getItem('copresenter-slide-url');
+  if (savedUrl) loadSlides(savedUrl);
+}
+
+// ── Slides ──
+function loadSlides(url) {
+  url = url || $.slideUrlInline?.value?.trim() || $.slideUrl?.value?.trim();
+  if (!url) return;
+  $.slideFrame.src = url;
+  $.slideFrame.style.display = 'block';
+  $.slidesPlaceholder.style.display = 'none';
+  localStorage.setItem('copresenter-slide-url', url);
+  $.slideUrl.value = url;
+}
+
+// ── Connection ──
+async function toggleConnection() {
+  const active = core.getActiveConnection();
+  if (active) {
+    active.ws.close();
+    $.connectBtn.textContent = 'Connect';
+    return;
+  }
+  await startSession();
+}
+
+async function startSession() {
+  if (!core.acquireConnectLock()) return;
+
+  const key = $.apiKey.value.trim() || localStorage.getItem('gemini-api-key');
+  if (!key) { core.releaseConnectLock(); toggleConfig(); return; }
+  localStorage.setItem('gemini-api-key', key);
+
+  if (!core.wasmReady) {
+    core.releaseConnectLock();
+    console.error('WASM not loaded — check browser console for init errors');
+    $.liveTranscript.innerHTML = '<span style="color:var(--red)">WASM not loaded. Check console for errors.</span>';
+    return;
+  }
+
+  setStatus('Connecting');
+  $.connectBtn.textContent = 'Connecting...';
+  $.askBtn.disabled = true;
+  core.resetStats();
+  turnCount = 0;
+  traceEvents = [];
+  $.traceWaterfall.innerHTML = '';
+  toolStats = { total: 0, fetches: 0, cached: 0 };
+  browserCache.clear();
+  $.sTurns.textContent = '0';
+  $.sCached.textContent = '0';
+  $.tsEvents.textContent = '0';
+  $.tsTools.textContent = '0';
+  $.tsFetches.textContent = '0';
+
+  await core.initAudio();
+  sessionStartTime = Date.now();
+  sessionTimer = setInterval(updateSessionDuration, 1000);
+
+  const voice = $.voiceSelect.value;
+  localStorage.setItem('copresenter-voice', voice);
+
+  addTraceEvent('session.init', { voice, model: 'gemini-live' });
+
+  try {
+    const thinkingBudget = parseInt($.thinkingBudget?.value) || -1;
+    const modelOverride = localStorage.getItem('copresenter-model') || '';
+    const result = await core.wasmEngine.callAsync(WASM_MODULE, 'startCoPresenterSession', key, voice, thinkingBudget, modelOverride);
+    if (!result.success) {
+      console.error('Session error:', result.error);
+    }
+  } catch (e) {
+    console.error('Session failed:', e);
+  }
+
+  core.sessionReady = false;
+  setStatus('Idle');
+  $.connectBtn.textContent = 'Connect';
+  $.askBtn.disabled = true;
+  core.releaseConnectLock();
+  if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+}
+
+// ── Mic ──
+let micChunkCount = 0;
+async function toggleMic() {
+  micChunkCount = 0;
+  const active = await core.toggleMic((b64) => {
+    const conn = core.getActiveConnection();
+    if (!conn) { console.warn('[mic] no active connection'); return; }
+    const msg = core.callAILANG('buildAudioChunk', b64);
+    if (!msg) { console.error('[mic] buildAudioChunk returned null'); return; }
+    conn.ws.send(msg);
+    micChunkCount++;
+    if (micChunkCount <= 3 || micChunkCount % 50 === 0) {
+      console.log('[mic] chunk #' + micChunkCount + ' sent (' + b64.length + ' b64 chars)');
+    }
+  });
+  $.micBtn.classList.toggle('active', active);
+  if (active) console.log('[mic] started — sending audio chunks');
+}
+
+// ── Ask AILANG button ──
+function askAILANG() {
+  const conn = core.getActiveConnection();
+  if (!conn || !core.sessionReady) return;
+  const text = 'AILANG, what have you found? Summarize everything you researched while I was speaking.';
+  const msg = core.callAILANG('buildTextMessage', text);
+  if (msg) conn.ws.send(msg);
+  $.liveTranscript.innerHTML = '<span class="highlight">Asked:</span> What did you find?';
+  showConversation('What did you find?', 'heard');
+  setStatus('Thinking');
+  addTraceEvent('transcript.input', { text: 'User asked AILANG for findings', source: 'button' });
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 't' || e.key === 'T') toggleTrace();
+  if (e.key === 'm' || e.key === 'M') toggleMic();
+  if (e.key === ' ' && core.sessionReady) { e.preventDefault(); askAILANG(); }
+  if (e.key === 'Escape') $.configPanel.classList.remove('open');
+});
+</script>
+</body>
+</html>

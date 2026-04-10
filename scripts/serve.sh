@@ -135,6 +135,12 @@ mkdir -p "$SITE/ailang/streaming/ambient_assistant"
 ln -sf "$REPO_ROOT/streaming/ambient_assistant/ambient_browser.ail" \
   "$SITE/ailang/streaming/ambient_assistant/ambient_browser.ail"
 
+# Co-Presenter
+mkdir -p "$SITE/co-presenter"
+ln -sf "$REPO_ROOT/co-presenter/index.html" "$SITE/co-presenter/index.html"
+mkdir -p "$SITE/ailang/co_presenter"
+ln -sf "$REPO_ROOT/co-presenter/co_presenter.ail" "$SITE/ailang/co_presenter/co_presenter.ail"
+
 # Claude Chat AILANG modules (SSE demo)
 mkdir -p "$SITE/ailang/streaming/claude_chat/types"
 mkdir -p "$SITE/ailang/streaming/claude_chat/services"
@@ -168,6 +174,7 @@ echo "  Ecommerce: http://localhost:$PORT/ecommerce/"
 echo "  Website:   http://localhost:$PORT/website_builder/"
 echo "  Streaming: http://localhost:$PORT/streaming/"
 echo "  Ambient:   http://localhost:$PORT/streaming/ambient_assistant/"
+echo "  Co-Present:http://localhost:$PORT/co-presenter/"
 echo ""
 echo "Press Ctrl+C to stop."
 cd "$SITE" && python3 -m http.server "$PORT"

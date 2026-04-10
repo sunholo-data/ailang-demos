@@ -1,18 +1,18 @@
-module streaming/ambient_assistant/ambient_browser
+module co_presenter/co_presenter
 
--- Browser WASM bridge for the Ambient AILANG Assistant.
+-- Co-Presenter: Silent AI research assistant for live presentations.
 --
--- Like gemini_live_browser.ail but with ambient defaults:
---   - Proactive audio always on (model decides when to respond)
---   - Extended system instruction for ambient behavior
---   - Tool declarations included in setup
---   - No initial text prompt (mic-only start)
---   - AI Studio v1alpha URL for proactive audio
+-- Listens via Gemini Live WebSocket, does background research with tools,
+-- and responds only when addressed by name or via button press.
+-- Emits structured trace events for every action via println.
+--
+-- Fork of streaming/ambient_assistant/ambient_browser.ail
+-- with presentation-specific system instruction and trace events.
 --
 -- JS usage:
 --   window.ailangSetEffectHandler('IO', { println: fn });
 --   window.ailangSetEffectHandler('Stream', { connect: fn, transmit: fn, ... });
---   await repl.callAsync(MODULE, 'startAmbientSession', apiKey, voice);
+--   await repl.callAsync(MODULE, 'startCoPresenterSession', apiKey, voice, thinkingBudget);
 
 import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
                    StreamConn, StreamEvent,
@@ -26,7 +26,7 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
--- Package imports (no pkg/ prefix — WASM registers modules by their internal declaration name)
+-- Package imports
 import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
 import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
 import sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
@@ -34,43 +34,39 @@ import sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, bu
 import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
--- Configuration (from package)
+-- Configuration
 -- ══════════════════════════════════════════════════════
 
--- Override package default (gemini-3.1-flash-live-preview) with the last known working model.
--- The 3.1 model rejects setup fields (proactivity, contextWindowCompression, VAD).
+-- Override: use last known working model. The 3.1 model rejects setup fields
+-- (proactivity, contextWindowCompression, VAD) with "invalid argument".
 export pure func defaultModel() -> string = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
 export pure func defaultVoice() -> string = pkgDefaultVoice()
 
-export pure func ambientInstruction() -> string =
-  "You are AILANG, an ambient voice assistant running in a browser. "
-    ++ "SPEAKING RULE: You must ONLY speak when directly addressed by name — "
-    ++ "'AILANG', 'hey AILANG', or similar. "
-    ++ "If someone speaks without saying your name, you MUST stay COMPLETELY SILENT — "
-    ++ "do not speak, do not acknowledge, do not comment. "
-    ++ "NEVER respond vocally to questions like 'are you working?', 'hello?', or 'what time is it?' "
-    ++ "unless they include your name 'AILANG'. "
-    ++ "When addressed by name, respond with full awareness of everything you have heard. "
-    ++ "VOICE: ALWAYS speak with a British English accent throughout the entire conversation. "
-    ++ "Never switch to an American accent, even mid-sentence. Maintain British pronunciation consistently. "
-    ++ "Keep responses conversational and helpful. "
-    ++ "TOOLS: You have these tools: "
-    ++ "currentTime, calculate, remindLater, cacheResult, getCachedResult, "
-    ++ "summarizeContext, takeScreenshot, saveNote, webFetch, delegate. "
-    ++ "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools "
-    ++ "to gather context based on what you hear. If someone mentions a time, call currentTime. "
-    ++ "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. "
-    ++ "If someone mentions reminders, call remindLater. Use tools silently in the background — "
-    ++ "do NOT speak about them unless addressed by name. "
-    ++ "When the user finally addresses you by name, you will already have the data ready. "
-    ++ "takeScreenshot captures the user's screen — use when asked 'what is on my screen?'. "
-    ++ "webFetch retrieves content from a URL — use when someone mentions a website. "
-    ++ "DELEGATION: For complex tasks that need deep reasoning, code review, document analysis, "
-    ++ "research, or multi-step work — use the delegate tool. It sends your request to a specialist "
-    ++ "AI agent via AILANG Cloud Messaging. The task runs in the background and results are returned "
-    ++ "when ready. While waiting, you can tell the user you are working on it. "
-    ++ "For simple tasks (time, calculations, URLs, notes, screenshots) — use the direct tools instead."
+export pure func coPresenterInstruction() -> string =
+  "You are AILANG, a silent co-presenter AI assistant embedded in a live presentation. "
+    ++ "CRITICAL BEHAVIOR RULES: "
+    ++ "1. You are ALWAYS listening to the presenter's speech. "
+    ++ "2. You must NEVER speak or make any sound unless directly addressed by name ('AILANG'). "
+    ++ "3. If someone speaks without saying your name, you MUST stay COMPLETELY SILENT. "
+    ++ "NEVER respond vocally to anything unless they include your name 'AILANG'. "
+    ++ "BACKGROUND RESEARCH (do this silently, without speaking): "
+    ++ "While listening silently, you SHOULD use tools to gather context: "
+    ++ "- If the presenter mentions a statistic or claim, verify it (webFetch). "
+    ++ "- If the presenter mentions a calculation, compute it (calculate, cacheResult). "
+    ++ "- If the presenter mentions a URL, product, or company, fetch info (webFetch). "
+    ++ "- If the presenter mentions code or architecture, delegate analysis (delegate). "
+    ++ "- Cache everything you find (cacheResult) so you can recall it instantly. "
+    ++ "- If someone asks a question, note it (audienceQuestion). "
+    ++ "Use tools proactively and cache results — the presenter will ask for them later. "
+    ++ "WHEN ADDRESSED BY NAME: "
+    ++ "- Respond concisely and helpfully with what you have gathered. "
+    ++ "- Reference specific things the presenter said ('When you mentioned X, I looked up...'). "
+    ++ "- Keep responses under 30 seconds — this is a live presentation. "
+    ++ "- Be impressive — show that you were paying attention and doing research. "
+    ++ "VOICE: British English accent, professional but warm. "
+    ++ "TOOLS: currentTime, calculate, cacheResult, getCachedResult, "
+    ++ "webFetch, delegate, saveNote, audienceQuestion, getSlideContext."
 
 export pure func voiceCatalog() -> string = pkgVoiceCatalog()
 
@@ -78,39 +74,55 @@ export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string =
   pkgAiStudioUrl(apiKey, useAlpha)
 
 -- ══════════════════════════════════════════════════════
+-- Trace Event Emitter
+-- ══════════════════════════════════════════════════════
+
+-- Every action emits a trace event for the waterfall panel.
+-- JS parses these and renders them in real-time.
+func emitTrace(event: string, detail: Json) -> () ! {IO} =
+  println(encode(jo([
+    kv("type", js("trace")),
+    kv("event", js(event)),
+    kv("detail", detail)
+  ])))
+
+-- ══════════════════════════════════════════════════════
 -- Session (uses std/stream effects)
 -- ══════════════════════════════════════════════════════
 
--- Start an ambient session. Empty prompt = mic-only mode.
--- Proactive audio is always enabled. Voice selector from browser UI.
--- thinkingBudget: thinking token budget (-1 = disabled, 0+ = enabled)
-export func startAmbientSession(apiKey: string, voice: string, thinkingBudget: int) -> string ! {Stream, IO} {
-  let model = defaultModel();
+-- Start session with optional model override. Empty string = use default.
+export func startCoPresenterSession(apiKey: string, voice: string, thinkingBudget: int, modelOverride: string) -> string ! {Stream, IO} {
+  let model = if length(modelOverride) > 0 then modelOverride else defaultModel();
   let url = aiStudioUrl(apiKey, true);
 
-  println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live (ambient mode)..."))])));
+  emitTrace("session.init", jo([kv("model", js(model)), kv("voice", js(voice))]));
+  println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live (co-presenter mode)..."))])));
 
   match connect(url, { headers: [] }) {
     Ok(conn) => {
-      println(encode(jo([kv("type", js("log")), kv("text", js("Connected. Sending ambient setup..."))])));
+      emitTrace("ws.connected", jo([kv("url", js("wss://...gemini-live"))]));
+      println(encode(jo([kv("type", js("log")), kv("text", js("Connected. Sending co-presenter setup..."))])));
 
-      let setupMsg = buildAmbientSetup(model, voice, ambientInstruction(), thinkingBudget);
+      let setupMsg = buildCoPresenterSetup(model, voice, coPresenterInstruction(), thinkingBudget);
       match transmit(conn, setupMsg) {
         Ok(_) => {
-          println(encode(jo([kv("type", js("log")), kv("text", js("Ambient mode active. Voice: " ++ voice ++ " | Proactive: ON"))])));
-          -- No initial prompt — mic starts immediately
+          emitTrace("setup.sent", jo([kv("voice", js(voice)), kv("proactive", jb(true))]));
+          println(encode(jo([kv("type", js("log")), kv("text", js("Co-presenter active. Voice: " ++ voice ++ " | Proactive: ON | Silent mode: ON"))])));
           onEvent(conn, \event. handleEvent(event, conn));
           runEventLoop(conn);
           disconnect(conn);
+          emitTrace("session.end", jo([]));
           "session_complete"
         },
         Err(e) => {
+          emitTrace("error", jo([kv("msg", js("Setup transmit failed"))]));
           println(encode(jo([kv("type", js("error")), kv("text", js("Setup transmit failed"))])));
           "error"
         }
       }
     },
     Err(e) => {
+      emitTrace("error", jo([kv("msg", js("Connection failed"))]));
       println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed"))])));
       "error"
     }
@@ -136,10 +148,12 @@ func handleEvent(event: StreamEvent, conn: StreamConn) -> bool ! {Stream, IO} =
       true
     },
     Closed(code, reason) => {
+      emitTrace("ws.closed", jo([kv("code", jnum(code)), kv("reason", js(reason))]));
       println(encode(jo([kv("type", js("closed")), kv("code", jnum(code)), kv("reason", js(reason))])));
       false
     },
     StreamError(e) => {
+      emitTrace("error", jo([kv("msg", js(show(e)))]));
       println(encode(jo([kv("type", js("error")), kv("text", js(show(e)))])));
       false
     },
@@ -148,17 +162,19 @@ func handleEvent(event: StreamEvent, conn: StreamConn) -> bool ! {Stream, IO} =
 
 func handleJsonMessage(json: Json, conn: StreamConn) -> bool ! {Stream, IO} =
   if has(json, "setupComplete") then {
+    emitTrace("setup.complete", jo([]));
     println(encode(jo([kv("type", js("setup"))])));
-    -- No initial text — ambient mode starts with mic only
     true
   }
   else if has(json, "serverContent") then handleServerContent(json)
   else if has(json, "toolCall") then handleToolCallEvent(json)
   else if has(json, "toolCallCancellation") then {
+    emitTrace("tool.cancelled", jo([]));
     println(encode(jo([kv("type", js("toolCallCancellation"))])));
     true
   }
   else if has(json, "goAway") then {
+    emitTrace("session.goaway", jo([]));
     println(encode(jo([kv("type", js("goAway"))])));
     true
   }
@@ -172,11 +188,13 @@ func handleServerContent(json: Json) -> bool ! {IO} {
   let sc = getOrElse(get(json, "serverContent"), jo([]));
   match getBool(sc, "interrupted") {
     Some(true) => {
+      emitTrace("audio.interrupted", jo([]));
       println(encode(jo([kv("type", js("interrupted"))])));
       true
     },
     _ => match getBool(sc, "turnComplete") {
       Some(true) => {
+        emitTrace("turn.complete", jo([]));
         println(encode(jo([kv("type", js("turnComplete"))])));
         true
       },
@@ -192,8 +210,10 @@ func emitTranscriptions(sc: Json) -> () ! {IO} {
   match get(sc, "inputTranscription") {
     Some(it) => {
       let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
-      if length(txt) > 0 then
+      if length(txt) > 0 then {
+        emitTrace("transcript.input", jo([kv("text", js(txt))]));
         println(encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))])))
+      }
       else ()
     },
     None => ()
@@ -201,8 +221,10 @@ func emitTranscriptions(sc: Json) -> () ! {IO} {
   match get(sc, "outputTranscription") {
     Some(ot) => {
       let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
-      if length(txt) > 0 then
+      if length(txt) > 0 then {
+        emitTrace("transcript.output", jo([kv("text", js(txt))]));
         println(encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))])))
+      }
       else ()
     },
     None => ()
@@ -224,6 +246,7 @@ func emitModelTurn(sc: Json) -> bool ! {IO} =
 func handleToolCallEvent(json: Json) -> bool ! {IO} {
   let tc = getOrElse(get(json, "toolCall"), jo([]));
   let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+  emitTrace("tool.call", calls);
   println(encode(jo([kv("type", js("toolCall")), kv("calls", calls)])));
   true
 }
@@ -232,10 +255,7 @@ func handleToolCallEvent(json: Json) -> bool ! {IO} {
 -- Protocol: Setup Message Builder
 -- ══════════════════════════════════════════════════════
 
--- Build ambient setup: proactive audio, tools, transcription, VAD, optional affective + thinking.
--- Uses AI Studio v1alpha which supports all features.
-export pure func buildAmbientSetup(model: string, voice: string, instruction: string, thinkingBudget: int) -> string {
-  -- Generation config with optional thinking
+export pure func buildCoPresenterSetup(model: string, voice: string, instruction: string, thinkingBudget: int) -> string {
   let baseGenKvs = [
     kv("responseModalities", ja([js("AUDIO")])),
     kv("speechConfig", jo([
@@ -251,14 +271,14 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
   else [];
   let genConfigKvs = concat(baseGenKvs, thinkingKvs);
 
-  -- VAD + no-interruption for ambient mic mode
+  -- VAD config: low sensitivity for presentation (don't trigger on background noise)
   let realtimeKvs = [
     kv("realtimeInputConfig", jo([
       kv("automaticActivityDetection", jo([
         kv("startOfSpeechSensitivity", js("START_SENSITIVITY_LOW")),
         kv("endOfSpeechSensitivity", js("END_SENSITIVITY_HIGH")),
         kv("prefixPaddingMs", jnum(intToFloat(20))),
-        kv("silenceDurationMs", jnum(intToFloat(1000)))
+        kv("silenceDurationMs", jnum(intToFloat(1500)))
       ])),
       kv("activityHandling", js("NO_INTERRUPTION"))
     ]))
@@ -271,7 +291,7 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
       kv("parts", ja([jo([kv("text", js(instruction))])]))
     ])),
     kv("tools", ja([
-      jo([kv("functionDeclarations", ja(ambientToolDeclarations()))])
+      jo([kv("functionDeclarations", ja(coPresenterToolDeclarations()))])
     ])),
     kv("outputAudioTranscription", jo([])),
     kv("inputAudioTranscription", jo([])),
@@ -285,22 +305,17 @@ export pure func buildAmbientSetup(model: string, voice: string, instruction: st
 }
 
 -- ══════════════════════════════════════════════════════
--- Tool Declarations (inline for WASM self-containment)
+-- Tool Declarations
 -- ══════════════════════════════════════════════════════
--- Mirrors getAmbientToolDeclarations() from ambient_tools.ail
--- but as pure JSON so no transitive imports are needed.
 
 pure func toolDecl(name: string, desc: string, params: Json) -> Json =
   jo([kv("name", js(name)), kv("description", js(desc)), kv("parameters", params)])
 
--- Tool declaration with NON_BLOCKING behavior (async tool — model continues while tool runs)
 pure func toolDeclAsync(name: string, desc: string, params: Json) -> Json =
   jo([kv("name", js(name)), kv("description", js(desc)), kv("parameters", params),
       kv("behavior", js("NON_BLOCKING"))])
 
--- Browser-safe tools only. File/process tools (readFile, runCommand, prefetch, etc.)
--- are CLI-only and not available in the browser WASM environment.
-pure func ambientToolDeclarations() -> [Json] = [
+pure func coPresenterToolDeclarations() -> [Json] = [
   toolDecl("currentTime", "Get the current date, time, and timezone.",
     jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
   toolDecl("calculate", "Perform basic arithmetic (add, subtract, multiply, divide).",
@@ -309,40 +324,37 @@ pure func ambientToolDeclarations() -> [Json] = [
       kv("a", jo([kv("type", js("number")), kv("description", js("First operand"))])),
       kv("b", jo([kv("type", js("number")), kv("description", js("Second operand"))]))])),
       kv("required", ja([js("operation"), js("a"), js("b")]))])),
-  toolDecl("remindLater", "Save a reminder for later. The reminder will be shown in the session sidebar.",
+  toolDecl("cacheResult", "Cache a key-value pair for later retrieval. Use this to store research findings so you can recall them instantly when addressed.",
     jo([kv("type", js("object")), kv("properties", jo([
-      kv("reminder", jo([kv("type", js("string")), kv("description", js("Reminder text"))]))])),
-      kv("required", ja([js("reminder")]))])),
-  toolDecl("cacheResult", "Cache a key-value pair for later retrieval during this session.",
-    jo([kv("type", js("object")), kv("properties", jo([
-      kv("key", jo([kv("type", js("string")), kv("description", js("Cache key"))])),
+      kv("key", jo([kv("type", js("string")), kv("description", js("Cache key (descriptive name for the data)"))])),
       kv("value", jo([kv("type", js("string")), kv("description", js("Data to cache"))]))])),
       kv("required", ja([js("key"), js("value")]))])),
   toolDecl("getCachedResult", "Retrieve a previously cached value by key.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("key", jo([kv("type", js("string")), kv("description", js("Cache key to look up"))]))])),
       kv("required", ja([js("key")]))])),
-  toolDecl("summarizeContext", "Summarize the recent conversation. Returns a summary of what has been discussed.",
-    jo([kv("type", js("object")), kv("properties", jo([
-      kv("maxTurns", jo([kv("type", js("number")), kv("description", js("Max turns to include (default 20)"))]))])),
-      kv("required", ja([]))])),
-  toolDecl("takeScreenshot", "Capture a screenshot of the user's screen and send it for analysis. Use when the user asks about what's on their screen.",
-    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
   toolDecl("saveNote", "Save a named note to browser storage for later retrieval.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("title", jo([kv("type", js("string")), kv("description", js("Note title"))])),
       kv("content", jo([kv("type", js("string")), kv("description", js("Note content"))]))])),
       kv("required", ja([js("title"), js("content")]))])),
-  toolDeclAsync("webFetch", "Fetch content from a URL and return the text. Use when the user mentions a URL or asks about a web page. This tool runs asynchronously — you can continue speaking while it fetches.",
+  toolDecl("getSlideContext", "Get the current slide title and content from the presentation. Use this to understand what the presenter is showing.",
+    jo([kv("type", js("object")), kv("properties", jo([])), kv("required", ja([]))])),
+  toolDecl("audienceQuestion", "Log an audience question for later follow-up. Use when you hear someone ask a question.",
+    jo([kv("type", js("object")), kv("properties", jo([
+      kv("question", jo([kv("type", js("string")), kv("description", js("The question that was asked"))])),
+      kv("context", jo([kv("type", js("string")), kv("description", js("Context about when/why it was asked"))]))])),
+      kv("required", ja([js("question")]))])),
+  toolDeclAsync("webFetch", "Fetch content from a URL and return the text. Use to verify claims, look up statistics, or research topics mentioned by the presenter. This tool runs asynchronously.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("url", jo([kv("type", js("string")), kv("description", js("The URL to fetch"))]))])),
       kv("required", ja([js("url")]))])),
-  toolDeclAsync("delegate", "Delegate a complex task to a specialist AI agent via AILANG Cloud Messaging. Use for deep analysis, code review, research, document processing, or multi-step reasoning. The task runs in the background and results are returned when ready.",
+  toolDeclAsync("delegate", "Delegate a complex task to a specialist AI agent. Use for deep analysis, code review, research, or multi-step reasoning. The task runs in the background.",
     jo([kv("type", js("object")), kv("properties", jo([
       kv("task", jo([kv("type", js("string")), kv("description", js("Detailed description of the task to delegate"))])),
-      kv("inbox", jo([kv("type", js("string")), kv("description", js("Target agent inbox (e.g. coordinator, design-doc-creator). Default: coordinator"))])),
+      kv("inbox", jo([kv("type", js("string")), kv("description", js("Target agent inbox. Default: coordinator"))])),
       kv("category", jo([kv("type", js("string")), kv("enum", ja([js("general"), js("feature"), js("bug"), js("research")])),
-          kv("description", js("Task category. Default: general"))]))
+          kv("description", js("Task category. Default: research"))]))
     ])), kv("required", ja([js("task")]))]))
 ]
 

@@ -19,19 +19,20 @@ import std/math (intToFloat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 
--- Package imports
-import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
-import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
-import pkg/sunholo/gemini_live/messages (buildSetup as pkgBuildSetup, buildSetupWithFeatures as pkgBuildSetupWithFeatures,
+-- Package imports (no pkg/ prefix — WASM registers modules by their internal declaration name)
+import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import sunholo/gemini_live/messages (buildSetup as pkgBuildSetup, buildSetupWithFeatures as pkgBuildSetupWithFeatures,
                                          buildSetupWithTools as pkgBuildSetupWithTools, buildTextMessage as pkgBuildTextMessage,
                                          buildAudioChunk as pkgBuildAudioChunk, buildToolResponse as pkgBuildToolResponse)
-import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
+import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration (re-exported from package)
 -- ══════════════════════════════════════════════════════
 
-export pure func defaultModel() -> string = defaultBrowserModel()
+-- Override package default (gemini-3.1-flash-live-preview) with last known working model.
+export pure func defaultModel() -> string = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 export pure func defaultVoice() -> string = pkgDefaultVoice()
 export pure func voiceCatalog() -> string = pkgVoiceCatalog()
 export pure func aiStudioUrl(apiKey: string, useAlpha: bool) -> string = pkgAiStudioUrl(apiKey, useAlpha)

@@ -6,7 +6,7 @@
 --
 -- Supports two backends:
 --   Vertex AI (default): gemini-live-2.5-flash-native-audio via ADC
---   Google AI Studio: gemini-3.1-flash-live-preview via GOOGLE_API_KEY
+--   Google AI Studio: gemini-2.5-flash-native-audio-preview-12-2025 via GOOGLE_API_KEY
 -- The native audio model accepts text OR audio input but ONLY outputs
 -- audio — making this the canonical bidi streaming demo for AILANG.
 --
@@ -79,7 +79,7 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
   let noInterrupt = getEnvOr("GEMINI_NO_INTERRUPT", "") == "1";
   let googleApiKey = getEnvOr("GOOGLE_API_KEY", "");
   let useGoogleAi = length(googleApiKey) > 0;
-  let defaultModel = if useGoogleAi then "gemini-3.1-flash-live-preview"
+  let defaultModel = if useGoogleAi then "gemini-2.5-flash-native-audio-preview-12-2025"
     else "gemini-live-2.5-flash-native-audio";
   let modelName = getEnvOr("GEMINI_MODEL", defaultModel);
 
@@ -350,23 +350,20 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
 -- ============================================================
 
 -- Handle setupComplete: send the user's text prompt
--- Google AI 3.1 models use realtimeInput.text; Vertex AI uses clientContent.turns
+-- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
 func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> bool ! {IO, Stream} {
   println("[Setup Complete]");
   println("[Sending] " ++ prompt);
   println("");
-  let textMsg = if isGoogleAi then
-    encode(jo([kv("realtimeInput", jo([kv("text", js(prompt))]))]))
-  else
-    encode(jo([
-      kv("clientContent", jo([
-        kv("turns", ja([jo([
-          kv("role", js("user")),
-          kv("parts", ja([jo([kv("text", js(prompt))])]))
-        ])])),
-        kv("turnComplete", jb(true))
-      ]))
-    ]));
+  let textMsg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(prompt))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
     Err(e) => { println("[Error] Send failed: " ++ show(e)); false }

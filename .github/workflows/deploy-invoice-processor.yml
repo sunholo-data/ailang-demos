@@ -10,6 +10,7 @@ on:
       - 'ecommerce/**'
       - 'verify_demo/**'
       - 'streaming/**'
+      - 'co-presenter/**'
       - 'site/**'
       - 'website_builder/**'
       - '.github/workflows/deploy-invoice-processor.yml'
@@ -244,6 +245,10 @@ jobs:
           mkdir -p invoice_processor_wasm/ailang/streaming/ambient_assistant
           cp streaming/ambient_assistant/ambient_browser.ail \
             invoice_processor_wasm/ailang/streaming/ambient_assistant/
+          # Co-Presenter module
+          mkdir -p invoice_processor_wasm/ailang/co_presenter
+          cp co-presenter/co_presenter.ail \
+            invoice_processor_wasm/ailang/co_presenter/
           echo "Copied streaming modules"
 
       - name: Copy demo Office files
@@ -338,6 +343,10 @@ jobs:
           mkdir -p _site/website_builder/ailang/docparse/services
           cp docparse/types/*.ail _site/website_builder/ailang/docparse/types/
           cp docparse/services/*.ail _site/website_builder/ailang/docparse/services/
+
+          # Co-Presenter
+          mkdir -p _site/co-presenter
+          cp co-presenter/index.html _site/co-presenter/
 
           echo "::group::Site contents"
           find _site -type f | head -60 || true

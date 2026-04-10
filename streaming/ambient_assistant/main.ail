@@ -88,7 +88,7 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
 
   let googleApiKey = getEnvOr("GOOGLE_API_KEY", "");
   let useGoogleAi = length(googleApiKey) > 0;
-  let defaultModel = if useGoogleAi then "gemini-3.1-flash-live-preview"
+  let defaultModel = if useGoogleAi then "gemini-2.5-flash-native-audio-preview-12-2025"
     else "gemini-live-2.5-flash-native-audio";
   let modelName = getEnvOr("GEMINI_MODEL", defaultModel);
 
@@ -532,19 +532,16 @@ func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath
   let transcriptPath = sessionDir ++ "/transcript.jsonl";
   appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(line))])) ++ "\n");
   -- Send as new turn to Gemini
-  -- Google AI 3.1 models use realtimeInput.text; Vertex AI uses clientContent.turns
-  let textMsg = if isGoogleAi then
-    encode(jo([kv("realtimeInput", jo([kv("text", js(line))]))]))
-  else
-    encode(jo([
-      kv("clientContent", jo([
-        kv("turns", ja([jo([
-          kv("role", js("user")),
-          kv("parts", ja([jo([kv("text", js(line))])]))
-        ])])),
-        kv("turnComplete", jb(true))
-      ]))
-    ]));
+  -- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
+  let textMsg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(line))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
     Err(e) => { println("[Error] Send failed: " ++ show(e)); true }
@@ -664,23 +661,20 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
 -- Message Handlers
 -- ============================================================
 
--- Google AI 3.1 models use realtimeInput.text; Vertex AI uses clientContent.turns
+-- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
 func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> bool ! {IO, Stream} {
   println("[Setup Complete] Ambient mode active — listening...");
   println("[Sending] " ++ prompt);
   println("");
-  let textMsg = if isGoogleAi then
-    encode(jo([kv("realtimeInput", jo([kv("text", js(prompt))]))]))
-  else
-    encode(jo([
-      kv("clientContent", jo([
-        kv("turns", ja([jo([
-          kv("role", js("user")),
-          kv("parts", ja([jo([kv("text", js(prompt))])]))
-        ])])),
-        kv("turnComplete", jb(true))
-      ]))
-    ]));
+  let textMsg = encode(jo([
+    kv("clientContent", jo([
+      kv("turns", ja([jo([
+        kv("role", js("user")),
+        kv("parts", ja([jo([kv("text", js(prompt))])]))
+      ])])),
+      kv("turnComplete", jb(true))
+    ]))
+  ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
     Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
