@@ -85,11 +85,11 @@ const IMAGE_MAP = {
 
 assert('resolveImages: bare filename → data URI',
   resolveImages('<img src="photo.jpg">', IMAGE_MAP),
-  '<img src="data:image/jpeg;base64,/9j/abc">');
+  '<img data-original-src="photo.jpg" src="data:image/jpeg;base64,/9j/abc">');
 
 assert('resolveImages: media/ prefix → strips to basename, finds in map',
   resolveImages('<img src="media/photo.jpg">', IMAGE_MAP),
-  '<img src="data:image/jpeg;base64,/9j/abc">');
+  '<img data-original-src="media/photo.jpg" src="data:image/jpeg;base64,/9j/abc">');
 
 assert('resolveImages: unknown filename → unchanged',
   resolveImages('<img src="unknown.jpg">', IMAGE_MAP),
@@ -97,7 +97,7 @@ assert('resolveImages: unknown filename → unchanged',
 
 assert('resolveImages: video src resolved',
   resolveImages('<video src="clip.mp4"></video>', IMAGE_MAP),
-  '<video src="blob:http://localhost:5174/abc-123"></video>');
+  '<video data-original-src="clip.mp4" src="blob:http://localhost:5174/abc-123"></video>');
 
 assert('resolveImages: poster resolved',
   resolveImages('<video poster="hero.png"></video>', IMAGE_MAP),
@@ -109,7 +109,7 @@ assert('resolveImages: data URI preserved (not double-replaced)',
 
 assert('resolveImages: absolute URL with matching basename → resolved',
   resolveImages('<img src="https://cdn.example.com/photo.jpg">', IMAGE_MAP),
-  '<img src="data:image/jpeg;base64,/9j/abc">');
+  '<img data-original-src="https://cdn.example.com/photo.jpg" src="data:image/jpeg;base64,/9j/abc">');
 
 assert('resolveImages: absolute URL with no matching basename → preserved',
   resolveImages('<img src="https://cdn.example.com/other.jpg">', IMAGE_MAP),
@@ -315,7 +315,7 @@ assertIncludes('normalizeHtml: CSS url() → GitHub Pages URL',
 // Partial pipeline — only some options
 assert('normalizeHtml: images only (no css, no repoCtx)',
   normalizeHtml('<img src="photo.jpg">', { imageMap: IMAGE_MAP }),
-  '<img src="data:image/jpeg;base64,/9j/abc">');
+  '<img data-original-src="photo.jpg" src="data:image/jpeg;base64,/9j/abc">');
 
 assert('normalizeHtml: css only (no images, no repoCtx)',
   normalizeHtml('<link rel="stylesheet" href="x.css">', { css: 'h1{}' }),
@@ -476,11 +476,11 @@ const SPACE_MAP = { 'WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg': 'data:imag
 
 assert('resolveImages: filename with spaces',
   resolveImages('<img src="WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg">', SPACE_MAP),
-  '<img src="data:image/jpeg;base64,AAAA">');
+  '<img data-original-src="WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg" src="data:image/jpeg;base64,AAAA">');
 
 assert('resolveImages: media/ + filename with spaces → strips to basename',
   resolveImages('<img src="media/WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg">', SPACE_MAP),
-  '<img src="data:image/jpeg;base64,AAAA">');
+  '<img data-original-src="media/WhatsApp Image 2026-02-05 at 20.33.27 (2).jpeg" src="data:image/jpeg;base64,AAAA">');
 
 // ── Run async tests then report ──
 
