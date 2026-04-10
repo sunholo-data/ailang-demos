@@ -386,8 +386,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
     <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle microphone">
       &#x1F3A4;
     </button>
-    <button class="ask-btn" id="askBtn" onclick="askAILANG()" disabled title="Ask AILANG what it found">
-      Ask AILANG
+    <button class="ask-btn" id="askBtn" onclick="askAILANG()" disabled title="Prompt AILANG to summarize everything it researched silently while you were speaking. Same as saying 'AILANG, what have you found?' aloud. Shortcut: Spacebar.">
+      Summarize Findings
     </button>
     <div class="mic-level" id="micLevel" title="Mic input level">
       <div class="mic-level-bar" id="micLevelBar"></div>
@@ -545,6 +545,21 @@ const core = new GeminiLiveCore({
     populateVoices();
     console.log('[co-presenter] WASM ready');
     $.statusLabel.textContent = 'Ready';
+    // Wire up real AILANG trace stream (v0.11.1+) if available
+    if (typeof window.ailangSetTraceHandler === 'function') {
+      try {
+        // Grant Trace capability so std/trace.spanStart/spanEnd/event can run
+        if (typeof window.ailangGrantCapability === 'function') {
+          window.ailangGrantCapability('Trace');
+        }
+        window.ailangSetTraceHandler(handleAILANGTraceEvent);
+        console.log('[co-presenter] ailangSetTraceHandler registered (real AILANG traces v0.11.1+)');
+      } catch (e) {
+        console.warn('[co-presenter] ailangSetTraceHandler failed:', e);
+      }
+    } else {
+      console.warn('[co-presenter] ailangSetTraceHandler not available — needs ailang >= 0.11.1');
+    }
   },
   onWasmError: (e) => {
     console.error('[co-presenter] WASM error', e);
@@ -553,12 +568,44 @@ const core = new GeminiLiveCore({
   },
 });
 
+// ── Persistence helpers (exposed on window for console access) ──
+window.coPresenter = {
+  getNotes: () => JSON.parse(localStorage.getItem('copresenter-notes') || '{}'),
+  getQuestions: () => JSON.parse(localStorage.getItem('copresenter-questions') || '[]'),
+  getCache: () => Array.from(browserCache.entries()),
+  clearAll: () => {
+    localStorage.removeItem('copresenter-notes');
+    localStorage.removeItem('copresenter-questions');
+    browserCache.clear();
+    audienceQuestions.length = 0;
+    console.log('[co-presenter] Cleared all saved notes, questions, and cache');
+  },
+  exportAll: () => {
+    return {
+      notes: window.coPresenter.getNotes(),
+      questions: window.coPresenter.getQuestions(),
+      cache: window.coPresenter.getCache(),
+    };
+  },
+};
+
 // ── Init ──
 window.addEventListener('DOMContentLoaded', async () => {
   loadConfig();
   renderToolsStrip();
   await core.initWASM();
   core.initWaveform($.waveformMini);
+  // Log what's persisted from prior sessions so the user knows where things live.
+  const notes = window.coPresenter.getNotes();
+  const questions = window.coPresenter.getQuestions();
+  const noteCount = Object.keys(notes).length;
+  console.log(
+    '[co-presenter] Storage:\n' +
+    '  saveNote      \u2192 localStorage["copresenter-notes"] (' + noteCount + ' notes)\n' +
+    '  audienceQuestion \u2192 localStorage["copresenter-questions"] (' + questions.length + ' questions)\n' +
+    '  cacheResult   \u2192 in-memory Map (cleared on refresh)\n' +
+    'Console helpers: coPresenter.getNotes(), .getQuestions(), .getCache(), .exportAll(), .clearAll()'
+  );
 });
 
 // ═══════════════════════════════════════════════════════
@@ -573,6 +620,7 @@ const TRACE_ICONS = {
   'turn.complete': '\u21A9', 'audio.interrupted': '\u270B',
   'tool.call': '\u{1F527}', 'tool.result': '\u{1F4E6}', 'tool.cancelled': '\u{1F6AB}',
   'fetch.start': '\u{1F310}', 'fetch.done': '\u{1F4E5}',
+  'ailang.effect': '\u{26A1}', 'ailang.module': '\u{1F4E6}', 'ailang.error': '\u{1F4A5}',
 };
 
 function traceType(event) {
@@ -580,7 +628,8 @@ function traceType(event) {
   if (event.startsWith('transcript')) return 'transcript';
   if (event.startsWith('session') || event.startsWith('ws') || event.startsWith('setup')) return 'session';
   if (event.startsWith('audio')) return 'audio';
-  if (event === 'error') return 'error';
+  if (event === 'error' || event === 'ailang.error') return 'error';
+  if (event.startsWith('ailang.')) return 'session';
   return 'session';
 }
 
@@ -681,6 +730,7 @@ function filterTrace(type, btn) {
 // ═══════════════════════════════════════════════════════
 
 const wfSpans = [];
+const wfSpansById = new Map(); // span_id -> span (from real AILANG traces)
 let wfCurrentTurn = null;
 
 function wfAddSpan(type, name, detail) {
@@ -692,6 +742,74 @@ function wfAddSpan(type, name, detail) {
 
 function wfEndSpan(span) {
   if (span) span.end = Date.now();
+}
+
+// ═══════════════════════════════════════════════════════
+// REAL AILANG TRACE STREAM (v0.11.1+ ailangSetTraceHandler)
+// ═══════════════════════════════════════════════════════
+// Receives W3C-compatible trace events from the AILANG runtime in real-time.
+// Events: module_start, function_enter, function_exit, effect, contract_check,
+// budget_delta, error, module_end. Each carries trace_id/span_id/parent_span_id.
+
+function classifyAILANGSpan(name) {
+  if (!name) return 'fn';
+  if (name.startsWith('std/trace.')) return 'trace';
+  if (name.startsWith('std/stream.')) return 'stream';
+  if (name === 'co_presenter.session') return 'session';
+  if (name === 'ws.connect' || name === 'setup.send') return 'session';
+  if (name.indexOf('handleToolCallEvent') >= 0) return 'tool';
+  if (name.indexOf('Transcription') >= 0) return 'transcript';
+  if (name.indexOf('handleEvent') >= 0 || name.indexOf('handleJsonMessage') >= 0) return 'fn';
+  return 'fn';
+}
+
+function handleAILANGTraceEvent(evt) {
+  // Forward every event to the trace log too (verbose but truthful)
+  try {
+    if (evt.event === 'function_enter' && evt.function && evt.function.name) {
+      const name = evt.function.name;
+      const type = classifyAILANGSpan(name);
+      // Only show interesting spans on the waterfall — std/trace.spanStart/spanEnd are noise
+      if (name === 'std/trace.spanStart' || name === 'std/trace.spanEnd' || name === 'std/trace.event') return;
+      const now = Date.now();
+      const span = {
+        type, name, detail: '',
+        start: now, end: null,
+        startRel: sessionStartTime ? now - sessionStartTime : 0,
+        spanId: evt.span_id, parentSpanId: evt.parent_span_id,
+        ailang: true,
+      };
+      wfSpans.push(span);
+      if (evt.span_id) wfSpansById.set(evt.span_id, span);
+      if (activePanelTab === 'waterfall') renderWaterfall();
+    } else if (evt.event === 'function_exit' && evt.function) {
+      const span = evt.span_id ? wfSpansById.get(evt.span_id) : null;
+      if (span) {
+        span.end = Date.now();
+        if (evt.function.duration_ns) span.detail = (evt.function.duration_ns / 1e6).toFixed(1) + 'ms';
+        if (activePanelTab === 'waterfall') renderWaterfall();
+      }
+    } else if (evt.event === 'effect' && evt.effect) {
+      // Custom event() calls from co_presenter.ail surface here as Trace.<name>
+      const eff = evt.effect;
+      if (eff.effect_name === 'Trace') {
+        // Annotate the parent span with the event detail
+        const parent = evt.parent_span_id ? wfSpansById.get(evt.parent_span_id) : null;
+        if (parent) {
+          const arg = (eff.args && eff.args[0]) || '';
+          parent.detail = (eff.op_name || 'event') + '=' + String(arg).substring(0, 40);
+          if (activePanelTab === 'waterfall') renderWaterfall();
+        }
+      }
+      addTraceEvent('ailang.effect', { name: eff.effect_name + '.' + eff.op_name, args: (eff.args || []).slice(0, 2) });
+    } else if (evt.event === 'module_start' && evt.module) {
+      addTraceEvent('ailang.module', { name: evt.module.name, caps: evt.module.caps });
+    } else if (evt.event === 'error') {
+      addTraceEvent('ailang.error', { msg: (evt.error && evt.error.message) || '' });
+    }
+  } catch (e) {
+    console.warn('[co-presenter] trace handler error:', e, evt);
+  }
 }
 
 // Find last open span of a given type
@@ -923,7 +1041,11 @@ async function handleAILANGEvent(event) {
         for (const call of event.calls) {
           const name = call.name || 'unknown';
           const callId = call.id || '';
-          const args = call.args || {};
+          // Defensive: AILANG re-encode may collapse args to a string. Re-parse if needed.
+          let args = call.args || {};
+          if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch { /* leave as string */ }
+          }
 
           toolStats.total++;
           $.tsTools.textContent = toolStats.total;
@@ -1036,7 +1158,12 @@ async function dispatchBrowserTool(name, args) {
     case 'audienceQuestion': {
       const q = args.question || '';
       const ctx = args.context || '';
-      audienceQuestions.push({ question: q, context: ctx, time: new Date().toLocaleTimeString() });
+      const entry = { question: q, context: ctx, time: new Date().toISOString() };
+      audienceQuestions.push(entry);
+      // Persist to localStorage so it survives page reloads
+      const stored = JSON.parse(localStorage.getItem('copresenter-questions') || '[]');
+      stored.push(entry);
+      localStorage.setItem('copresenter-questions', JSON.stringify(stored));
       return 'Question logged: ' + q;
     }
     case 'webFetch': {
@@ -1111,20 +1238,43 @@ function setStatus(s) {
 
 function showConversation(text, role) {
   $.conversation.classList.add('visible');
-  const div = document.createElement('div');
-  div.className = 'conv-msg conv-' + role;
-  div.textContent = text;
-  $.conversation.appendChild(div);
+  // Merge consecutive same-role fragments into one bubble (transcripts arrive word-by-word).
+  // Reset the merge target after a short idle gap or when role changes.
+  const now = Date.now();
+  const idleGap = 4000;
+  const lastEl = showConversation._lastEl;
+  const lastRole = showConversation._lastRole;
+  const lastTime = showConversation._lastTime || 0;
+  if (lastEl && lastRole === role && (now - lastTime) < idleGap) {
+    // Append with a space if needed
+    const sep = (lastEl.textContent.endsWith(' ') || text.startsWith(' ') || text.startsWith(',') || text.startsWith('.') || text.startsWith('?') || text.startsWith('!')) ? '' : ' ';
+    lastEl.textContent = lastEl.textContent + sep + text;
+  } else {
+    const div = document.createElement('div');
+    div.className = 'conv-msg conv-' + role;
+    div.textContent = text;
+    $.conversation.appendChild(div);
+    showConversation._lastEl = div;
+    showConversation._lastRole = role;
+  }
+  showConversation._lastTime = now;
   $.conversation.scrollTop = $.conversation.scrollHeight;
   // Auto-hide after 10s of no new messages
   clearTimeout(showConversation._timer);
   showConversation._timer = setTimeout(() => {
     $.conversation.classList.remove('visible');
+    showConversation._lastEl = null;
+    showConversation._lastRole = null;
   }, 10000);
 }
 
 function summarizeArgs(args) {
   if (!args) return '';
+  // If args came in as a JSON string (AILANG encode quirk), try to parse it
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args); } catch { return args.length > 50 ? args.substring(0, 50) + '...' : args; }
+  }
+  if (typeof args !== 'object') return String(args);
   const entries = Object.entries(args);
   return entries.slice(0, 2).map(([k, v]) => {
     const vs = String(v);
@@ -1159,8 +1309,10 @@ function populateVoices() {
       opt.textContent = v.name + ' (' + v.desc + ')';
       $.voiceSelect.appendChild(opt);
     });
+    // Default to Sulafat (Warm) — the British female voice we use everywhere else.
+    // Honor the user's saved preference if they explicitly chose something else.
     const saved = localStorage.getItem('copresenter-voice');
-    if (saved) $.voiceSelect.value = saved;
+    $.voiceSelect.value = saved || 'Sulafat';
     if (!$.voiceSelect.value) $.voiceSelect.value = 'Sulafat';
   } catch (e) {
     console.warn('Voice catalog error:', e);

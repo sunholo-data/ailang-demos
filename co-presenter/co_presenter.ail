@@ -52,9 +52,9 @@ export pure func coPresenterInstruction() -> string =
     ++ "NEVER respond vocally to anything unless they include your name 'AILANG'. "
     ++ "BACKGROUND RESEARCH (do this silently, without speaking): "
     ++ "While listening silently, you SHOULD use tools to gather context: "
-    ++ "- If the presenter mentions a statistic or claim, verify it (webFetch). "
+    ++ "- If the presenter mentions a statistic, claim, or topic, search for it (use Google Search built-in tool). "
     ++ "- If the presenter mentions a calculation, compute it (calculate, cacheResult). "
-    ++ "- If the presenter mentions a URL, product, or company, fetch info (webFetch). "
+    ++ "- If the presenter mentions a specific URL, fetch its content (webFetch). For general research, prefer Google Search over webFetch since many sites block direct fetching. "
     ++ "- If the presenter mentions code or architecture, delegate analysis (delegate). "
     ++ "- Cache everything you find (cacheResult) so you can recall it instantly. "
     ++ "- If someone asks a question, note it (audienceQuestion). "
@@ -66,7 +66,8 @@ export pure func coPresenterInstruction() -> string =
     ++ "- Be impressive — show that you were paying attention and doing research. "
     ++ "VOICE: British English accent, professional but warm. "
     ++ "TOOLS: currentTime, calculate, cacheResult, getCachedResult, "
-    ++ "webFetch, delegate, saveNote, audienceQuestion, getSlideContext."
+    ++ "webFetch, delegate, saveNote, audienceQuestion, getSlideContext. "
+    ++ "BUILT-IN: Google Search (grounding) — handled automatically by the model."
 
 export pure func voiceCatalog() -> string = pkgVoiceCatalog()
 
@@ -291,6 +292,9 @@ export pure func buildCoPresenterSetup(model: string, voice: string, instruction
       kv("parts", ja([jo([kv("text", js(instruction))])]))
     ])),
     kv("tools", ja([
+      -- Built-in: Google Search grounding (model decides when to invoke)
+      jo([kv("googleSearch", jo([]))]),
+      -- Custom function tools
       jo([kv("functionDeclarations", ja(coPresenterToolDeclarations()))])
     ])),
     kv("outputAudioTranscription", jo([])),
