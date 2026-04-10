@@ -21,7 +21,8 @@ class GeminiLiveCore {
     this.config = Object.assign({
       wasmPath: '../../wasm/ailang.wasm',
       workletPath: '../shared/audio-worklet.js',
-      modules: [],               // [{name, path}]
+      modules: [],               // [{name, path}] — deps first, main module last
+      mainModule: null,          // name of the main module for callAILANG(); defaults to last in modules[]
       stdlibs: ['std/json', 'std/option', 'std/result', 'std/string', 'std/list', 'std/io', 'std/stream'],
       playbackRate: 48000,
       sourceRate: 24000,
@@ -142,10 +143,12 @@ class GeminiLiveCore {
     }
   }
 
-  // Call a pure AILANG function on the primary module (first in config.modules)
+  // Call a pure AILANG function on the main module.
+  // Main module = config.mainModule, or last entry in config.modules[] (deps load first).
   callAILANG(funcName, ...args) {
     if (!this._wasmReady || this.config.modules.length === 0) return null;
-    return this.callAILANGModule(this.config.modules[0].name, funcName, ...args);
+    const main = this.config.mainModule || this.config.modules[this.config.modules.length - 1].name;
+    return this.callAILANGModule(main, funcName, ...args);
   }
 
   // Call a pure AILANG function on a specific module
@@ -988,5 +991,15 @@ class GeminiLiveCore {
     }
 
     this._animId = requestAnimationFrame(() => this._drawWaveformLoop());
+  }
+
+  // Get current mic input RMS level (0.0–1.0). Returns 0 if mic not active.
+  getMicLevel() {
+    if (!this._micAnalyserNode || !this._isRecording) return 0;
+    const data = new Float32Array(this._micAnalyserNode.fftSize);
+    this._micAnalyserNode.getFloatTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+    return Math.sqrt(sum / data.length);
   }
 }

@@ -114,6 +114,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
 }
 .transcript-live .highlight{color:var(--cyan)}
 
+.mic-level{width:4px;height:28px;background:var(--bg-card);border-radius:2px;border:1px solid var(--border);overflow:hidden;flex-shrink:0;position:relative}
+.mic-level-bar{position:absolute;bottom:0;width:100%;background:var(--green);border-radius:1px;transition:height 80ms ease-out;height:0}
+.mic-level.active .mic-level-bar{box-shadow:0 0 4px rgba(74,222,128,.4)}
 .waveform-mini{width:120px;height:32px;flex-shrink:0}
 
 .bottom-stats{display:flex;gap:16px;font-size:10px;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;flex-shrink:0}
@@ -170,6 +173,69 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
 /* Tool result expansion */
 .trace-event .trace-expand{display:none;grid-column:1/-1;margin-top:4px;padding:6px 8px;background:var(--bg-card);border-radius:4px;font-size:10px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
 .trace-event.expanded .trace-expand{display:block}
+
+/* Tools strip */
+.tools-strip{padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.tools-strip-label{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.tools-strip-tags{display:flex;flex-wrap:wrap;gap:4px}
+.tool-tag{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--bg-card);color:var(--text-dim);border:1px solid var(--border);transition:all .3s}
+.tool-tag.used{color:var(--green);border-color:rgba(74,222,128,.3);background:var(--green-dim)}
+.tool-tag.async{border-style:dashed}
+
+/* Panel views */
+.panel-view{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+
+/* Transcript view */
+.transcript-list{padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.transcript-empty{color:var(--text-dim);font-size:11px;font-style:italic;text-align:center;padding:40px 0}
+.transcript-entry{padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;animation:traceIn .2s ease-out}
+.transcript-entry.heard{background:var(--bg-card);border:1px solid var(--border);border-radius:8px 8px 8px 2px}
+.transcript-entry.heard .te-label{color:var(--cyan);font-size:10px;font-weight:600;margin-bottom:2px}
+.transcript-entry.ailang{background:var(--blue-dim);border:1px solid #1e3050;border-radius:8px 8px 2px 8px;margin-left:20px}
+.transcript-entry.ailang .te-label{color:var(--blue);font-size:10px;font-weight:600;margin-bottom:2px}
+.transcript-entry.system{color:var(--text-dim);font-size:10px;text-align:center;padding:4px;background:none}
+.transcript-entry.tool{background:var(--green-dim);border:1px solid rgba(74,222,128,.15);border-radius:6px;padding:6px 10px;font-size:11px;margin:2px 0}
+.transcript-entry .te-time{color:var(--text-dim);font-size:9px;float:right;margin-left:8px}
+.transcript-entry .te-text{color:var(--text-secondary)}
+.te-tool-header{color:var(--green);font-size:11px}
+.te-tool-args{color:var(--text-dim);font-weight:400;font-size:10px}
+.te-tool-time{color:var(--text-dim);font-size:9px;font-weight:400}
+.te-tool-result{color:var(--text-secondary);font-size:10px;margin-top:2px;line-height:1.4;max-height:60px;overflow-y:auto}
+
+/* ── Waterfall view ── */
+.wf-timeline{padding:8px 12px}
+.wf-empty{color:var(--text-dim);font-size:11px;font-style:italic;text-align:center;padding:40px 0}
+.wf-span{margin-bottom:1px;border-radius:3px;position:relative;min-height:24px;display:flex;align-items:stretch;animation:traceIn .15s ease-out}
+.wf-span:hover{background:rgba(255,255,255,.03)}
+.wf-label{width:120px;flex-shrink:0;padding:4px 8px;font-size:10px;font-weight:500;display:flex;align-items:center;gap:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.wf-bar-area{flex:1;position:relative;min-height:24px}
+.wf-bar{position:absolute;top:4px;height:16px;border-radius:3px;min-width:3px;display:flex;align-items:center;padding:0 6px;font-size:9px;color:rgba(255,255,255,.8);white-space:nowrap;overflow:hidden}
+.wf-bar-text{overflow:hidden;text-overflow:ellipsis}
+
+/* Span type colors */
+.wf-span[data-type="session"] .wf-label{color:var(--amber)}
+.wf-span[data-type="session"] .wf-bar{background:var(--amber);opacity:.7}
+.wf-span[data-type="turn"] .wf-label{color:var(--text-secondary);padding-left:16px}
+.wf-span[data-type="turn"] .wf-bar{background:var(--border);opacity:.5}
+.wf-span[data-type="listening"] .wf-label{color:var(--cyan);padding-left:24px}
+.wf-span[data-type="listening"] .wf-bar{background:rgba(56,189,248,.25);border:1px solid rgba(56,189,248,.3)}
+.wf-span[data-type="tool"] .wf-label{color:var(--green);padding-left:24px}
+.wf-span[data-type="tool"] .wf-bar{background:var(--green);opacity:.6}
+.wf-span[data-type="speaking"] .wf-label{color:var(--amber);padding-left:24px}
+.wf-span[data-type="speaking"] .wf-bar{background:rgba(232,168,48,.3);border:1px solid rgba(232,168,48,.3)}
+.wf-span[data-type="fetch"] .wf-label{color:var(--orange);padding-left:24px}
+.wf-span[data-type="fetch"] .wf-bar{background:var(--orange);opacity:.5}
+.wf-span[data-type="error"] .wf-label{color:var(--red);padding-left:24px}
+.wf-span[data-type="error"] .wf-bar{background:var(--red);opacity:.5}
+
+/* Time axis */
+.wf-axis{display:flex;justify-content:space-between;padding:0 0 4px;margin-bottom:6px;border-bottom:1px solid var(--border);font-size:9px;color:var(--text-dim)}
+.wf-axis-label{padding-left:120px}
+
+/* Trace filter bar */
+.trace-filter-bar{display:flex;gap:4px;padding:8px 8px 4px;flex-shrink:0}
+.trace-filter{font-size:10px;padding:2px 10px;border-radius:10px;border:1px solid var(--border);background:none;color:var(--text-dim);cursor:pointer;font-family:var(--mono)}
+.trace-filter.active{background:var(--amber-glow);color:var(--amber);border-color:rgba(232,168,48,.3)}
 
 /* Trace stats bar */
 .trace-stats{
@@ -263,20 +329,50 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
     <div class="conversation-overlay" id="conversation"></div>
   </div>
 
-  <!-- Trace panel -->
+  <!-- Side panel (Transcript + Trace) -->
   <div class="trace-panel" id="tracePanel">
     <div class="trace-header">
       <div>
-        <span class="trace-title">AI Trace</span>
-        <span class="trace-subtitle" id="traceCount">0 events</span>
+        <span class="trace-title">Co-Presenter</span>
+        <span class="trace-subtitle" id="traceCount"></span>
       </div>
       <div class="trace-controls">
-        <button class="trace-tab active" data-tab="all" onclick="filterTrace('all',this)">All</button>
-        <button class="trace-tab" data-tab="tools" onclick="filterTrace('tool',this)">Tools</button>
-        <button class="trace-tab" data-tab="transcript" onclick="filterTrace('transcript',this)">Speech</button>
+        <button class="trace-tab active" data-tab="transcript" onclick="switchPanelTab('transcript',this)">Transcript</button>
+        <button class="trace-tab" data-tab="waterfall" onclick="switchPanelTab('waterfall',this)">Waterfall</button>
+        <button class="trace-tab" data-tab="trace" onclick="switchPanelTab('trace',this)">Log</button>
       </div>
     </div>
-    <div class="trace-waterfall" id="traceWaterfall"></div>
+
+    <!-- Available tools strip -->
+    <div class="tools-strip" id="toolsStrip">
+      <div class="tools-strip-label">Available tools</div>
+      <div class="tools-strip-tags" id="toolsTags"></div>
+    </div>
+
+    <!-- Transcript view (clean chat) -->
+    <div class="panel-view" id="transcriptView">
+      <div class="transcript-list" id="transcriptList">
+        <div class="transcript-empty">Listening... speech will appear here</div>
+      </div>
+    </div>
+
+    <!-- Waterfall view (APM-style spans) -->
+    <div class="panel-view" id="waterfallView" style="display:none">
+      <div class="wf-timeline" id="wfTimeline">
+        <div class="wf-empty">Session waterfall will appear here</div>
+      </div>
+    </div>
+
+    <!-- Trace log view -->
+    <div class="panel-view" id="traceView" style="display:none">
+      <div class="trace-filter-bar">
+        <button class="trace-filter active" data-filter="all" onclick="filterTrace('all',this)">All</button>
+        <button class="trace-filter" data-filter="tool" onclick="filterTrace('tool',this)">Tools</button>
+        <button class="trace-filter" data-filter="session" onclick="filterTrace('session',this)">Session</button>
+      </div>
+      <div class="trace-waterfall" id="traceWaterfall"></div>
+    </div>
+
     <div class="trace-stats">
       <span>Events: <span class="ts-val" id="tsEvents">0</span></span>
       <span>Tools: <span class="ts-val" id="tsTools">0</span></span>
@@ -293,12 +389,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
     <button class="ask-btn" id="askBtn" onclick="askAILANG()" disabled title="Ask AILANG what it found">
       Ask AILANG
     </button>
+    <div class="mic-level" id="micLevel" title="Mic input level">
+      <div class="mic-level-bar" id="micLevelBar"></div>
+    </div>
     <div class="transcript-live" id="liveTranscript">
       <span class="highlight">Waiting...</span> Connect and start mic to begin
     </div>
     <canvas class="waveform-mini" id="waveformMini"></canvas>
     <div class="bottom-stats">
       <span>Turns: <span class="stat-val" id="sTurns">0</span></span>
+      <span>Chunks: <span class="stat-val" id="sChunks">0</span></span>
       <span>Cached: <span class="stat-val" id="sCached">0</span></span>
     </div>
   </div>
@@ -325,8 +425,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
   </div>
   <div class="config-group">
     <div class="config-label">Model (leave blank for default)</div>
-    <input type="text" class="config-input" id="modelInput" placeholder="models/gemini-2.5-flash-live-001">
-    <div class="config-hint">Default: gemini-2.5-flash-live-001. Try gemini-3.1-flash-live-preview for newer features.</div>
+    <input type="text" class="config-input" id="modelInput" placeholder="models/gemini-2.5-flash-native-audio-preview-12-2025">
+    <div class="config-hint">Default: gemini-2.5-flash-native-audio-preview-12-2025. Leave blank for default.</div>
   </div>
   <div class="config-group">
     <div class="config-label">Thinking Budget</div>
@@ -369,11 +469,20 @@ const $ = {
   liveTranscript: document.getElementById('liveTranscript'),
   waveformMini: document.getElementById('waveformMini'),
   sTurns: document.getElementById('sTurns'),
+  sChunks: document.getElementById('sChunks'),
   sCached: document.getElementById('sCached'),
+  micLevel: document.getElementById('micLevel'),
+  micLevelBar: document.getElementById('micLevelBar'),
   tracePanel: document.getElementById('tracePanel'),
   traceToggle: document.getElementById('traceToggle'),
   traceBadge: document.getElementById('traceBadge'),
   traceWaterfall: document.getElementById('traceWaterfall'),
+  transcriptView: document.getElementById('transcriptView'),
+  waterfallView: document.getElementById('waterfallView'),
+  wfTimeline: document.getElementById('wfTimeline'),
+  traceView: document.getElementById('traceView'),
+  transcriptList: document.getElementById('transcriptList'),
+  toolsTags: document.getElementById('toolsTags'),
   traceCount: document.getElementById('traceCount'),
   tsEvents: document.getElementById('tsEvents'),
   tsTools: document.getElementById('tsTools'),
@@ -412,10 +521,12 @@ const core = new GeminiLiveCore({
   wasmPath: '../wasm/ailang.wasm',
   workletPath: '../streaming/shared/audio-worklet.js',
   modules: [
+    // Package dependencies (loaded before main module for import resolution)
     { name: 'sunholo/gemini_live/voices',    path: '../ailang/pkg/sunholo/gemini_live/voices.ail' },
     { name: 'sunholo/gemini_live/endpoints', path: '../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
     { name: 'sunholo/gemini_live/messages',  path: '../ailang/pkg/sunholo/gemini_live/messages.ail' },
     { name: 'sunholo/gemini_live/parsers',   path: '../ailang/pkg/sunholo/gemini_live/parsers.ail' },
+    // Main module (last — has exports like buildAudioChunk, buildTextMessage)
     { name: WASM_MODULE, path: '../ailang/co_presenter/co_presenter.ail' },
   ],
   playbackRate: 48000,
@@ -445,6 +556,7 @@ const core = new GeminiLiveCore({
 // ── Init ──
 window.addEventListener('DOMContentLoaded', async () => {
   loadConfig();
+  renderToolsStrip();
   await core.initWASM();
   core.initWaveform($.waveformMini);
 });
@@ -454,12 +566,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ═══════════════════════════════════════════════════════
 
 const TRACE_ICONS = {
-  'session.init': '&#x1F680;', 'ws.connected': '&#x1F50C;', 'setup.sent': '&#x2699;',
-  'setup.complete': '&#x2705;', 'session.end': '&#x1F3C1;', 'session.goaway': '&#x26A0;',
-  'ws.closed': '&#x274C;', 'error': '&#x1F6A8;',
-  'transcript.input': '&#x1F399;', 'transcript.output': '&#x1F50A;',
-  'turn.complete': '&#x21A9;', 'audio.interrupted': '&#x270B;',
-  'tool.call': '&#x1F527;', 'tool.result': '&#x1F4E6;', 'tool.cancelled': '&#x1F6AB;',
+  'session.init': '\u{1F680}', 'ws.connected': '\u{1F50C}', 'setup.sent': '\u2699',
+  'setup.complete': '\u2705', 'session.end': '\u{1F3C1}', 'session.goaway': '\u26A0',
+  'ws.closed': '\u274C', 'error': '\u{1F6A8}',
+  'transcript.input': '\u{1F3A4}', 'transcript.output': '\u{1F50A}',
+  'turn.complete': '\u21A9', 'audio.interrupted': '\u270B',
+  'tool.call': '\u{1F527}', 'tool.result': '\u{1F4E6}', 'tool.cancelled': '\u{1F6AB}',
+  'fetch.start': '\u{1F310}', 'fetch.done': '\u{1F4E5}',
 };
 
 function traceType(event) {
@@ -539,13 +652,196 @@ function toggleTrace() {
   $.traceBadge.textContent = '';
 }
 
+let activePanelTab = 'transcript';
+
+function switchPanelTab(tab, btn) {
+  activePanelTab = tab;
+  document.querySelectorAll('.trace-header .trace-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  $.transcriptView.style.display = tab === 'transcript' ? '' : 'none';
+  $.waterfallView.style.display = tab === 'waterfall' ? '' : 'none';
+  $.traceView.style.display = tab === 'trace' ? '' : 'none';
+  if (tab === 'waterfall') renderWaterfall();
+  $.traceCount.textContent =
+    tab === 'trace' ? traceEvents.length + ' events' :
+    tab === 'waterfall' ? wfSpans.length + ' spans' :
+    transcriptEntries.length + ' messages';
+}
+
 function filterTrace(type, btn) {
   traceFilter = type;
-  document.querySelectorAll('.trace-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.trace-filter').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  // Re-render
   $.traceWaterfall.innerHTML = '';
   traceEvents.filter(e => type === 'all' || e.type === type).forEach(renderTraceRow);
+}
+
+// ═══════════════════════════════════════════════════════
+// WATERFALL VIEW (APM-style spans)
+// ═══════════════════════════════════════════════════════
+
+const wfSpans = [];
+let wfCurrentTurn = null;
+
+function wfAddSpan(type, name, detail) {
+  const now = Date.now();
+  const span = { type, name, detail: detail || '', start: now, end: null, startRel: sessionStartTime ? now - sessionStartTime : 0 };
+  wfSpans.push(span);
+  return span;
+}
+
+function wfEndSpan(span) {
+  if (span) span.end = Date.now();
+}
+
+// Find last open span of a given type
+function wfFindOpen(type) {
+  for (let i = wfSpans.length - 1; i >= 0; i--) {
+    if (wfSpans[i].type === type && !wfSpans[i].end) return wfSpans[i];
+  }
+  return null;
+}
+
+function renderWaterfall() {
+  if (!wfSpans.length) {
+    $.wfTimeline.innerHTML = '<div class="wf-empty">Session waterfall will appear here</div>';
+    return;
+  }
+
+  const now = Date.now();
+  const totalMs = Math.max(1000, now - sessionStartTime);
+
+  // Time axis
+  let html = '<div class="wf-axis"><span class="wf-axis-label">0s</span>';
+  const steps = Math.min(5, Math.floor(totalMs / 1000));
+  for (let i = 1; i <= steps; i++) {
+    const t = Math.round((totalMs / steps) * i / 1000);
+    html += '<span>' + t + 's</span>';
+  }
+  html += '</div>';
+
+  for (const span of wfSpans) {
+    const startPct = (span.startRel / totalMs) * 100;
+    const endMs = span.end ? span.end - sessionStartTime : now - sessionStartTime;
+    const widthPct = Math.max(0.5, ((endMs - span.startRel) / totalMs) * 100);
+    const durationMs = span.end ? span.end - (sessionStartTime + span.startRel) : now - (sessionStartTime + span.startRel);
+    const durationStr = durationMs < 1000 ? durationMs + 'ms' : (durationMs / 1000).toFixed(1) + 's';
+
+    const barText = span.detail ? span.detail.substring(0, 40) : durationStr;
+    const icon = span.type === 'tool' ? '\u{1F527}' : span.type === 'listening' ? '\u{1F3A4}' : span.type === 'speaking' ? '\u{1F50A}' : span.type === 'fetch' ? '\u{1F310}' : span.type === 'session' ? '\u{1F680}' : span.type === 'turn' ? '\u21A9' : '\u25CF';
+
+    html += '<div class="wf-span" data-type="' + span.type + '" title="' + escapeHtml(span.name + ': ' + span.detail + ' (' + durationStr + ')') + '">';
+    html += '<div class="wf-label">' + icon + ' ' + escapeHtml(span.name) + '</div>';
+    html += '<div class="wf-bar-area"><div class="wf-bar" style="left:' + startPct + '%;width:' + widthPct + '%"><span class="wf-bar-text">' + escapeHtml(barText) + '</span></div></div>';
+    html += '</div>';
+  }
+
+  $.wfTimeline.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════
+// AVAILABLE TOOLS DISPLAY
+// ═══════════════════════════════════════════════════════
+
+const AVAILABLE_TOOLS = [
+  { name: 'currentTime', desc: 'Get the current date, time, and timezone. Used when someone mentions time or scheduling.', async: false },
+  { name: 'calculate', desc: 'Perform arithmetic (add, subtract, multiply, divide). Used when someone mentions numbers or calculations.', async: false },
+  { name: 'cacheResult', desc: 'Store a key-value pair for instant recall later. The AI caches research findings so it can respond immediately when addressed.', async: false },
+  { name: 'getCachedResult', desc: 'Retrieve a previously cached value by key. The AI recalls stored findings when you ask "what did you find?"', async: false },
+  { name: 'saveNote', desc: 'Save a named note to browser storage. Persists across sessions for later retrieval.', async: false },
+  { name: 'getSlideContext', desc: 'Read the current slide title and content from the embedded presentation. Helps the AI understand what\'s being shown.', async: false },
+  { name: 'audienceQuestion', desc: 'Log an audience question for later follow-up. Tracks who asked what and when during the presentation.', async: false },
+  { name: 'webFetch', desc: 'Fetch content from a URL in the background. Used to verify claims, look up statistics, or research topics the presenter mentions. Runs async \u2014 audio continues while fetching.', async: true },
+  { name: 'delegate', desc: 'Send a complex task to a specialist AI agent via AILANG Cloud. Used for deep analysis, code review, or multi-step research. Runs in the background.', async: true },
+];
+const toolsUsedSet = new Set();
+
+function renderToolsStrip() {
+  $.toolsTags.innerHTML = AVAILABLE_TOOLS.map(t =>
+    '<span class="tool-tag' + (t.async ? ' async' : '') + '" data-tool="' + t.name + '" title="' + t.desc + (t.async ? ' (async)' : '') + '">' + t.name + '</span>'
+  ).join('');
+}
+
+function markToolUsed(name) {
+  toolsUsedSet.add(name);
+  const tag = $.toolsTags.querySelector('[data-tool="' + name + '"]');
+  if (tag) tag.classList.add('used');
+}
+
+// ═══════════════════════════════════════════════════════
+// TRANSCRIPT VIEW (clean chat format)
+// ═══════════════════════════════════════════════════════
+
+const transcriptEntries = [];
+let lastTranscriptType = null;
+let lastTranscriptEl = null;
+let lastTranscriptText = '';
+
+function addTranscriptEntry(type, data) {
+  // data is a string for heard/ailang, or an object for tool type
+  const text = typeof data === 'string' ? data : '';
+  if (type !== 'tool' && (!text || text === '<noise>')) return;
+
+  const now = Date.now();
+  const elapsed = sessionStartTime ? ((now - sessionStartTime) / 1000).toFixed(0) : '0';
+  const mins = Math.floor(elapsed / 60);
+  const secs = String(elapsed % 60).padStart(2, '0');
+  const timeStr = mins + ':' + secs;
+
+  transcriptEntries.push({ type, data, time: timeStr, ts: now });
+  $.traceCount.textContent = activePanelTab === 'transcript'
+    ? transcriptEntries.length + ' messages'
+    : traceEvents.length + ' events';
+
+  // Remove empty placeholder
+  const empty = $.transcriptList.querySelector('.transcript-empty');
+  if (empty) empty.remove();
+
+  // Merge consecutive same-type entries (heard+heard or ailang+ailang) into one bubble
+  if ((type === 'heard' || type === 'ailang') && type === lastTranscriptType && lastTranscriptEl) {
+    lastTranscriptText += ' ' + text;
+    const textEl = lastTranscriptEl.querySelector('.te-text');
+    if (textEl) textEl.textContent = lastTranscriptText;
+    const timeEl = lastTranscriptEl.querySelector('.te-time');
+    if (timeEl) timeEl.textContent = timeStr;
+    $.transcriptList.scrollTop = $.transcriptList.scrollHeight;
+    return;
+  }
+
+  // New bubble
+  const div = document.createElement('div');
+  div.className = 'transcript-entry ' + type;
+
+  if (type === 'heard') {
+    div.innerHTML = '<div class="te-label">Heard <span class="te-time">' + timeStr + '</span></div><div class="te-text">' + escapeHtml(text) + '</div>';
+    lastTranscriptType = type;
+    lastTranscriptEl = div;
+    lastTranscriptText = text;
+  } else if (type === 'ailang') {
+    div.innerHTML = '<div class="te-label">AILANG <span class="te-time">' + timeStr + '</span></div><div class="te-text">' + escapeHtml(text) + '</div>';
+    lastTranscriptType = type;
+    lastTranscriptEl = div;
+    lastTranscriptText = text;
+  } else if (type === 'tool') {
+    // Tool call with args and result
+    const t = data;
+    const argsStr = t.args ? Object.entries(t.args).map(([k,v]) => k + ': ' + v).join(', ') : '';
+    div.innerHTML =
+      '<div class="te-tool-header">\u{1F527} <strong>' + escapeHtml(t.name) + '</strong>' +
+      (argsStr ? ' <span class="te-tool-args">(' + escapeHtml(argsStr) + ')</span>' : '') +
+      ' <span class="te-tool-time">' + t.elapsed + 'ms</span></div>' +
+      '<div class="te-tool-result">\u2192 ' + escapeHtml(t.result) + '</div>';
+    // Tools don't break heard merge — they're interleaved by the model
+    // but speech continues in the same context
+  } else {
+    div.innerHTML = '<span class="te-time">' + timeStr + '</span> ' + escapeHtml(text);
+    lastTranscriptType = null;
+    lastTranscriptEl = null;
+    lastTranscriptText = '';
+  }
+
+  $.transcriptList.appendChild(div);
+  $.transcriptList.scrollTop = $.transcriptList.scrollHeight;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -566,16 +862,19 @@ async function handleAILANGEvent(event) {
       setStatus('Listening');
       $.connectBtn.textContent = 'Disconnect';
       $.askBtn.disabled = false;
-      // Auto-start mic
       if (!core.isRecording) toggleMic();
-      addTraceEvent('setup.complete', {});
+      wfAddSpan('session', 'Session', 'Gemini Live co-presenter');
+      wfAddSpan('listening', 'Listening', 'mic active');
       break;
 
     case 'inputTranscript':
       if (event.text) {
         conversationLog.push('[Heard] ' + event.text);
         $.liveTranscript.innerHTML = '<span class="highlight">Heard:</span> ' + escapeHtml(event.text);
-        addTraceEvent('transcript.input', { text: event.text.substring(0, 100) });
+        addTranscriptEntry('heard', event.text);
+        // Update listening span detail with latest text
+        const lisSpan = wfFindOpen('listening');
+        if (lisSpan) lisSpan.detail = event.text.substring(0, 50);
       }
       break;
 
@@ -583,12 +882,18 @@ async function handleAILANGEvent(event) {
       if (event.text) {
         conversationLog.push('[AILANG] ' + event.text);
         showConversation(event.text, 'ailang');
-        addTraceEvent('transcript.output', { text: event.text.substring(0, 100) });
+        addTranscriptEntry('ailang', event.text);
+        $.liveTranscript.innerHTML = '<span class="highlight">\u{1F50A} AILANG:</span> ' + escapeHtml(event.text.substring(0, 100));
+        const spkSpan = wfFindOpen('speaking');
+        if (spkSpan) spkSpan.detail = event.text.substring(0, 50);
       }
       break;
 
     case 'modelTurn':
       if (event.parts && Array.isArray(event.parts)) {
+        // End listening, start speaking
+        wfEndSpan(wfFindOpen('listening'));
+        if (!wfFindOpen('speaking')) wfAddSpan('speaking', 'Speaking', '');
         setStatus('Speaking');
         event.parts.forEach(part => {
           if (part.text && !part.thought) {
@@ -605,7 +910,11 @@ async function handleAILANGEvent(event) {
       turnCount++;
       $.sTurns.textContent = turnCount;
       setStatus('Listening');
-      addTraceEvent('turn.complete', { turn: turnCount });
+      // End speaking span, start new listening span
+      wfEndSpan(wfFindOpen('speaking'));
+      wfAddSpan('listening', 'Listening', 'mic active');
+      // Live-update waterfall if visible
+      if (activePanelTab === 'waterfall') renderWaterfall();
       break;
 
     case 'toolCall':
@@ -618,13 +927,20 @@ async function handleAILANGEvent(event) {
 
           toolStats.total++;
           $.tsTools.textContent = toolStats.total;
+          markToolUsed(name);
           addTraceEvent('tool.call', { name, args: summarizeArgs(args) });
 
+          const toolSpan = wfAddSpan('tool', name, summarizeArgs(args) ? JSON.stringify(summarizeArgs(args)) : '');
           const t0 = performance.now();
           const result = await dispatchBrowserTool(name, args);
           const elapsed = Math.round(performance.now() - t0);
+          toolSpan.detail = (result || '').substring(0, 60);
+          wfEndSpan(toolSpan);
 
           addTraceEvent('tool.result', { name, result: (result || '').substring(0, 120) }, elapsed);
+          addTranscriptEntry('tool', { name, args: summarizeArgs(args), result: (result || '').substring(0, 200), elapsed });
+          $.liveTranscript.innerHTML = '<span class="highlight">\u{1F527} ' + escapeHtml(name) + ':</span> ' + escapeHtml((result || '').substring(0, 80)) + ' <span style="color:var(--text-dim)">(' + elapsed + 'ms)</span>';
+          if (activePanelTab === 'waterfall') renderWaterfall();
 
           const scheduling = NON_BLOCKING_TOOLS.has(name) ? 'WHEN_IDLE' : undefined;
           sendToolResponse(callId, name, result, scheduling);
@@ -635,15 +951,15 @@ async function handleAILANGEvent(event) {
     case 'interrupted':
       core.clearAudioQueue();
       setStatus('Listening');
-      addTraceEvent('audio.interrupted', {});
+      // Trace emitted by AILANG module
       break;
 
     case 'toolCallCancellation':
-      addTraceEvent('tool.cancelled', {});
+      // Trace emitted by AILANG module
       break;
 
     case 'goAway':
-      addTraceEvent('session.goaway', { timeLeft: event.timeLeft || 0 });
+      // Trace emitted by AILANG module
       break;
 
     case 'closed':
@@ -920,8 +1236,15 @@ async function startSession() {
   core.resetStats();
   turnCount = 0;
   traceEvents = [];
+  transcriptEntries.length = 0;
+  lastTranscriptType = null;
+  lastTranscriptEl = null;
+  lastTranscriptText = '';
   $.traceWaterfall.innerHTML = '';
+  $.transcriptList.innerHTML = '<div class="transcript-empty">Listening... speech will appear here</div>';
   toolStats = { total: 0, fetches: 0, cached: 0 };
+  toolsUsedSet.clear();
+  renderToolsStrip();
   browserCache.clear();
   $.sTurns.textContent = '0';
   $.sCached.textContent = '0';
@@ -959,6 +1282,16 @@ async function startSession() {
 
 // ── Mic ──
 let micChunkCount = 0;
+let micLevelRAF = null;
+
+function updateMicLevel() {
+  const level = core.getMicLevel();
+  // Scale RMS (typically 0–0.3) to percentage
+  const pct = Math.min(100, Math.max(0, level * 400));
+  $.micLevelBar.style.height = pct + '%';
+  if (core.isRecording) micLevelRAF = requestAnimationFrame(updateMicLevel);
+}
+
 async function toggleMic() {
   micChunkCount = 0;
   const active = await core.toggleMic((b64) => {
@@ -968,12 +1301,21 @@ async function toggleMic() {
     if (!msg) { console.error('[mic] buildAudioChunk returned null'); return; }
     conn.ws.send(msg);
     micChunkCount++;
-    if (micChunkCount <= 3 || micChunkCount % 50 === 0) {
+    $.sChunks.textContent = micChunkCount;
+
+    if (micChunkCount <= 3 || micChunkCount % 100 === 0) {
       console.log('[mic] chunk #' + micChunkCount + ' sent (' + b64.length + ' b64 chars)');
     }
   });
   $.micBtn.classList.toggle('active', active);
-  if (active) console.log('[mic] started — sending audio chunks');
+  $.micLevel.classList.toggle('active', active);
+  if (active) {
+    console.log('[mic] started — sending audio chunks');
+    updateMicLevel();
+  } else {
+    if (micLevelRAF) cancelAnimationFrame(micLevelRAF);
+    $.micLevelBar.style.height = '0';
+  }
 }
 
 // ── Ask AILANG button ──
