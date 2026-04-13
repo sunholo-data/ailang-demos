@@ -107,6 +107,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--m
 }
 .ask-btn:hover{background:var(--amber);color:#000}
 .ask-btn:disabled{opacity:.4;cursor:default}
+.ask-btn.quiet{border-color:var(--red);color:var(--red);background:rgba(255,107,107,.1)}
+.ask-btn.quiet:hover{background:var(--red);color:#000}
 
 .transcript-live{
   flex:1;font-size:11px;color:var(--text-dim);overflow:hidden;white-space:nowrap;
@@ -1234,6 +1236,16 @@ function sendToolResponse(callId, name, result, scheduling) {
 function setStatus(s) {
   $.statusLabel.textContent = s;
   $.statusPill.className = 'status-pill ' + s.toLowerCase();
+  // Toggle ask button between "Summarize Findings" and "Quiet, AILANG"
+  if (s === 'Speaking') {
+    $.askBtn.textContent = 'Quiet, AILANG';
+    $.askBtn.title = 'Tell AILANG to stop talking and listen silently. Shortcut: Spacebar.';
+    $.askBtn.classList.add('quiet');
+  } else if ($.askBtn.classList.contains('quiet')) {
+    $.askBtn.textContent = 'Summarize Findings';
+    $.askBtn.title = 'Prompt AILANG to summarize everything it researched silently while you were speaking. Shortcut: Spacebar.';
+    $.askBtn.classList.remove('quiet');
+  }
 }
 
 function showConversation(text, role) {
@@ -1474,6 +1486,21 @@ async function toggleMic() {
 function askAILANG() {
   const conn = core.getActiveConnection();
   if (!conn || !core.sessionReady) return;
+
+  // If AILANG is currently speaking, hush her
+  if ($.askBtn.classList.contains('quiet')) {
+    core.clearAudioQueue();
+    const hush = 'Stop talking now. Be silent and listen. Do not respond until I address you again.';
+    const msg = core.callAILANG('buildTextMessage', hush);
+    if (msg) conn.ws.send(msg);
+    $.liveTranscript.innerHTML = '<span class="highlight">Hushed:</span> AILANG silenced';
+    showConversation('[Quiet, AILANG]', 'heard');
+    setStatus('Listening');
+    addTraceEvent('transcript.input', { text: 'User silenced AILANG', source: 'button' });
+    return;
+  }
+
+  // Otherwise, ask for a summary
   const text = 'AILANG, what have you found? Summarize everything you researched while I was speaking.';
   const msg = core.callAILANG('buildTextMessage', text);
   if (msg) conn.ws.send(msg);
