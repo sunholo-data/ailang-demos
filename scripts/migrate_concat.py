@@ -297,33 +297,31 @@ def classify_term(tokens, src, start, end):
     if len(sig) == 1 and sig[0][0] == KIND_STRING:
         return ('STRING', sig[0][1])
 
-    # Scan for complex constructs
+    # Scan for complex constructs. Track paren depth: some things that are
+    # complex at depth 0 (top of term) are fine when nested inside a call.
     paren_depth = 0
     for t in sig:
         if t[0] == KIND_PUNCT and t[1] == '(':
             paren_depth += 1
+            continue
         elif t[0] == KIND_PUNCT and t[1] == ')':
             paren_depth -= 1
-        if t[0] == KIND_IDENT and t[1] in COMPLEX_KEYWORDS:
+            continue
+        if t[0] == KIND_IDENT and t[1] in COMPLEX_KEYWORDS and paren_depth == 0:
             return ('COMPLEX', None)
-        if t[0] == KIND_PUNCT and t[1] == '\\':
+        if t[0] == KIND_PUNCT and t[1] == '\\' and paren_depth == 0:
             return ('COMPLEX', None)
-        # Nested ++ inside this term (shouldn't happen at same depth, but inside parens it could)
+        # Nested ++ anywhere — belt-and-braces
         if t[0] == KIND_OP and t[1] == '++':
             return ('COMPLEX', None)
-        # Block braces introduce a statement block
-        if t[0] == KIND_PUNCT and t[1] == '{':
+        # Block braces / semicolons at depth 0 signal a statement block
+        if t[0] == KIND_PUNCT and t[1] == '{' and paren_depth == 0:
             return ('COMPLEX', None)
-        # Semicolon inside term = statement sep
-        if t[0] == KIND_PUNCT and t[1] == ';':
+        if t[0] == KIND_PUNCT and t[1] == ';' and paren_depth == 0:
             return ('COMPLEX', None)
-        # Comparison / arithmetic ops complicate interpolation — demand parens
-        if t[0] == KIND_OP and t[1] in ('==', '!=', '<', '>', '<=', '>=', '&&', '||'):
+        # Top-level comparison/logical ops complicate interpolation
+        if t[0] == KIND_OP and t[1] in ('==', '!=', '<', '>', '<=', '>=', '&&', '||') and paren_depth == 0:
             return ('COMPLEX', None)
-
-    # Strings embedded within (other than a single literal) — skip
-    if sum(1 for t in sig if t[0] == KIND_STRING) > 0:
-        return ('COMPLEX', None)
 
     # Reconstruct text from source (preserves whitespace between sig tokens within term)
     raw_start = sig[0][2]
@@ -502,13 +500,14 @@ def process_source(src):
 def walk_files(root):
     p = Path(root)
     if p.is_file():
-        if p.suffix == '.ail':
+        if p.suffix == '.ail' and not p.is_symlink():
             yield p
         return
     for f in sorted(p.rglob('*.ail')):
-        # Skip archived/generated trees
         parts = set(f.parts)
         if '_archive' in parts or 'node_modules' in parts or '.git' in parts:
+            continue
+        if f.is_symlink():
             continue
         yield f
 
