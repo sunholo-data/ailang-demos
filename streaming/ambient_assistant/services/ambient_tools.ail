@@ -134,7 +134,7 @@ export func dispatchAmbientTool(name: string, argsJson: string, allowedPath: str
 -- Reads the transcript JSONL and returns recent conversation turns.
 
 func handleSummarizeContext(argsJson: string, sessionDir: string) -> Result[string, string] ! {FS} {
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   if not fileExists(transcriptPath) then
     Ok("No conversation history yet.")
   else {
@@ -152,7 +152,7 @@ func handleSummarizeContext(argsJson: string, sessionDir: string) -> Result[stri
     let startIdx = if totalLines > maxTurns then totalLines - maxTurns else 0;
     let recentLines = takeFrom(startIdx, 0, lines);
     let summary = join("\n", recentLines);
-    Ok("Recent conversation (" ++ show(listLength(recentLines)) ++ " of " ++ show(totalLines) ++ " entries):\n" ++ summary)
+    Ok("Recent conversation (${listLength(recentLines)} of ${totalLines} entries):\n${summary}")
   }
 }
 
@@ -179,21 +179,21 @@ func handleSearchNotes(argsJson: string, allowedPath: string) -> Result[string, 
         -- Search in common notes locations using grep
         let notesDir = getEnvOr("AILANG_NOTES_DIR", allowedPath);
         if not isPathSafe(notesDir, allowedPath) then
-          Err("Notes directory must be within allowed path: " ++ allowedPath)
+          Err("Notes directory must be within allowed path: ${allowedPath}")
         else {
           match exec("grep", ["-rl", "--include=*.md", "--include=*.txt", "--include=*.org", keyword, notesDir]) {
             Ok(out) => {
               let result = toString(out.stdout);
-              if length(result) == 0 then Ok("No notes found matching '" ++ keyword ++ "'")
-              else Ok("Files matching '" ++ keyword ++ "':\n" ++ result)
+              if length(result) == 0 then Ok("No notes found matching '${keyword}'")
+              else Ok("Files matching '${keyword}':\n${result}")
             },
             Err(NotFound(_)) => Err("grep command not found"),
-            Err(_) => Ok("No notes found matching '" ++ keyword ++ "'")
+            Err(_) => Ok("No notes found matching '${keyword}'")
           }
         }
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -208,18 +208,18 @@ func handleRemindLater(argsJson: string, sessionDir: string) -> Result[string, s
       let reminder = getOrElse(getString(json, "reminder"), "");
       if length(reminder) == 0 then Err("reminder text is required")
       else {
-        let remindersPath = sessionDir ++ "/reminders.txt";
+        let remindersPath = "${sessionDir}/reminders.txt";
         -- Get current timestamp
         let timestamp = match exec("date", ["+%Y-%m-%d %H:%M:%S"]) {
           Ok(out) => toString(out.stdout),
           Err(_) => "(unknown time)"
         };
-        let entry = "[" ++ timestamp ++ "] " ++ reminder ++ "\n";
+        let entry = "[${timestamp}] ${reminder}\n";
         appendFile(remindersPath, entry);
-        Ok("Reminder saved: " ++ reminder)
+        Ok("Reminder saved: ${reminder}")
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -241,7 +241,7 @@ func handleCacheResult(argsJson: string, sessionDir: string) -> Result[string, s
         writeCacheEntry(sessionDir, key, value, ttl)
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -257,7 +257,7 @@ func handleGetCachedResult(argsJson: string, sessionDir: string) -> Result[strin
       if length(key) == 0 then Err("key is required")
       else readCacheEntry(sessionDir, key)
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -287,15 +287,15 @@ func handlePrefetch(argsJson: string, sessionDir: string, allowedPath: string) -
           Ok(result) => {
             -- Cache the result (5 minute TTL)
             match writeCacheEntry(sessionDir, key, result, 300) {
-              Ok(_) => Ok("Prefetched and cached as '" ++ key ++ "': " ++ result),
-              Err(e) => Ok("Prefetched but cache write failed: " ++ e ++ "\nResult: " ++ result)
+              Ok(_) => Ok("Prefetched and cached as '${key}': ${result}"),
+              Err(e) => Ok("Prefetched but cache write failed: ${e}\nResult: ${result}")
             }
           },
-          Err(e) => Err("Prefetch command failed: " ++ e)
+          Err(e) => Err("Prefetch command failed: ${e}")
         }
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -313,10 +313,10 @@ func getUnixTimestamp() -> int ! {Process} =
   }
 
 func writeCacheEntry(sessionDir: string, key: string, value: string, ttlSeconds: int) -> Result[string, string] ! {FS, Process} {
-  let cacheDir = sessionDir ++ "/cache";
+  let cacheDir = "${sessionDir}/cache";
   -- Ensure cache directory exists
   exec("mkdir", ["-p", cacheDir]);
-  let cachePath = cacheDir ++ "/" ++ key ++ ".json";
+  let cachePath = "${cacheDir}/${key}.json";
   let now = getUnixTimestamp();
   let expires = now + ttlSeconds;
   let entry = encode(jo([
@@ -325,12 +325,12 @@ func writeCacheEntry(sessionDir: string, key: string, value: string, ttlSeconds:
     kv("cachedAt", js(show(now)))
   ]));
   writeFile(cachePath, entry);
-  Ok("Cached '" ++ key ++ "' (expires in " ++ show(ttlSeconds) ++ "s)")
+  Ok("Cached '${key}' (expires in ${ttlSeconds}s)")
 }
 
 func readCacheEntry(sessionDir: string, key: string) -> Result[string, string] ! {FS, Process} {
-  let cachePath = sessionDir ++ "/cache/" ++ key ++ ".json";
-  if not fileExists(cachePath) then Ok("Not found: no cached data for '" ++ key ++ "'")
+  let cachePath = "${sessionDir}/cache/${key}.json";
+  if not fileExists(cachePath) then Ok("Not found: no cached data for '${key}'")
   else {
     let content = readFile(cachePath);
     match decode(content) {
@@ -340,11 +340,11 @@ func readCacheEntry(sessionDir: string, key: string) -> Result[string, string] !
         let expires = match stringToInt(expiresStr) { Some(n) => n, None => 0 };
         let now = getUnixTimestamp();
         if now > expires then
-          Ok("Expired: cached data for '" ++ key ++ "' has expired")
+          Ok("Expired: cached data for '${key}' has expired")
         else
           Ok(value)
       },
-      Err(e) => Err("Cache read error: " ++ e)
+      Err(e) => Err("Cache read error: ${e}")
     }
   }
 }
@@ -362,17 +362,17 @@ func handleTakeScreenshot(argsJson: string, sessionDir: string) -> Result[string
     Err(_) => "screen"
   };
   let scriptDir = getEnvOr("GEMINI_SCRIPT_DIR", "streaming/ambient_assistant/scripts");
-  let scriptPath = scriptDir ++ "/take_screenshot.sh";
+  let scriptPath = "${scriptDir}/take_screenshot.sh";
   match exec(scriptPath, [source]) {
     Ok(out) => {
       let b64 = trim(toString(out.stdout));
       if length(b64) == 0 then Err("Screenshot capture returned empty result")
       else {
         -- Prefix with SCREENSHOT: so main.ail sends it as a video frame
-        Ok("SCREENSHOT:" ++ b64)
+        Ok("SCREENSHOT:${b64}")
       }
     },
-    Err(NotFound(_)) => Err("Screenshot script not found: " ++ scriptPath),
+    Err(NotFound(_)) => Err("Screenshot script not found: ${scriptPath}"),
     Err(Timeout(_)) => Err("Screenshot capture timed out"),
     Err(_) => Err("Screenshot capture failed")
   }

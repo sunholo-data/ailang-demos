@@ -20,11 +20,11 @@ import streaming/ambient_assistant/ambient_browser (
 -- ── Test helpers ──
 
 func check(name: string, ok: bool) -> () ! {IO} =
-  if ok then println("  PASS: " ++ name)
-  else println("  FAIL: " ++ name)
+  if ok then println("  PASS: ${name}")
+  else println("  FAIL: ${name}")
 
 func checkHas(name: string, json: Json, key: string) -> () ! {IO} =
-  check(name ++ " has '" ++ key ++ "'", has(json, key))
+  check("${name} has '${key}'", has(json, key))
 
 -- ── Tests ──
 
@@ -66,7 +66,7 @@ func testSetupStructure() -> () ! {IO} {
   println("== Setup JSON Structure ==");
   let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test instruction", -1);
   match decode(setupJson) {
-    Err(e) => println("  FAIL: decode setup: " ++ e),
+    Err(e) => println("  FAIL: decode setup: ${e}"),
     Ok(json) => {
       checkHas("root", json, "setup");
       match getObject(json, "setup") {
@@ -141,7 +141,7 @@ func testSetupWithThinking() -> () ! {IO} {
   println("== Setup with Thinking ==");
   let setupJson = buildAmbientSetup("models/test", "Sulafat", "Test", 1024);
   match decode(setupJson) {
-    Err(e) => println("  FAIL: decode: " ++ e),
+    Err(e) => println("  FAIL: decode: ${e}"),
     Ok(json) => match getObject(json, "setup") {
       None => println("  FAIL: no setup"),
       Some(setup) => match getObject(setup, "generationConfig") {
@@ -159,7 +159,7 @@ func testBuildTextMessage() -> () ! {IO} {
   println("== buildTextMessage ==");
   let msg = buildTextMessage("Hello AILANG");
   match decode(msg) {
-    Err(e) => println("  FAIL: decode: " ++ e),
+    Err(e) => println("  FAIL: decode: ${e}"),
     Ok(json) => {
       checkHas("textMsg", json, "clientContent");
       match getObject(json, "clientContent") {
@@ -180,7 +180,7 @@ func testBuildAudioChunk() -> () ! {IO} {
   println("== buildAudioChunk ==");
   let msg = buildAudioChunk("AAAA");
   match decode(msg) {
-    Err(e) => println("  FAIL: decode: " ++ e),
+    Err(e) => println("  FAIL: decode: ${e}"),
     Ok(json) => {
       checkHas("audioChunk", json, "realtimeInput");
       match getObject(json, "realtimeInput") {
@@ -195,7 +195,7 @@ func testBuildToolResponse() -> () ! {IO} {
   println("== buildToolResponse ==");
   let msg = buildToolResponse("call-123", "currentTime", "2025-01-01 12:00");
   match decode(msg) {
-    Err(e) => println("  FAIL: decode: " ++ e),
+    Err(e) => println("  FAIL: decode: ${e}"),
     Ok(json) => {
       checkHas("toolResp", json, "toolResponse");
       match getObject(json, "toolResponse") {
@@ -250,7 +250,7 @@ func testVoiceCatalog() -> () ! {IO} {
   println("== voiceCatalog ==");
   let catalog = voiceCatalog();
   match decode(catalog) {
-    Err(e) => println("  FAIL: decode catalog: " ++ e),
+    Err(e) => println("  FAIL: decode catalog: ${e}"),
     Ok(json) => {
       check("catalog contains Sulafat", contains(catalog, "Sulafat"));
       check("catalog contains Charon", contains(catalog, "Charon"));
