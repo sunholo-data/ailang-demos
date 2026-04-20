@@ -81,13 +81,13 @@ pure func calculateSubtotal(items: [LineItem]) -> int
 -- Validate a single line item
 pure func validateLineItem(item: LineItem, lineNum: int) -> Option[string] =
   if item.quantity <= 0 then
-    Some("Line " ++ intToStr(lineNum) ++ ": quantity must be positive")
+    Some("Line ${intToStr(lineNum)}: quantity must be positive")
   else if item.unit_price_cents < 0 then
-    Some("Line " ++ intToStr(lineNum) ++ ": price cannot be negative")
+    Some("Line ${intToStr(lineNum)}: price cannot be negative")
   else if item.tax_rate_bps < 0 || item.tax_rate_bps > 10000 then
-    Some("Line " ++ intToStr(lineNum) ++ ": tax rate must be between 0 and 10000 bps")
+    Some("Line ${intToStr(lineNum)}: tax rate must be between 0 and 10000 bps")
   else if item.description == "" then
-    Some("Line " ++ intToStr(lineNum) ++ ": description cannot be empty")
+    Some("Line ${intToStr(lineNum)}: description cannot be empty")
   else
     None
 
@@ -228,7 +228,7 @@ export pure func processInvoice(jsonString: string) -> string =
   match decode(jsonString) {
     Err(parseErr) => encode(jo([
       kv("valid", jb(false)),
-      kv("error", js("Invalid JSON: " ++ parseErr))
+      kv("error", js("Invalid JSON: ${parseErr}"))
     ])),
     Ok(jsonObj) =>
       match parseInvoice(jsonObj) {

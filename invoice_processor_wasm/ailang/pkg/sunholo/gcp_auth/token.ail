@@ -35,14 +35,14 @@ export type ADCCredentials = {
 -- Uses HOME env var with /tmp fallback
 export func getCredentialsPath() -> string ! {FS, Env} {
   let home = getEnvOr("HOME", "/tmp");
-  home ++ "/.config/gcloud/application_default_credentials.json"
+  "${home}/.config/gcloud/application_default_credentials.json"
 }
 
 -- Read and parse ADC credentials from the default location
 export func readCredentials() -> Result[ADCCredentials, string] ! {FS, Env} {
   let path = getCredentialsPath();
   let found = fileExists(path);
-  if found then parseCredentialsFile(path) else Err("ADC file not found at: " ++ path)
+  if found then parseCredentialsFile(path) else Err("ADC file not found at: ${path}")
 }
 
 func parseCredentialsFile(path: string) -> Result[ADCCredentials, string] ! {FS, Env} {
@@ -57,7 +57,7 @@ func parseCredentialsFile(path: string) -> Result[ADCCredentials, string] ! {FS,
       else if refreshToken == "" then Err("Missing refresh_token in ADC file")
       else Ok({ clientId: clientId, clientSecret: clientSecret, refreshToken: refreshToken })
     },
-    Err(e) => Err("Failed to parse ADC file: " ++ e)
+    Err(e) => Err("Failed to parse ADC file: ${e}")
   }
 }
 
@@ -85,21 +85,18 @@ func getMetadataToken() -> Result[string, string] ! {Net} {
           Ok(json) => {
             let tokenOpt = getString(json, "access_token");
             if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
-            else Err("gcp_auth: metadata ok but no access_token in body: " ++ response.body)
+            else Err("gcp_auth: metadata ok but no access_token in body: ${response.body}")
           },
-          Err(e) => Err("gcp_auth: metadata ok but JSON decode failed: " ++ e ++ " body=" ++ response.body)
+          Err(e) => Err("gcp_auth: metadata ok but JSON decode failed: ${e} body=${response.body}")
         }
-      } else Err("gcp_auth: metadata status=" ++ show(response.status) ++ " body=" ++ response.body),
-    Err(e) => Err("gcp_auth: metadata httpRequest failed: " ++ show(e))
+      } else Err("gcp_auth: metadata status=${response.status} body=${response.body}"),
+    Err(e) => Err("gcp_auth: metadata httpRequest failed: ${e}")
   }
 }
 
 func exchangeRefreshToken(creds: ADCCredentials) -> Result[string, string] ! {Net} {
   let url = "https://oauth2.googleapis.com/token";
-  let body = "client_id=" ++ creds.clientId ++
-             "&client_secret=" ++ creds.clientSecret ++
-             "&refresh_token=" ++ creds.refreshToken ++
-             "&grant_type=refresh_token";
+  let body = "client_id=${creds.clientId}&client_secret=${creds.clientSecret}&refresh_token=${creds.refreshToken}&grant_type=refresh_token";
   let headers = [
     { name: "Content-Type", value: "application/x-www-form-urlencoded" }
   ];
@@ -112,9 +109,9 @@ func exchangeRefreshToken(creds: ADCCredentials) -> Result[string, string] ! {Ne
             if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
             else Err("No access_token in OAuth2 response")
           },
-          Err(e) => Err("Failed to parse OAuth2 response: " ++ e)
+          Err(e) => Err("Failed to parse OAuth2 response: ${e}")
         }
-      } else Err("OAuth2 request failed with status: " ++ show(response.status))
+      } else Err("OAuth2 request failed with status: ${response.status}")
     },
     Err(_) => Err("Network error during OAuth2 token exchange")
   }
