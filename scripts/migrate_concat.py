@@ -430,32 +430,36 @@ def line_indent(src, pos):
     return src[line_start:j]
 
 
-def inject_concat_import(src):
-    """Ensure `concat` is imported from std/string. Modify src if needed."""
-    # Look for existing `import std/string (...)` line
+def inject_concat_import(src, alias=None):
+    """Ensure `concat` is imported from std/string (as `alias` if given).
+    Modify src if needed."""
+    import_name = 'concat' if alias is None else f'concat as {alias}'
+    # The name we want to appear in the import parens
+    check_target = 'concat' if alias is None else f'concat as {alias}'
     import re
     m = re.search(r'^import\s+std/string\s*\(([^)]*)\)', src, re.MULTILINE)
     if m:
         names = [n.strip() for n in m.group(1).split(',') if n.strip()]
-        # Check: `concat` itself or `concat as X`
-        has = any(n == 'concat' or n.startswith('concat ') or n.startswith('concat as ')
-                  for n in names)
+        if alias is None:
+            has = any(n == 'concat' or n.startswith('concat as ') for n in names)
+        else:
+            has = any(n == f'concat as {alias}' for n in names)
+            # Drop plain `concat` if present — conflicts with alias form
+            names = [n for n in names if n != 'concat']
         if has:
-            return src
-        new_names = names + ['concat']
+            new_import = f'import std/string ({", ".join(names)})'
+            return src[:m.start()] + new_import + src[m.end():]
+        new_names = names + [import_name]
         new_import = f'import std/string ({", ".join(new_names)})'
         return src[:m.start()] + new_import + src[m.end():]
-    # No existing import — add one after `module` line
     m2 = re.search(r'^module\s+\S+\s*\n', src, re.MULTILINE)
     if m2:
-        insertion = 'import std/string (concat)\n'
-        # If there's a blank line after module, insert after it; otherwise add one
+        insertion = f'import std/string ({import_name})\n'
         after = m2.end()
         if after < len(src) and src[after] == '\n':
             return src[:after + 1] + insertion + src[after + 1:]
         return src[:after] + '\n' + insertion + src[after:]
-    # No module line — prepend
-    return 'import std/string (concat)\n' + src
+    return f'import std/string ({import_name})\n' + src
 
 
 def process_source(src):
@@ -503,7 +507,22 @@ def process_source(src):
         out = out[:s] + text + out[e:]
 
     if needs_concat_import:
-        out = inject_concat_import(out)
+        # If std/list already imports `concat` (plain, no alias), use `strConcat`
+        # alias on std/string to avoid name collision.
+        import re
+        list_concat = re.search(
+            r'^import\s+std/list\s*\(([^)]*)\)', out, re.MULTILINE)
+        use_alias = False
+        if list_concat:
+            names = [n.strip() for n in list_concat.group(1).split(',') if n.strip()]
+            if any(n == 'concat' for n in names):
+                use_alias = True
+        if use_alias:
+            # Rewrite our emitted concat([...]) to strConcat([...])
+            out = out.replace('concat([', 'strConcat([')
+            out = inject_concat_import(out, alias='strConcat')
+        else:
+            out = inject_concat_import(out)
 
     return out, n_migrated, n_skipped, n_concat_removed
 

@@ -41,7 +41,7 @@ export func parseDocx(filepath: string) -> [Block] ! {FS} {
   let xml = readDocxContent(filepath);
   match parse(xml) {
     Ok(root) => extractBodyBlocks(root),
-    Err(e) => [TextBlock({text: "XML parse error: " ++ e, style: "error", level: 0})]
+    Err(e) => [TextBlock({text: "XML parse error: ${e}", style: "error", level: 0})]
   }
 }
 
@@ -468,7 +468,7 @@ pure func docxParseCommentNodes(nodes: [XmlNode]) -> [Block] =
       let texts = docxExtractCommentTexts(paragraphs);
       let commentText = join(" ", texts);
       let block = SectionBlock({kind: "comment", blocks: [
-        TextBlock({text: "[" ++ author ++ "] " ++ commentText, style: "CommentText", level: 0})
+        TextBlock({text: "[${author}] ${commentText}", style: "CommentText", level: 0})
       ]});
       block :: docxParseCommentNodes(rest)
     }

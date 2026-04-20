@@ -12,7 +12,7 @@ module docparse/services/docparse_browser
 
 import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren)
 import std/json (encode, decode, jo, kv, js, jb, ja, jnum, asArray)
-import std/string (length, join)
+import std/string (length, join, concat)
 import std/ai (callJsonSimple)
 import std/math (intToFloat)
 import std/result (Ok, Err)
@@ -32,7 +32,7 @@ import docparse/services/output_formatter (blocksToJson, metadataToJson)
 export pure func parseDocxBody(xml: string) -> string {
   match parse(xml) {
     Ok(root) => encode(ja(blocksToJson(extractBodyBlocks(root)))),
-    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("XML parse error: " ++ e))])]))
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("XML parse error: ${e}"))])]))
   }
 }
 
@@ -114,15 +114,17 @@ export func parseFileFromBase64(base64Data: string, mimeType: string, filename: 
       kv("data", js(base64Data)),
       kv("fileName", js(filename)),
       kv("prompt", js(
-        "Extract content from this file as a compact JSON array of blocks. " ++
-        "For documents: use {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, " ++
-        "{\"type\":\"text\",\"text\":\"...\"}, " ++
-        "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, " ++
-        "{\"type\":\"list\",\"items\":[...],\"ordered\":bool}. " ++
-        "For images: describe what you see in detail using " ++
-        "{\"type\":\"text\",\"text\":\"...\"} blocks. Include any visible text, " ++
-        "objects, people, colors, layout, and context. " ++
-        "Merge adjacent text into single blocks. Use compact JSON (no whitespace). Return ONLY the JSON array."
+        concat([
+          "Extract content from this file as a compact JSON array of blocks. ",
+          "For documents: use {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, ",
+          "{\"type\":\"text\",\"text\":\"...\"}, ",
+          "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, ",
+          "{\"type\":\"list\",\"items\":[...],\"ordered\":bool}. ",
+          "For images: describe what you see in detail using ",
+          "{\"type\":\"text\",\"text\":\"...\"} blocks. Include any visible text, ",
+          "objects, people, colors, layout, and context. ",
+          "Merge adjacent text into single blocks. Use compact JSON (no whitespace). Return ONLY the JSON array."
+        ])
       ))
     ]));
     callJsonSimple(request)
@@ -145,9 +147,11 @@ export func describeImageBase64(base64Data: string, mimeType: string) -> string 
       kv("mimeType", js(mimeType)),
       kv("data", js(base64Data)),
       kv("prompt", js(
-        "Describe this image concisely in one or two sentences. " ++
-        "Focus on the key content and any text visible. " ++
-        "Return ONLY the description text, no JSON."
+        concat([
+          "Describe this image concisely in one or two sentences. ",
+          "Focus on the key content and any text visible. ",
+          "Return ONLY the description text, no JSON."
+        ])
       ))
     ]));
     callJsonSimple(request)
@@ -164,7 +168,7 @@ pure func parseCommentNodes(nodes: [XmlNode]) -> [Block] =
       let texts = extractCommentTexts(paragraphs);
       let commentText = join(" ", texts);
       let block = SectionBlock({kind: "comment", blocks: [
-        TextBlock({text: "[" ++ author ++ "] " ++ commentText, style: "CommentText", level: 0})
+        TextBlock({text: "[${author}] ${commentText}", style: "CommentText", level: 0})
       ]});
       block :: parseCommentNodes(rest)
     }

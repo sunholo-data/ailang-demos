@@ -18,8 +18,8 @@ import docparse/bug_repro/module_b (greetB)
 export func main() -> () ! {IO} {
   let a = greetA("World");
   let b = greetB("World");
-  println("greetA: " ++ a);
-  println("greetB: " ++ b);
+  println("greetA: ${a}");
+  println("greetB: ${b}");
 
   if a == "Hello from A: World"
   then println("PASS: module_a's internal function resolved correctly")
