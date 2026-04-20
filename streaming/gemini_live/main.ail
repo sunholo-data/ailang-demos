@@ -85,13 +85,14 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
 
   println("=== Gemini Live — Text to Audio ===");
   println("Protocol: WebSocket (bidirectional)");
-  println("Model: " ++ modelName);
+  println("Model: ${modelName}");
   let toolsLabel = if toolsEnabled then " | Tools: ON" else "";
-  let featLabels = (if proactiveEnabled then " | Proactive" else "")
-    ++ (if affectiveEnabled then " | Affective*" else "")
-    ++ (if thinkingBudget >= 0 then " | Thinking: " ++ show(thinkingBudget) else "")
-    ++ (if noInterrupt then " | NoInterrupt" else "");
-  println("Voice: " ++ voice ++ " | Input: text | Output: audio (PCM 24kHz)" ++ toolsLabel ++ featLabels);
+  let proactiveLabel = if proactiveEnabled then " | Proactive" else "";
+  let affectiveLabel = if affectiveEnabled then " | Affective*" else "";
+  let thinkingLabel = if thinkingBudget >= 0 then " | Thinking: ${thinkingBudget}" else "";
+  let interruptLabel = if noInterrupt then " | NoInterrupt" else "";
+  let featLabels = "${proactiveLabel}${affectiveLabel}${thinkingLabel}${interruptLabel}";
+  println("Voice: ${voice} | Input: text | Output: audio (PCM 24kHz)${toolsLabel}${featLabels}");
   if affectiveEnabled && useGoogleAi == false then
     println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw WebSocket on Vertex AI)")
   else ();
@@ -102,7 +103,7 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
 
   -- Session scope: directory for handle + transcript storage
   let sessionDir = getEnvOr("GEMINI_SESSION_DIR", "/tmp/gemini_speak");
-  let handlePath = sessionDir ++ "/session.handle";
+  let handlePath = "${sessionDir}/session.handle";
 
   -- Session resumption: load handle from previous session
   let newSession = getEnvOr("GEMINI_NEW_SESSION", "");
@@ -111,8 +112,8 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
       readFile(handlePath)
     else "";
   if length(handle) > 0 then
-    println("Session: Resuming | Dir: " ++ sessionDir)
-  else println("Session: New | Dir: " ++ sessionDir);
+    println("Session: Resuming | Dir: ${sessionDir}")
+  else println("Session: New | Dir: ${sessionDir}");
 
   let args = getArgs();
   let prompt = if listLength(args) > 0 then join(" ", args)
@@ -130,18 +131,18 @@ export func main() -> () ! {IO @limit=400, FS @limit=500, Stream @limit=600, Net
         match getAccessToken() {
           Ok(token) => {
             let region = getEnvOr("GEMINI_REGION", "us-central1");
-            println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+            println("Auth: OK (ADC) | Project: ${projectId} | Region: ${region}");
             startLiveSession(token, region, projectId, modelName, prompt, voice, handle, sessionDir, toolsEnabled,
               proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt)
           },
           Err(e) => {
-            println("Error: ADC authentication failed: " ++ e);
+            println("Error: ADC authentication failed: ${e}");
             println("Run: gcloud auth application-default login");
             println("Or set GOOGLE_API_KEY for Google AI Studio")
           }
         }
       },
-      Err(e) => println("Error: Project detection failed: " ++ e)
+      Err(e) => println("Error: Project detection failed: ${e}")
     }
   }
 }
@@ -155,7 +156,7 @@ func startLiveSessionGoogleAi(apiKey: string, modelName: string, prompt: string,
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1beta");
   let url = googleAiUrl(apiKey, apiVersion);
   let config = { headers: [] };
-  let modelId = "models/" ++ modelName;
+  let modelId = "models/${modelName}";
   runLiveSession(url, config, modelId, prompt, voice, handle, sessionDir, toolsEnabled,
     proactiveEnabled, affectiveEnabled, true, thinkingBudget, includeThoughts, noInterrupt)
 }
@@ -164,9 +165,8 @@ func startLiveSessionGoogleAi(apiKey: string, modelName: string, prompt: string,
 func startLiveSession(token: string, region: string, projectId: string, modelName: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
   let url = vertexAiUrl(region, apiVersion);
-  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
-  let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
-                "/publishers/google/models/" ++ modelName;
+  let config = { headers: [{ name: "Authorization", value: "Bearer ${token}" }] };
+  let modelId = "projects/${projectId}/locations/${region}/publishers/google/models/${modelName}";
   runLiveSession(url, config, modelId, prompt, voice, handle, sessionDir, toolsEnabled,
     proactiveEnabled, affectiveEnabled, false, thinkingBudget, includeThoughts, noInterrupt)
 }
@@ -174,14 +174,14 @@ func startLiveSession(token: string, region: string, projectId: string, modelNam
 -- Shared session logic for both Google AI Studio and Vertex AI
 func runLiveSession(url: string, config: {headers: List[{name: string, value: string}]}, modelId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, isGoogleAi: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", if isGoogleAi then "v1beta" else "v1");
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let wavPath = sessionDir ++ "/output.wav";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
-  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let wavPath = "${sessionDir}/output.wav";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
+  let turnUsagePath = "${sessionDir}/turn_usage.txt";
 
   match connect(url, config) {
     Ok(conn) => {
-      println("[Connected] " ++ url);
+      println("[Connected] ${url}");
       let sessionConfig = if length(handle) > 0 then
         jo([kv("handle", js(handle))])
       else jo([]);
@@ -192,7 +192,7 @@ func runLiveSession(url: string, config: {headers: List[{name: string, value: st
       let proactiveInstruction = if proactiveEnabled then
         " You are in proactive mode. Only respond when the user addresses you directly by name ('AILANG', 'hey AILANG'). Stay silent for conversations not directed at you."
       else "";
-      let sysInstruction = baseInstruction ++ toolInstruction ++ proactiveInstruction;
+      let sysInstruction = "${baseInstruction}${toolInstruction}${proactiveInstruction}";
 
       -- Generation config (speech + optional thinking merged together)
       let baseGenKvs = [
@@ -241,22 +241,22 @@ func runLiveSession(url: string, config: {headers: List[{name: string, value: st
       let setupMsg = encode(jo([kv("setup", jo(allKvs))]));
 
       -- Initialize per-turn temp files
-      let turnDonePath = sessionDir ++ "/turn_done.flag";
+      let turnDonePath = "${sessionDir}/turn_done.flag";
       writeFile(pcmPath, "");
       writeFile(turnTextPath, "");
       writeFile(turnUsagePath, "");
       writeFile(turnDonePath, "");
 
       -- Save user prompt to transcript
-      let transcriptPath = sessionDir ++ "/transcript.jsonl";
-      appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(prompt))])) ++ "\n");
+      let transcriptPath = "${sessionDir}/transcript.jsonl";
+      appendFile(transcriptPath, "${encode(jo([kv("role", js("user")), kv("text", js(prompt))]))}\n");
 
       -- Register event handler and run
       let allowedPath = getEnvOr("HOME", "/tmp");
       onEvent(conn, \event. handleEvent(event, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi));
       match transmit(conn, setupMsg) {
-        Ok(_) => println("[Setup] Sent (model: " ++ modelId ++ ", voice: " ++ voice ++ ", accent: British)"),
-        Err(e) => println("[Error] Setup failed: " ++ show(e))
+        Ok(_) => println("[Setup] Sent (model: ${modelId}, voice: ${voice}, accent: British)"),
+        Err(e) => println("[Error] Setup failed: ${e}")
       };
       println("");
       runEventLoop(conn);
@@ -267,7 +267,7 @@ func runLiveSession(url: string, config: {headers: List[{name: string, value: st
       reportSummary(prompt, turnTextPath, turnUsagePath, transcriptPath);
       println("")
     },
-    Err(e) => println("[Error] Connection failed: " ++ show(e))
+    Err(e) => println("[Error] Connection failed: ${e}")
   }
 }
 
@@ -287,17 +287,17 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
     Binary(data) => match decode(data) {
       Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi),
       Err(_) => {
-        println("[Audio] " ++ show(length(data)) ++ " bytes (PCM 24kHz)");
+        println("[Audio] ${length(data)} bytes (PCM 24kHz)");
         true
       }
     },
     Opened(_) => true,
     Closed(code, reason) => {
-      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      println("[Closed ${code}] ${reason}");
       false
     },
     StreamError(e) => {
-      println("[Error] " ++ show(e));
+      println("[Error] ${e}");
       false
     },
     Ping(_) => true
@@ -317,7 +317,7 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
     None => match getObject(json, "sessionResumptionUpdate") {
       Some(sr) => handleSessionResumption(sr, sessionDir, turnDonePath),
       None => match getObject(json, "toolCall") {
-        Some(tc) => handleToolCall(tc, conn, sessionDir ++ "/transcript.jsonl", allowedPath),
+        Some(tc) => handleToolCall(tc, conn, "${sessionDir}/transcript.jsonl", allowedPath),
         None => match getObject(json, "toolCallCancellation") {
           Some(tcc) => handleToolCallCancellation(tcc),
           None => match getObject(json, "goAway") {
@@ -334,7 +334,7 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
               None => match getObject(json, "usageMetadata") {
                 Some(um) => handleUsageMetadata(um, sessionDir),
                 None => {
-                  println("[MSG] " ++ encode(json));
+                  println("[MSG] ${encode(json)}");
                   true
                 }
               }
@@ -353,7 +353,7 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
 -- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
 func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> bool ! {IO, Stream} {
   println("[Setup Complete]");
-  println("[Sending] " ++ prompt);
+  println("[Sending] ${prompt}");
   println("");
   let textMsg = encode(jo([
     kv("clientContent", jo([
@@ -366,7 +366,7 @@ func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> 
   ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
-    Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
+    Err(e) => { println("[Error] Send failed: ${e}"); false }
   }
 }
 
@@ -374,7 +374,7 @@ func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> 
 -- Only disconnect if the turn is already complete (tool calls trigger
 -- mid-turn handle updates that must not cause early disconnection).
 func handleSessionResumption(sr: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
-  let handlePath = sessionDir ++ "/session.handle";
+  let handlePath = "${sessionDir}/session.handle";
   match getString(sr, "newHandle") {
     Some(h) => {
       writeFile(handlePath, h);
@@ -391,20 +391,20 @@ func handleSessionResumption(sr: Json, sessionDir: string, turnDonePath: string)
 
 -- Handle usageMetadata: log token counts
 func handleUsageMetadata(um: Json, sessionDir: string) -> bool ! {FS} {
-  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let turnUsagePath = "${sessionDir}/turn_usage.txt";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   let pTok = getOrElse(getInt(um, "promptTokenCount"), 0);
   let rTok = getOrElse(getInt(um, "candidatesTokenCount"), 0);
   let tTok = getOrElse(getInt(um, "totalTokenCount"), 0);
-  let usageStr = show(pTok) ++ " prompt + " ++ show(rTok) ++ " response = " ++ show(tTok) ++ " total";
+  let usageStr = "${pTok} prompt + ${rTok} response = ${tTok} total";
   writeFile(turnUsagePath, usageStr);
-  appendFile(transcriptPath, encode(jo([
+  appendFile(transcriptPath, "${encode(jo([
     kv("type", js("usage")),
     kv("prompt_tokens", js(show(pTok))),
     kv("response_tokens", js(show(rTok))),
     kv("total_tokens", js(show(tTok))),
     kv("raw", um)
-  ])) ++ "\n");
+  ]))}\n");
   true
 }
 
@@ -419,24 +419,24 @@ func handleToolCall(tc: Json, conn: StreamConn, transcriptPath: string, allowedP
             Some(a) => encode(a),
             None => "{}"
           };
-          println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+          println("[Tool] ${fnName}(${argsJson})");
           let result = match dispatchTool(fnName, argsJson, allowedPath) {
             Ok(r) => r,
-            Err(e) => "Error: " ++ e
+            Err(e) => "Error: ${e}"
           };
           let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
-          println("[Tool Result] " ++ truncResult);
+          println("[Tool Result] ${truncResult}");
           let responseMsg = buildToolResponseMsg(fnName, truncResult);
           match transmit(conn, responseMsg) {
             Ok(_) => (),
-            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+            Err(e) => println("[Error] Tool response failed: ${e}")
           };
-          appendFile(transcriptPath, encode(jo([
+          appendFile(transcriptPath, "${encode(jo([
             kv("type", js("tool_call")),
             kv("name", js(fnName)),
             kv("args", js(argsJson)),
             kv("result", js(truncResult))
-          ])) ++ "\n");
+          ]))}\n");
           true
         },
         None => true
@@ -450,7 +450,7 @@ func handleToolCall(tc: Json, conn: StreamConn, transcriptPath: string, allowedP
 func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
   match getArray(tcc, "ids") {
     Some(ids) => {
-      println("[Tool Canceled] " ++ show(listLength(ids)) ++ " pending call(s) canceled");
+      println("[Tool Canceled] ${listLength(ids)} pending call(s) canceled");
       true
     },
     None => { println("[Tool Canceled]"); true }
@@ -460,15 +460,15 @@ func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
 -- Handle goAway: server signals imminent session close
 func handleGoAway(ga: Json) -> bool ! {IO} {
   let timeLeft = getOrElse(getInt(ga, "timeLeft"), 0);
-  println("[GoAway] Server closing in " ++ show(timeLeft) ++ "ms — save handle for reconnection");
+  println("[GoAway] Server closing in ${timeLeft}ms — save handle for reconnection");
   true
 }
 
 -- Handle serverContent: dispatch interrupted, turnComplete, transcription, or audio
 func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getBool(sc, "interrupted") {
     Some(true) => {
       println("[Interrupted] Generation canceled — clearing audio");
@@ -500,7 +500,7 @@ func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> 
 func handleOutputTranscription(ot: Json, transcriptPath: string, turnTextPath: string) -> bool ! {FS} {
   match getString(ot, "text") {
     Some(t) => {
-      appendFile(transcriptPath, encode(jo([kv("role", js("model")), kv("text", js(t))])) ++ "\n");
+      appendFile(transcriptPath, "${encode(jo([kv("role", js("model")), kv("text", js(t))]))}\n");
       appendFile(turnTextPath, t);
       true
     },
@@ -511,7 +511,7 @@ func handleOutputTranscription(ot: Json, transcriptPath: string, turnTextPath: s
 -- Log input transcription (for mic input mode)
 func handleInputTranscription(it: Json) -> bool ! {IO} {
   match getString(it, "text") {
-    Some(t) => { println("[Input] " ++ t); true },
+    Some(t) => { println("[Input] ${t}"); true },
     None => true
   }
 }
@@ -534,7 +534,7 @@ func logThoughtParts(parts: List[Json]) -> () ! {IO} {
   forEachE(\part.
     match getBool(part, "thought") {
       Some(true) => match getString(part, "text") {
-        Some(t) => println("[Thought] " ++ t),
+        Some(t) => println("[Thought] ${t}"),
         None => ()
       },
       _ => ()
@@ -571,7 +571,7 @@ func accumulateAudioParts(parts: List[Json], pcmPath: string) -> () ! {IO, FS} {
             match fromBase64(b64) {
               Some(pcmData) => {
                 appendFileBytes(pcmPath, pcmData);
-                println("[Audio] Frame: " ++ show(bytesLen(pcmData)) ++ " bytes PCM")
+                println("[Audio] Frame: ${bytesLen(pcmData)} bytes PCM")
               },
               None => println("[Audio] Frame: base64 decode failed")
             }
@@ -619,8 +619,8 @@ func reportAudioOutput(pcmPath: string, wavPath: string) -> () ! {IO, FS, Proces
             println("[Playing...]");
             match exec("afplay", [wavPath]) {
               Ok(_) => (),
-              Err(NotFound(_)) => println("Play manually: afplay " ++ wavPath),
-              Err(_) => println("Play manually: afplay " ++ wavPath)
+              Err(NotFound(_)) => println("Play manually: afplay ${wavPath}"),
+              Err(_) => println("Play manually: afplay ${wavPath}")
             }
           } else {
             println("[Audio] No audio data received")
@@ -629,7 +629,7 @@ func reportAudioOutput(pcmPath: string, wavPath: string) -> () ! {IO, FS, Proces
         None => println("[Audio] Failed to decode PCM data")
       }
     },
-    Err(e) => println("[Audio] Failed to read PCM file: " ++ e)
+    Err(e) => println("[Audio] Failed to read PCM file: ${e}")
   }
 }
 
@@ -643,19 +643,19 @@ func reportSummary(prompt: string, turnTextPath: string, turnUsagePath: string, 
   let usage = if fileExists(turnUsagePath) then readFile(turnUsagePath) else "";
   println("");
   println("--- Summary ---");
-  println("You:   " ++ prompt);
+  println("You:   ${prompt}");
   if length(said) > 0 then
-    println("AILANG: " ++ said)
+    println("AILANG: ${said}")
   else ();
   if length(usage) > 0 then
-    println("Tokens: " ++ usage)
+    println("Tokens: ${usage}")
   else ();
   if length(said) > 0 then
-    appendFile(transcriptPath, encode(jo([
+    appendFile(transcriptPath, "${encode(jo([
       kv("type", js("summary")),
       kv("user", js(prompt)),
       kv("model", js(said)),
       kv("usage", js(usage))
-    ])) ++ "\n")
+    ]))}\n")
   else ()
 }

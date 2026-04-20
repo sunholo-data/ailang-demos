@@ -99,7 +99,7 @@ export func parseClaudeEvent(data: string) -> Result[ClaudeEvent, string]
 {
   match decode(data) {
     Ok(json) => dispatchEvent(json),
-    Err(e) => Err("JSON parse error: " ++ e)
+    Err(e) => Err("JSON parse error: ${e}")
   }
 }
 

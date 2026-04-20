@@ -49,7 +49,7 @@ import pkg/sunholo/gcp_auth/token (getAccessToken)
 import pkg/sunholo/gcp_auth/project (getDefaultProject)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
-import std/string (length, join, startsWith)
+import std/string (length, join, startsWith, concat)
 import std/list (length as listLength, nth, map)
 import std/json (encode, decode, getString, getObject, getArray,
                  getNumber, jo, kv, js, ja, jnum)
@@ -85,19 +85,19 @@ export func main() -> () ! {IO @limit=100, FS @limit=10, Stream @limit=200, Net 
       match getAccessToken() {
         Ok(token) => {
           let region = getEnvOr("GEMINI_REGION", "us-central1");
-          println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+          println("Auth: OK (ADC) | Project: ${projectId} | Region: ${region}");
           let args = getArgs();
           let question = if listLength(args) > 0 then join(" ", args)
             else "Calculate 500 times 300";
           runSafeAgent(token, projectId, region, question)
         },
         Err(e) => {
-          println("Error: ADC authentication failed: " ++ e);
+          println("Error: ADC authentication failed: ${e}");
           println("Run: gcloud auth application-default login")
         }
       }
     },
-    Err(e) => println("Error: Project detection failed: " ++ e)
+    Err(e) => println("Error: Project detection failed: ${e}")
   }
 }
 
@@ -105,14 +105,10 @@ export func main() -> () ! {IO @limit=100, FS @limit=10, Stream @limit=200, Net 
 func model() -> string = "gemini-2.5-flash"
 
 func restUrl(projectId: string, region: string) -> string =
-  "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
-  projectId ++ "/locations/" ++ region ++
-  "/publishers/google/models/" ++ model() ++ ":generateContent"
+  "https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model()}:generateContent"
 
 func sseUrl(projectId: string, region: string) -> string =
-  "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
-  projectId ++ "/locations/" ++ region ++
-  "/publishers/google/models/" ++ model() ++ ":streamGenerateContent?alt=sse"
+  "https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model()}:streamGenerateContent?alt=sse"
 
 -- Build tool declarations as JSON for the Gemini API
 func toolDeclsJson() -> [Json] = map(toolToJson, toolDecls())
@@ -146,25 +142,27 @@ func toolToJson(t: ToolDecl) -> Json =
   }
 
 func systemInstruction() -> string =
-  "You are a safe assistant with contract-verified tools. " ++
-  "All tool operations are validated at runtime with formal contracts. " ++
-  "The calculator clamps inputs to [-1000, 1000] and guarantees results in [-1000000, 1000000]. " ++
-  "File reads are restricted to the allowed directory with no path traversal. " ++
-  "SQL queries must be SELECT-only. " ++
-  "Use the available tools when the user asks for calculations, file operations, or data queries. " ++
-  "After using a tool, explain the result briefly."
+  concat([
+    "You are a safe assistant with contract-verified tools. ",
+    "All tool operations are validated at runtime with formal contracts. ",
+    "The calculator clamps inputs to [-1000, 1000] and guarantees results in [-1000000, 1000000]. ",
+    "File reads are restricted to the allowed directory with no path traversal. ",
+    "SQL queries must be SELECT-only. ",
+    "Use the available tools when the user asks for calculations, file operations, or data queries. ",
+    "After using a tool, explain the result briefly."
+  ])
 
 -- Main agent flow: REST for tool turn, SSE for streaming response
 func runSafeAgent(token: string, projectId: string, region: string, question: string) -> () ! {IO, FS, Stream, Net} {
   println("");
-  println("You: " ++ question);
+  println("You: ${question}");
   println("");
 
   -- Step 1: REST call with tools to let model decide which tool to use
   println("[Step 1] Asking model (with tools)...");
   let body = buildToolRequest(question);
   let headers = [
-    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Authorization", value: "Bearer ${token}" },
     { name: "Content-Type", value: "application/json" }
   ];
 
@@ -173,11 +171,11 @@ func runSafeAgent(token: string, projectId: string, region: string, question: st
       if response.ok then
         handleToolResponse(response.body, token, projectId, region, question)
       else {
-        println("[Error] API returned status " ++ show(response.status));
+        println("[Error] API returned status ${response.status}");
         println(response.body)
       }
     },
-    Err(e) => println("[Error] Network error: " ++ show(e))
+    Err(e) => println("[Error] Network error: ${e}")
   }
 }
 
@@ -220,7 +218,7 @@ func handleToolResponse(responseBody: string, token: string, projectId: string, 
                               -- Direct text response (no tool call)
                               match getString(part, "text") {
                                 Some(text) => {
-                                  println("[Gemini] " ++ text);
+                                  println("[Gemini] ${text}");
                                   println("");
                                   println(safetyReport(emptySafetyStats()))
                                 },
@@ -244,7 +242,7 @@ func handleToolResponse(responseBody: string, token: string, projectId: string, 
         None => println("[Error] No candidates array in response")
       }
     },
-    Err(e) => println("[Error] Failed to parse response: " ++ e)
+    Err(e) => println("[Error] Failed to parse response: ${e}")
   }
 }
 
@@ -255,7 +253,7 @@ func handleFunctionCall(fc: Json, token: string, projectId: string, region: stri
     Some(a) => encode(a),
     None => "{}"
   };
-  println("[Tool Call] " ++ name ++ " (contract-verified)");
+  println("[Tool Call] ${name} (contract-verified)");
 
   let toolCall: ToolCall = { id: "", name: name, args: args };
   let stats = emptySafetyStats();
@@ -263,7 +261,7 @@ func handleFunctionCall(fc: Json, token: string, projectId: string, region: stri
   match dispatchVerifiedTool(toolCall, allowedPath()) {
     Ok(result) => {
       println("[Contract] PASSED");
-      println("[Result]   " ++ result);
+      println("[Result]   ${result}");
       let updatedStats = recordSuccess(stats);
 
       -- Step 3: Stream the final response with tool result in context
@@ -274,14 +272,14 @@ func handleFunctionCall(fc: Json, token: string, projectId: string, region: stri
     },
     Err(e) => {
       println("[Contract] REJECTED");
-      println("[Blocked]  " ++ e);
+      println("[Blocked]  ${e}");
       let updatedStats = recordFailure(stats, e);
 
       -- Stream response with rejection context
       println("");
       println("[Step 3] Streaming response (with rejection)...");
       println("");
-      streamWithToolResult(token, projectId, region, question, name, args, "Contract violation: " ++ e, updatedStats)
+      streamWithToolResult(token, projectId, region, question, name, args, "Contract violation: ${e}", updatedStats)
     }
   }
 }
@@ -330,7 +328,7 @@ func streamWithToolResult(token: string, projectId: string, region: string,
   ]));
 
   let config = { headers: [
-    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Authorization", value: "Bearer ${token}" },
     { name: "Content-Type", value: "application/json" }
   ] };
 
@@ -362,7 +360,7 @@ func streamWithToolResult(token: string, projectId: string, region: string,
           }
         },
         Closed(_, _) => false,
-        StreamError(e) => { println("[Error] " ++ show(e)); false },
+        StreamError(e) => { println("[Error] ${e}"); false },
         _ => true
       });
 
@@ -376,7 +374,7 @@ func streamWithToolResult(token: string, projectId: string, region: string,
       println("=== Session Complete ===")
     },
     Err(e) => {
-      println("[Error] SSE connection failed: " ++ show(e));
+      println("[Error] SSE connection failed: ${e}");
       println("");
       println(safetyReport(stats))
     }

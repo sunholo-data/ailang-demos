@@ -27,10 +27,7 @@ export pure func calcInvoice(subtotalCents: int, tier: string, region: string, p
       let discount = applyTierDiscount(subtotalCents, tier);
       let tax = calculateTax(discount, region);
       let rebate = promoRebate(promoCode, discount);
-      "{\"ok\":true,\"total\":" ++ intToStr(total)
-        ++ ",\"afterDiscount\":" ++ intToStr(discount)
-        ++ ",\"tax\":" ++ intToStr(tax)
-        ++ ",\"rebate\":" ++ intToStr(rebate) ++ "}"
+      "{\"ok\":true,\"total\":${intToStr(total)},\"afterDiscount\":${intToStr(discount)},\"tax\":${intToStr(tax)},\"rebate\":${intToStr(rebate)}}"
     }
 }
 
@@ -43,10 +40,7 @@ export pure func calcInsurance(ageBand: string, riskTier: string, claimHistory: 
   let base = basePremium(ageBand);
   let mult = riskMultiplier(riskTier, claimHistory);
   let surcharge = coverageSurcharge(coverage, region);
-  "{\"ok\":true,\"premium\":" ++ intToStr(premium)
-    ++ ",\"base\":" ++ intToStr(base)
-    ++ ",\"multiplier\":" ++ intToStr(mult)
-    ++ ",\"surcharge\":" ++ intToStr(surcharge) ++ "}"
+  "{\"ok\":true,\"premium\":${intToStr(premium)},\"base\":${intToStr(base)},\"multiplier\":${intToStr(mult)},\"surcharge\":${intToStr(surcharge)}}"
 }
 
 -- ══════════════════════════════════════════════════════
@@ -64,12 +58,7 @@ export pure func calcPayroll(hourlyRateCents: int, hoursWorked: int) -> string {
       let fed = federalTax(ti);
       let state = stateTax(ti);
       let fica = ficaTax(gross);
-      "{\"ok\":true,\"gross\":" ++ intToStr(gross)
-        ++ ",\"net\":" ++ intToStr(net)
-        ++ ",\"deductions\":" ++ intToStr(deductions)
-        ++ ",\"federal\":" ++ intToStr(fed)
-        ++ ",\"state\":" ++ intToStr(state)
-        ++ ",\"fica\":" ++ intToStr(fica) ++ "}"
+      "{\"ok\":true,\"gross\":${intToStr(gross)},\"net\":${intToStr(net)},\"deductions\":${intToStr(deductions)},\"federal\":${intToStr(fed)},\"state\":${intToStr(state)},\"fica\":${intToStr(fica)}}"
     }
 }
 
@@ -84,11 +73,7 @@ export pure func calcShipping(region: string, priority: string, weightKg: int, d
       let cost = shippingCost(region, priority, weightKg, discountCents);
       let base = shippingBaseCost(region);
       let mult = priorityMultiplier(priority);
-      "{\"ok\":true,\"cost\":" ++ intToStr(cost)
-        ++ ",\"baseCost\":" ++ intToStr(base)
-        ++ ",\"multiplier\":" ++ intToStr(mult)
-        ++ ",\"weightSurcharge\":" ++ intToStr(weightKg * 50)
-        ++ ",\"discount\":" ++ intToStr(discountCents) ++ "}"
+      "{\"ok\":true,\"cost\":${intToStr(cost)},\"baseCost\":${intToStr(base)},\"multiplier\":${intToStr(mult)},\"weightSurcharge\":${intToStr(weightKg * 50)},\"discount\":${intToStr(discountCents)}}"
     }
 }
 
@@ -104,9 +89,6 @@ export pure func calcRisk(severity: string, source: string, repeatCount: int) ->
       let sevScore = severityScore(severity);
       let srcMod = sourceModifier(source);
       let repPen = repeatPenalty(repeatCount);
-      "{\"ok\":true,\"score\":" ++ intToStr(score)
-        ++ ",\"severity\":" ++ intToStr(sevScore)
-        ++ ",\"source\":" ++ intToStr(srcMod)
-        ++ ",\"repeat\":" ++ intToStr(repPen) ++ "}"
+      "{\"ok\":true,\"score\":${intToStr(score)},\"severity\":${intToStr(sevScore)},\"source\":${intToStr(srcMod)},\"repeat\":${intToStr(repPen)}}"
     }
 }

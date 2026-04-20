@@ -68,7 +68,7 @@ export func startChat(apiKey: string, model: string, messagesJson: string, syste
 
   match ssePost(url, body, config) {
     Ok(conn) => {
-      println(encode(jo([kv("type", js("log")), kv("text", js("SSE stream open. Model: " ++ model))])));
+      println(encode(jo([kv("type", js("log")), kv("text", js("SSE stream open. Model: ${model}"))])));
 
       onEvent(conn, \event. handleBrowserEvent(event));
       runEventLoop(conn);
@@ -78,7 +78,7 @@ export func startChat(apiKey: string, model: string, messagesJson: string, syste
       "complete"
     },
     Err(e) => {
-      println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed: " ++ show(e)))])));
+      println(encode(jo([kv("type", js("error")), kv("text", js("Connection failed: ${e}"))])));
       "error"
     }
   }

@@ -39,24 +39,21 @@ export func main() -> () ! {IO @limit=100, Stream @limit=200, Net @limit=5, Env}
           let args = getArgs();
           let prompt = if listLength(args) > 0 then join(" ", args)
             else "What is 2+2? Reply in one sentence.";
-          println("Project: " ++ projectId ++ " | Region: " ++ region);
-          println("Prompt: " ++ prompt);
+          println("Project: ${projectId} | Region: ${region}");
+          println("Prompt: ${prompt}");
           println("");
           streamGemini(token, projectId, region, prompt)
         },
-        Err(e) => println("Auth failed: " ++ e)
+        Err(e) => println("Auth failed: ${e}")
       }
     },
-    Err(e) => println("Project detection failed: " ++ e)
+    Err(e) => println("Project detection failed: ${e}")
   }
 }
 
 func streamGemini(token: string, projectId: string, region: string, prompt: string) -> () ! {IO, Stream} {
   let model = "gemini-2.5-flash";
-  let url = "https://" ++ region ++ "-aiplatform.googleapis.com/v1/projects/" ++
-            projectId ++ "/locations/" ++ region ++
-            "/publishers/google/models/" ++ model ++
-            ":streamGenerateContent?alt=sse";
+  let url = "https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:streamGenerateContent?alt=sse";
 
   let body = encode(jo([
     kv("contents", ja([jo([
@@ -69,11 +66,11 @@ func streamGemini(token: string, projectId: string, region: string, prompt: stri
   ]));
 
   let config = { headers: [
-    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Authorization", value: "Bearer ${token}" },
     { name: "Content-Type", value: "application/json" }
   ] };
 
-  println("[SSE] Connecting to " ++ model ++ "...");
+  println("[SSE] Connecting to ${model}...");
 
   match ssePost(url, body, config) {
     Ok(conn) => {
@@ -118,21 +115,21 @@ func streamGemini(token: string, projectId: string, region: string, prompt: stri
                 }
               }
             },
-            Err(_) => { println("[RAW] " ++ data); true }
+            Err(_) => { println("[RAW] ${data}"); true }
           }
         },
         Message(msg) => {
           -- Fallback: might get Message instead of SSEData
-          println("[MSG] " ++ msg);
+          println("[MSG] ${msg}");
           true
         },
         Closed(code, _) => {
           println("");
-          println("[Closed " ++ show(code) ++ "]");
+          println("[Closed ${code}]");
           false
         },
         StreamError(e) => {
-          println("[Error] " ++ show(e));
+          println("[Error] ${e}");
           false
         },
         Opened(_) => true,
@@ -146,6 +143,6 @@ func streamGemini(token: string, projectId: string, region: string, prompt: stri
       println("");
       println("=== Stream Complete ===")
     },
-    Err(e) => println("[Error] Connection failed: " ++ show(e))
+    Err(e) => println("[Error] Connection failed: ${e}")
   }
 }

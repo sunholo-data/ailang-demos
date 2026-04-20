@@ -31,7 +31,7 @@ export func updateAccumulator(acc: StreamAccumulator, event: ClaudeEvent) -> Str
     TextDelta(text) => {
       messageId: base.messageId,
       model: base.model,
-      textSoFar: acc.textSoFar ++ text,
+      textSoFar: "${acc.textSoFar}${text}",
       blockCount: base.blockCount,
       eventsReceived: base.eventsReceived,
       isComplete: false
@@ -61,12 +61,9 @@ export pure func formatStreamState(acc: StreamAccumulator) -> string
   ensures { length(result) > 0 }
 {
   if acc.isComplete then
-    "[Complete] " ++ show(acc.eventsReceived) ++ " events, " ++
-    show(length(acc.textSoFar)) ++ " chars, " ++
-    show(acc.blockCount) ++ " blocks"
+    "[Complete] ${acc.eventsReceived} events, ${length(acc.textSoFar)} chars, ${acc.blockCount} blocks"
   else
-    "[Streaming] " ++ show(acc.eventsReceived) ++ " events, " ++
-    show(length(acc.textSoFar)) ++ " chars so far"
+    "[Streaming] ${acc.eventsReceived} events, ${length(acc.textSoFar)} chars so far"
 }
 
 -- Get the complete response text

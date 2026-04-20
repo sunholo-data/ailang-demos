@@ -93,7 +93,7 @@ export func safeCalculate(op: string, a: int, b: int) -> Result[int, string]
 {
   let ca: int = clampInput(a);
   let cb: int = clampInput(b);
-  optionToResult(doCalc(opCode(op), ca, cb), "Unknown operation or error: " ++ op)
+  optionToResult(doCalc(opCode(op), ca, cb), "Unknown operation or error: ${op}")
 }
 
 -- ============================================================
@@ -120,9 +120,9 @@ export func safeReadFile(filepath: string, allowedPrefix: string) -> Result[stri
   ensures { match result { Ok(s) => length(s) >= 0, Err(e) => length(e) > 0 } }
 {
   if isPathSafe(filepath, allowedPrefix) == false then
-    Err("Path rejected: '" ++ filepath ++ "' must start with '" ++ allowedPrefix ++ "' and contain no '..'")
+    Err("Path rejected: '${filepath}' must start with '${allowedPrefix}' and contain no '..'")
   else if fileExists(filepath) == false then
-    Err("File not found: " ++ filepath)
+    Err("File not found: ${filepath}")
   else {
     match readFile(filepath) {
       content => Ok(content)
@@ -148,11 +148,11 @@ export func safeQuery(sql: string, projectId: string, token: string) -> Result[s
   ensures { match result { Ok(s) => length(s) > 0, Err(e) => length(e) > 0 } }
 {
   if isSafeQuery(sql) == false then
-    Err("Rejected: only SELECT queries are allowed. Got: " ++ substring(sql, 0, 20) ++ "...")
+    Err("Rejected: only SELECT queries are allowed. Got: ${substring(sql, 0, 20)}...")
   else {
     -- Would call BigQuery here via ecommerce/services/bigquery.query()
     -- For the demo, return a placeholder
-    Ok("Query executed: " ++ sql)
+    Ok("Query executed: ${sql}")
   }
 }
 
@@ -202,7 +202,7 @@ export func dispatchVerifiedTool(call: ToolCall, allowedPath: string) -> Result[
     "readFile" => handleReadFile(call.args, allowedPath),
     "query" => handleQuery(call.args),
     "wordCount" => handleWordCount(call.args),
-    _ => Err("Unknown tool: " ++ call.name)
+    _ => Err("Unknown tool: ${call.name}")
   }
 }
 
@@ -217,7 +217,7 @@ func handleCalculate(argsJson: string) -> Result[string, string] {
         Err(e) => Err(e)
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -227,7 +227,7 @@ func handleReadFile(argsJson: string, allowedPath: string) -> Result[string, str
       let filepath = getOrElse(getString(json, "filepath"), "");
       safeReadFile(filepath, allowedPath)
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -237,7 +237,7 @@ func handleQuery(argsJson: string) -> Result[string, string] ! {Net} {
       let sql = getOrElse(getString(json, "sql"), "");
       safeQuery(sql, "", "")
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -245,8 +245,8 @@ func handleWordCount(argsJson: string) -> Result[string, string] {
   match decode(argsJson) {
     Ok(json) => {
       let text = getOrElse(getString(json, "text"), "");
-      Ok(intToStr(wordCount(text)) ++ " words")
+      Ok("${intToStr(wordCount(text))} words")
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }

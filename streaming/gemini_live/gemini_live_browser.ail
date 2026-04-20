@@ -65,7 +65,7 @@ export pure func parseMessage(jsonStr: string) -> string = pkgParseMessage(jsonS
 
 export func startSession(apiKey: string, voice: string, instruction: string, prompt: string) -> string ! {Stream, IO} {
   let model = defaultModel();
-  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
+  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}";
 
   println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live..."))])));
 
@@ -75,7 +75,7 @@ export func startSession(apiKey: string, voice: string, instruction: string, pro
       let setupMsg = buildSetup(model, voice, instruction);
       match transmit(conn, setupMsg) {
         Ok(_) => {
-          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent. Voice: " ++ voice))])));
+          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent. Voice: ${voice}"))])));
           onEvent(conn, \event. handleEvent(event, conn, prompt));
           runEventLoop(conn);
           disconnect(conn);
@@ -212,7 +212,7 @@ func handleToolCallEvent(json: Json) -> bool ! {IO} {
 
 export func startSessionWithTools(apiKey: string, voice: string, instruction: string, prompt: string, toolsJson: string) -> string ! {Stream, IO} {
   let model = defaultModel();
-  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" ++ apiKey;
+  let url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}";
 
   println(encode(jo([kv("type", js("log")), kv("text", js("Connecting to Gemini Live (with tools)..."))])));
 
@@ -222,7 +222,7 @@ export func startSessionWithTools(apiKey: string, voice: string, instruction: st
       let setupMsg = buildSetupWithTools(model, voice, instruction, toolsJson);
       match transmit(conn, setupMsg) {
         Ok(_) => {
-          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent with tools. Voice: " ++ voice))])));
+          println(encode(jo([kv("type", js("log")), kv("text", js("Setup sent with tools. Voice: ${voice}"))])));
           onEvent(conn, \event. handleEvent(event, conn, prompt));
           runEventLoop(conn);
           disconnect(conn);

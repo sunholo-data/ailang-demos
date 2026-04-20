@@ -22,8 +22,8 @@ import std/string (intToStr)
 -- Returns JSON: {"ok":true,"result":"100"} or {"ok":false,"error":"..."}
 export func calculate(op: string, a: int, b: int) -> string {
   match safeCalculate(op, a, b) {
-    Ok(n) => "{\"ok\":true,\"result\":\"" ++ intToStr(n) ++ "\"}",
-    Err(e) => "{\"ok\":false,\"error\":\"" ++ e ++ "\"}"
+    Ok(n) => "{\"ok\":true,\"result\":\"${intToStr(n)}\"}",
+    Err(e) => "{\"ok\":false,\"error\":\"${e}\"}"
   }
 }
 
