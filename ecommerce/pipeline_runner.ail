@@ -15,7 +15,7 @@ export func main() -> () ! {IO, FS} {
 }
 
 func runPipeline(inputFile: string, outputFile: string) -> () ! {IO, FS} {
-  println("Loading sales data from: " ++ inputFile);
+  println("Loading sales data from: ${inputFile}");
   let fileFound = fileExists(inputFile);
   if fileFound then processFile(inputFile, outputFile) else println("Error: Input file not found!")
 }
@@ -26,10 +26,10 @@ func processFile(inputFile: string, outputFile: string) -> () ! {IO, FS} {
   println("");
 
   let records = parseSalesData(content);
-  println("Parsed " ++ show(countRecords(records)) ++ " sales records");
+  println("Parsed ${countRecords(records)} sales records");
 
   let aggregated = aggregateByProduct(records);
-  println("Aggregated into " ++ show(countAggregated(aggregated)) ++ " product summaries");
+  println("Aggregated into ${countAggregated(aggregated)} product summaries");
   println("");
 
   println("=== Aggregated Results ===");
@@ -38,7 +38,7 @@ func processFile(inputFile: string, outputFile: string) -> () ! {IO, FS} {
 
   let outputJson = buildOutputJson(aggregated);
   writeFile(outputFile, outputJson);
-  println("Results written to: " ++ outputFile)
+  println("Results written to: ${outputFile}")
 }
 
 -- Data types
@@ -125,7 +125,7 @@ func printAggregated(data: [AggregatedSales]) -> () ! {IO} =
   match data {
     [] => (),
     d :: rest => {
-      println("  " ++ d.productId ++ ": qty=" ++ show(d.totalQuantity) ++ ", revenue=$" ++ show(d.totalRevenue));
+      println("  ${d.productId}: qty=${d.totalQuantity}, revenue=$${d.totalRevenue}");
       printAggregated(rest)
     }
   }

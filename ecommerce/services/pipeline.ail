@@ -23,7 +23,7 @@ export func loadSalesData(filepath: string) -> [SalesRecord] ! {FS, IO} {
     let content = readFile(filepath);
     parseSalesRecords(content)
   } else {
-    println("File not found: " ++ filepath);
+    println("File not found: ${filepath}");
     []
   }
 }
