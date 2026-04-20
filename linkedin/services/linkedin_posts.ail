@@ -22,7 +22,7 @@ func linkedinApiVersion() -> string = "202403"
 
 -- Build standard LinkedIn API headers
 func linkedinHeaders(token: string) -> [{name: string, value: string}] = [
-  { name: "Authorization", value: "Bearer " ++ token },
+  { name: "Authorization", value: "Bearer ${token}" },
   { name: "Content-Type", value: "application/json" },
   { name: "X-Restli-Protocol-Version", value: "2.0.0" },
   { name: "LinkedIn-Version", value: linkedinApiVersion() }
@@ -45,7 +45,7 @@ requires { length(text) > 0 && length(text) <= 3000 }
   match httpRequest("POST", url, linkedinHeaders(token), body) {
     Ok(response) => {
       if response.ok then linkedinParsePostResponse(response.body)
-      else Err("LinkedIn API error (status " ++ show(response.status) ++ "): " ++ response.body)
+      else Err("LinkedIn API error (status ${response.status}): ${response.body}")
     },
     Err(_) => Err("Network error creating LinkedIn post")
   }

@@ -17,7 +17,7 @@ import linkedin/types/linkedin_types (LinkedInComment, PostState)
 
 -- LinkedIn API headers
 func linkedinCommentHeaders(token: string) -> [{name: string, value: string}] = [
-  { name: "Authorization", value: "Bearer " ++ token },
+  { name: "Authorization", value: "Bearer ${token}" },
   { name: "X-Restli-Protocol-Version", value: "2.0.0" },
   { name: "LinkedIn-Version", value: "202403" }
 ]
@@ -39,13 +39,13 @@ func linkedinReplaceColons(s: string) -> string {
 -- Fetch comments for a single post
 export func linkedinGetComments(token: string, postUrn: string) -> Result[[LinkedInComment], string] ! {Net @limit=1} {
   let encodedUrn = linkedinEncodeUrn(postUrn);
-  let url = "https://api.linkedin.com/rest/socialActions/" ++ encodedUrn ++ "/comments";
+  let url = "https://api.linkedin.com/rest/socialActions/${encodedUrn}/comments";
   match httpRequest("GET", url, linkedinCommentHeaders(token), "") {
     Ok(response) => {
       if response.ok then linkedinParseCommentsResponse(response.body, postUrn)
-      else Err("Comments API error (status " ++ show(response.status) ++ "): " ++ response.body)
+      else Err("Comments API error (status ${response.status}): ${response.body}")
     },
-    Err(_) => Err("Network error fetching comments for " ++ postUrn)
+    Err(_) => Err("Network error fetching comments for ${postUrn}")
   }
 }
 
@@ -57,7 +57,7 @@ func linkedinParseCommentsResponse(body: string, postUrn: string) -> Result[[Lin
         None => Ok([])
       }
     },
-    Err(e) => Err("Failed to parse comments: " ++ e)
+    Err(e) => Err("Failed to parse comments: ${e}")
   }
 }
 
@@ -90,7 +90,7 @@ func linkedinExtractCommentAuthor(elem: Json) -> string {
     Some(actor) => {
       let first = getOrElse(getString(actor, "firstName"), "");
       let last = getOrElse(getString(actor, "lastName"), "");
-      if length(first) > 0 then first ++ " " ++ last
+      if length(first) > 0 then "${first} ${last}"
       else getOrElse(getString(elem, "actor"), "unknown")
     },
     None => getOrElse(getString(elem, "actor"), "unknown")

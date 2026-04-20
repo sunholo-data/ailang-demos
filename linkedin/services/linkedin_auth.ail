@@ -25,7 +25,7 @@ func linkedinGetHome() -> string ! {Env} {
 -- Path to credentials file
 func linkedinCredsPath() -> string ! {Env} {
   let home = linkedinGetHome();
-  home ++ "/.ailang/linkedin/credentials.json"
+  "${home}/.ailang/linkedin/credentials.json"
 }
 
 -- Read and parse credentials file
@@ -33,14 +33,14 @@ export func linkedinReadCreds() -> Result[LinkedInCreds, string] ! {Env, FS @lim
   let path = linkedinCredsPath();
   let found = fileExists(path);
   if found then linkedinParseCredsFile(path)
-  else Err("Credentials not found at: " ++ path ++ "\nRun: linkedin setup")
+  else Err("Credentials not found at: ${path}\nRun: linkedin setup")
 }
 
 func linkedinParseCredsFile(path: string) -> Result[LinkedInCreds, string] ! {FS} {
   let content = readFile(path);
   match decode(content) {
     Ok(json) => linkedinExtractCreds(json),
-    Err(e) => Err("Failed to parse credentials: " ++ e)
+    Err(e) => Err("Failed to parse credentials: ${e}")
   }
 }
 
@@ -92,17 +92,14 @@ func linkedinTokenFromCreds() -> Result[string, string] ! {Env, FS @limit=5, Net
 -- Exchange refresh token for new access token
 func linkedinRefreshToken(creds: LinkedInCreds) -> Result[string, string] ! {Net} {
   let url = "https://www.linkedin.com/oauth/v2/accessToken";
-  let body = "grant_type=refresh_token" ++
-             "&refresh_token=" ++ creds.refreshToken ++
-             "&client_id=" ++ creds.clientId ++
-             "&client_secret=" ++ creds.clientSecret;
+  let body = "grant_type=refresh_token&refresh_token=${creds.refreshToken}&client_id=${creds.clientId}&client_secret=${creds.clientSecret}";
   let headers = [
     { name: "Content-Type", value: "application/x-www-form-urlencoded" }
   ];
   match httpRequest("POST", url, headers, body) {
     Ok(response) => {
       if response.ok then linkedinParseTokenResponse(response.body)
-      else Err("OAuth refresh failed (status " ++ show(response.status) ++ "): " ++ response.body)
+      else Err("OAuth refresh failed (status ${response.status}): ${response.body}")
     },
     Err(_) => Err("Network error during OAuth token refresh")
   }
@@ -115,7 +112,7 @@ func linkedinParseTokenResponse(body: string) -> Result[string, string] {
       if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
       else Err("No access_token in OAuth response")
     },
-    Err(e) => Err("Failed to parse OAuth response: " ++ e)
+    Err(e) => Err("Failed to parse OAuth response: ${e}")
   }
 }
 

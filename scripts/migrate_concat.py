@@ -230,13 +230,16 @@ def find_chain_term_bounds(tokens, depths, chain):
         d = depths[i]
         if t[0] in SKIP_KINDS:
             continue
-        if t[0] == KIND_PUNCT and t[1] in ',;' and d <= my_depth:
+        if t[0] == KIND_PUNCT and t[1] in ',;:' and d <= my_depth:
             break
         if t[0] == KIND_PUNCT and t[1] in '([{' and d < my_depth:
             break
         if t[0] == KIND_OP and t[1] == '=' and d <= my_depth:
             break
         if t[0] == KIND_OP and t[1] in ('->', '=>') and d <= my_depth:
+            break
+        # Comparison/logical ops split the expression — ++ binds tighter
+        if t[0] == KIND_OP and t[1] in ('==', '!=', '<', '>', '<=', '>=', '&&', '||') and d <= my_depth:
             break
         # Keywords that start/separate expressions
         if t[0] == KIND_IDENT and t[1] in DECL_KEYWORDS and d <= my_depth:
@@ -287,11 +290,16 @@ def classify_term(tokens, src, start, end):
       STRING: payload = raw literal text (with quotes)
       SHOW: payload = inner expression raw text
       SIMPLE: payload = raw expression text
+      LIST: payload = None  (list literal — chain must be skipped as list concat)
       COMPLEX: payload = None
     """
     sig = [t for t in tokens[start:end + 1] if t[0] not in SKIP_KINDS]
     if not sig:
         return ('COMPLEX', None)
+
+    # List literal at top level: first sig token is '[' and matching ']' is last
+    if sig[0][0] == KIND_PUNCT and sig[0][1] == '[':
+        return ('LIST', None)
 
     # Single string literal
     if len(sig) == 1 and sig[0][0] == KIND_STRING:
@@ -467,6 +475,9 @@ def process_source(src):
             n_skipped += 1
             continue
         terms = [classify_term(tokens, src, s, e) for (s, e) in bounds]
+        # List concat — leave alone (still valid ++ usage in 0.13.0)
+        if any(t[0] == 'LIST' for t in terms):
+            continue
         if any(t[0] == 'COMPLEX' for t in terms):
             n_skipped += 1
             continue

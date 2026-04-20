@@ -35,16 +35,16 @@ func linkedinPostSlugs() -> [string] = [
 
 -- Load a single post by slug
 export func linkedinLoadPost(slug: string) -> Result[MarketingPost, string] ! {FS @limit=5} {
-  let path = "marketing/" ++ slug ++ "/post.md";
+  let path = "marketing/${slug}/post.md";
   let found = fileExists(path);
   if found then linkedinParsePostFile(slug, path)
-  else Err("Post not found: " ++ path)
+  else Err("Post not found: ${path}")
 }
 
 func linkedinParsePostFile(slug: string, path: string) -> Result[MarketingPost, string] ! {FS} {
   let content = readFile(path);
   let body = linkedinExtractBody(content);
-  if length(body) == 0 then Err("No post body found in " ++ path)
+  if length(body) == 0 then Err("No post body found in ${path}")
   else linkedinMakePost(slug, content, body)
 }
 
