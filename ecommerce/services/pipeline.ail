@@ -1,6 +1,7 @@
 module ecommerce/services/pipeline
 
 import std/fs (readFile, writeFile, fileExists)
+import std/io (println)
 import std/json (encode, decode, jo, kv, js, jnum, ja, getArray, getString, getNumber, asString, asNumber)
 import std/option (Some, None)
 import std/result (Ok, Err)
@@ -18,8 +19,8 @@ export type SalesRecord = {
 
 -- Load sales data from a JSON file
 export func loadSalesData(filepath: string) -> [SalesRecord] ! {FS, IO} {
-  let exists = fileExists(filepath);
-  if exists then {
+  let found = fileExists(filepath);
+  if found then {
     let content = readFile(filepath);
     parseSalesRecords(content)
   } else {
