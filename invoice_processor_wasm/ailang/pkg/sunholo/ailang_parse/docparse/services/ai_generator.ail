@@ -1,0 +1,123 @@
+module docparse/services/ai_generator
+
+import std/ai (callJsonSimple)
+import std/json (encode, jo, kv, js, decode, asArray, asString as jsonAsString, getString, getInt, getArray, getBool, getStringArrayOrEmpty)
+import std/string (length, trim)
+import std/list (flatMap, length as listLength)
+import std/option (Some, None, getOrElse)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, ParsedDocument, DocMetadata, emptyMetadata, simpleCell)
+
+-- AI Document Generator — prompt → Block ADT via LLM.
+--
+-- Takes a natural language prompt, asks an AI model to generate structured JSON
+-- matching the Block ADT schema, then decodes it into [Block].
+-- The caller pipes these blocks through the appropriate format generator.
+--
+-- Uses callJsonSimple (not callJson) to avoid multimodal corruption bugs.
+--
+-- Example prompts:
+--   "Q1 sales report with revenue table and 3 key findings"
+--   "5-slide pitch deck for AILANG Parse with bullet points"
+--   "Simple spreadsheet tracking employee names, roles, and start dates"
+
+-- Generate blocks from a natural language prompt.
+-- The AI is given the Block ADT schema and asked to return conformant JSON.
+export func aiGenerateBlocks(prompt: string, targetFormat: string) -> [Block] ! {AI}
+  ensures { listLength(result) >= 0 }
+{
+  let formatHint = aiFormatHint(targetFormat);
+  let request = encode(jo([
+    kv("prompt", js(aiSystemPrompt(prompt, formatHint)))
+  ]));
+  let response = callJsonSimple(request);
+  aiParseResponse(response)
+}
+
+-- Build the system prompt with Block ADT schema
+pure func aiSystemPrompt(userPrompt: string, formatHint: string) -> string =
+  "You are a document generator. Given a description, produce structured document content as a JSON array of blocks.\n\nBLOCK TYPES (return a JSON array of these):\n- {\"type\":\"heading\", \"text\":\"...\", \"level\":N}  — N is 1-6\n- {\"type\":\"text\", \"text\":\"...\"}  — paragraph text\n- {\"type\":\"table\", \"headers\":[\"col1\",\"col2\",...], \"rows\":[[\"a\",\"b\",...],[...]]}  — tabular data\n- {\"type\":\"list\", \"items\":[\"item1\",\"item2\",...], \"ordered\":true/false}  — bulleted or numbered list\n- {\"type\":\"section\", \"kind\":\"slide\", \"blocks\":[...]}  — for presentations, wrap each slide's content\n- {\"type\":\"section\", \"kind\":\"sheet\", \"blocks\":[...]}  — for spreadsheets, wrap each sheet's content\n\n${formatHint}RULES:\n1. Generate realistic, useful content — not placeholder text.\n2. Use appropriate heading levels (h1 for title, h2 for sections, h3 for subsections).\n3. Tables must have headers and at least 2 data rows with realistic data.\n4. Lists should have 3-7 items with meaningful content.\n5. Return ONLY the JSON array. No markdown, no explanation.\n6. Use compact JSON (no extra whitespace).\n\nUSER REQUEST: ${userPrompt}"
+
+-- Format-specific hints to guide the AI
+pure func aiFormatHint(format: string) -> string =
+  if format == "pptx" || format == "odp"
+  then "FORMAT: Presentation. Wrap each slide in {\"type\":\"section\",\"kind\":\"slide\",\"blocks\":[...]}.\nInclude a title slide (heading level 1) and 3-7 content slides.\n\n"
+  else if format == "xlsx" || format == "ods"
+  then "FORMAT: Spreadsheet. Use table blocks for data. If multiple datasets, wrap each in {\"type\":\"section\",\"kind\":\"sheet\",\"blocks\":[...]}.\n\n"
+  else if format == "html" || format == "md"
+  then "FORMAT: Document/article. Use headings, paragraphs, lists, and tables as appropriate.\n\n"
+  else "FORMAT: Document. Use headings, paragraphs, lists, and tables as appropriate.\n\n"
+
+-- Parse the AI response JSON into Block ADT
+pure func aiParseResponse(response: string) -> [Block] {
+  let trimmed = trim(response);
+  match decode(trimmed) {
+    Ok(json) => match asArray(json) {
+      Some(items) => aiParseBlockItems(items),
+      None => [TextBlock({text: trimmed, style: "ai-raw", level: 0})]
+    },
+    Err(_) => [TextBlock({text: "AI generation failed: could not parse response as JSON. Raw: ${trimmed}", style: "error", level: 0})]
+  }
+}
+
+-- Parse JSON array items into Blocks
+pure func aiParseBlockItems(items: [Json]) -> [Block] =
+  flatMap(\item. match aiParseOneBlock(item) {
+    Some(block) => [block],
+    None => []
+  }, items)
+
+-- Parse a single JSON object into a Block
+pure func aiParseOneBlock(json: Json) -> Option[Block] {
+  match getString(json, "type") {
+    Some("heading") => match getString(json, "text") {
+      Some(text) =>
+        Some(HeadingBlock({text: text, level: getOrElse(getInt(json, "level"), 1)})),
+      None => None
+    },
+    Some("text") => match getString(json, "text") {
+      Some(text) => Some(TextBlock({text: text, style: "Normal", level: 0})),
+      None => None
+    },
+    Some("table") => {
+      let headers = getOrElse(getArray(json, "headers"), []);
+      let rows = getOrElse(getArray(json, "rows"), []);
+      Some(TableBlock({headers: aiJsonToSimpleCells(headers), rows: aiJsonToRows(rows)}))
+    },
+    Some("list") => {
+      let items = getOrElse(getArray(json, "items"), []);
+      let ordered = getOrElse(getBool(json, "ordered"), false);
+      Some(ListBlock({items: aiJsonToStrings(items), ordered: ordered}))
+    },
+    Some("section") => {
+      let kind = getOrElse(getString(json, "kind"), "section");
+      let blocks = getOrElse(getArray(json, "blocks"), []);
+      Some(SectionBlock({kind: kind, blocks: aiParseBlockItems(blocks)}))
+    },
+    _ => None
+  }
+}
+
+-- Convert JSON array of strings to [string]
+pure func aiJsonToStrings(items: [Json]) -> [string] =
+  flatMap(\item. match aiAsString(item) {
+    Some(s) => [s],
+    None => []
+  }, items)
+
+-- Helper: extract string from a Json value
+pure func aiAsString(json: Json) -> Option[string] =
+  jsonAsString(json)
+
+-- Convert JSON array of strings to [TableCell]
+pure func aiJsonToSimpleCells(items: [Json]) -> [TableCell] =
+  flatMap(\item. match aiAsString(item) {
+    Some(s) => [simpleCell(s)],
+    None => []
+  }, items)
+
+-- Convert JSON array of arrays to [[TableCell]]
+pure func aiJsonToRows(rows: [Json]) -> [[TableCell]] =
+  flatMap(\row. match asArray(row) {
+    Some(cells) => [aiJsonToSimpleCells(cells)],
+    None => []
+  }, rows)

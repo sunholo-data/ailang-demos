@@ -1,0 +1,157 @@
+module docparse/services/html_generator
+
+import std/string (length, join, intToStr)
+import std/list (map, foldl, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape)
+
+-- HTML Generator — converts Block ADT to standalone HTML document.
+-- Pure string concatenation, no XML tree building needed.
+--
+-- Supports all 9 Block variants:
+--   HeadingBlock  -> <h1>...<h6>
+--   TextBlock     -> <p> with optional style class
+--   TableBlock    -> <table> with colspan/rowspan for merged cells
+--   ListBlock     -> <ol>/<ul> with <li> items
+--   ImageBlock    -> <img> with base64 data URI or description placeholder
+--   AudioBlock    -> <audio> or transcription text
+--   VideoBlock    -> <video> or description text
+--   SectionBlock  -> <section> with class for kind
+--   ChangeBlock   -> <ins>/<del> with attribution
+
+-- Generate a complete HTML document from a ParsedDocument
+export pure func generateHtml(doc: ParsedDocument) -> string
+  ensures { length(result) > 0 }
+{
+  let title = if length(doc.metadata.title) > 0
+    then xmlEscape(doc.metadata.title)
+    else xmlEscape(doc.filename);
+  "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\"/>\n<title>${title}</title>\n${htmlStyle()}</head>\n<body>\n${htmlBlocksToStr(doc.blocks)}</body>\n</html>\n"
+}
+
+-- Generate just the body HTML from blocks (no wrapper)
+export pure func generateHtmlBody(blocks: [Block]) -> string =
+  htmlBlocksToStr(blocks)
+
+-- Minimal CSS for readable output
+pure func htmlStyle() -> string =
+  "<style>\nbody { font-family: sans-serif; max-width: 800px; margin: 2em auto; line-height: 1.6; }\ntable { border-collapse: collapse; margin: 1em 0; }\nth, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }\nth { background: #f5f5f5; }\n.merged { background: #f0f0f0; }\nins { background: #d4edda; text-decoration: none; }\ndel { background: #f8d7da; }\n.section-header, .section-footer { color: #666; font-style: italic; border-top: 1px solid #eee; padding-top: 0.5em; }\n.section-slide { border-top: 2px solid #333; padding-top: 1em; margin-top: 2em; }\n.section-textbox { border-left: 3px solid #ccc; padding-left: 1em; margin: 1em 0; }\n</style>\n"
+
+-- Convert a list of blocks to HTML
+pure func htmlBlocksToStr(blocks: [Block]) -> string =
+  foldl(\acc b. "${acc}${htmlBlockToStr(b)}", "", blocks)
+
+-- Convert a single Block to HTML
+pure func htmlBlockToStr(block: Block) -> string =
+  match block {
+    HeadingBlock(h) =>
+      let tag = htmlHeadingTag(h.level) in
+      "<${tag}>${xmlEscape(h.text)}</${tag}>\n",
+
+    TextBlock(t) =>
+      if length(t.text) > 0
+      then if length(t.style) > 0 && t.style != "normal" && t.style != "Normal"
+        then "<p class=\"${xmlEscape(t.style)}\">${xmlEscape(t.text)}</p>\n"
+        else "<p>${xmlEscape(t.text)}</p>\n"
+      else "",
+
+    TableBlock(t) =>
+      htmlTableToStr(t.headers, t.rows),
+
+    ListBlock(l) =>
+      if l.ordered
+      then "<ol>\n${htmlListItems(l.items)}</ol>\n"
+      else "<ul>\n${htmlListItems(l.items)}</ul>\n",
+
+    ImageBlock(i) =>
+      if length(i.data) > 0 && length(i.mime) > 0
+      then "<figure><img src=\"data:${i.mime};base64,${i.data}\" alt=\"${xmlEscape(i.description)}\"/></figure>\n"
+      else if length(i.description) > 0
+        then "<p><em>[Image: ${xmlEscape(i.description)}]</em></p>\n"
+        else "<p><em>[Image]</em></p>\n",
+
+    AudioBlock(a) =>
+      if length(a.transcription) > 0
+      then "<blockquote><p><strong>Audio transcription:</strong> ${xmlEscape(a.transcription)}</p></blockquote>\n"
+      else "<p><em>[Audio]</em></p>\n",
+
+    VideoBlock(v) =>
+      if length(v.description) > 0
+      then "<p><em>[Video: ${xmlEscape(v.description)}]</em></p>\n"
+      else "<p><em>[Video]</em></p>\n",
+
+    SectionBlock(s) =>
+      htmlSectionToStr(s.kind, s.blocks),
+
+    ChangeBlock(c) =>
+      htmlChangeToStr(c.changeType, c.author, c.date, c.text)
+  }
+
+-- Heading tag from level
+pure func htmlHeadingTag(level: int) -> string =
+  if level == 1 then "h1"
+  else if level == 2 then "h2"
+  else if level == 3 then "h3"
+  else if level == 4 then "h4"
+  else if level == 5 then "h5"
+  else if level == 6 then "h6"
+  else "h2"
+
+-- Render table with headers and rows
+pure func htmlTableToStr(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerRow = if listLength(headers) > 0
+    then "<thead><tr>${htmlHeaderCells(headers)}</tr></thead>\n"
+    else "";
+  let bodyRows = foldl(\acc row. "${acc}<tr>${htmlDataCells(row)}</tr>\n", "", rows);
+  let body = if length(bodyRows) > 0
+    then "<tbody>\n${bodyRows}</tbody>\n"
+    else "";
+  "<table>\n${headerRow}${body}</table>\n"
+}
+
+-- Render header cells as <th> with colspan support
+pure func htmlHeaderCells(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${htmlHeaderCell(c)}", "", cells)
+
+pure func htmlHeaderCell(cell: TableCell) -> string {
+  if cell.merged then ""
+  else if cell.colSpan > 1
+    then "<th colspan=\"${intToStr(cell.colSpan)}\">${xmlEscape(cell.text)}</th>"
+    else "<th>${xmlEscape(cell.text)}</th>"
+}
+
+-- Render data cells as <td> with colspan support
+pure func htmlDataCells(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${htmlDataCell(c)}", "", cells)
+
+pure func htmlDataCell(cell: TableCell) -> string {
+  if cell.merged then ""
+  else if cell.colSpan > 1
+    then "<td colspan=\"${intToStr(cell.colSpan)}\">${xmlEscape(cell.text)}</td>"
+    else "<td>${xmlEscape(cell.text)}</td>"
+}
+
+-- Render list items
+pure func htmlListItems(items: [string]) -> string =
+  foldl(\acc item. "${acc}<li>${xmlEscape(item)}</li>\n", "", items)
+
+-- Render section block with appropriate CSS class
+pure func htmlSectionToStr(kind: string, blocks: [Block]) -> string {
+  let cssClass = if kind == "slide" then "section-slide"
+    else if kind == "sheet" then "section-sheet"
+    else if kind == "header" then "section-header"
+    else if kind == "footer" then "section-footer"
+    else if kind == "footnote" then "section-footnote"
+    else if kind == "endnote" then "section-endnote"
+    else if kind == "textbox" then "section-textbox"
+    else "section-other";
+  "<section class=\"${cssClass}\">\n${htmlBlocksToStr(blocks)}</section>\n"
+}
+
+-- Render track change as <ins> or <del> with attribution
+pure func htmlChangeToStr(changeType: string, author: string, date: string, text: string) -> string {
+  let attribution = " <small>(${xmlEscape(changeType)} by ${xmlEscape(author)}, ${xmlEscape(date)})</small>";
+  if changeType == "delete" || changeType == "move-from"
+  then "<del>${xmlEscape(text)}</del>${attribution}\n"
+  else "<ins>${xmlEscape(text)}</ins>${attribution}\n"
+}

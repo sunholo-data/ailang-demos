@@ -83,6 +83,10 @@ mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
+# Vendor AILANG package modules (for WASM pkg/ imports)
+# Runs early because website_builder and docparse both link to vendored files.
+"$REPO_ROOT/scripts/vendor-wasm-packages.sh" "$SITE/ailang/pkg"
+
 # Website Builder portal
 if [ "$BUILD_WB" = true ] && [ -f "$REPO_ROOT/website_builder/portal/package.json" ]; then
   echo "Building website builder portal..."
@@ -105,10 +109,13 @@ if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
   ln -sf "$REPO_ROOT/website_builder/types/"*.ail "$SITE/website_builder/ailang/website_builder/types/"
   ln -sf "$REPO_ROOT/website_builder/services/"*.ail "$SITE/website_builder/ailang/website_builder/services/"
   # DocParse modules (used by website builder for document parsing)
-  mkdir -p "$SITE/website_builder/ailang/docparse/types"
-  mkdir -p "$SITE/website_builder/ailang/docparse/services"
-  ln -sf "$REPO_ROOT/docparse/types/"*.ail "$SITE/website_builder/ailang/docparse/types/"
-  ln -sf "$REPO_ROOT/docparse/services/"*.ail "$SITE/website_builder/ailang/docparse/services/"
+  # Sourced from the vendored sunholo/ailang_parse registry package.
+  VENDORED_DOCPARSE="$SITE/ailang/pkg/sunholo/ailang_parse/docparse"
+  if [ -d "$VENDORED_DOCPARSE" ]; then
+    mkdir -p "$SITE/website_builder/ailang/docparse"
+    ln -sf "$VENDORED_DOCPARSE/types" "$SITE/website_builder/ailang/docparse/types"
+    ln -sf "$VENDORED_DOCPARSE/services" "$SITE/website_builder/ailang/docparse/services"
+  fi
 fi
 
 # DocParse hub
@@ -121,9 +128,6 @@ fi
 mkdir -p "$SITE/shared"
 cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/shared/" 2>/dev/null || true
 cp "$REPO_ROOT/site/shared/design-system.css" "$SITE/streaming/shared/" 2>/dev/null || true
-
-# Vendor AILANG package modules (for WASM pkg/ imports)
-"$REPO_ROOT/scripts/vendor-wasm-packages.sh" "$SITE/ailang/pkg"
 
 # Streaming AILANG modules (for WASM demos)
 mkdir -p "$SITE/ailang/streaming/gemini_live"

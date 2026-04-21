@@ -1,0 +1,153 @@
+module docparse/services/ods_generator
+
+import std/string (length, intToStr)
+import std/list (foldl, length as listLength)
+import std/zip (createArchive)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape, xmlDecl)
+
+-- ODS Generator — converts Block ADT to a valid .ods file.
+-- ODS = OpenDocument Spreadsheet. Uses table:table elements for sheets.
+
+-- Generate an ODS file from ParsedDocument
+export func generateOds(doc: ParsedDocument, outputPath: string) -> string ! {FS}
+  ensures { length(result) > 0 }
+{
+  let sheets = odsCollectSheets(doc.blocks);
+  let contentXml = odsBuildContent(sheets);
+  let stylesXml = odsMinimalStyles();
+  let metaXml = odsBuildMeta(doc.metadata.title, doc.metadata.author);
+  let manifest = odsManifest();
+  let mimetype = "application/vnd.oasis.opendocument.spreadsheet";
+
+  let entries = [
+    {name: "mimetype", content: mimetype},
+    {name: "META-INF/manifest.xml", content: manifest},
+    {name: "content.xml", content: contentXml},
+    {name: "styles.xml", content: stylesXml},
+    {name: "meta.xml", content: metaXml}
+  ];
+
+  let result = createArchive(outputPath, entries);
+  match result {
+    Ok(_) => "Generated ODS: ${outputPath} (${intToStr(listLength(sheets))} sheets)",
+    Err(e) => "Error generating ODS: ${e}"
+  }
+}
+
+-- ODF namespace declaration
+pure func odsNs() -> string =
+  "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:meta=\"urn:oasis:names:tc:opendocument:xmlns:meta:1.0\""
+
+-- A sheet with name and rows
+type OdsSheet = { name: string, rows: [[string]] }
+
+-- Collect blocks into sheets (same logic as xlsx_generator)
+pure func odsCollectSheets(blocks: [Block]) -> [OdsSheet] {
+  odsCollectSheetsAcc(blocks, [], 1)
+}
+
+pure func odsCollectSheetsAcc(blocks: [Block], acc: [OdsSheet], idx: int) -> [OdsSheet] =
+  match blocks {
+    [] => if listLength(acc) == 0 then [{name: "Sheet1", rows: []}] else acc,
+    SectionBlock(s) :: rest =>
+      if s.kind == "sheet"
+      then odsCollectSheetsAcc(rest,
+        odsAppendSheet(acc, {name: "Sheet${intToStr(idx)}", rows: odsBlocksToRows(s.blocks)}), idx + 1)
+      else odsCollectSheetsAcc(rest, acc, idx),
+    TableBlock(t) :: rest =>
+      odsCollectSheetsAcc(rest,
+        odsAppendSheet(acc, {name: "Sheet${intToStr(idx)}", rows: odsTableToRows(t.headers, t.rows)}), idx + 1),
+    b :: rest =>
+      let text = odsBlockToText(b) in
+      if length(text) > 0
+      then odsCollectSheetsAcc(rest, odsAppendToContentSheet(acc, [text]), idx)
+      else odsCollectSheetsAcc(rest, acc, idx)
+  }
+
+pure func odsBlockToText(block: Block) -> string =
+  match block {
+    HeadingBlock(h) => h.text,
+    TextBlock(t) => t.text,
+    ListBlock(l) => foldl(\acc item. if length(acc) > 0 then "${acc}, ${item}" else item, "", l.items),
+    ImageBlock(i) => "[Image: ${i.description}]",
+    ChangeBlock(c) => c.text,
+    _ => ""
+  }
+
+pure func odsBlocksToRows(blocks: [Block]) -> [[string]] =
+  match blocks {
+    [] => [],
+    TableBlock(t) :: rest => odsAppendRows(odsTableToRows(t.headers, t.rows), odsBlocksToRows(rest)),
+    b :: rest =>
+      let text = odsBlockToText(b) in
+      if length(text) > 0 then [text] :: odsBlocksToRows(rest)
+      else odsBlocksToRows(rest)
+  }
+
+pure func odsTableToRows(headers: [TableCell], rows: [[TableCell]]) -> [[string]] {
+  let headerRow = odsCellsToStrings(headers);
+  let dataRows = match rows {
+    [] => [],
+    _ => odsRowsToStrings(rows)
+  };
+  if listLength(headerRow) > 0 then headerRow :: dataRows else dataRows
+}
+
+pure func odsCellsToStrings(cells: [TableCell]) -> [string] =
+  match cells {
+    [] => [],
+    c :: rest => c.text :: odsCellsToStrings(rest)
+  }
+
+pure func odsRowsToStrings(rows: [[TableCell]]) -> [[string]] =
+  match rows {
+    [] => [],
+    row :: rest => odsCellsToStrings(row) :: odsRowsToStrings(rest)
+  }
+
+pure func odsAppendSheet(sheets: [OdsSheet], sheet: OdsSheet) -> [OdsSheet] =
+  match sheets {
+    [] => [sheet],
+    x :: rest => x :: odsAppendSheet(rest, sheet)
+  }
+
+pure func odsAppendToContentSheet(sheets: [OdsSheet], row: [string]) -> [OdsSheet] =
+  match sheets {
+    [] => [{name: "Content", rows: [row]}],
+    s :: rest =>
+      if s.name == "Content"
+      then {name: "Content", rows: odsAppendRows(s.rows, [row])} :: rest
+      else s :: odsAppendToContentSheet(rest, row)
+  }
+
+pure func odsAppendRows(a: [[string]], b: [[string]]) -> [[string]] =
+  match a {
+    [] => b,
+    x :: rest => x :: odsAppendRows(rest, b)
+  }
+
+-- Build content.xml with sheets
+pure func odsBuildContent(sheets: [OdsSheet]) -> string {
+  "${xmlDecl()}<office:document-content ${odsNs()} office:version=\"1.2\"><office:body><office:spreadsheet>${foldl(\acc s. "${acc}${odsSheetToXml(s)}", "", sheets)}</office:spreadsheet></office:body></office:document-content>"
+}
+
+pure func odsSheetToXml(sheet: OdsSheet) -> string {
+  "<table:table table:name=\"${xmlEscape(sheet.name)}\"><table:table-column/>${foldl(\acc row. "${acc}${odsRowToXml(row)}", "", sheet.rows)}</table:table>"
+}
+
+pure func odsRowToXml(row: [string]) -> string =
+  "<table:table-row>${foldl(\acc cell. "${acc}<table:table-cell><text:p>${xmlEscape(cell)}</text:p></table:table-cell>", "", row)}</table:table-row>"
+
+-- Minimal styles
+pure func odsMinimalStyles() -> string =
+  "${xmlDecl()}<office:document-styles ${odsNs()} office:version=\"1.2\"><office:styles/></office:document-styles>"
+
+-- Meta
+pure func odsBuildMeta(title: string, author: string) -> string =
+  "${xmlDecl()}<office:document-meta ${odsNs()} office:version=\"1.2\"><office:meta>${if length(title) > 0 then "<dc:title>${xmlEscape(title)}</dc:title>" else ""}${if length(author) > 0 then "<dc:creator>${xmlEscape(author)}</dc:creator>" else ""}<meta:generator>AILANG Parse</meta:generator></office:meta></office:document-meta>"
+
+-- Manifest
+pure func odsManifest() -> string =
+  "${xmlDecl()}<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\"><manifest:file-entry manifest:media-type=\"application/vnd.oasis.opendocument.spreadsheet\" manifest:full-path=\"/\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"content.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"styles.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"meta.xml\"/></manifest:manifest>"

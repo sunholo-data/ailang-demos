@@ -1,0 +1,152 @@
+module docparse/services/odp_generator
+
+import std/string (length, intToStr)
+import std/list (foldl, length as listLength)
+import std/zip (createArchive)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape, xmlDecl)
+
+-- ODP Generator — converts Block ADT to a valid .odp file.
+-- ODP = OpenDocument Presentation. Uses draw:page elements for slides.
+
+-- Generate an ODP file from ParsedDocument
+export func generateOdp(doc: ParsedDocument, outputPath: string) -> string ! {FS}
+  ensures { length(result) > 0 }
+{
+  let slides = odpCollectSlides(doc.blocks);
+  let contentXml = odpBuildContent(slides);
+  let stylesXml = odpMinimalStyles();
+  let metaXml = odpBuildMeta(doc.metadata.title, doc.metadata.author);
+  let manifest = odpManifest();
+  let mimetype = "application/vnd.oasis.opendocument.presentation";
+
+  let entries = [
+    {name: "mimetype", content: mimetype},
+    {name: "META-INF/manifest.xml", content: manifest},
+    {name: "content.xml", content: contentXml},
+    {name: "styles.xml", content: stylesXml},
+    {name: "meta.xml", content: metaXml}
+  ];
+
+  let result = createArchive(outputPath, entries);
+  match result {
+    Ok(_) => "Generated ODP: ${outputPath} (${intToStr(listLength(slides))} slides)",
+    Err(e) => "Error generating ODP: ${e}"
+  }
+}
+
+-- ODF namespace declaration
+pure func odpNs() -> string =
+  "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:meta=\"urn:oasis:names:tc:opendocument:xmlns:meta:1.0\""
+
+-- Collect blocks into slide groups
+pure func odpCollectSlides(blocks: [Block]) -> [[Block]] {
+  let hasSlides = odpHasSlideBlocks(blocks);
+  if hasSlides then odpSplitBySlides(blocks)
+  else [blocks]
+}
+
+pure func odpHasSlideBlocks(blocks: [Block]) -> bool =
+  match blocks {
+    [] => false,
+    SectionBlock(s) :: _ => if s.kind == "slide" then true else odpHasSlideBlocks(blocks),
+    _ :: rest => odpHasSlideBlocks(rest)
+  }
+
+pure func odpSplitBySlides(blocks: [Block]) -> [[Block]] =
+  match blocks {
+    [] => [],
+    SectionBlock(s) :: rest =>
+      if s.kind == "slide" then s.blocks :: odpSplitBySlides(rest)
+      else odpSplitBySlides(rest),
+    _ :: rest => odpSplitBySlides(rest)
+  }
+
+-- Build content.xml with slides
+pure func odpBuildContent(slides: [[Block]]) -> string {
+  "${xmlDecl()}<office:document-content ${odpNs()} office:version=\"1.2\"><office:automatic-styles><style:style style:name=\"dp1\" style:family=\"drawing-page\"/><style:style style:name=\"tf1\" style:family=\"graphic\"><style:graphic-properties draw:auto-grow-height=\"true\"/></style:style></office:automatic-styles><office:body><office:presentation>${odpSlidesToXml(slides, 1)}</office:presentation></office:body></office:document-content>"
+}
+
+pure func odpSlidesToXml(slides: [[Block]], idx: int) -> string =
+  match slides {
+    [] => "",
+    slide :: rest =>
+      "<draw:page draw:name=\"Slide${intToStr(idx)}\" draw:style-name=\"dp1\">${odpSlideContent(slide, 1)}</draw:page>${odpSlidesToXml(rest, idx + 1)}"
+  }
+
+-- Convert blocks to draw:frame text boxes on a slide
+pure func odpSlideContent(blocks: [Block], frameIdx: int) -> string =
+  match blocks {
+    [] => "",
+    block :: rest =>
+      "${odpBlockToFrame(block, frameIdx)}${odpSlideContent(rest, frameIdx + 1)}"
+  }
+
+pure func odpBlockToFrame(block: Block, frameIdx: int) -> string {
+  let yPos = "${intToStr(frameIdx * 3)}cm";
+  match block {
+    HeadingBlock(h) =>
+      odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p><text:span text:style-name=\"Bold\">${xmlEscape(h.text)}</text:span></text:p>"),
+
+    TextBlock(t) =>
+      if length(t.text) > 0
+      then odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p>${xmlEscape(t.text)}</text:p>")
+      else "",
+
+    TableBlock(t) =>
+      odpTextFrame("2cm", yPos, "22cm", "4cm",
+        odpTableInFrame(t.headers, t.rows)),
+
+    ListBlock(l) =>
+      odpTextFrame("2cm", yPos, "22cm", "3cm",
+        foldl(\acc item. "${acc}<text:p>\u2022 ${xmlEscape(item)}</text:p>", "", l.items)),
+
+    ImageBlock(i) =>
+      odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p>[Image: ${xmlEscape(i.description)}]</text:p>"),
+
+    AudioBlock(a) =>
+      odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p>[Audio: ${xmlEscape(a.transcription)}]</text:p>"),
+
+    VideoBlock(v) =>
+      odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p>[Video: ${xmlEscape(v.description)}]</text:p>"),
+
+    SectionBlock(s) =>
+      odpSlideContent(s.blocks, frameIdx),
+
+    ChangeBlock(c) =>
+      odpTextFrame("2cm", yPos, "22cm", "2cm",
+        "<text:p>${xmlEscape(c.text)} (${xmlEscape(c.changeType)})</text:p>")
+  }
+}
+
+pure func odpTextFrame(x: string, y: string, w: string, h: string, content: string) -> string =
+  "<draw:frame draw:style-name=\"tf1\" svg:x=\"${x}\" svg:y=\"${y}\" svg:width=\"${w}\" svg:height=\"${h}\"><draw:text-box>${content}</draw:text-box></draw:frame>"
+
+-- Table rendered as text inside a frame (ODP tables are complex, this is simpler)
+pure func odpTableInFrame(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerLine = if listLength(headers) > 0
+    then "<text:p>${foldl(\acc c. if length(acc) > 0 then "${acc} | ${xmlEscape(c.text)}" else xmlEscape(c.text), "", headers)}</text:p>"
+    else "";
+  let dataLines = foldl(\acc row.
+    "${acc}<text:p>${foldl(\a c. if length(a) > 0 then "${a} | ${xmlEscape(c.text)}" else xmlEscape(c.text), "", row)}</text:p>",
+    "", rows);
+  "${headerLine}${dataLines}"
+}
+
+-- Minimal styles.xml
+pure func odpMinimalStyles() -> string =
+  "${xmlDecl()}<office:document-styles ${odpNs()} office:version=\"1.2\"><office:styles/><office:automatic-styles><style:page-layout style:name=\"PM1\"><style:page-layout-properties fo:page-width=\"25.4cm\" fo:page-height=\"19.05cm\" style:print-orientation=\"landscape\"/></style:page-layout></office:automatic-styles><office:master-styles><style:master-page style:name=\"Default\" style:page-layout-name=\"PM1\"/></office:master-styles></office:document-styles>"
+
+-- Build meta.xml
+pure func odpBuildMeta(title: string, author: string) -> string =
+  "${xmlDecl()}<office:document-meta ${odpNs()} office:version=\"1.2\"><office:meta>${if length(title) > 0 then "<dc:title>${xmlEscape(title)}</dc:title>" else ""}${if length(author) > 0 then "<dc:creator>${xmlEscape(author)}</dc:creator>" else ""}<meta:generator>AILANG Parse</meta:generator></office:meta></office:document-meta>"
+
+-- manifest.xml
+pure func odpManifest() -> string =
+  "${xmlDecl()}<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\"><manifest:file-entry manifest:media-type=\"application/vnd.oasis.opendocument.presentation\" manifest:full-path=\"/\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"content.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"styles.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"meta.xml\"/></manifest:manifest>"

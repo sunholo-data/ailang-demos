@@ -1,0 +1,51 @@
+module docparse/services/mcp/auth
+
+import std/string (length)
+import std/json (encode, jo, kv, js)
+import std/env (getEnvOr)
+import std/net (httpPost)
+import std/result (Ok, Err)
+
+-- Start device authorization to get an API key.
+-- Returns a verification URL and user code. Tell the human to open the URL
+-- in their browser and sign in. Then call mcpAuthPoll with the device_code.
+-- The human sees a code (e.g. ABCD-1234) and clicks Approve.
+-- This follows RFC 8628 (Device Authorization Grant).
+@route("POST", "/mcp/v1/auth")
+export func mcpAuth(label: string) -> string ! {Env, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+  if mode == "local" then
+    encode(jo([
+      kv("error", js("LOCAL_MODE")),
+      kv("message", js("Device auth is not needed in local mode. Local parsing has no quota limits.")),
+      kv("suggested_fix", js("You are running AILANG Parse locally. Parse files directly with mcpParse."))
+    ]))
+  else {
+    let baseUrl = getEnvOr("DOCPARSE_API_URL", "https://docparse.ailang.sunholo.com");
+    let keyLabel = if length(label) > 0 then label else "mcp-agent";
+    let body = "{\"label\":\"${keyLabel}\",\"scope\":\"parse\"}";
+    let resp = httpPost("${baseUrl}/api/v1/auth/device", body);
+    resp
+  }
+}
+
+-- Poll for device authorization completion.
+-- Returns "pending" (keep polling every 5s), "approved" (with api_key and tier),
+-- or "expired" (start over with mcpAuth).
+-- On approval, save the api_key for all subsequent parse/convert/account calls.
+@route("POST", "/mcp/v1/auth/poll")
+export func mcpAuthPoll(deviceCode: string) -> string ! {Env, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+  if mode == "local" then
+    encode(jo([
+      kv("error", js("LOCAL_MODE")),
+      kv("message", js("Device auth is not needed in local mode.")),
+      kv("suggested_fix", js("You are running AILANG Parse locally. No API key is required."))
+    ]))
+  else {
+    let baseUrl = getEnvOr("DOCPARSE_API_URL", "https://docparse.ailang.sunholo.com");
+    let body = "{\"deviceCode\":\"${deviceCode}\"}";
+    let resp = httpPost("${baseUrl}/api/v1/auth/device/poll", body);
+    resp
+  }
+}

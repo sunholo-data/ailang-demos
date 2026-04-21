@@ -1,0 +1,270 @@
+module docparse/services/unstructured_compat
+
+import std/string (length, intToStr, join, split, substring)
+import std/list (map, foldl, length as listLength, flatMap, concat)
+import std/math (intToFloat)
+import std/json (encode, jo, kv, js, jnum, ja, jb, jn)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, DocMetadata, countBlocks, cellText)
+import docparse/services/xml_helpers (xmlEscape)
+
+-- Unstructured API Compatibility Layer
+--
+-- Maps AILANG Parse's Block ADT to Unstructured's element format.
+-- This enables AILANG Parse to be a drop-in replacement for the Unstructured API.
+--
+-- Unstructured element types:
+--   Title, NarrativeText, ListItem, Table, Image, Header, Footer,
+--   PageBreak, CodeSnippet, UncategorizedText, CompositeElement
+--
+-- Reference: https://docs.unstructured.io/api-reference/
+
+-- Convert a ParsedDocument to Unstructured-compatible element JSON array
+export pure func blocksToUnstructuredJson(doc: ParsedDocument) -> string
+  ensures { length(result) > 2 }
+{
+  let elements = blocksToElements(doc.blocks, doc.filename, unstMimeType(doc.format), 0);
+  encode(ja(elements))
+}
+
+-- Convert blocks to Unstructured element JSON values with sequence numbering
+pure func blocksToElements(blocks: [Block], filename: string, filetype: string, startIdx: int) -> [Json] {
+  let indexed = unstIndexBlocks(blocks, startIdx);
+  flatMap(\pair. unstBlockToElements(pair.block, filename, filetype, pair.idx), indexed)
+}
+
+-- A block with its sequence index (for element_id generation)
+type IndexedBlock = {block: Block, idx: int}
+
+-- Assign sequential indices to blocks
+pure func unstIndexBlocks(blocks: [Block], startIdx: int) -> [IndexedBlock] =
+  match blocks {
+    [] => [],
+    b :: rest =>
+      let ib = {block: b, idx: startIdx} in
+      ib :: unstIndexBlocks(rest, startIdx + 1)
+  }
+
+-- Convert a single Block to one or more Unstructured elements.
+-- Most blocks produce one element, but ListBlock produces one ListItem per item,
+-- and SectionBlock may produce multiple elements from its children.
+pure func unstBlockToElements(block: Block, filename: string, filetype: string, idx: int) -> [Json] =
+  match block {
+    HeadingBlock(h) =>
+      [unstElement("Title", h.text, filename, filetype, idx, h.level - 1, jn())],
+
+    TextBlock(t) =>
+      if length(t.text) == 0 then []
+      else
+        let typ = if t.style == "code" then "CodeSnippet" else "NarrativeText" in
+        [unstElement(typ, t.text, filename, filetype, idx, 0, jn())],
+
+    TableBlock(t) =>
+      let flatText = unstTableToText(t.headers, t.rows) in
+      let htmlStr = unstTableToHtml(t.headers, t.rows) in
+      let extra = jo([kv("text_as_html", js(htmlStr))]) in
+      [unstElement("Table", flatText, filename, filetype, idx, 0, extra)],
+
+    ListBlock(l) =>
+      unstListToElements(l.items, l.ordered, filename, filetype, idx),
+
+    ImageBlock(i) =>
+      let extra = if length(i.mime) > 0
+        then jo([kv("image_mime_type", js(i.mime))])
+        else jn() in
+      [unstElement("Image", i.description, filename, filetype, idx, 0, extra)],
+
+    AudioBlock(a) =>
+      [unstElement("NarrativeText", "[Audio: ${a.transcription}]", filename, filetype, idx, 0, jn())],
+
+    VideoBlock(v) =>
+      [unstElement("NarrativeText", "[Video: ${v.description}]", filename, filetype, idx, 0, jn())],
+
+    SectionBlock(s) =>
+      unstSectionToElements(s.kind, s.blocks, filename, filetype, idx),
+
+    ChangeBlock(c) =>
+      let text = "[${c.changeType}] ${c.text} (by ${c.author}, ${c.date})" in
+      [unstElement("NarrativeText", text, filename, filetype, idx, 0, jn())]
+  }
+
+-- Build a single Unstructured element as JSON
+pure func unstElement(typ: string, text: string, filename: string, filetype: string, idx: int, depth: int, extraMeta: Json) -> Json {
+  let elementId = unstElementId(typ, text, idx);
+  let baseMeta = jo([
+    kv("filename", js(filename)),
+    kv("filetype", js(filetype)),
+    kv("category_depth", jnum(intToFloat(depth)))
+  ]);
+  let meta = unstMergeMeta(baseMeta, extraMeta);
+  jo([
+    kv("type", js(typ)),
+    kv("element_id", js(elementId)),
+    kv("text", js(text)),
+    kv("metadata", meta)
+  ])
+}
+
+-- Generate a deterministic element ID from type + text + index.
+-- Unstructured uses SHA-256; we use a simpler hash since we don't have crypto stdlib.
+-- Format: hex-like string derived from content.
+pure func unstElementId(typ: string, text: string, idx: int) -> string {
+  let seed = "${typ}:${text}:${intToStr(idx)}";
+  unstSimpleHash(seed)
+}
+
+-- Simple deterministic hash producing a hex-like ID string.
+-- Not cryptographic — just needs to be deterministic and unique enough.
+pure func unstSimpleHash(input: string) -> string {
+  let h = foldl(\acc c. acc * 31 + c, 7, unstCharCodes(input, 0, length(input)));
+  let absH = if h < 0 then 0 - h else h;
+  unstIntToHex(absH)
+}
+
+-- Get character codes as list of ints (using substring comparison)
+pure func unstCharCodes(s: string, idx: int, len: int) -> [int] =
+  if idx >= len then []
+  else
+    let ch = substring(s, idx, idx + 1) in
+    let code = unstCharToCode(ch) in
+    code :: unstCharCodes(s, idx + 1, len)
+
+-- Map a single character to a numeric code
+-- Simple ordinal mapping for ASCII range
+pure func unstCharToCode(ch: string) -> int =
+  if ch == "a" then 97 else if ch == "b" then 98 else if ch == "c" then 99
+  else if ch == "d" then 100 else if ch == "e" then 101 else if ch == "f" then 102
+  else if ch == "g" then 103 else if ch == "h" then 104 else if ch == "i" then 105
+  else if ch == "j" then 106 else if ch == "k" then 107 else if ch == "l" then 108
+  else if ch == "m" then 109 else if ch == "n" then 110 else if ch == "o" then 111
+  else if ch == "p" then 112 else if ch == "q" then 113 else if ch == "r" then 114
+  else if ch == "s" then 115 else if ch == "t" then 116 else if ch == "u" then 117
+  else if ch == "v" then 118 else if ch == "w" then 119 else if ch == "x" then 120
+  else if ch == "y" then 121 else if ch == "z" then 122
+  else if ch == "A" then 65 else if ch == "B" then 66 else if ch == "C" then 67
+  else if ch == "D" then 68 else if ch == "E" then 69 else if ch == "F" then 70
+  else if ch == "G" then 71 else if ch == "H" then 72 else if ch == "I" then 73
+  else if ch == "J" then 74 else if ch == "K" then 75 else if ch == "L" then 76
+  else if ch == "M" then 77 else if ch == "N" then 78 else if ch == "O" then 79
+  else if ch == "P" then 80 else if ch == "Q" then 81 else if ch == "R" then 82
+  else if ch == "S" then 83 else if ch == "T" then 84 else if ch == "U" then 85
+  else if ch == "V" then 86 else if ch == "W" then 87 else if ch == "X" then 88
+  else if ch == "Y" then 89 else if ch == "Z" then 90
+  else if ch == "0" then 48 else if ch == "1" then 49 else if ch == "2" then 50
+  else if ch == "3" then 51 else if ch == "4" then 52 else if ch == "5" then 53
+  else if ch == "6" then 54 else if ch == "7" then 55 else if ch == "8" then 56
+  else if ch == "9" then 57
+  else if ch == " " then 32 else if ch == ":" then 58 else if ch == "." then 46
+  else if ch == "," then 44 else if ch == "-" then 45 else if ch == "_" then 95
+  else 63  -- '?' for unknown
+
+-- Convert an integer to hex-like string (16 chars, zero-padded)
+pure func unstIntToHex(n: int) -> string {
+  let hexChars = "0123456789abcdef";
+  unstIntToHexHelper(n, 16, hexChars)
+}
+
+pure func unstIntToHexHelper(n: int, digits: int, hexChars: string) -> string =
+  if digits <= 0 then ""
+  else
+    let remainder = n - ((n / 16) * 16) in
+    let digit = substring(hexChars, remainder, remainder + 1) in
+    "${unstIntToHexHelper(n / 16, digits - 1, hexChars)}${digit}"
+
+-- Merge base metadata with extra metadata fields
+-- If extra is null, return base. Otherwise combine.
+pure func unstMergeMeta(base: Json, extra: Json) -> Json =
+  base  -- TODO: merge when std/json supports object merging
+
+-- Convert table to flattened text (Unstructured format: space-separated cells, newline-separated rows)
+pure func unstTableToText(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerLine = if listLength(headers) > 0
+    then "${unstCellsToText(headers)}\n"
+    else "";
+  let rowLines = foldl(\acc row. "${acc}${unstCellsToText(row)}\n", "", rows);
+  "${headerLine}${rowLines}"
+}
+
+pure func unstCellsToText(cells: [TableCell]) -> string =
+  join(" ", map(cellText, cells))
+
+-- Convert table to HTML string for text_as_html metadata field
+export pure func unstTableToHtml(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerHtml = if listLength(headers) > 0
+    then "<thead><tr>${unstHeaderCellsHtml(headers)}</tr></thead>"
+    else "";
+  let bodyHtml = if listLength(rows) > 0
+    then "<tbody>${foldl(\acc row. "${acc}<tr>${unstDataCellsHtml(row)}</tr>", "", rows)}</tbody>"
+    else "";
+  "<table>${headerHtml}${bodyHtml}</table>"
+}
+
+pure func unstHeaderCellsHtml(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${unstHeaderCellHtml(c)}", "", cells)
+
+pure func unstHeaderCellHtml(cell: TableCell) -> string {
+  if cell.merged then ""
+  else if cell.colSpan > 1
+    then "<th colspan=\"${intToStr(cell.colSpan)}\">${xmlEscape(cell.text)}</th>"
+    else "<th>${xmlEscape(cell.text)}</th>"
+}
+
+pure func unstDataCellsHtml(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${unstDataCellHtml(c)}", "", cells)
+
+pure func unstDataCellHtml(cell: TableCell) -> string {
+  if cell.merged then ""
+  else if cell.colSpan > 1
+    then "<td colspan=\"${intToStr(cell.colSpan)}\">${xmlEscape(cell.text)}</td>"
+    else "<td>${xmlEscape(cell.text)}</td>"
+}
+
+-- Convert ListBlock items to individual ListItem elements
+pure func unstListToElements(items: [string], ordered: bool, filename: string, filetype: string, baseIdx: int) -> [Json] =
+  match items {
+    [] => [],
+    item :: rest =>
+      let el = unstElement("ListItem", item, filename, filetype, baseIdx, 0, jn()) in
+      el :: unstListToElements(rest, ordered, filename, filetype, baseIdx + 1)
+  }
+
+-- Convert SectionBlock to appropriate Unstructured element types
+pure func unstSectionToElements(kind: string, blocks: [Block], filename: string, filetype: string, idx: int) -> [Json] {
+  if kind == "header" then
+    blocksToElements(blocks, filename, filetype, idx * 100)
+  else if kind == "footer" then
+    blocksToElements(blocks, filename, filetype, idx * 100)
+  else if kind == "slide" then
+    blocksToElements(blocks, filename, filetype, idx * 100)
+  else if kind == "sheet" then
+    blocksToElements(blocks, filename, filetype, idx * 100)
+  else if kind == "comment" then
+    blocksToElements(blocks, filename, filetype, idx * 100)
+  else
+    blocksToElements(blocks, filename, filetype, idx * 100)
+}
+
+-- Map AILANG Parse format string to MIME type
+export pure func unstMimeType(format: string) -> string =
+  if format == "docx" then "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  else if format == "pptx" then "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  else if format == "xlsx" then "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  else if format == "pdf" then "application/pdf"
+  else if format == "html" then "text/html"
+  else if format == "csv" then "text/csv"
+  else if format == "markdown" then "text/markdown"
+  else if format == "epub" then "application/epub+zip"
+  else if format == "odt" then "application/vnd.oasis.opendocument.text"
+  else if format == "odp" then "application/vnd.oasis.opendocument.presentation"
+  else if format == "ods" then "application/vnd.oasis.opendocument.spreadsheet"
+  else if format == "png" then "image/png"
+  else if format == "jpg" then "image/jpeg"
+  else "application/octet-stream"
+
+-- Map AILANG Parse format to Unstructured-compatible strategy
+export pure func unstStrategy(format: string) -> string =
+  if needsAI(format) then "hi_res"
+  else "fast"
+
+-- Helper: check if format needs AI (mirrors format_router.needsAI)
+pure func needsAI(format: string) -> bool =
+  format == "pdf" || format == "image" || format == "audio" || format == "video" || format == "unknown"

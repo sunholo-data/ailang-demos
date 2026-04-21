@@ -1,0 +1,171 @@
+module docparse/services/samples
+
+import std/json (encode, jo, kv, js, ja, jb)
+import std/list (map)
+
+-- List available sample documents for testing with stable IDs.
+-- Each sample showcases specific parser features (tables, track changes, comments, images).
+@nowrap
+@route("GET", "/api/v1/samples")
+export pure func samples() -> string {
+  encode(jo([
+    kv("samples", ja([
+      -- DOCX: rich formatting (bold, italic, nested lists, styles)
+      sampleEntry("sample_docx_formatting", "data/test_files/challenge/challenge_formatting.docx",
+        "DOCX: Rich formatting with styles, bold, italic, and nested lists",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "formatting", "styles", "deterministic"], false),
+      -- DOCX: complex tables with merged cells
+      sampleEntry("sample_docx_tables", "data/test_files/tables.docx",
+        "DOCX: Tables with merged cells and column spans",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "tables", "merged-cells", "deterministic"], false),
+      -- DOCX: comments and track changes
+      sampleEntry("sample_docx_comments", "data/test_files/comments.docx",
+        "DOCX: Comments with author attribution and track changes",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "comments", "track-changes", "deterministic"], false),
+      -- DOCX: track changes with moves
+      sampleEntry("sample_docx_track_changes", "data/test_files/track_changes_move.docx",
+        "DOCX: Track changes with insertions, deletions, and paragraph moves",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "track-changes", "moves", "deterministic"], false),
+      -- DOCX: footnotes
+      sampleEntry("sample_docx_footnotes", "data/test_files/challenge/challenge_footnotes.docx",
+        "DOCX: Footnotes and endnotes",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "footnotes", "deterministic"], false),
+      -- DOCX: hyperlinks
+      sampleEntry("sample_docx_hyperlinks", "data/test_files/challenge/challenge_hyperlinks.docx",
+        "DOCX: Hyperlinks with URLs and anchor references",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "hyperlinks", "deterministic"], false),
+      -- DOCX: real-world complex document
+      sampleEntry("sample_docx_real_world", "data/test_files/challenge/challenge_real_world.docx",
+        "DOCX: Complex real-world document with mixed formatting, tables, and lists",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ["docx", "complex", "real-world", "deterministic"], false),
+      -- PPTX: slides with speaker notes
+      sampleEntry("sample_pptx_notes", "data/test_files/challenge/challenge_speaker_notes.pptx",
+        "PPTX: Presentation slides with speaker notes",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ["pptx", "speaker-notes", "deterministic"], false),
+      -- PPTX: rich text formatting
+      sampleEntry("sample_pptx_formatting", "data/test_files/challenge/challenge_pptx_formatting.pptx",
+        "PPTX: Rich text formatting in slides",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ["pptx", "formatting", "deterministic"], false),
+      -- XLSX: merged cells
+      sampleEntry("sample_xlsx_merged", "data/test_files/challenge/challenge_merged_cells.xlsx",
+        "XLSX: Spreadsheet with merged cell ranges",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ["xlsx", "merged-cells", "deterministic"], false),
+      -- XLSX: formulas with cached values
+      sampleEntry("sample_xlsx_formulas", "data/test_files/challenge/challenge_formulas.xlsx",
+        "XLSX: Spreadsheet with formulas and cached values",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ["xlsx", "formulas", "deterministic"], false),
+      -- XLSX: number formats
+      sampleEntry("sample_xlsx_formats", "data/test_files/challenge/challenge_number_formats.xlsx",
+        "XLSX: Number formatting (currency, percentages, dates)",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ["xlsx", "number-formats", "deterministic"], false),
+      -- CSV: AILANG format capabilities matrix
+      sampleEntry("sample_csv", "data/test_files/ailang_formats.csv",
+        "CSV: AILANG Parse format capabilities matrix (16 formats)",
+        "text/csv", ["csv", "ailang", "deterministic"], false),
+      -- Markdown: AILANG architecture overview with tables and code blocks
+      sampleEntry("sample_markdown", "data/test_files/ailang_architecture.md",
+        "Markdown: AILANG Parse architecture guide with tables, code blocks, and diagrams",
+        "text/markdown", ["markdown", "tables", "code-blocks", "ailang", "deterministic"], false),
+      -- HTML: Getting started guide with rich HTML features
+      sampleEntry("sample_html", "data/test_files/ailang_guide.html",
+        "HTML: AILANG Parse getting started guide with tables, lists, code, sections",
+        "text/html", ["html", "tables", "lists", "code", "sections", "ailang", "deterministic"], false),
+      -- ODT: table styles
+      sampleEntry("sample_odt", "data/test_files/lo_table_styles.odt",
+        "ODT: OpenDocument text with styled tables",
+        "application/vnd.oasis.opendocument.text", ["odt", "tables", "styles", "deterministic"], false),
+      -- ODP: presentation content
+      sampleEntry("sample_odp", "data/test_files/officeparser.odp",
+        "ODP: OpenDocument presentation with text frames",
+        "application/vnd.oasis.opendocument.presentation", ["odp", "deterministic"], false),
+      -- ODS: merged cell ranges
+      sampleEntry("sample_ods", "data/test_files/lo_merged.ods",
+        "ODS: OpenDocument spreadsheet with merged cells",
+        "application/vnd.oasis.opendocument.spreadsheet", ["ods", "merged-cells", "deterministic"], false),
+      -- EPUB: Alice in Wonderland (real book)
+      sampleEntry("sample_epub", "data/test_files/gutenberg_alice.epub",
+        "EPUB: Alice in Wonderland (Project Gutenberg) with chapters and illustrations",
+        "application/epub+zip", ["epub", "chapters", "real-content", "deterministic"], false),
+      -- EML: multipart welcome email with HTML and attachment
+      sampleEntry("sample_eml_welcome", "data/test_files/ailang_welcome.eml",
+        "EML: Welcome email with HTML body, plain text, and CSV attachment",
+        "message/rfc822", ["eml", "multipart", "attachment", "ailang", "deterministic"], false),
+      -- EML: release notes with multipart/alternative (text + HTML)
+      sampleEntry("sample_eml_release", "data/test_files/ailang_release_notes.eml",
+        "EML: Release notes email with plain text and rich HTML alternative",
+        "message/rfc822", ["eml", "multipart-alternative", "ailang", "deterministic"], false),
+      -- EML: bug report with encoded headers, CC, attachments
+      sampleEntry("sample_eml_bug", "data/test_files/ailang_bug_report.eml",
+        "EML: Bug report with RFC 2047 encoded headers, CC recipients, and file attachments",
+        "message/rfc822", ["eml", "encoded-headers", "cc", "attachments", "deterministic"], false),
+      -- MBOX: email thread with 4 reply messages
+      sampleEntry("sample_mbox_thread", "data/test_files/ailang_thread.mbox",
+        "MBOX: 4-message email thread discussing EML parser RFC with In-Reply-To threading",
+        "application/mbox", ["mbox", "thread", "reply-chain", "ailang", "deterministic"], false),
+      -- PDF: table report (AI-powered)
+      sampleEntry("sample_pdf", "data/test_files/table_report.pdf", "PDF: Report with tables",
+        "application/pdf", ["pdf", "tables", "ai-required"], true),
+      -- Audio: MP3 sample (AI-powered)
+      sampleEntry("sample_mp3", "data/test_files/sample.mp3", "MP3: Audio sample for transcription",
+        "audio/mpeg", ["audio", "ai-required"], true),
+      -- Video: MP4 sample (AI-powered)
+      sampleEntry("sample_mp4", "data/test_files/sample.mp4", "MP4: Video sample for visual + audio extraction",
+        "video/mp4", ["video", "ai-required"], true)
+    ]))
+  ]))
+}
+
+-- Build a single sample entry JSON object.
+pure func sampleEntry(id: string, path: string, label: string, mediaType: string, tags: [string], aiRequired: bool) -> Json =
+  jo([
+    kv("id", js(id)),
+    kv("path", js(path)),
+    kv("label", js(label)),
+    kv("media_type", js(mediaType)),
+    kv("tags", ja(map(js, tags))),
+    kv("expected_formats", ja(map(js, ["blocks", "markdown", "html", "a2ui"]))),
+    kv("ai_required", jb(aiRequired))
+  ])
+
+-- Resolve a sample ID to its file path.
+-- Returns empty string if sample ID not found.
+export pure func sampleResolvePath(sampleId: string) -> string =
+  if sampleId == "sample_docx_formatting" then "data/test_files/challenge/challenge_formatting.docx"
+  else if sampleId == "sample_docx_tables" then "data/test_files/tables.docx"
+  else if sampleId == "sample_docx_comments" then "data/test_files/comments.docx"
+  else if sampleId == "sample_docx_track_changes" then "data/test_files/track_changes_move.docx"
+  else if sampleId == "sample_docx_footnotes" then "data/test_files/challenge/challenge_footnotes.docx"
+  else if sampleId == "sample_docx_hyperlinks" then "data/test_files/challenge/challenge_hyperlinks.docx"
+  else if sampleId == "sample_docx_real_world" then "data/test_files/challenge/challenge_real_world.docx"
+  else if sampleId == "sample_pptx_notes" then "data/test_files/challenge/challenge_speaker_notes.pptx"
+  else if sampleId == "sample_pptx_formatting" then "data/test_files/challenge/challenge_pptx_formatting.pptx"
+  else if sampleId == "sample_xlsx_merged" then "data/test_files/challenge/challenge_merged_cells.xlsx"
+  else if sampleId == "sample_xlsx_formulas" then "data/test_files/challenge/challenge_formulas.xlsx"
+  else if sampleId == "sample_xlsx_formats" then "data/test_files/challenge/challenge_number_formats.xlsx"
+  else if sampleId == "sample_csv" then "data/test_files/ailang_formats.csv"
+  else if sampleId == "sample_markdown" then "data/test_files/ailang_architecture.md"
+  else if sampleId == "sample_html" then "data/test_files/ailang_guide.html"
+  else if sampleId == "sample_odt" then "data/test_files/lo_table_styles.odt"
+  else if sampleId == "sample_odp" then "data/test_files/officeparser.odp"
+  else if sampleId == "sample_ods" then "data/test_files/lo_merged.ods"
+  else if sampleId == "sample_epub" then "data/test_files/gutenberg_alice.epub"
+  else if sampleId == "sample_eml_welcome" then "data/test_files/ailang_welcome.eml"
+  else if sampleId == "sample_eml_release" then "data/test_files/ailang_release_notes.eml"
+  else if sampleId == "sample_eml_bug" then "data/test_files/ailang_bug_report.eml"
+  else if sampleId == "sample_mbox_thread" then "data/test_files/ailang_thread.mbox"
+  else if sampleId == "sample_pdf" then "data/test_files/table_report.pdf"
+  else if sampleId == "sample_mp3" then "data/test_files/sample.mp3"
+  else if sampleId == "sample_mp4" then "data/test_files/sample.mp4"
+  else ""

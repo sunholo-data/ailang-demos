@@ -1,0 +1,266 @@
+module docparse/services/a2ui_formatter
+
+-- A2UI Output Formatter
+--
+-- Converts AILANG Parse Block ADT to A2UI component JSON for cross-platform
+-- rendering. Uses the sunholo/a2ui package for component builders and
+-- JSON serialization.
+--
+-- The output is a flat adjacency-list JSON array where each element is a
+-- component node. SectionBlocks are flattened: the section becomes a
+-- container with child IDs, and children are emitted as top-level siblings.
+--
+-- Usage:
+--   import docparse/services/a2ui_formatter (documentToA2UI)
+
+import std/json (encode, decode, ja, js, jo, kv, jnum, getString, getInt, getBool, getArray, asArray, asString, getStringArrayOrEmpty)
+import std/string (join, length)
+import std/list (map, foldl, concat, length as listLength, flatMap)
+import std/math (intToFloat)
+import std/option (getOrElse)
+import pkg/sunholo/a2ui/components (A2UINode, A2UIProp, prop, a2uiContainer, a2uiLabeledContainer, a2uiHeading, a2uiText, a2uiPlainText, a2uiTable, a2uiList, a2uiImageRef, a2uiMedia, a2uiCalloutMeta, a2uiKeyValue, a2uiDivider, renderA2UI)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, DocMetadata, emptyMetadata, countBlocks, filterHeadings, filterTables, filterImages)
+
+-- Convert a full ParsedDocument to A2UI JSON string
+export pure func documentToA2UI(doc: ParsedDocument) -> string {
+  let metaNodes = a2uiMetadataNodes(doc.metadata, doc.format, doc.filename);
+  let blockResult = a2uiFlattenBlocks(doc.blocks, 0);
+  let blockNodes = blockResult.nodes;
+  let topIds = blockResult.topIds;
+  let metaIds = map(\n. n.id, metaNodes);
+  let allChildIds = concat(metaIds, topIds);
+  let root = a2uiContainer("doc", allChildIds);
+  let allNodes = concat([root], concat(metaNodes, blockNodes));
+  renderA2UI(allNodes)
+}
+
+-- Convert blocks to A2UI nodes (for partial rendering without metadata)
+export pure func blocksToA2UINodes(blocks: [Block]) -> [A2UINode] {
+  let result = a2uiFlattenBlocks(blocks, 0);
+  result.nodes
+}
+
+-- Internal: result of flattening blocks
+type FlatResult = {
+  nodes: [A2UINode],
+  topIds: [string],
+  nextIdx: int
+}
+
+-- Flatten a list of blocks into A2UI nodes with sequential IDs
+-- SectionBlocks become containers; their children are emitted at the top level
+pure func a2uiFlattenBlocks(blocks: [Block], startIdx: int) -> FlatResult {
+  foldl(a2uiFlattenOne, {nodes: [], topIds: [], nextIdx: startIdx}, blocks)
+}
+
+-- Flatten one block, accumulating into FlatResult
+pure func a2uiFlattenOne(acc: FlatResult, block: Block) -> FlatResult {
+  let idx = acc.nextIdx;
+  let id = "b_${show(idx)}";
+  match block {
+    SectionBlock(s) => {
+      -- Recursively flatten child blocks
+      let childResult = a2uiFlattenBlocks(s.blocks, idx + 1);
+      let childIds = childResult.topIds;
+      let sectionNode = a2uiLabeledContainer(id, s.kind, childIds);
+      {
+        nodes: concat(concat(acc.nodes, [sectionNode]), childResult.nodes),
+        topIds: concat(acc.topIds, [id]),
+        nextIdx: childResult.nextIdx
+      }
+    },
+    _ => {
+      let node = a2uiBlockToNode(id, block);
+      {
+        nodes: concat(acc.nodes, [node]),
+        topIds: concat(acc.topIds, [id]),
+        nextIdx: idx + 1
+      }
+    }
+  }
+}
+
+-- Convert a single non-section Block to an A2UINode
+pure func a2uiBlockToNode(id: string, block: Block) -> A2UINode =
+  match block {
+    HeadingBlock(h) =>
+      a2uiHeading(id, h.text, h.level),
+    TextBlock(t) =>
+      a2uiText(id, t.text, t.style),
+    TableBlock(t) =>
+      a2uiTable(id, a2uiCellsToJsonStr(t.headers), a2uiRowsToJsonStr(t.rows)),
+    ListBlock(l) =>
+      a2uiList(id, a2uiItemsToJsonStr(l.items), l.ordered),
+    ImageBlock(i) =>
+      a2uiImageRef(id, i.description, i.mime),
+    AudioBlock(a) =>
+      a2uiMedia(id, "audio", a.transcription, a.mime),
+    VideoBlock(v) =>
+      a2uiMedia(id, "video", v.description, v.mime),
+    ChangeBlock(c) =>
+      a2uiCalloutMeta(id, c.changeType, c.text,
+        encode(jo([kv("author", js(c.author)), kv("date", js(c.date))]))),
+    SectionBlock(_) =>
+      -- Should not reach here (handled in a2uiFlattenOne)
+      a2uiPlainText(id, "[section]")
+  }
+
+-- ============================================================
+-- JSON encoding helpers for table/list data in props
+-- ============================================================
+
+-- Encode table headers (list of TableCells) as a JSON array string
+pure func a2uiCellsToJsonStr(cells: [TableCell]) -> string {
+  encode(ja(map(a2uiCellToJson, cells)))
+}
+
+-- Encode a single cell, including span info if merged
+pure func a2uiCellToJson(cell: TableCell) -> Json {
+  if cell.colSpan == 1 && not cell.merged
+  then js(cell.text)
+  else jo([
+    kv("text", js(cell.text)),
+    kv("colSpan", jnum(intToFloat(cell.colSpan))),
+    kv("merged", if cell.merged then js("true") else js("false"))
+  ])
+}
+
+-- Encode table rows as a JSON array of arrays string
+pure func a2uiRowsToJsonStr(rows: [[TableCell]]) -> string {
+  encode(ja(map(\row. ja(map(a2uiCellToJson, row)), rows)))
+}
+
+-- Encode list items as a JSON array string
+pure func a2uiItemsToJsonStr(items: [string]) -> string {
+  encode(ja(map(js, items)))
+}
+
+-- ============================================================
+-- Metadata panel
+-- ============================================================
+
+-- Generate A2UI nodes for document metadata
+pure func a2uiMetadataNodes(meta: DocMetadata, format: string, filename: string) -> [A2UINode] {
+  let nodes = [a2uiKeyValue("meta_format", "Format", format)];
+  let nodes2 = if length(meta.title) > 0
+    then concat(nodes, [a2uiKeyValue("meta_title", "Title", meta.title)])
+    else nodes;
+  let nodes3 = if length(meta.author) > 0
+    then concat(nodes2, [a2uiKeyValue("meta_author", "Author", meta.author)])
+    else nodes2;
+  let nodes4 = if length(meta.created) > 0
+    then concat(nodes3, [a2uiKeyValue("meta_created", "Created", meta.created)])
+    else nodes3;
+  if meta.pageCount > 0
+    then concat(nodes4, [a2uiKeyValue("meta_pages", "Pages", show(meta.pageCount))])
+    else nodes4
+}
+
+-- ============================================================
+-- JSON → Block ADT decoder (inverse of output_formatter.blockToJson)
+-- Used by the WASM browser demo to convert block JSON back to
+-- Block ADT for A2UI conversion, eliminating the duplicate JS impl.
+-- ============================================================
+
+-- Decode a JSON string of block array into Block ADT values, then convert to A2UI.
+-- This is the bridge function called from docparse_browser.ail in WASM.
+export pure func convertBlocksJsonToA2UI(blocksJson: string) -> string {
+  match decode(blocksJson) {
+    Ok(json) => {
+      let blocks = a2ui_jsonToBlockList(json);
+      let doc = {format: "", filename: "", metadata: emptyMetadata(), blocks: blocks};
+      documentToA2UI(doc)
+    },
+    Err(_) => "[]"
+  }
+}
+
+-- Decode a Json value (array) into a list of Blocks
+export pure func a2ui_jsonToBlockList(jsonVal: Json) -> [Block] {
+  match asArray(jsonVal) {
+    Some(arr) => map(a2ui_jsonToBlock, arr),
+    None => []
+  }
+}
+
+-- Decode a list of Json values into Blocks (for recursive SectionBlock use)
+pure func a2ui_jsonArrayToBlocks(arr: [Json]) -> [Block] =
+  map(a2ui_jsonToBlock, arr)
+
+-- Decode a single Json object into a Block ADT value
+pure func a2ui_jsonToBlock(j: Json) -> Block {
+  let t = getOrElse(getString(j, "type"), "text");
+  if t == "heading" then
+    HeadingBlock({
+      text: getOrElse(getString(j, "text"), ""),
+      level: getOrElse(getInt(j, "level"), 1)
+    })
+  else if t == "table" then
+    TableBlock({
+      headers: a2ui_jsonToCells(getOrElse(getArray(j, "headers"), [])),
+      rows: a2ui_jsonToCellRows(getOrElse(getArray(j, "rows"), []))
+    })
+  else if t == "list" then
+    ListBlock({
+      items: getStringArrayOrEmpty(j, "items"),
+      ordered: getOrElse(getBool(j, "ordered"), false)
+    })
+  else if t == "image" then
+    ImageBlock({
+      data: "",
+      description: getOrElse(getString(j, "description"), ""),
+      mime: getOrElse(getString(j, "mime"), "")
+    })
+  else if t == "audio" then
+    AudioBlock({
+      data: "",
+      transcription: getOrElse(getString(j, "transcription"), ""),
+      mime: getOrElse(getString(j, "mime"), "")
+    })
+  else if t == "video" then
+    VideoBlock({
+      data: "",
+      description: getOrElse(getString(j, "description"), ""),
+      mime: getOrElse(getString(j, "mime"), "")
+    })
+  else if t == "section" then
+    SectionBlock({
+      kind: getOrElse(getString(j, "kind"), ""),
+      blocks: a2ui_jsonArrayToBlocks(getOrElse(getArray(j, "blocks"), []))
+    })
+  else if t == "change" then
+    ChangeBlock({
+      changeType: getOrElse(getString(j, "changeType"), ""),
+      author: getOrElse(getString(j, "author"), ""),
+      date: getOrElse(getString(j, "date"), ""),
+      text: getOrElse(getString(j, "text"), "")
+    })
+  else
+    TextBlock({
+      text: getOrElse(getString(j, "text"), ""),
+      style: getOrElse(getString(j, "style"), ""),
+      level: getOrElse(getInt(j, "level"), 0)
+    })
+}
+
+-- Decode table cells. Compact form: just a string. Expanded form: {text, colSpan, merged}.
+pure func a2ui_jsonToCells(arr: [Json]) -> [TableCell] =
+  map(a2ui_jsonToCell, arr)
+
+pure func a2ui_jsonToCell(j: Json) -> TableCell {
+  match asString(j) {
+    Some(s) => {text: s, colSpan: 1, rowSpan: 1, merged: false},
+    None => {
+      text: getOrElse(getString(j, "text"), ""),
+      colSpan: getOrElse(getInt(j, "colSpan"), 1),
+      rowSpan: getOrElse(getInt(j, "rowSpan"), 1),
+      merged: getOrElse(getBool(j, "merged"), false)
+    }
+  }
+}
+
+pure func a2ui_jsonToCellRows(arr: [Json]) -> [[TableCell]] =
+  map(\row. match asArray(row) {
+    Some(cells) => a2ui_jsonToCells(cells),
+    None => []
+  }, arr)

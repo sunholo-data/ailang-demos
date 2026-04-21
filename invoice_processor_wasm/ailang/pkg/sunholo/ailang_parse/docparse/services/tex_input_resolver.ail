@@ -1,0 +1,151 @@
+module docparse/services/tex_input_resolver
+
+import std/string (length, substring, find, contains)
+import std/fs (readFile, fileExists)
+import std/io (println)
+import std/list (foldl)
+
+-- Resolve \input{...} and \include{...} in LaTeX source by reading the
+-- referenced files and splicing their content inline. This runs before
+-- pure parseLatex so the pure parser stays effect-free.
+--
+-- Design choices (matches v0.15.0 design_docs/planned/v0_15_0/latex_parser.md):
+--   - DFS, depth-capped at 10 to prevent runaway recursion on broken bundles.
+--   - Cycle detection via a visited-paths list.
+--   - Path resolution: try `<basedir>/<arg>.tex`, then `<basedir>/<arg>`.
+--   - Unresolved/cyclic references become a LaTeX comment so the downstream
+--     parser stays silent on them rather than choking.
+
+-- --- Path helpers ------------------------------------------------------------
+
+-- Extract the directory containing a given file path. "a/b/c.tex" -> "a/b".
+-- No trailing slash. Returns "." if the path has no slash.
+export pure func texDirname(p: string) -> string {
+  let idx = texLastIndexOf(p, "/");
+  if idx < 0 then "."
+  else if idx == 0 then "/"
+  else substring(p, 0, idx)
+}
+
+-- Return the last index of `needle` in `hay`, or -1 if absent. O(n*m) —
+-- acceptable for path strings which are short.
+pure func texLastIndexOf(hay: string, needle: string) -> int {
+  texLastIndexOfFrom(hay, needle, 0, -1)
+}
+
+pure func texLastIndexOfFrom(hay: string, needle: string, start: int, best: int) -> int {
+  let rest = substring(hay, start, length(hay));
+  let hit = find(rest, needle);
+  if hit < 0 then best
+  else texLastIndexOfFrom(hay, needle, start + hit + 1, start + hit)
+}
+
+-- Join two path components. Handles absolute second paths and trailing slashes.
+pure func texJoinPath(dir: string, sub: string) -> string {
+  if length(sub) == 0 then dir
+  else if length(dir) == 0 then sub
+  else if substring(sub, 0, 1) == "/" then sub
+  else if substring(dir, length(dir) - 1, length(dir)) == "/" then "${dir}${sub}"
+  else "${dir}/${sub}"
+}
+
+-- --- Visited-set membership (simple linear scan) -----------------------------
+
+pure func texVisited(visited: [string], path: string) -> bool =
+  foldl(\acc p. if acc then true else p == path, false, visited)
+
+-- --- Main entry point --------------------------------------------------------
+
+-- Expand all \input and \include directives in `content`, resolving
+-- relative to `basedir`. Safe on single-file papers (returns content
+-- unchanged when no directives are found).
+export func expandInputs(basedir: string, content: string) -> string ! {IO, FS} =
+  expandAtDepth(basedir, content, 0, [])
+
+-- Internal recursion with depth & visited-set tracking.
+func expandAtDepth(basedir: string, content: string, depth: int, visited: [string]) -> string ! {IO, FS} {
+  if depth > 10 then depthCapHit(content)
+  else expandScan(basedir, content, 0, depth, visited)
+}
+
+-- Helper: log + return content unchanged when we hit the recursion cap.
+func depthCapHit(content: string) -> string ! {IO} {
+  let _ = println("    [tex_input_resolver] depth cap reached; not expanding further") in
+  content
+}
+
+-- Scan `content` starting at `fromIdx` for the earliest of \input{ or
+-- \include{.  When found, splice in the resolved file and continue scanning
+-- from just after the insertion.
+func expandScan(basedir: string, content: string, fromIdx: int, depth: int, visited: [string]) -> string ! {IO, FS} {
+  if fromIdx >= length(content) then content
+  else
+    let tail = substring(content, fromIdx, length(content)) in
+    let inputRel = find(tail, "\\input{") in
+    let includeRel = find(tail, "\\include{") in
+    let markerInfo = pickEarliest(inputRel, includeRel) in
+    let idx = markerInfo.idx in
+    let marker = markerInfo.marker in
+    if idx < 0 then content
+    else
+      let absoluteIdx = fromIdx + idx in
+      let argStart = absoluteIdx + length(marker) in
+      let afterMarker = substring(content, argStart, length(content)) in
+      let closeRel = find(afterMarker, "}") in
+      if closeRel < 0 then content
+      else
+        let argEnd = argStart + closeRel in
+        let arg = substring(content, argStart, argEnd) in
+        let before = substring(content, 0, absoluteIdx) in
+        let after = substring(content, argEnd + 1, length(content)) in
+        let resolved = resolveTexPath(basedir, arg) in
+        expandOne(basedir, before, after, arg, resolved, depth, visited, absoluteIdx)
+}
+
+pure func pickEarliest(a: int, b: int) -> {idx: int, marker: string} {
+  if a < 0 && b < 0 then {idx: -1, marker: ""}
+  else if a < 0 then {idx: b, marker: "\\include{"}
+  else if b < 0 then {idx: a, marker: "\\input{"}
+  else if a <= b then {idx: a, marker: "\\input{"}
+  else {idx: b, marker: "\\include{"}
+}
+
+-- Read + recurse the resolved file, then splice and keep scanning.
+func expandOne(basedir: string, before: string, after: string, arg: string,
+               resolved: string, depth: int, visited: [string], insertAt: int) -> string ! {IO, FS} {
+  if length(resolved) == 0 then
+    -- Unresolved: replace directive with a comment so scan continues cleanly.
+    let replacement = "% [input not found: ${arg}]" in
+    let patched = "${before}${replacement}${after}" in
+    expandScan(basedir, patched, insertAt + length(replacement), depth, visited)
+  else if texVisited(visited, resolved) then
+    let replacement = "% [input cycle: ${arg}]" in
+    let patched = "${before}${replacement}${after}" in
+    expandScan(basedir, patched, insertAt + length(replacement), depth, visited)
+  else readAndExpand(basedir, before, after, arg, resolved, depth, visited, insertAt)
+}
+
+-- Successful-resolution branch split out so the top-level `let`s don't
+-- cross an effectful println inline.
+func readAndExpand(basedir: string, before: string, after: string, arg: string,
+                   resolved: string, depth: int, visited: [string], insertAt: int) -> string ! {IO, FS} {
+  let inner = readFile(resolved) in
+  let _ = println("    [\\input] ${arg} -> ${resolved} (${show(length(inner))} chars)") in
+  let newVisited = [resolved] ++ visited in
+  let innerDir = texDirname(resolved) in
+  let expanded = expandAtDepth(innerDir, inner, depth + 1, newVisited) in
+  let replacement = "\n${expanded}\n" in
+  let patched = "${before}${replacement}${after}" in
+  expandScan(basedir, patched, insertAt + length(replacement), depth, visited)
+}
+
+-- Resolve `arg` against `basedir`. Try `basedir/arg.tex`, then `basedir/arg`.
+-- Returns "" if neither exists.
+func resolveTexPath(basedir: string, arg: string) -> string ! {FS} {
+  let withExt = texJoinPath(basedir, "${arg}.tex") in
+  if fileExists(withExt) then withExt
+  else
+    let bare = texJoinPath(basedir, arg) in
+    if fileExists(bare) then bare
+    else ""
+}

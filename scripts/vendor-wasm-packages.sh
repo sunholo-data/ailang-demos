@@ -56,13 +56,15 @@ for entry in $PACKAGES; do
   rm -rf "$PKG_DIR"
   mkdir -p "$PKG_DIR"
 
-  # Copy only .ail files
+  # Copy all .ail files preserving directory structure
+  # (some packages use module_prefix and ship files in subdirs, e.g. docparse/services/*.ail)
   count=0
-  for f in "$CACHE_DIR"/*.ail; do
-    [ -f "$f" ] || continue
-    cp "$f" "$PKG_DIR/"
+  while IFS= read -r -d '' f; do
+    rel="${f#$CACHE_DIR/}"
+    mkdir -p "$PKG_DIR/$(dirname "$rel")"
+    cp "$f" "$PKG_DIR/$rel"
     count=$((count + 1))
-  done
+  done < <(find "$CACHE_DIR" -name '*.ail' -type f -print0)
 
   echo "  $PKG_NAME@$PKG_VER — $count modules → $PKG_DIR"
 done

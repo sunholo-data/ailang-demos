@@ -1,0 +1,39 @@
+-- Gemini Files API endpoint URL constructors.
+--
+-- Supports two backends for file uploads:
+--   Backend A: GCS (Vertex AI / ADC) — upload to Cloud Storage, reference via gs:// URI
+--   Backend B: AI Studio Files API — upload via Gemini Files API, reference via file URI
+--
+-- Both produce URIs that Gemini generateContent accepts in fileData parts.
+
+module sunholo/gemini_files/endpoints
+
+import std/string (length)
+
+-- === Backend A: Google Cloud Storage (Vertex AI) ===
+
+-- GCS JSON API upload URL (simple/media upload).
+-- uploadType=media sends the file body directly (no multipart metadata).
+export pure func gcsUploadUrl(bucket: string, objectName: string) -> string =
+  "https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${objectName}"
+
+-- GCS JSON API object URL (for GET metadata or DELETE).
+export pure func gcsObjectUrl(bucket: string, objectName: string) -> string =
+  "https://storage.googleapis.com/storage/v1/b/${bucket}/o/${objectName}"
+
+-- GCS URI for use in Gemini fileData parts.
+-- Vertex AI generateContent natively accepts gs:// URIs.
+export pure func gcsUri(bucket: string, objectName: string) -> string =
+  "gs://${bucket}/${objectName}"
+
+-- === Backend B: Google AI Studio Files API ===
+
+-- AI Studio Files API upload URL.
+-- Expects multipart/related body: JSON metadata + file content.
+export pure func aiStudioUploadUrl(apiKey: string) -> string =
+  "https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}"
+
+-- AI Studio Files API file URL (for GET status or DELETE).
+-- fileName: e.g. "files/abc123" (as returned by upload response)
+export pure func aiStudioFileUrl(apiKey: string, fileName: string) -> string =
+  "https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}"

@@ -1,0 +1,39 @@
+-- HTTP response parsing helpers
+--
+-- Standard patterns for handling API responses: JSON decode, status check,
+-- field extraction with error context.
+--
+-- Usage:
+--   import pkg/sunholo/http_helpers/response (requireOk, parseJsonBody, requireField)
+
+module sunholo/http_helpers/response
+
+import std/json (decode, getString, getInt, getNumber, getArray, getObject)
+import std/option (getOrElse, isSome)
+import std/result (Ok, Err)
+
+-- Type alias for HTTP response (matches std/net HttpResponse shape)
+type HttpResponse = {
+  status: int,
+  headers: [{name: string, value: string}],
+  body: string,
+  ok: bool
+}
+
+-- Check response status is 2xx, return body or error with status
+export pure func requireOk(resp: HttpResponse) -> Result[string, string] =
+  if resp.ok then Ok(resp.body)
+  else Err("HTTP ${show(resp.status)}: ${resp.body}")
+
+-- Parse response body as JSON
+export pure func parseJsonBody(body: string) -> Result[Json, string] =
+  match decode(body) {
+    Ok(json) => Ok(json),
+    Err(e) => Err("JSON parse error: ${e}")
+  }
+
+-- Extract a required string field from JSON, with context for errors
+export pure func requireField(json: Json, field: string) -> Result[string, string] =
+  let val = getString(json, field)
+  in if isSome(val) then Ok(getOrElse(val, ""))
+     else Err("Missing required field: ${field}")

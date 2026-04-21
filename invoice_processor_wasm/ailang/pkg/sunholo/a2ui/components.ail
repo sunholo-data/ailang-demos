@@ -1,0 +1,158 @@
+-- A2UI Component Builder and Renderer
+--
+-- Provides types, pure builder functions, and JSON serialization for A2UI
+-- component trees. A2UI is a declarative JSON format for agent-driven UIs
+-- that renders on any platform (Lit, Angular, Flutter, React).
+--
+-- Components use a flat adjacency-list format: each node has an ID, type,
+-- child IDs, and string-keyed properties. This is LLM-friendly and supports
+-- incremental streaming.
+--
+-- Usage:
+--   import pkg/sunholo/a2ui/components (A2UINode, a2uiContainer, a2uiHeading, renderA2UI)
+
+module sunholo/a2ui/components
+
+import std/json (encode, jo, ja, js, kv)
+import std/string (join, length)
+import std/list (map, length as listLength)
+
+-- A key-value property pair
+export type A2UIProp = {
+  key: string,
+  value: string
+}
+
+-- A single A2UI component node in the flat adjacency-list
+export type A2UINode = {
+  id: string,
+  nodeType: string,
+  children: [string],
+  props: [A2UIProp]
+}
+
+-- ============================================================
+-- Property helper
+-- ============================================================
+
+-- Build a property pair
+export pure func prop(k: string, v: string) -> A2UIProp = {key: k, value: v}
+
+-- ============================================================
+-- Component builders (pure, composable)
+-- ============================================================
+
+-- Container: groups child components (sections, documents, forms)
+export pure func a2uiContainer(id: string, childIds: [string]) -> A2UINode =
+  {id: id, nodeType: "container", children: childIds, props: []}
+
+-- Container with a label (e.g. "header", "footer", "slide")
+export pure func a2uiLabeledContainer(id: string, label: string, childIds: [string]) -> A2UINode =
+  {id: id, nodeType: "container", children: childIds, props: [prop("label", label)]}
+
+-- Heading: text with level (1-6)
+export pure func a2uiHeading(id: string, text: string, level: int) -> A2UINode =
+  {id: id, nodeType: "heading", children: [], props: [prop("text", text), prop("level", show(level))]}
+
+-- Text: paragraph or inline text with optional style
+export pure func a2uiText(id: string, content: string, style: string) -> A2UINode =
+  {id: id, nodeType: "text", children: [], props: [prop("text", content), prop("style", style)]}
+
+-- Plain text (no style)
+export pure func a2uiPlainText(id: string, content: string) -> A2UINode =
+  {id: id, nodeType: "text", children: [], props: [prop("text", content)]}
+
+-- Table: headers and rows as JSON-encoded strings
+-- Headers: JSON array of strings, e.g. '["Name","Age"]'
+-- Rows: JSON array of arrays, e.g. '[["Alice","30"],["Bob","25"]]'
+export pure func a2uiTable(id: string, headersJson: string, rowsJson: string) -> A2UINode =
+  {id: id, nodeType: "table", children: [], props: [prop("headers", headersJson), prop("rows", rowsJson)]}
+
+-- List: ordered or unordered items
+export pure func a2uiList(id: string, itemsJson: string, ordered: bool) -> A2UINode =
+  {id: id, nodeType: "list", children: [], props: [
+    prop("items", itemsJson),
+    prop("ordered", if ordered then "true" else "false")
+  ]}
+
+-- Image: alt text and source (URL or data URI)
+export pure func a2uiImage(id: string, alt: string, src: string) -> A2UINode =
+  {id: id, nodeType: "image", children: [], props: [prop("alt", alt), prop("src", src)]}
+
+-- Image reference (no data, for lightweight output)
+export pure func a2uiImageRef(id: string, alt: string, mime: string) -> A2UINode =
+  {id: id, nodeType: "image", children: [], props: [prop("alt", alt), prop("mime", mime)]}
+
+-- Media: audio or video with fallback text
+export pure func a2uiMedia(id: string, mediaType: string, description: string, mime: string) -> A2UINode =
+  {id: id, nodeType: "media", children: [], props: [
+    prop("mediaType", mediaType),
+    prop("description", description),
+    prop("mime", mime)
+  ]}
+
+-- Callout: highlighted content with variant (info, warning, insert, delete, etc.)
+export pure func a2uiCallout(id: string, variant: string, content: string) -> A2UINode =
+  {id: id, nodeType: "callout", children: [], props: [prop("variant", variant), prop("text", content)]}
+
+-- Callout with metadata JSON (author, date, etc.)
+export pure func a2uiCalloutMeta(id: string, variant: string, content: string, metaJson: string) -> A2UINode =
+  {id: id, nodeType: "callout", children: [], props: [
+    prop("variant", variant),
+    prop("text", content),
+    prop("metadata", metaJson)
+  ]}
+
+-- Key-value display (for metadata panels)
+export pure func a2uiKeyValue(id: string, label: string, value: string) -> A2UINode =
+  {id: id, nodeType: "key-value", children: [], props: [prop("label", label), prop("value", value)]}
+
+-- Divider / separator
+export pure func a2uiDivider(id: string) -> A2UINode =
+  {id: id, nodeType: "divider", children: [], props: []}
+
+-- Generic node: for custom or future component types
+export pure func a2uiNode(id: string, nodeType: string, childIds: [string], nodeProps: [A2UIProp]) -> A2UINode =
+  {id: id, nodeType: nodeType, children: childIds, props: nodeProps}
+
+-- ============================================================
+-- JSON Rendering
+-- ============================================================
+
+-- Render a list of A2UINodes to A2UI JSON string (flat array)
+-- Output: [{"id":"...","type":"...","children":[...],"props":{...}}, ...]
+export pure func renderA2UI(nodes: [A2UINode]) -> string
+  ensures { length(result) > 2 }
+{
+  encode(ja(map(a2ui_nodeToJson, nodes)))
+}
+
+-- Render as JSONL (one JSON object per line, for streaming)
+export pure func renderA2UILines(nodes: [A2UINode]) -> string {
+  join("\n", map(a2ui_nodeToLine, nodes))
+}
+
+-- Convert a single A2UINode to a Json value
+pure func a2ui_nodeToJson(node: A2UINode) -> Json {
+  jo([
+    kv("id", js(node.id)),
+    kv("type", js(node.nodeType)),
+    kv("children", ja(map(js, node.children))),
+    kv("props", a2ui_propsToJson(node.props))
+  ])
+}
+
+-- Convert a single node to a JSON line string
+pure func a2ui_nodeToLine(node: A2UINode) -> string {
+  encode(a2ui_nodeToJson(node))
+}
+
+-- Convert prop list to a JSON object
+pure func a2ui_propsToJson(props: [A2UIProp]) -> Json {
+  jo(map(a2ui_propToKv, props))
+}
+
+-- Convert a single prop to a JSON key-value pair
+pure func a2ui_propToKv(p: A2UIProp) -> {key: string, value: Json} {
+  kv(p.key, js(p.value))
+}

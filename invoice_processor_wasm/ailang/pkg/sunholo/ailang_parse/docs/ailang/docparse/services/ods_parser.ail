@@ -1,0 +1,145 @@
+module docparse/services/ods_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/zip (readEntry)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, trim)
+import std/list (map, flatMap, filter, length as listLength)
+import docparse/types/document (Block, TextBlock, TableBlock, SectionBlock, TableCell, DocMetadata, simpleCell, emptyMetadata)
+
+-- ODS Parser — converts OpenDocument Spreadsheet to Block ADT.
+-- Pure AILANG implementation using std/zip + std/xml.
+--
+-- ODS structure (ZIP archive):
+--   content.xml    — sheets (table:table elements)
+--   meta.xml       — metadata
+--
+-- ODF Spreadsheet XML structure:
+--   office:body > office:spreadsheet > table:table (sheets)
+--   Each table:table contains table:table-row > table:table-cell
+--
+-- Analogous to XLSX parser but with ODF namespaces.
+
+-- Parse an ODS file into content blocks
+export func parseOds(filepath: string) -> [Block] ! {FS}
+  ensures { listLength(result) >= 0 }
+{
+  let xml = match readEntry(filepath, "content.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0
+  then [TextBlock({text: "ODS error: could not read content.xml", style: "error", level: 0})]
+  else match parse(xml) {
+    Ok(root) => odsExtractSheets(root),
+    Err(e) => [TextBlock({text: "ODS XML parse error: ${e}", style: "error", level: 0})]
+  }
+}
+
+-- Extract metadata from an ODS file
+export func parseOdsMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let xml = match readEntry(filepath, "meta.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0 then emptyMetadata()
+  else match parse(xml) {
+    Ok(root) => odsParseMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Navigate to office:body/office:spreadsheet and extract sheets
+export pure func odsExtractSheets(root: XmlNode) -> [Block] {
+  match findFirst(root, "office:body") {
+    Some(body) =>
+      match findFirst(body, "office:spreadsheet") {
+        Some(ss) => {
+          let tables = findAll(ss, "table:table");
+          flatMap(odsParseSheet, tables)
+        },
+        None => []
+      },
+    None => []
+  }
+}
+
+-- Parse a single table:table (sheet) into a SectionBlock wrapping a TableBlock
+pure func odsParseSheet(table: XmlNode) -> [Block] {
+  let sheetName = getOrElse(getAttr(table, "table:name"), "Sheet");
+  let rows = findAll(table, "table:table-row");
+  -- Filter out empty rows (ODS often has many empty trailing rows)
+  let parsedRows = map(odsParseRow, rows);
+  let nonEmptyRows = filter(odsRowHasContent, parsedRows);
+
+  if listLength(nonEmptyRows) == 0 then []
+  else {
+    let tableBlock = match nonEmptyRows {
+      [] => TableBlock({rows: [], headers: []}),
+      firstRow :: dataRows =>
+        TableBlock({rows: dataRows, headers: firstRow})
+    };
+    [SectionBlock({kind: "sheet:${sheetName}", blocks: [tableBlock]})]
+  }
+}
+
+-- Parse a single table:table-row
+pure func odsParseRow(tr: XmlNode) -> [TableCell] {
+  let cells = findAll(tr, "table:table-cell");
+  map(odsParseCell, cells)
+}
+
+-- Parse a table:table-cell
+-- Handles table:number-columns-repeated for repeated empty cells
+pure func odsParseCell(cell: XmlNode) -> TableCell {
+  let text = trim(getText(cell));
+  let colSpanStr = getOrElse(getAttr(cell, "table:number-columns-spanned"), "1");
+  let colSpan = odsParseSpan(colSpanStr);
+  {text: text, colSpan: colSpan, rowSpan: 1, merged: false}
+}
+
+-- Parse span value
+-- Contract: always returns at least 1
+pure func odsParseSpan(s: string) -> int
+  ensures { result >= 1 }
+{
+  if s == "1" then 1
+  else if s == "2" then 2
+  else if s == "3" then 3
+  else if s == "4" then 4
+  else if s == "5" then 5
+  else if s == "6" then 6
+  else if s == "7" then 7
+  else if s == "8" then 8
+  else if s == "9" then 9
+  else if s == "10" then 10
+  else 1
+}
+
+-- Check if a row has any non-empty cells
+pure func odsRowHasContent(cells: [TableCell]) -> bool {
+  match cells {
+    [] => false,
+    c :: rest => if length(c.text) > 0 then true else odsRowHasContent(rest)
+  }
+}
+
+-- Parse metadata from meta.xml
+export pure func odsParseMetadata(root: XmlNode) -> DocMetadata {
+  let title = odsFindMeta(root, "dc:title");
+  let author = odsFindMeta(root, "dc:creator");
+  let date = odsFindMeta(root, "dc:date");
+  {title: title, author: author, created: date, modified: "", pageCount: 0}
+}
+
+-- Find a metadata element's text
+pure func odsFindMeta(root: XmlNode, tagName: string) -> string {
+  let elements = findAll(root, tagName);
+  match elements {
+    [] => "",
+    el :: _ => trim(getText(el))
+  }
+}

@@ -1,0 +1,1288 @@
+module docparse/main
+
+import std/fs (readFile, writeFile, writeFileBytes, fileExists, removeFile)
+import std/json (encode)
+import std/string (length, intToStr, floatToStr, toLower, split, contains)
+import std/list (last, concat, any, map, flatMap as listFlatMap, filter)
+import std/option (Some, None)
+import std/bytes (fromBase64)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, TableCell, SectionBlock, ParsedDocument, ExtractionResult, DocMetadata, emptyMetadata, simpleCell, mergedCell, spanCell, cellText, countBlocks, filterHeadings, filterTables, filterImages, filterSections)
+import docparse/services/format_router (detectFormat, getExtension, officeType, strategyDescription, needsAI)
+import docparse/services/zip_extract (readDocxContent, readCoreProperties, listOfficeEntries, findMediaEntries, readEmbeddedImage, mediaMimeType, resolveBlockImages)
+import docparse/services/docx_parser (parseDocx, parseDocxMetadata, parseDocxImages, parseDocxHeaders, parseDocxFooters, parseDocxFootnotes, parseDocxEndnotes, parseDocxComments)
+import docparse/services/pptx_parser (parsePptx, parsePptxMetadata, parsePptxImages)
+import docparse/services/xlsx_parser (parseXlsx, parseXlsxMetadata)
+import docparse/services/direct_ai_parser (parsePdf, parseDocumentImage, parseImage, parseAudio, parseVideo, parsePdfMetadata)
+import docparse/services/layout_ai (describeImages, enhanceBlocks, inferTableStructure, cleanExtractedText)
+import docparse/services/csv_parser (parseCsv)
+import docparse/services/markdown_parser (parseMarkdown)
+import docparse/services/tex_parser (parseLatex, parseLatexMetadata)
+import docparse/services/tex_input_resolver (expandInputs, texDirname)
+import docparse/services/tex_archive_extract (extractArxivBundle, isTarGz)
+import docparse/services/html_parser (parseHtml)
+import docparse/services/eml_parser (parseEml, parseEmlMetadata, parseMbox, parseMboxMetadata, parseMboxThreaded)
+import docparse/services/epub_parser (parseEpub, parseEpubMetadata)
+import docparse/services/odt_parser (parseOdt, parseOdtMetadata, parseOdtHeadersFooters)
+import docparse/services/odp_parser (parseOdp, parseOdpMetadata)
+import docparse/services/ods_parser (parseOds, parseOdsMetadata)
+import docparse/services/output_formatter (formatResult, printSummary, printBlocks, renderMarkdown)
+import docparse/services/eval (evalMain, evalNormalizeJson, evalJaccard, evalComputeScore)
+import docparse/services/html_generator (generateHtml)
+import docparse/services/docx_generator (generateDocx)
+import docparse/services/pptx_generator (generatePptx)
+import docparse/services/xlsx_generator (generateXlsx)
+import docparse/services/odt_generator (generateOdt)
+import docparse/services/odp_generator (generateOdp)
+import docparse/services/ods_generator (generateOds)
+import docparse/services/qmd_generator (generateQmd)
+import docparse/services/ai_generator (aiGenerateBlocks)
+import docparse/services/xml_helpers (xmlEscape)
+import docparse/services/unstructured_compat (blocksToUnstructuredJson, unstMimeType)
+import docparse/services/a2ui_formatter (documentToA2UI, blocksToA2UINodes, convertBlocksJsonToA2UI, a2ui_jsonToBlockList)
+import pkg/sunholo/a2ui/components (A2UINode, renderA2UI)
+import std/xml (parse, findAll, findAllTexts, findAllAttrs, findFirst, getText, getAttr, getChildren, getTag)
+import std/zip (listEntries, readEntry, readEntryBytes)
+import std/ai (call)
+import std/io (println)
+import std/math (intToFloat, floatToInt)
+import std/env (getArgs, getEnvOr)
+import std/net (httpGet, httpPost)
+import docparse/services/mcp/tools (mcpParse, mcpConvert, mcpFormats)
+import docparse/services/mcp/estimate (mcpEstimate)
+import docparse/services/mcp/auth (mcpAuth, mcpAuthPoll)
+import docparse/services/mcp/account (mcpAccount)
+import docparse/services/tools (tools)
+import docparse/services/samples (samples, sampleResolvePath)
+
+-- AILANG Parse: Universal Document Parsing in AILANG
+--
+-- Demonstrates:
+--   - ZIP + XML parsing for Office formats (std/zip, std/xml)
+--   - AI-augmented layout understanding with bounded costs
+--   - Contracts on output quality
+--   - Pure/effectful function separation
+--   - Pattern matching on XML trees
+--
+-- Run (without AI):
+--   ailang run --entry main --caps IO,FS,Env docparse/main.ail myfile.docx
+--
+-- Run (with AI image descriptions):
+--   GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI --ai gemini-3-flash-preview docparse/main.ail myfile.docx describe
+--
+-- Run (with contracts enforced):
+--   ailang run --entry main --caps IO,FS,Env --verify-contracts docparse/main.ail myfile.docx
+--
+-- Test:
+--   ailang test docparse/services/format_router.ail
+--   ailang test docparse/services/docx_parser.ail
+--
+-- CAPABILITY BUDGETS:
+--   IO @limit=1000  - Console output for results (increased for page-by-page PDF parsing)
+--   FS @limit=100   - File reads (ZIP entries) + output write (increased from 20 for complex DOCX with headers/footers)
+--   AI @limit=30   - PDF page-by-page parsing + image descriptions + layout inference
+
+export func main() -> () ! {IO @limit=50000, FS @limit=5000, AI @limit=30, Env} {
+  println("=== AILANG Parse: Universal Document Parsing ===");
+  println("");
+
+  -- Get filepath and flags from CLI args
+  let args = getArgs();
+  let filepath = match args {
+    [] => "docparse/data/sample.docx",
+    f :: _ => f
+  };
+  let useAI = hasFlag(args, "describe");
+  let doSummarize = hasFlag(args, "summarize");
+  let convertTarget = getConvertTarget(args);
+  let generateTarget = getGenerateTarget(args);
+  let promptText = getPromptText(args);
+
+  -- AI Document Generation mode: --generate output.docx --prompt "..."
+  if length(generateTarget) > 0 && length(promptText) > 0 then {
+    generateDocument(generateTarget, promptText)
+  }
+  else if length(generateTarget) > 0 then {
+    println("Error: --generate requires --prompt \"description\"");
+    println("");
+    println("Usage: ./bin/docparse --generate report.docx --prompt \"Q1 sales report with tables\"");
+    println("       ./bin/docparse --generate slides.pptx --prompt \"5-slide pitch deck\"")
+  }
+  -- Check file exists (normal parse mode)
+  else if not fileExists(filepath) then {
+    println("Error: File not found: ${filepath}");
+    println("");
+    println("Usage: ailang run --entry main --caps IO,FS,Env docparse/main.ail <file>");
+    println("       ailang run --entry main --caps IO,FS,Env,AI --ai gemini-3-flash-preview docparse/main.ail <file> describe");
+    println("       ailang run --entry main --caps IO,FS,Env,AI --ai gemini-3-flash-preview docparse/main.ail <file> summarize");
+    println("       ailang run --entry main --caps IO,FS,Env,AI --ai gemini-2.5-flash docparse/main.ail --generate output.docx --prompt \"...\"")
+  }
+  else {
+    -- Step 1: Detect format
+    -- Special case: archive extensions (.tar.gz, .tgz, .tex.gz) route to
+    -- the LaTeX pipeline — arXiv source bundles. getExtension only returns
+    -- the last dotted suffix (".gz"), so we check the full filename first.
+    let rawExt = getExtension(filepath);
+    let ext = if isTarGz(filepath) then "tar.gz" else rawExt;
+    let format = if isTarGz(filepath) then "latex" else detectFormat(rawExt);
+    let strategy = strategyDescription(format);
+    println("File:     ${filepath}");
+    println("Format:   ${format} (${ext})");
+    println("Strategy: ${strategy}");
+    let aiRequired = needsAI(format);
+    if aiRequired then println("AI:       required (format needs AI extraction)")
+    else if doSummarize then println("AI:       enabled (summarize)")
+    else if useAI then println("AI:       enabled (image descriptions)")
+    else println("AI:       disabled (pass 'describe' or 'summarize' arg to enable)");
+    println("");
+
+    -- Step 2: Parse based on format
+    match format {
+      "zip-office" => parseOfficeDocument(filepath, ext, useAI || doSummarize, doSummarize, convertTarget),
+      "pdf" => parsePdfDocument(filepath, doSummarize, convertTarget),
+      "image" => parseImageDocument(filepath, ext, doSummarize, convertTarget),
+      "audio" => parseAudioDocument(filepath, ext, doSummarize, convertTarget),
+      "video" => parseVideoDocument(filepath, ext, doSummarize, convertTarget),
+      "csv" => parseCsvDocument(filepath, ext, convertTarget),
+      "markdown" => parseMarkdownDocument(filepath, convertTarget),
+      "html" => parseHtmlDocument(filepath, useAI || doSummarize, doSummarize, convertTarget),
+      "epub" => parseEpubDocument(filepath, useAI || doSummarize, doSummarize, convertTarget),
+      "zip-odf" => parseOdfDocument(filepath, ext, useAI || doSummarize, doSummarize, convertTarget),
+      "email" => parseEmailDocument(filepath, ext, hasFlag(args, "--threaded"), hasFlag(args, "--deep")),
+      "latex" => parseLatexDocument(filepath, convertTarget),
+      "text" => parseTextDocument(filepath),
+      _ => println("Format '${format}' not yet supported in this demo.")
+    }
+  }
+}
+
+-- Check if a flag is present in args list
+pure func hasFlag(args: [string], flag: string) -> bool =
+  any(\a. a == flag, args)
+
+-- Extract --convert target path from args: ["file.docx", "--convert", "out.html"] -> "out.html"
+pure func getConvertTarget(args: [string]) -> string =
+  match args {
+    [] => "",
+    "--convert" :: rest => match rest {
+      [] => "",
+      target :: _ => target
+    },
+    _ :: rest => getConvertTarget(rest)
+  }
+
+-- Extract --generate target path from args: ["--generate", "out.docx", "--prompt", "..."] -> "out.docx"
+pure func getGenerateTarget(args: [string]) -> string =
+  match args {
+    [] => "",
+    "--generate" :: rest => match rest {
+      [] => "",
+      target :: _ => target
+    },
+    _ :: rest => getGenerateTarget(rest)
+  }
+
+-- Extract --prompt text from args: ["--prompt", "Q1 report"] -> "Q1 report"
+pure func getPromptText(args: [string]) -> string =
+  match args {
+    [] => "",
+    "--prompt" :: rest => match rest {
+      [] => "",
+      text :: _ => text
+    },
+    _ :: rest => getPromptText(rest)
+  }
+
+-- AI Document Generation: prompt -> AI -> [Block] -> format generator -> file
+func generateDocument(outputPath: string, prompt: string) -> () ! {IO, FS, AI, Env} {
+  let ext = getExtension(outputPath);
+  println("--- AI Document Generation ---");
+  println("Output:   ${outputPath}");
+  println("Format:   ${ext}");
+  println("Prompt:   ${prompt}");
+  println("");
+
+  -- Step 1: Generate blocks from prompt via AI
+  println("Generating content via AI...");
+  let blocks = aiGenerateBlocks(prompt, ext);
+  println("Generated ${show(countBlocks(blocks))} content blocks.");
+  println("");
+
+  -- Step 2: Build a ParsedDocument wrapper
+  let doc = {
+    format: ext,
+    filename: outputPath,
+    metadata: {title: prompt, author: "AILANG Parse AI", created: "", modified: "", pageCount: 0},
+    blocks: blocks
+  };
+
+  -- Step 3: Show what was generated
+  printSummary(doc);
+  println("");
+  println("--- Generated Content ---");
+  printBlocks(blocks);
+  println("");
+
+  -- Step 4: Generate the output file
+  if ext == "html" || ext == "htm" then {
+    let html = generateHtml(doc);
+    writeFile(outputPath, html);
+    println("Generated HTML: ${outputPath}")
+  }
+  else if ext == "docx" then {
+    let msg = generateDocx(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "pptx" then {
+    let msg = generatePptx(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "xlsx" then {
+    let msg = generateXlsx(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "odt" then {
+    let msg = generateOdt(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "odp" then {
+    let msg = generateOdp(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "ods" then {
+    let msg = generateOds(doc, outputPath);
+    println(msg)
+  }
+  else if ext == "md" then {
+    let md = renderMarkdown(doc);
+    writeFile(outputPath, md);
+    println("Generated Markdown: ${outputPath}")
+  }
+  else if ext == "qmd" then {
+    let qmd = generateQmd(doc);
+    writeFile(outputPath, qmd);
+    println("Generated Quarto Markdown: ${outputPath}")
+  }
+  else println("Unsupported format: ${ext} (supported: html, docx, pptx, xlsx, odt, odp, ods, md, qmd)");
+
+  println("");
+  println("=== AILANG Parse Generation Complete ===")
+}
+
+-- Parse an Office document (docx/pptx/xlsx)
+func parseOfficeDocument(filepath: string, ext: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  let office = officeType(ext);
+  match office {
+    "word" => parseWordDocument(filepath, useAI, doSummarize, convertTarget),
+    "powerpoint" => parsePowerPointDocument(filepath, useAI, doSummarize, convertTarget),
+    "excel" => parseExcelDocument(filepath, doSummarize, convertTarget),
+    _ => println("Office type '${office}' not yet supported.")
+  }
+}
+
+-- Parse a Word (DOCX) document
+func parseWordDocument(filepath: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing DOCX ---");
+  println("");
+
+  -- Step 2a: Extract metadata
+  println("Extracting metadata...");
+  let metadata = parseDocxMetadata(filepath);
+
+  -- Step 2b: Parse document content (pure XML parsing)
+  println("Parsing document XML...");
+  let blocks = parseDocx(filepath);
+  println("Extracted ${show(countBlocks(blocks))} content blocks.");
+  println("");
+
+  -- Step 2c: Extract headers and footers
+  println("Extracting headers/footers...");
+  let headerBlocks = parseDocxHeaders(filepath);
+  let footerBlocks = parseDocxFooters(filepath);
+  println("Found ${show(countBlocks(headerBlocks))} headers, ${show(countBlocks(footerBlocks))} footers.");
+
+  -- Step 2d: Extract footnotes and endnotes
+  println("Extracting footnotes/endnotes...");
+  let footnoteBlocks = parseDocxFootnotes(filepath);
+  let endnoteBlocks = parseDocxEndnotes(filepath);
+  println("Found ${show(countBlocks(footnoteBlocks))} footnotes, ${show(countBlocks(endnoteBlocks))} endnotes.");
+
+  -- Step 2e: Extract comments
+  println("Extracting comments...");
+  let commentBlocks = parseDocxComments(filepath);
+  println("Found ${show(countBlocks(commentBlocks))} comments.");
+
+  -- Step 2f: Extract embedded images
+  println("Extracting images...");
+  let imageBlocks = parseDocxImages(filepath);
+  println("Found ${show(countBlocks(imageBlocks))} embedded images.");
+  println("");
+
+  -- Combine all blocks: headers + body + footers + footnotes + endnotes + comments + images
+  let combinedBlocks = concat(headerBlocks,
+    concat(blocks,
+      concat(footerBlocks,
+        concat(footnoteBlocks,
+          concat(endnoteBlocks,
+            concat(commentBlocks, imageBlocks))))));
+
+  -- Step 2f: AI image descriptions (optional)
+  let imageCount = countBlocks(filterImages(combinedBlocks));
+  let describedBlocks = if useAI && imageCount > 0 then {
+    println("Describing ${show(imageCount)} images with AI...");
+    describeImages(combinedBlocks)
+  } else {
+    if imageCount > 0
+    then println("Images: ${show(imageCount)} (pass 'describe' arg for AI descriptions)")
+    else println("No images found.");
+    combinedBlocks
+  };
+
+  -- Step 2g: AI self-healing (fix tables with empty/ambiguous cells)
+  let allBlocks = if useAI then {
+    println("Enhancing blocks with AI (fixing tables, layout)...");
+    enhanceBlocks(describedBlocks)
+  } else describedBlocks;
+
+  -- Step 3: Build result
+  let aiCalls = if useAI then imageCount else 0;
+  let doc = {
+    format: "docx",
+    filename: filepath,
+    metadata: metadata,
+    blocks: allBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: aiCalls
+  };
+
+  -- Step 4: Output
+  println("");
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(allBlocks);
+  println("");
+
+  -- Step 5: Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse a PowerPoint (PPTX) document
+func parsePowerPointDocument(filepath: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing PPTX ---");
+  println("");
+
+  -- Step 2a: Extract metadata
+  println("Extracting metadata...");
+  let metadata = parsePptxMetadata(filepath);
+
+  -- Step 2b: Parse all slides
+  println("Parsing slides...");
+  let blocks = parsePptx(filepath);
+  println("Extracted ${show(countBlocks(blocks))} slide blocks.");
+  println("");
+
+  -- Step 2c: Extract embedded images (only when AI will describe them)
+  let combinedBlocks = if useAI then {
+    println("Extracting images for AI description...");
+    let imageBlocks = parsePptxImages(filepath);
+    println("Found ${show(countBlocks(imageBlocks))} embedded images.");
+    println("");
+    concat(blocks, imageBlocks)
+  } else {
+    let inlineImages = countBlocks(filterImages(blocks));
+    println("Images: ${show(inlineImages)} (pass 'describe' arg to extract)");
+    println("");
+    blocks
+  };
+
+  -- Step 2d: AI image descriptions (optional)
+  let imageCount = countBlocks(filterImages(combinedBlocks));
+  let describedBlocks = if useAI && imageCount > 0 then {
+    println("Describing ${show(imageCount)} images with AI...");
+    describeImages(combinedBlocks)
+  } else {
+    if imageCount > 0
+    then println("Images: ${show(imageCount)} (pass 'describe' arg for AI descriptions)")
+    else println("No images found.");
+    combinedBlocks
+  };
+
+  -- Step 2e: AI self-healing (fix tables with empty/ambiguous cells)
+  let allBlocks = if useAI then {
+    println("Enhancing blocks with AI (fixing tables, layout)...");
+    enhanceBlocks(describedBlocks)
+  } else describedBlocks;
+
+  -- Step 3: Build result
+  let aiCalls = if useAI then imageCount else 0;
+  let doc = {
+    format: "pptx",
+    filename: filepath,
+    metadata: metadata,
+    blocks: allBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: aiCalls
+  };
+
+  -- Step 4: Output
+  println("");
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(allBlocks);
+  println("");
+
+  -- Step 5: Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse an Excel (XLSX) document
+func parseExcelDocument(filepath: string, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing XLSX ---");
+  println("");
+
+  -- Step 2a: Extract metadata
+  println("Extracting metadata...");
+  let metadata = parseXlsxMetadata(filepath);
+
+  -- Step 2b: Parse all worksheets
+  println("Parsing worksheets...");
+  let blocks = parseXlsx(filepath);
+  println("Extracted ${show(countBlocks(blocks))} sheet blocks.");
+  println("");
+
+  -- Step 3: Build result
+  let doc = {
+    format: "xlsx",
+    filename: filepath,
+    metadata: metadata,
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  -- Step 4: Output
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  -- Step 5: Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse a PDF document (AI-powered extraction)
+func parsePdfDocument(filepath: string, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing PDF (AI) ---");
+  println("");
+
+  -- Step 2a: Extract metadata via AI
+  println("Extracting metadata via AI...");
+  let metadata = parsePdfMetadata(filepath);
+
+  -- Step 2b: Extract content via AI
+  println("Extracting content via AI...");
+  let blocks = parsePdf(filepath);
+  println("Extracted ${show(countBlocks(blocks))} content blocks.");
+  println("");
+
+  -- Step 3: Build result
+  let aiCalls = 1 + (if countBlocks(blocks) > 0 then 1 else 0);
+  let doc = {
+    format: "pdf",
+    filename: filepath,
+    metadata: metadata,
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: aiCalls
+  };
+
+  -- Step 4: Output
+  println("");
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  -- Step 5: Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse an image file (AI-powered document extraction)
+-- Extracts structured content (headings, text, tables) from document page images.
+-- Falls back to image description if no document content is found.
+func parseImageDocument(filepath: string, ext: string, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing Image (AI Document Extraction) ---");
+  println("");
+
+  let mime = imageMimeType(ext);
+  println("Extracting document content from image via AI...");
+  let blocks = parseDocumentImage(filepath, mime);
+  let finalBlocks = match blocks {
+    [] => {
+      println("No document content found, falling back to image description...");
+      parseImage(filepath, mime)
+    },
+    _ => blocks
+  };
+  println("Generated ${show(countBlocks(finalBlocks))} content blocks.");
+  println("");
+
+  -- Build result
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: finalBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 1
+  };
+
+  -- Output
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(finalBlocks);
+  println("");
+
+  -- Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Determine MIME type from image extension
+pure func imageMimeType(ext: string) -> string =
+  match ext {
+    "png" => "image/png",
+    "jpg" => "image/jpeg",
+    "jpeg" => "image/jpeg",
+    "gif" => "image/gif",
+    "bmp" => "image/bmp",
+    "webp" => "image/webp",
+    "tiff" => "image/tiff",
+    _ => "image/unknown"
+  }
+
+-- Parse an audio file (AI-powered transcription + understanding)
+func parseAudioDocument(filepath: string, ext: string, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing Audio (AI) ---");
+  println("");
+
+  let mime = audioMimeType(ext);
+  println("Transcribing audio via AI...");
+  let blocks = parseAudio(filepath, mime);
+  println("Generated ${show(countBlocks(blocks))} content blocks.");
+  println("");
+
+  -- Build result
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 1
+  };
+
+  -- Output
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  -- Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Determine MIME type from audio extension
+pure func audioMimeType(ext: string) -> string =
+  match ext {
+    "wav" => "audio/wav",
+    "mp3" => "audio/mp3",
+    "aiff" => "audio/aiff",
+    "aac" => "audio/aac",
+    "ogg" => "audio/ogg",
+    "flac" => "audio/flac",
+    _ => "audio/unknown"
+  }
+
+-- Parse a video file (AI-powered visual + audio understanding)
+func parseVideoDocument(filepath: string, ext: string, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing Video (AI) ---");
+  println("");
+
+  let mime = videoMimeType(ext);
+  println("Analyzing video via AI...");
+  let blocks = parseVideo(filepath, mime);
+  println("Generated ${show(countBlocks(blocks))} content blocks.");
+  println("");
+
+  -- Build result
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 1
+  };
+
+  -- Output
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  -- Write outputs
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Determine MIME type from video extension
+pure func videoMimeType(ext: string) -> string =
+  match ext {
+    "mp4" => "video/mp4",
+    "mpeg" => "video/mpeg",
+    "mov" => "video/mov",
+    "avi" => "video/avi",
+    "flv" => "video/x-flv",
+    "mpg" => "video/mpg",
+    "webm" => "video/webm",
+    "wmv" => "video/wmv",
+    "3gpp" => "video/3gpp",
+    _ => "video/unknown"
+  }
+
+-- Parse a CSV/TSV document (pure AILANG, no dependencies)
+func parseCsvDocument(filepath: string, ext: string, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing CSV (pure AILANG) ---");
+  println("");
+
+  let content = readFile(filepath);
+  let delimiter = if ext == "tsv" then "\t" else ",";
+  println("Parsing ${show(length(content))} chars with delimiter '${delimiter}'...");
+
+  let blocks = parseCsv(content, delimiter);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+  println("");
+
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  writeOutputs(doc, result, false, filepath, convertTarget)
+}
+
+-- Parse a Markdown document (pure AILANG, no dependencies)
+func parseMarkdownDocument(filepath: string, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing Markdown (pure AILANG) ---");
+  println("");
+
+  let content = readFile(filepath);
+  println("Parsing ${show(length(content))} chars of markdown...");
+
+  let blocks = parseMarkdown(content);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+  println("");
+
+  let doc = {
+    format: "markdown",
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  writeOutputs(doc, result, false, filepath, convertTarget)
+}
+
+-- Resolve the main .tex path. If the input is a .tar.gz / .tgz / .tex.gz
+-- bundle (arXiv source), extract it and pick the file containing
+-- \documentclass. Otherwise return the path unchanged.
+func resolveLatexSource(filepath: string) -> string ! {IO, FS} {
+  if isTarGz(filepath) then {
+    let _ = println("Archive detected (${filepath}) — extracting...");
+    match extractArxivBundle(filepath) {
+      Ok(r) => {
+        let _ = println("Extracted to ${r.dir}. Main .tex: ${r.main}");
+        r.main
+      },
+      Err(msg) => {
+        let _ = println("Extract failed: ${msg}");
+        filepath
+      }
+    }
+  } else filepath
+}
+
+-- Parse a LaTeX/TeX document (pure AILANG, no dependencies)
+-- Effectful wrapper around the pure core parseLatex / parseLatexMetadata.
+-- Scientific-paper wedge: deterministic parsing of .tex source (as found in
+-- ~89% of arXiv papers) where competitors are OCR-bound on the rendered PDF.
+-- Accepts raw .tex files or .tar.gz / .tgz arXiv source bundles.
+func parseLatexDocument(filepath: string, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing LaTeX (pure AILANG, deterministic) ---");
+  println("");
+
+  -- Detect arXiv-style .tar.gz / .tgz bundles and extract before parsing.
+  -- The main .tex file is auto-detected (one containing \documentclass).
+  -- Requires std/tar + std/gzip (AILANG v0.12.0+).
+  let mainTexPath = resolveLatexSource(filepath);
+
+  let rawContent = readFile(mainTexPath);
+  println("Parsing ${show(length(rawContent))} chars of LaTeX source...");
+
+  -- Resolve \input{...} and \include{...} against the main file's
+  -- directory before parsing. Single-file papers are unaffected; multi-file
+  -- bundles (BERT, Vaswani, etc.) get their fragments spliced inline.
+  let basedir = texDirname(mainTexPath);
+  let content = expandInputs(basedir, rawContent);
+  if length(content) != length(rawContent) then
+    println("After \\input expansion: ${show(length(content))} chars.")
+  else println("");
+
+  let meta = parseLatexMetadata(content);
+  let blocks = parseLatex(content);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+  if length(meta.title) > 0 then println("Title:  ${meta.title}") else println("");
+  if length(meta.author) > 0 then println("Author: ${meta.author}") else println("");
+  println("");
+
+  let docMeta = {
+    title: meta.title,
+    author: meta.author,
+    created: "",
+    modified: "",
+    pageCount: 0
+  };
+
+  let doc = {
+    format: "latex",
+    filename: filepath,
+    metadata: docMeta,
+    blocks: blocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(blocks);
+  println("");
+
+  writeOutputs(doc, result, false, filepath, convertTarget)
+}
+
+-- Parse an EPUB document (ZIP of XHTML, pure AILANG)
+func parseEpubDocument(filepath: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing EPUB (pure AILANG, ZIP + XHTML) ---");
+  println("");
+
+  -- Extract metadata
+  println("Extracting metadata...");
+  let metadata = parseEpubMetadata(filepath);
+
+  -- Parse content (image paths resolved to full ZIP paths in epub_parser)
+  println("Parsing XHTML chapters...");
+  let blocks = parseEpub(filepath);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+
+  -- Resolve image references to binary data from EPUB ZIP
+  println("Resolving embedded images...");
+  let resolvedBlocks = resolveBlockImages(filepath, blocks);
+  let imageCount = countBlocks(filterImages(resolvedBlocks));
+
+  -- AI image descriptions (optional)
+  let describedBlocks = if useAI && imageCount > 0 then {
+    println("Describing ${show(imageCount)} images with AI...");
+    describeImages(resolvedBlocks)
+  } else {
+    if imageCount > 0
+    then println("Images: ${show(imageCount)} (pass 'describe' arg for AI descriptions)")
+    else println("No images found.");
+    resolvedBlocks
+  };
+
+  -- AI self-healing (fix tables with empty/ambiguous cells)
+  let allBlocks = if useAI then {
+    println("Enhancing blocks with AI (fixing tables, layout)...");
+    enhanceBlocks(describedBlocks)
+  } else describedBlocks;
+  println("");
+
+  let aiCalls = if useAI then imageCount else 0;
+  let doc = {
+    format: "epub",
+    filename: filepath,
+    metadata: metadata,
+    blocks: allBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: aiCalls
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(allBlocks);
+  println("");
+
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse an ODF document (ODT/ODP/ODS — pure AILANG, ZIP + ODF XML)
+func parseOdfDocument(filepath: string, ext: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  let odfType = if ext == "odt" then "text"
+    else if ext == "odp" then "presentation"
+    else if ext == "ods" then "spreadsheet"
+    else "unknown";
+  println("--- Parsing ODF ${odfType} (pure AILANG, ZIP + XML) ---");
+  println("");
+
+  -- Extract metadata
+  println("Extracting metadata...");
+  let metadata = if ext == "odt" then parseOdtMetadata(filepath)
+    else if ext == "odp" then parseOdpMetadata(filepath)
+    else parseOdsMetadata(filepath);
+
+  -- Extract headers/footers (ODT only, from styles.xml)
+  let hdrFtrBlocks = if ext == "odt" then {
+    println("Extracting headers/footers...");
+    let hf = parseOdtHeadersFooters(filepath);
+    println("Found ${show(countBlocks(hf))} header/footer blocks.");
+    hf
+  } else [];
+
+  -- Parse content
+  println("Parsing ODF XML...");
+  let bodyBlocks = if ext == "odt" then parseOdt(filepath)
+    else if ext == "odp" then parseOdp(filepath)
+    else parseOds(filepath);
+  let blocks = concat(bodyBlocks, hdrFtrBlocks);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+
+  -- Resolve image references to binary data from ZIP
+  println("Resolving embedded images...");
+  let resolvedBlocks = resolveBlockImages(filepath, blocks);
+  let imageCount = countBlocks(filterImages(resolvedBlocks));
+
+  -- AI image descriptions (optional)
+  let describedBlocks = if useAI && imageCount > 0 then {
+    println("Describing ${show(imageCount)} images with AI...");
+    describeImages(resolvedBlocks)
+  } else {
+    if imageCount > 0
+    then println("Images: ${show(imageCount)} (pass 'describe' arg for AI descriptions)")
+    else println("No images found.");
+    resolvedBlocks
+  };
+
+  -- AI self-healing (fix tables with empty/ambiguous cells)
+  let allBlocks = if useAI then {
+    println("Enhancing blocks with AI (fixing tables, layout)...");
+    enhanceBlocks(describedBlocks)
+  } else describedBlocks;
+  println("");
+
+  let aiCalls = if useAI then imageCount else 0;
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: metadata,
+    blocks: allBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: aiCalls
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(allBlocks);
+  println("");
+
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse an HTML/XHTML document (pure AILANG, XML-based)
+-- Strategy: try deterministic XML parse first, AI fallback for dirty HTML
+func parseHtmlDocument(filepath: string, useAI: bool, doSummarize: bool, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing HTML (pure AILANG, XML-based) ---");
+  println("");
+
+  let content = readFile(filepath);
+  println("Parsing ${show(length(content))} chars of HTML...");
+
+  -- Step 1: Try deterministic XML parsing
+  let blocks = parseHtml(content);
+  let hasError = htmlHasParseError(blocks);
+
+  -- Step 2: If parse failed and AI is enabled, extract text via AI
+  let resolvedBlocks = if hasError && useAI then {
+    println("XML parse failed — extracting text content via AI...");
+    let extracted = call(
+      "Extract the text content from this HTML. Return the main text, preserving: paragraph breaks, headings, list items, and table data. Ignore HTML tags, scripts, and styles. Return clean readable text.\n\n${content}"
+    );
+    [TextBlock({text: extracted, style: "ai-extracted", level: 0})]
+  } else blocks;
+
+  println("Extracted ${show(countBlocks(resolvedBlocks))} blocks.");
+
+  -- Apply AI table enhancement (only if parse succeeded deterministically)
+  let allBlocks = if useAI && hasError == false then {
+    println("Enhancing blocks with AI (fixing tables, layout)...");
+    enhanceBlocks(resolvedBlocks)
+  } else resolvedBlocks;
+  println("");
+
+  let doc = {
+    format: "html",
+    filename: filepath,
+    metadata: emptyMetadata(),
+    blocks: allBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(allBlocks);
+  println("");
+
+  writeOutputs(doc, result, doSummarize, filepath, convertTarget)
+}
+
+-- Parse an email document (EML or MBOX)
+func parseEmailDocument(filepath: string, ext: string, threaded: bool, deep: bool) -> () ! {IO, FS, AI, Env} {
+  println("--- Parsing Email (pure AILANG, RFC 5322) ---");
+  if threaded then println("Mode: threaded (grouping by conversation)") else ();
+  if deep then println("Mode: deep (resolving Office attachments)") else ();
+  println("");
+
+  let content = readFile(filepath);
+  println("Parsing ${show(length(content))} chars of email...");
+
+  let isMbox = ext == "mbox";
+  let blocks = if isMbox && threaded then parseMboxThreaded(content)
+               else if isMbox then parseMbox(content)
+               else parseEml(content);
+  let metadata = if isMbox then parseMboxMetadata(content) else parseEmlMetadata(content);
+  println("Extracted ${show(countBlocks(blocks))} blocks.");
+
+  -- Pass 2: Resolve Office attachments (DOCX/PPTX/XLSX) if --deep
+  let resolvedBlocks = if deep then {
+    println("Resolving Office attachments...");
+    let resolved = emlResolveOfficeAttachments(blocks, 0);
+    println("Resolved ${show(resolved.count)} Office attachment(s).");
+    resolved.blocks
+  } else blocks;
+  println("");
+
+  let doc = {
+    format: ext,
+    filename: filepath,
+    metadata: metadata,
+    blocks: resolvedBlocks
+  };
+
+  let result = {
+    document: doc,
+    warnings: [],
+    aiCallsUsed: 0
+  };
+
+  printSummary(doc);
+  println("");
+  println("--- Content Blocks ---");
+  printBlocks(resolvedBlocks);
+  println("");
+
+  writeOutputs(doc, result, false, filepath, "")
+}
+
+-- ============================================================
+-- Pass 2: Office Attachment Resolution
+-- ============================================================
+
+-- Walk blocks, find attachment SectionBlocks with attachment-data, resolve them
+func emlResolveOfficeAttachments(blocks: [Block], counter: int) -> { blocks: [Block], count: int } ! {IO, FS} {
+  match blocks {
+    [] => { blocks: [], count: 0 },
+    block :: rest => {
+      let resolved = emlResolveOneBlock(block, counter);
+      let restResolved = emlResolveOfficeAttachments(rest, counter + resolved.count);
+      { blocks: resolved.block :: restResolved.blocks, count: resolved.count + restResolved.count }
+    }
+  }
+}
+
+-- Resolve a single block (recurse into SectionBlocks)
+func emlResolveOneBlock(block: Block, counter: int) -> { block: Block, count: int } ! {IO, FS} {
+  match block {
+    SectionBlock(s) => {
+      if s.kind == "attachment" && emlHasAttachmentData(s.blocks) then {
+        -- This attachment has base64 data to resolve
+        let b64 = emlGetAttachmentData(s.blocks);
+        let ext = emlGetAttachmentExt(s.blocks);
+        let meta = emlGetAttachmentMeta(s.blocks);
+        let tmpPath = "/tmp/ailang_email_attach_${show(counter)}.${ext}";
+        match fromBase64(b64) {
+          Some(bytes) => {
+            writeFileBytes(tmpPath, bytes);
+            let parsedBlocks = emlParseOfficeFile(tmpPath, ext);
+            removeFile(tmpPath);
+            let metaBlock = TextBlock({text: meta, style: "attachment-meta", level: 0});
+            { block: SectionBlock({kind: "attachment", blocks: metaBlock :: parsedBlocks}), count: 1 }
+          },
+          None => {
+            println("  Warning: Failed to decode base64 for attachment");
+            { block: block, count: 0 }
+          }
+        }
+      }
+      else {
+        -- Recurse into nested sections (threads, mbox-messages, etc.)
+        let inner = emlResolveOfficeAttachments(s.blocks, counter);
+        { block: SectionBlock({kind: s.kind, blocks: inner.blocks}), count: inner.count }
+      }
+    },
+    _ => { block: block, count: 0 }
+  }
+}
+
+-- Parse an Office file by extension using existing parsers
+func emlParseOfficeFile(filepath: string, ext: string) -> [Block] ! {IO, FS} {
+  if ext == "docx" then parseDocx(filepath)
+  else if ext == "xlsx" then parseXlsx(filepath)
+  else if ext == "pptx" then parsePptx(filepath)
+  else [TextBlock({text: "[unsupported Office format: ${ext}]", style: "error", level: 0})]
+}
+
+-- Check if a block list contains an attachment-data TextBlock
+pure func emlHasAttachmentData(blocks: [Block]) -> bool
+  ensures { result == true || result == false }
+=
+  match blocks {
+    [] => false,
+    TextBlock(t) :: rest => if t.style == "attachment-data" then true else emlHasAttachmentData(rest),
+    _ :: rest => emlHasAttachmentData(rest)
+  }
+
+-- Extract the base64 data from attachment blocks
+pure func emlGetAttachmentData(blocks: [Block]) -> string
+  ensures { length(result) >= 0 }
+=
+  match blocks {
+    [] => "",
+    TextBlock(t) :: rest => if t.style == "attachment-data" then t.text else emlGetAttachmentData(rest),
+    _ :: rest => emlGetAttachmentData(rest)
+  }
+
+-- Extract the file extension from attachment blocks
+pure func emlGetAttachmentExt(blocks: [Block]) -> string
+  ensures { length(result) >= 0 }
+=
+  match blocks {
+    [] => "bin",
+    TextBlock(t) :: rest => if t.style == "attachment-ext" then t.text else emlGetAttachmentExt(rest),
+    _ :: rest => emlGetAttachmentExt(rest)
+  }
+
+-- Extract the meta label from attachment blocks
+pure func emlGetAttachmentMeta(blocks: [Block]) -> string
+  ensures { length(result) >= 0 }
+=
+  match blocks {
+    [] => "",
+    TextBlock(t) :: rest => if t.style == "attachment-meta" then t.text else emlGetAttachmentMeta(rest),
+    _ :: rest => emlGetAttachmentMeta(rest)
+  }
+
+-- Parse a plain text document
+func parseTextDocument(filepath: string) -> () ! {IO, FS} {
+  println("--- Parsing Text ---");
+  let content = readFile(filepath);
+  println("Content (${show(length(content))} chars):");
+  println(content);
+  println("=== AILANG Parse Complete ===")
+}
+
+-- Write all output files: JSON, markdown, optional conversion, and optional AI summary
+-- Output filenames are derived from input: sample.docx -> sample.docx.json, sample.docx.md
+-- Output dir: DOCPARSE_OUTPUT_DIR env var (default: docparse/data)
+-- convertTarget: if non-empty, generate output in target format (e.g., "out.html", "out.docx")
+func writeOutputs(doc: ParsedDocument, result: ExtractionResult, doSummarize: bool, filepath: string, convertTarget: string) -> () ! {IO, FS, AI, Env} {
+  let outDir = getEnvOr("DOCPARSE_OUTPUT_DIR", "docparse/data");
+  let basename = mainBasename(filepath);
+
+  -- Write JSON
+  let jsonOutput = formatResult(result);
+  let jsonPath = "${outDir}/${basename}.json";
+  writeFile(jsonPath, jsonOutput);
+  println("JSON output written to ${jsonPath}");
+
+  -- Write markdown (LLM-ready text)
+  let markdown = renderMarkdown(doc);
+  let mdPath = "${outDir}/${basename}.md";
+  writeFile(mdPath, markdown);
+  println("Markdown output written to ${mdPath}");
+
+  -- Optional: format conversion
+  if length(convertTarget) > 0 then {
+    println("");
+    let convertExt = getExtension(convertTarget);
+    if convertExt == "html" || convertExt == "htm" then {
+      let html = generateHtml(doc);
+      writeFile(convertTarget, html);
+      println("Converted to HTML: ${convertTarget}")
+    }
+    else if convertExt == "docx" then {
+      let msg = generateDocx(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "pptx" then {
+      let msg = generatePptx(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "xlsx" then {
+      let msg = generateXlsx(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "odt" then {
+      let msg = generateOdt(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "odp" then {
+      let msg = generateOdp(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "ods" then {
+      let msg = generateOds(doc, convertTarget);
+      println(msg)
+    }
+    else if convertExt == "md" then {
+      let md = renderMarkdown(doc);
+      writeFile(convertTarget, md);
+      println("Converted to Markdown: ${convertTarget}")
+    }
+    else if convertExt == "qmd" then {
+      let qmd = generateQmd(doc);
+      writeFile(convertTarget, qmd);
+      println("Converted to Quarto Markdown: ${convertTarget}")
+    }
+    else println("Unsupported conversion format: ${convertExt} (supported: html, docx, pptx, xlsx, odt, odp, ods, md, qmd)")
+  }
+  else ();
+
+  -- Optional: AI summary
+  if doSummarize then {
+    println("");
+    println("--- AI Summary ---");
+    let summary = call(
+      "Summarize this document concisely. Include key points, data from any tables, and descriptions of any images. Output plain text, not markdown.\n\n${markdown}"
+    );
+    println(summary);
+    println("");
+    -- Write summary to file
+    let summaryPath = "${outDir}/${basename}_summary.txt";
+    writeFile(summaryPath, summary);
+    println("Summary written to ${summaryPath}")
+  }
+  else ();
+
+  println("");
+  println("=== AILANG Parse Complete ===")
+}
+
+-- Extract basename from a filepath: "/path/to/sample.docx" -> "sample.docx"
+pure func mainBasename(filepath: string) -> string {
+  let parts = split(filepath, "/");
+  match last(parts) {
+    Some(name) => if length(name) > 0 then name else "output",
+    None => "output"
+  }
+}
+
+-- Check if parsed HTML blocks contain a parse error
+-- The HTML parser returns TextBlock(style: "error") on parse failure
+pure func htmlHasParseError(blocks: [Block]) -> bool =
+  match blocks {
+    [] => false,
+    b :: rest => match b {
+      TextBlock(t) => if t.style == "error" then true else htmlHasParseError(rest),
+      _ => htmlHasParseError(rest)
+    }
+  }

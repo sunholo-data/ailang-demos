@@ -1,0 +1,196 @@
+-- Gemini file upload — upload once, reference by URI in AI calls.
+--
+-- Auto-detects backend:
+--   1. GCS (Vertex AI / ADC): GOOGLE_API_KEY="" and GCS_TEMP_BUCKET set
+--   2. AI Studio Files API: GOOGLE_API_KEY set
+--   3. Neither: returns Err (caller should fall back to inline base64)
+--
+-- Usage:
+--   import pkg/sunholo/gemini_files/upload (uploadFile, deleteFile, UploadedFile)
+--
+--   match uploadFile(base64Data, "application/pdf", "contract.pdf") {
+--     Ok(uploaded) => -- use uploaded.uri in AI calls as fileUri
+--     Err(e) => -- fall back to inline base64
+--   }
+
+module sunholo/gemini_files/upload
+
+import std/env (getEnvOr)
+import std/net (httpRequest)
+import std/string (length, intToStr, substring)
+import std/json (decode, encode, jo, kv, js, getString, get)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/clock (now)
+import pkg/sunholo/gcp_auth/token (getAccessToken)
+import pkg/sunholo/gemini_files/endpoints (gcsUploadUrl, gcsObjectUrl, gcsUri, aiStudioUploadUrl, aiStudioFileUrl)
+
+-- Result of a successful file upload
+export type UploadedFile = {
+  uri: string,         -- gs://bucket/path OR Gemini Files API URI
+  mimeType: string,
+  backend: string,     -- "gcs" or "ai_studio"
+  ref: string          -- backend-specific reference for deletion (object name or file name)
+}
+
+-- Upload a file to the best available backend.
+-- base64Data: file content as base64 string
+-- mimeType: e.g. "application/pdf", "image/png"
+-- displayName: human-readable name for the file
+export func uploadFile(base64Data: string, mimeType: string, displayName: string)
+  -> Result[UploadedFile, string] ! {Net, FS, Env} {
+  let apiKey = getEnvOr("GOOGLE_API_KEY", "");
+  let gcsBucket = getEnvOr("GCS_TEMP_BUCKET", "");
+
+  -- Priority 1: GCS upload (Vertex AI / ADC path)
+  if length(apiKey) == 0 && length(gcsBucket) > 0
+  then uploadToGcs(base64Data, mimeType, displayName, gcsBucket)
+
+  -- Priority 2: AI Studio Files API
+  else if length(apiKey) > 0
+  then uploadToAiStudio(base64Data, mimeType, displayName, apiKey)
+
+  -- No backend available
+  else Err("gemini_files: no upload backend — set GCS_TEMP_BUCKET (for Vertex AI) or GOOGLE_API_KEY (for AI Studio)")
+}
+
+-- Delete an uploaded file from whichever backend it was uploaded to.
+export func deleteFile(uploaded: UploadedFile) -> Result[(), string] ! {Net, FS, Env} {
+  if uploaded.backend == "gcs" then deleteFromGcs(uploaded)
+  else if uploaded.backend == "ai_studio" then deleteFromAiStudio(uploaded)
+  else Err("gemini_files: unknown backend: ${uploaded.backend}")
+}
+
+-- === Backend A: GCS Upload ===
+
+func uploadToGcs(base64Data: string, mimeType: string, displayName: string, bucket: string)
+  -> Result[UploadedFile, string] ! {Net, FS, Env} {
+  -- Get OAuth2 token via ADC
+  match getAccessToken() {
+    Err(e) => Err("gemini_files: GCS auth failed: ${e}"),
+    Ok(token) => {
+      -- Generate unique object name
+      let ts = intToStr(now());
+      let objectName = "docparse-temp/${ts}-${sanitizeName(displayName)}";
+      let url = gcsUploadUrl(bucket, objectName);
+
+      let headers = [
+        { name: "Authorization", value: "Bearer ${token}" },
+        { name: "Content-Type", value: mimeType },
+        { name: "Content-Transfer-Encoding", value: "base64" }
+      ];
+
+      match httpRequest("POST", url, headers, base64Data) {
+        Err(e) => Err("gemini_files: GCS upload network error: ${show(e)}"),
+        Ok(resp) =>
+          if resp.ok then Ok({
+            uri: gcsUri(bucket, objectName),
+            mimeType: mimeType,
+            backend: "gcs",
+            ref: objectName
+          })
+          else Err("gemini_files: GCS upload failed HTTP ${intToStr(resp.status)}: ${resp.body}")
+      }
+    }
+  }
+}
+
+func deleteFromGcs(uploaded: UploadedFile) -> Result[(), string] ! {Net, FS, Env} {
+  let bucket = getEnvOr("GCS_TEMP_BUCKET", "");
+  match getAccessToken() {
+    Err(e) => Err("gemini_files: GCS auth failed on delete: ${e}"),
+    Ok(token) => {
+      let url = gcsObjectUrl(bucket, uploaded.ref);
+      let headers = [
+        { name: "Authorization", value: "Bearer ${token}" }
+      ];
+      match httpRequest("DELETE", url, headers, "") {
+        Err(e) => Err("gemini_files: GCS delete network error: ${show(e)}"),
+        Ok(resp) =>
+          if resp.ok then Ok(())
+          else Err("gemini_files: GCS delete failed HTTP ${intToStr(resp.status)}")
+      }
+    }
+  }
+}
+
+-- === Backend B: AI Studio Files API ===
+
+func uploadToAiStudio(base64Data: string, mimeType: string, displayName: string, apiKey: string)
+  -> Result[UploadedFile, string] ! {Net} {
+  let url = aiStudioUploadUrl(apiKey);
+  let boundary = "----AILANGFileBoundary";
+
+  -- Build multipart/related body
+  let metaJson = encode(jo([kv("file", jo([kv("displayName", js(displayName))]))]));
+  let body = "--${boundary}\r\nContent-Type: application/json\r\n\r\n${metaJson}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Data}\r\n--${boundary}--";
+
+  let headers = [
+    { name: "Content-Type", value: "multipart/related; boundary=${boundary}" }
+  ];
+
+  match httpRequest("POST", url, headers, body) {
+    Err(e) => Err("gemini_files: AI Studio upload network error: ${show(e)}"),
+    Ok(resp) =>
+      if resp.ok then parseAiStudioUploadResponse(resp.body, mimeType)
+      else Err("gemini_files: AI Studio upload failed HTTP ${intToStr(resp.status)}: ${resp.body}")
+  }
+}
+
+func parseAiStudioUploadResponse(body: string, mimeType: string) -> Result[UploadedFile, string] {
+  match decode(body) {
+    Err(e) => Err("gemini_files: AI Studio response parse error: ${e}"),
+    Ok(json) => {
+      let fileJson = match get(json, "file") {
+        Some(f) => f,
+        None => json
+      };
+      let name = getOrElse(getString(fileJson, "name"), "");
+      let uri = getOrElse(getString(fileJson, "uri"), "");
+      if length(uri) > 0 then Ok({
+        uri: uri,
+        mimeType: mimeType,
+        backend: "ai_studio",
+        ref: name
+      })
+      else if length(name) > 0 then Ok({
+        uri: "https://generativelanguage.googleapis.com/v1beta/${name}",
+        mimeType: mimeType,
+        backend: "ai_studio",
+        ref: name
+      })
+      else Err("gemini_files: AI Studio response missing file URI and name")
+    }
+  }
+}
+
+func deleteFromAiStudio(uploaded: UploadedFile) -> Result[(), string] ! {Net, Env} {
+  let apiKey = getEnvOr("GOOGLE_API_KEY", "");
+  let url = aiStudioFileUrl(apiKey, uploaded.ref);
+  match httpRequest("DELETE", url, [], "") {
+    Err(e) => Err("gemini_files: AI Studio delete network error: ${show(e)}"),
+    Ok(resp) =>
+      if resp.ok then Ok(())
+      else Err("gemini_files: AI Studio delete failed HTTP ${intToStr(resp.status)}")
+  }
+}
+
+-- === Helpers ===
+
+-- Sanitize filename for use as GCS object name
+-- Replace spaces and special chars with underscores
+pure func sanitizeName(name: string) -> string {
+  sanitizeChars(name, 0, length(name), "")
+}
+
+pure func sanitizeChars(s: string, i: int, len: int, acc: string) -> string {
+  if i >= len then acc
+  else {
+    let ch = substring(s, i, i + 1);
+    let safe = if ch == " " then "_"
+      else if ch == "/" then "_"
+      else if ch == "\\" then "_"
+      else ch;
+    sanitizeChars(s, i + 1, len, "${acc}${safe}")
+  }
+}

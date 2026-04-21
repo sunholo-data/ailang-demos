@@ -1,0 +1,374 @@
+module docparse/services/docx_generator
+
+import std/string (length, intToStr, split)
+import std/list (map, foldl, length as listLength)
+import std/zip (createArchive, createArchiveWithBytes)
+import std/bytes (fromString, toBase64)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape, xmlDecl, docxContentTypes, docxRootRels, docxRun, docxParagraph, docxStyledParagraph)
+
+-- DOCX Generator — converts Block ADT to a valid .docx file.
+--
+-- Pattern: Build XML strings for each ZIP entry, then createArchive in one shot.
+-- Uses createArchiveWithBytes when ImageBlocks have binary data to embed.
+--
+-- Generated DOCX structure:
+--   [Content_Types].xml           - MIME registry
+--   _rels/.rels                   - Root relationships
+--   word/document.xml             - Main content (dynamic from blocks)
+--   word/styles.xml               - Minimal style definitions
+--   word/_rels/document.xml.rels  - Image relationships (when images present)
+--   word/media/image1.ext ...     - Embedded images (binary, via createArchiveWithBytes)
+--
+-- Limitations:
+--   - No headers/footers (could add as word/header1.xml if SectionBlocks present)
+--   - Minimal styling (structural, not pixel-perfect)
+--   - Image sizing is fixed (no aspect ratio detection from binary data)
+--
+-- Contract: non-empty blocks produce a valid DOCX
+
+-- Generate a DOCX file from a ParsedDocument, writing to outputPath
+export func generateDocx(doc: ParsedDocument, outputPath: string) -> string ! {FS}
+  ensures { length(result) > 0 }
+{
+  let images = docxCollectImages(doc.blocks, 1);
+  let hasImages = listLength(images) > 0;
+  let bodyResult = docxBlocksToXmlWithImages(doc.blocks, 1);
+  let documentXml = docxBuildDocumentWithNs(bodyResult.xml, hasImages);
+  let stylesXml = docxMinimalStyles();
+  let contentTypes = docxContentTypesWithImages(images);
+  let rootRels = docxRootRels();
+
+  if hasImages then {
+    -- Use createArchiveWithBytes for mixed text+binary archive
+    let docRels = docxDocumentRels(images);
+    let textEntries = [
+      {name: "[Content_Types].xml", data: docxTextToBase64(contentTypes)},
+      {name: "_rels/.rels", data: docxTextToBase64(rootRels)},
+      {name: "word/document.xml", data: docxTextToBase64(documentXml)},
+      {name: "word/styles.xml", data: docxTextToBase64(stylesXml)},
+      {name: "word/_rels/document.xml.rels", data: docxTextToBase64(docRels)}
+    ];
+    let imageEntries = docxImageEntries(images);
+    let allEntries = docxAppendByteEntries(textEntries, imageEntries);
+    let result = createArchiveWithBytes(outputPath, allEntries);
+    match result {
+      Ok(_) => "Generated DOCX: ${outputPath} (${intToStr(listLength(images))} images)",
+      Err(e) => "Error generating DOCX: ${e}"
+    }
+  } else {
+    -- No images: use createArchive (simpler, no base64 overhead)
+    let entries = [
+      {name: "[Content_Types].xml", content: contentTypes},
+      {name: "_rels/.rels", content: rootRels},
+      {name: "word/document.xml", content: documentXml},
+      {name: "word/styles.xml", content: stylesXml}
+    ];
+    let result = createArchive(outputPath, entries);
+    match result {
+      Ok(_) => "Generated DOCX: ${outputPath}",
+      Err(e) => "Error generating DOCX: ${e}"
+    }
+  }
+}
+
+-- Base64-encode a text string for createArchiveWithBytes
+pure func docxTextToBase64(text: string) -> string =
+  toBase64(fromString(text))
+
+-- Build word/document.xml with optional drawing namespaces for images
+pure func docxBuildDocumentWithNs(body: string, hasImages: bool) -> string
+  ensures { length(result) > 0 }
+{
+  let imageNs = if hasImages
+    then " xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\""
+    else "";
+  "${xmlDecl()}<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"${imageNs}><w:body>${body}</w:body></w:document>"
+}
+
+-- Convert a single Block to DOCX XML (no image embedding — used in fallback path)
+pure func docxBlockToXml(block: Block) -> string =
+  match block {
+    HeadingBlock(h) =>
+      docxStyledParagraph("Heading${intToStr(h.level)}", h.text),
+
+    TextBlock(t) =>
+      if length(t.text) > 0
+      then docxParagraph(docxRun(t.text))
+      else "",
+
+    TableBlock(t) =>
+      docxTableToXml(t.headers, t.rows),
+
+    ListBlock(l) =>
+      docxListToXml(l.items, l.ordered),
+
+    ImageBlock(i) =>
+      if length(i.description) > 0
+      then docxParagraph(docxRun("[Image: ${i.description}]"))
+      else docxParagraph(docxRun("[Image]")),
+
+    AudioBlock(a) =>
+      if length(a.transcription) > 0
+      then docxParagraph(docxRun("[Audio: ${a.transcription}]"))
+      else docxParagraph(docxRun("[Audio]")),
+
+    VideoBlock(v) =>
+      if length(v.description) > 0
+      then docxParagraph(docxRun("[Video: ${v.description}]"))
+      else docxParagraph(docxRun("[Video]")),
+
+    SectionBlock(s) =>
+      docxSectionToXml(s.kind, s.blocks),
+
+    ChangeBlock(c) =>
+      docxChangeToXml(c.changeType, c.author, c.date, c.text)
+  }
+
+-- Image-aware block conversion: tracks image index for rId references
+type DocxBlockResult = { xml: string, nextIdx: int }
+
+pure func docxBlocksToXmlWithImages(blocks: [Block], imgIdx: int) -> DocxBlockResult =
+  match blocks {
+    [] => {xml: "", nextIdx: imgIdx},
+    block :: rest =>
+      let r = docxBlockToXmlWithImage(block, imgIdx) in
+      let rest_r = docxBlocksToXmlWithImages(rest, r.nextIdx) in
+      {xml: "${r.xml}${rest_r.xml}", nextIdx: rest_r.nextIdx}
+  }
+
+pure func docxBlockToXmlWithImage(block: Block, imgIdx: int) -> DocxBlockResult =
+  match block {
+    ImageBlock(i) =>
+      if length(i.data) > 0 && length(i.mime) > 0
+      then {xml: docxInlineImage(imgIdx, i.description), nextIdx: imgIdx + 1}
+      else {xml: docxBlockToXml(block), nextIdx: imgIdx},
+
+    SectionBlock(s) =>
+      let r = docxBlocksToXmlWithImages(s.blocks, imgIdx) in
+      let label = docxSectionLabel(s.kind) in
+      let labelXml = if length(label) > 0 then docxStyledParagraph("Heading3", label) else "" in
+      {xml: "${labelXml}${r.xml}", nextIdx: r.nextIdx},
+
+    _ => {xml: docxBlockToXml(block), nextIdx: imgIdx}
+  }
+
+-- Section label helper (extracted for reuse)
+pure func docxSectionLabel(kind: string) -> string =
+  if kind == "slide" then "--- Slide ---"
+  else if kind == "sheet" then "--- Sheet ---"
+  else if kind == "header" then "Header:"
+  else if kind == "footer" then "Footer:"
+  else if kind == "footnote" then "Footnote:"
+  else if kind == "endnote" then "Endnote:"
+  else if kind == "textbox" then "Text Box:"
+  else ""
+
+-- Build OOXML <w:drawing> for an inline image
+-- rId references word/_rels/document.xml.rels entry
+pure func docxInlineImage(imgIdx: int, description: string) -> string {
+  let rId = "rId${intToStr(imgIdx)}";
+  let idStr = intToStr(imgIdx);
+  let desc = xmlEscape(description);
+  -- Default size: 6 inches wide × 4 inches tall (in EMUs: 1 inch = 914400 EMU)
+  let cx = "5486400";
+  let cy = "3657600";
+  docxParagraph(
+    "<w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"${cx}\" cy=\"${cy}\"/><wp:docPr id=\"${idStr}\" name=\"Image ${idStr}\" descr=\"${desc}\"/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"${idStr}\" name=\"Image ${idStr}\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\"${rId}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"${cx}\" cy=\"${cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"
+  )
+}
+
+-- Build a DOCX table: <w:tbl> with <w:tr>/<w:tc>
+pure func docxTableToXml(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let tblPr = "<w:tblPr><w:tblBorders><w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/><w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/><w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/><w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/><w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"auto\"/></w:tblBorders><w:tblW w:w=\"0\" w:type=\"auto\"/></w:tblPr>";
+  let headerRow = if listLength(headers) > 0
+    then "<w:tr>${docxHeaderCellsToXml(headers)}</w:tr>"
+    else "";
+  let dataRows = foldl(\acc row. "${acc}<w:tr>${docxDataCellsToXml(row)}</w:tr>", "", rows);
+  "<w:tbl>${tblPr}${headerRow}${dataRows}</w:tbl>"
+}
+
+-- Header cells as bold <w:tc>
+pure func docxHeaderCellsToXml(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${docxHeaderCellToXml(c)}", "", cells)
+
+pure func docxHeaderCellToXml(cell: TableCell) -> string {
+  if cell.merged then "<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>"
+  else {
+    let spanPr = if cell.colSpan > 1
+      then "<w:gridSpan w:val=\"${intToStr(cell.colSpan)}\"/>"
+      else "";
+    "<w:tc><w:tcPr>${spanPr}</w:tcPr><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">${xmlEscape(cell.text)}</w:t></w:r></w:p></w:tc>"
+  }
+}
+
+-- Data cells as normal <w:tc>
+pure func docxDataCellsToXml(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${docxDataCellToXml(c)}", "", cells)
+
+pure func docxDataCellToXml(cell: TableCell) -> string {
+  if cell.merged then "<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>"
+  else {
+    let spanPr = if cell.colSpan > 1
+      then "<w:gridSpan w:val=\"${intToStr(cell.colSpan)}\"/>"
+      else "";
+    "<w:tc><w:tcPr>${spanPr}</w:tcPr>${docxParagraph(docxRun(cell.text))}</w:tc>"
+  }
+}
+
+-- Lists as numbered/bulleted paragraphs
+-- DOCX lists use <w:numPr> with numId reference. We use a simple approach:
+-- bullet list items get a bullet character prefix, numbered get "N. " prefix.
+-- Full list numbering would require word/numbering.xml (deferred).
+pure func docxListToXml(items: [string], ordered: bool) -> string =
+  docxListItemsToXml(items, ordered, 1)
+
+pure func docxListItemsToXml(items: [string], ordered: bool, idx: int) -> string =
+  match items {
+    [] => "",
+    item :: rest =>
+      let prefix = if ordered
+        then "${intToStr(idx)}. "
+        else "\u2022 " in
+      "${docxParagraph(docxRun("${prefix}${item}"))}${docxListItemsToXml(rest, ordered, idx + 1)}"
+  }
+
+-- Section blocks: render child blocks with a section label
+pure func docxSectionToXml(kind: string, blocks: [Block]) -> string {
+  let label = if kind == "slide" then "--- Slide ---"
+    else if kind == "sheet" then "--- Sheet ---"
+    else if kind == "header" then "Header:"
+    else if kind == "footer" then "Footer:"
+    else if kind == "footnote" then "Footnote:"
+    else if kind == "endnote" then "Endnote:"
+    else if kind == "textbox" then "Text Box:"
+    else "";
+  let labelXml = if length(label) > 0
+    then docxStyledParagraph("Heading3", label)
+    else "";
+  "${labelXml}${foldl(\acc b. "${acc}${docxBlockToXml(b)}", "", blocks)}"
+}
+
+-- Track changes as styled paragraphs
+-- Full revision markup (<w:ins>/<w:del>) would need revision IDs (deferred).
+-- For now, render as styled text with attribution.
+pure func docxChangeToXml(changeType: string, author: string, date: string, text: string) -> string {
+  let attribution = " (${changeType} by ${author}, ${date})";
+  if changeType == "delete" || changeType == "move-from"
+  then docxParagraph(
+    "<w:r><w:rPr><w:strike/></w:rPr><w:t xml:space=\"preserve\">${xmlEscape(text)}</w:t></w:r>${docxRun(attribution)}"
+  )
+  else docxParagraph(
+    "<w:r><w:rPr><w:b/><w:u w:val=\"single\"/></w:rPr><w:t xml:space=\"preserve\">${xmlEscape(text)}</w:t></w:r>${docxRun(attribution)}"
+  )
+}
+
+-- [Content_Types].xml with styles + image extensions
+pure func docxContentTypesWithImages(images: [DocxImage]) -> string {
+  let imageDefaults = docxImageContentTypeDefaults(images);
+  "${xmlDecl()}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>${imageDefaults}<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/><Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/></Types>"
+}
+
+-- Build <Default> entries for image MIME types found in the document
+pure func docxImageContentTypeDefaults(images: [DocxImage]) -> string =
+  docxUniqueExtDefaults(images, "")
+
+pure func docxUniqueExtDefaults(images: [DocxImage], seen: string) -> string =
+  match images {
+    [] => "",
+    img :: rest =>
+      let ext = img.ext in
+      -- Simple dedup: check if extension already in seen string
+      if docxContainsExt(seen, ext)
+      then docxUniqueExtDefaults(rest, seen)
+      else "<Default Extension=\"${ext}\" ContentType=\"${img.mime}\"/>${docxUniqueExtDefaults(rest, "${seen},${ext}")}"
+  }
+
+pure func docxContainsExt(seen: string, ext: string) -> bool {
+  let parts = split(seen, ",");
+  docxExtInList(parts, ext)
+}
+
+pure func docxExtInList(parts: [string], ext: string) -> bool =
+  match parts {
+    [] => false,
+    p :: rest => if p == ext then true else docxExtInList(rest, ext)
+  }
+
+-- Minimal styles.xml with heading styles
+pure func docxMinimalStyles() -> string {
+  "${xmlDecl()}<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:style w:type=\"paragraph\" w:styleId=\"Normal\"><w:name w:val=\"Normal\"/></w:style>${docxHeadingStyle(1, "28")}${docxHeadingStyle(2, "24")}${docxHeadingStyle(3, "20")}${docxHeadingStyle(4, "18")}${docxHeadingStyle(5, "16")}${docxHeadingStyle(6, "14")}</w:styles>"
+}
+
+-- Build a heading style definition
+pure func docxHeadingStyle(level: int, fontSize: string) -> string =
+  "<w:style w:type=\"paragraph\" w:styleId=\"Heading${intToStr(level)}\"><w:name w:val=\"heading ${intToStr(level)}\"/><w:pPr><w:spacing w:before=\"240\" w:after=\"120\"/></w:pPr><w:rPr><w:b/><w:sz w:val=\"${fontSize}\"/></w:rPr></w:style>"
+
+-- ============================================================
+-- Image embedding support (M3: createArchiveWithBytes)
+-- ============================================================
+
+-- Collected image info
+type DocxImage = { idx: int, data: string, mime: string, ext: string }
+
+-- Collect all ImageBlocks with binary data from blocks
+pure func docxCollectImages(blocks: [Block], startIdx: int) -> [DocxImage] =
+  match blocks {
+    [] => [],
+    ImageBlock(i) :: rest =>
+      if length(i.data) > 0 && length(i.mime) > 0
+      then
+        let img = {idx: startIdx, data: i.data, mime: i.mime, ext: docxMimeToExt(i.mime)} in
+        img :: docxCollectImages(rest, startIdx + 1)
+      else docxCollectImages(rest, startIdx),
+    SectionBlock(s) :: rest =>
+      let inner = docxCollectImages(s.blocks, startIdx) in
+      let nextIdx = startIdx + listLength(inner) in
+      docxAppendImageList(inner, docxCollectImages(rest, nextIdx)),
+    _ :: rest => docxCollectImages(rest, startIdx)
+  }
+
+-- MIME type to file extension
+pure func docxMimeToExt(mime: string) -> string =
+  if mime == "image/png" then "png"
+  else if mime == "image/jpeg" then "jpeg"
+  else if mime == "image/gif" then "gif"
+  else if mime == "image/bmp" then "bmp"
+  else if mime == "image/tiff" then "tiff"
+  else if mime == "image/svg+xml" then "svg"
+  else "png"
+
+-- Build word/_rels/document.xml.rels with image relationships
+pure func docxDocumentRels(images: [DocxImage]) -> string {
+  "${xmlDecl()}<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">${docxImageRelsEntries(images)}</Relationships>"
+}
+
+pure func docxImageRelsEntries(images: [DocxImage]) -> string =
+  match images {
+    [] => "",
+    img :: rest =>
+      "<Relationship Id=\"rId${intToStr(img.idx)}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/image${intToStr(img.idx)}.${img.ext}\"/>${docxImageRelsEntries(rest)}"
+  }
+
+-- Build binary archive entries for images
+pure func docxImageEntries(images: [DocxImage]) -> [{name: string, data: string}] =
+  match images {
+    [] => [],
+    img :: rest =>
+      let entry = {name: "word/media/image${intToStr(img.idx)}.${img.ext}", data: img.data} in
+      entry :: docxImageEntries(rest)
+  }
+
+-- List append helpers
+pure func docxAppendByteEntries(a: [{name: string, data: string}], b: [{name: string, data: string}]) -> [{name: string, data: string}] =
+  match a {
+    [] => b,
+    x :: rest => x :: docxAppendByteEntries(rest, b)
+  }
+
+pure func docxAppendImageList(a: [DocxImage], b: [DocxImage]) -> [DocxImage] =
+  match a {
+    [] => b,
+    x :: rest => x :: docxAppendImageList(rest, b)
+  }

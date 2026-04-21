@@ -1,0 +1,494 @@
+module docparse/services/eval
+
+import std/json (decode, get, getString, getArray, getInt, getBool, asString, asArray, asObject, getObject, filterStrings)
+import std/option (Some, None, getOrElse, map as optMap)
+import std/result (Ok, Err)
+import std/string (length, trim, toLower, split, join, contains, intToStr, floatToStr, words as splitWords)
+import std/list (map, flatMap, filter, concat, length as listLength, member, dedup, intersect, union, take)
+import std/math (intToFloat)
+import std/fs (readFile)
+import std/io (println)
+import std/env (getArgs)
+
+-- AILANG Eval Module — structural comparison of golden vs actual AILANG Parse output.
+-- Mirrors the 8 checks from benchmarks/office/eval_office.py:
+--   1. Tables (count + merged cells + cell text Jaccard)
+--   2. Track changes (count + types + authors)
+--   3. Comments (count)
+--   4. Headers/footers (count)
+--   5. Text boxes (count)
+--   6. Images (count)
+--   7. Metadata (field-by-field match)
+--   8. Text Jaccard (overall text similarity >= 0.95)
+
+-- ================================================================
+-- Types
+-- ================================================================
+
+-- Flattened element for comparison (mirrors Python NormalizedElement)
+type EvalElement = {
+  elType: string,        -- "heading", "text", "table", "list", "image", "change", etc.
+  elText: string,        -- extracted text content
+  elLevel: int,          -- heading level (0 for non-headings)
+  elSection: string,     -- "header", "footer", "comment", "textbox", "" for normal
+  elChangeType: string,  -- for change blocks
+  elAuthor: string,      -- for change blocks
+  elHasMerge: bool,      -- true if table has merged cells
+  elImageMime: string    -- MIME type for images
+}
+
+-- Result of a single check
+type CheckResult = {
+  name: string,
+  applicable: bool,
+  passed: bool,
+  detail: string
+}
+
+-- Overall evaluation result
+type EvalResult = {
+  filename: string,
+  score: float,
+  applicableChecks: int,
+  passedChecks: int,
+  checks: [CheckResult]
+}
+
+-- ================================================================
+-- Entry point
+-- ================================================================
+
+-- Evaluate a golden JSON file against an actual JSON file
+-- Usage: ailang run --entry evalMain --caps IO,FS,Env docparse/services/eval.ail golden.json actual.json
+export func evalMain() -> () ! {IO, FS, Env} {
+  let args = getArgs();
+  let goldenPath = match args {
+    [] => "",
+    g :: _ => g
+  };
+  let actualPath = match args {
+    [] => "",
+    _ :: rest => match rest {
+      [] => "",
+      a :: _ => a
+    }
+  };
+
+  if length(goldenPath) == 0 || length(actualPath) == 0 then {
+    println("Usage: ailang run --entry evalMain --caps IO,FS,Env docparse/services/eval.ail <golden.json> <actual.json>");
+    ()
+  }
+  else {
+  let goldenStr = readFile(goldenPath);
+  let actualStr = readFile(actualPath);
+
+  let result = match decode(goldenStr) {
+    Ok(goldenJson) => match decode(actualStr) {
+      Ok(actualJson) => {
+        let goldenEls = evalNormalizeJson(goldenJson);
+        let actualEls = evalNormalizeJson(actualJson);
+        evalRunChecks(goldenPath, goldenJson, actualJson, goldenEls, actualEls)
+      },
+      Err(e) => {filename: goldenPath, score: 0.0, applicableChecks: 0, passedChecks: 0,
+                  checks: [{name: "parse", applicable: true, passed: false, detail: "actual JSON parse error: ${e}"}]}
+    },
+    Err(e) => {filename: goldenPath, score: 0.0, applicableChecks: 0, passedChecks: 0,
+                checks: [{name: "parse", applicable: true, passed: false, detail: "golden JSON parse error: ${e}"}]}
+  };
+
+  -- Print results
+  println("File: ${result.filename}");
+  println("Score: ${evalFloatToString(result.score)}");
+  println("Checks: ${evalIntToString(result.passedChecks)}/${evalIntToString(result.applicableChecks)}");
+  evalPrintChecks(result.checks)
+  }
+}
+
+-- ================================================================
+-- JSON Normalization → [EvalElement]
+-- ================================================================
+
+-- Normalize JSON output into flat list of EvalElements
+-- Contract: always returns at least empty list
+export pure func evalNormalizeJson(json: Json) -> [EvalElement]
+  ensures { listLength(result) >= 0 }
+{
+  let doc = getOrElse(getObject(json, "document"), json);
+  let blocksOpt = getArray(doc, "blocks");
+  match blocksOpt {
+    Some(blocks) => evalFlattenBlocks(blocks, ""),
+    None => []
+  }
+}
+
+-- Recursively flatten blocks, tracking section context
+pure func evalFlattenBlocks(blocks: [Json], section: string) -> [EvalElement] =
+  flatMap(\b. evalFlattenOneBlock(b, section), blocks)
+
+-- Flatten a single block based on its type
+pure func evalFlattenOneBlock(block: Json, section: string) -> [EvalElement] {
+  let blockType = getOrElse(getString(block, "type"), "unknown");
+
+  if blockType == "section" then {
+    let kind = getOrElse(getString(block, "kind"), "");
+    let childBlocks = getOrElse(getArray(block, "blocks"), []);
+    -- Sections like "header", "footer", "comment", "textbox" set the section context
+    let newSection = if contains(kind, "header") then "header"
+                     else if contains(kind, "footer") then "footer"
+                     else if contains(kind, "comment") then "comment"
+                     else if contains(kind, "textbox") then "textbox"
+                     else kind;
+    evalFlattenBlocks(childBlocks, newSection)
+  }
+  else if blockType == "heading" then {
+    let text = getOrElse(getString(block, "text"), "");
+    let level = getOrElse(getInt(block, "level"), 1);
+    [{elType: "heading", elText: text, elLevel: level, elSection: section,
+      elChangeType: "", elAuthor: "", elHasMerge: false, elImageMime: ""}]
+  }
+  else if blockType == "text" then {
+    let text = getOrElse(getString(block, "text"), "");
+    [{elType: "text", elText: text, elLevel: 0, elSection: section,
+      elChangeType: "", elAuthor: "", elHasMerge: false, elImageMime: ""}]
+  }
+  else if blockType == "table" then {
+    let text = evalExtractTableText(block);
+    let hasMerge = evalCheckTableMerge(block);
+    [{elType: "table", elText: text, elLevel: 0, elSection: section,
+      elChangeType: "", elAuthor: "", elHasMerge: hasMerge, elImageMime: ""}]
+  }
+  else if blockType == "list" then {
+    let items = getOrElse(getArray(block, "items"), []);
+    let itemTexts = filterStrings(items);
+    map(\t. {elType: "list_item", elText: t, elLevel: 0, elSection: section,
+             elChangeType: "", elAuthor: "", elHasMerge: false, elImageMime: ""}, itemTexts)
+  }
+  else if blockType == "image" then {
+    let desc = getOrElse(getString(block, "description"), "");
+    let mime = getOrElse(getString(block, "mime"), "");
+    [{elType: "image", elText: desc, elLevel: 0, elSection: section,
+      elChangeType: "", elAuthor: "", elHasMerge: false, elImageMime: mime}]
+  }
+  else if blockType == "change" then {
+    let text = getOrElse(getString(block, "text"), "");
+    let changeType = getOrElse(getString(block, "changeType"), "");
+    let author = getOrElse(getString(block, "author"), "");
+    [{elType: "change", elText: text, elLevel: 0, elSection: section,
+      elChangeType: changeType, elAuthor: author, elHasMerge: false, elImageMime: ""}]
+  }
+  else {
+    -- audio, video, unknown — just extract text
+    let text = getOrElse(getString(block, "text"), "");
+    [{elType: blockType, elText: text, elLevel: 0, elSection: section,
+      elChangeType: "", elAuthor: "", elHasMerge: false, elImageMime: ""}]
+  }
+}
+
+-- Extract all text from a table block (headers + rows)
+pure func evalExtractTableText(table: Json) -> string {
+  let headerTexts = match getArray(table, "headers") {
+    Some(headers) => evalExtractCellTexts(headers),
+    None => []
+  };
+  let rowTexts = match getArray(table, "rows") {
+    Some(rows) => flatMap(\row. match asArray(row) {
+      Some(cells) => evalExtractCellTexts(cells),
+      None => []
+    }, rows),
+    None => []
+  };
+  join(" ", concat(headerTexts, rowTexts))
+}
+
+-- Extract text from cells (which can be strings or objects with "text" field)
+pure func evalExtractCellTexts(cells: [Json]) -> [string] =
+  map(\cell.
+    match asString(cell) {
+      Some(s) => s,
+      None => getOrElse(getString(cell, "text"), "")
+    }, cells)
+
+-- Check if a table has any merged cells
+pure func evalCheckTableMerge(table: Json) -> bool {
+  let headerMerge = match getArray(table, "headers") {
+    Some(headers) => evalAnyCellMerged(headers),
+    None => false
+  };
+  if headerMerge then true
+  else match getArray(table, "rows") {
+    Some(rows) => evalAnyRowMerged(rows),
+    None => false
+  }
+}
+
+pure func evalAnyCellMerged(cells: [Json]) -> bool =
+  listLength(filter(evalIsCellMerged, cells)) > 0
+
+pure func evalAnyRowMerged(rows: [Json]) -> bool =
+  listLength(filter(evalIsRowMerged, rows)) > 0
+
+pure func evalIsRowMerged(row: Json) -> bool =
+  match asArray(row) {
+    Some(cells) => evalAnyCellMerged(cells),
+    None => false
+  }
+
+pure func evalIsCellMerged(cell: Json) -> bool =
+  match asString(cell) {
+    Some(_) => false,
+    None => {
+      let colSpan = getOrElse(getInt(cell, "colSpan"), 1);
+      let rowSpan = getOrElse(getInt(cell, "rowSpan"), 1);
+      let merged = getOrElse(getBool(cell, "merged"), false);
+      colSpan > 1 || rowSpan > 1 || merged
+    }
+  }
+
+-- ================================================================
+-- Tokenization (uses std/string.words + std/list.dedup)
+-- ================================================================
+
+-- Tokenize text into lowercase words (split on whitespace, filter empty)
+pure func evalTokenize(text: string) -> [string] =
+  splitWords(toLower(text))
+
+-- Collect unique words from elements.
+-- Hash-based dedup is O(n), but AILANG JSON decode + flatMap on 2800+ elements
+-- still OOMs on large docs (Moby Dick 1.4MB JSON). Cap at 10000 words (~40 pages).
+pure func evalCollectWords(elements: [EvalElement]) -> [string] =
+  dedup(take(10000, flatMap(\el. evalTokenize(el.elText), elements)))
+
+-- ================================================================
+-- Jaccard Similarity
+-- ================================================================
+
+-- Compute Jaccard similarity between two word sets
+-- Contract: result is always between 0.0 and 1.0
+export pure func evalJaccard(golden: [string], actual: [string]) -> float
+  ensures { result >= 0.0 && result <= 1.0 }
+{
+  let inter = intersect(golden, actual);
+  let uni = union(golden, actual);
+  let uniLen = listLength(uni);
+  if uniLen == 0 then 1.0
+  else evalDivide(listLength(inter), uniLen)
+}
+
+-- Safe integer division returning float
+pure func evalDivide(num: int, den: int) -> float =
+  if den == 0 then 0.0
+  else intToFloat(num) / intToFloat(den)
+
+
+-- ================================================================
+-- Check Functions (8 checks)
+-- ================================================================
+
+-- 1. Tables: count match + merged cells + cell text Jaccard
+pure func evalCheckTables(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenTables = filter(\e. e.elType == "table", golden);
+  let actualTables = filter(\e. e.elType == "table", actual);
+  if listLength(goldenTables) == 0 then
+    {name: "tables", applicable: false, passed: true, detail: "no tables in golden"}
+  else {
+    let countMatch = listLength(goldenTables) == listLength(actualTables);
+    let goldenMerged = filter(\e. e.elHasMerge, goldenTables);
+    let actualMerged = filter(\e. e.elHasMerge, actualTables);
+    let mergeMatch = listLength(goldenMerged) == listLength(actualMerged);
+    let goldenWords = evalCollectWords(goldenTables);
+    let actualWords = evalCollectWords(actualTables);
+    let jaccard = evalJaccard(goldenWords, actualWords);
+    let passed = countMatch && mergeMatch && jaccard >= 0.9;
+    {name: "tables", applicable: true, passed: passed,
+     detail: "count:${evalBoolToStr(countMatch)} merge:${evalBoolToStr(mergeMatch)} jaccard:${evalFloatToString(jaccard)}"}
+  }
+}
+
+-- 2. Track changes: count + types + authors
+pure func evalCheckTrackChanges(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenChanges = filter(\e. e.elType == "change", golden);
+  let actualChanges = filter(\e. e.elType == "change", actual);
+  if listLength(goldenChanges) == 0 then
+    {name: "track_changes", applicable: false, passed: true, detail: "no track changes in golden"}
+  else {
+    let countMatch = listLength(goldenChanges) == listLength(actualChanges);
+    let goldenTypes = dedup(map(\e. e.elChangeType, goldenChanges));
+    let actualTypes = dedup(map(\e. e.elChangeType, actualChanges));
+    let typesMatch = listLength(goldenTypes) == listLength(actualTypes);
+    let goldenAuthors = dedup(map(\e. e.elAuthor, goldenChanges));
+    let actualAuthors = dedup(map(\e. e.elAuthor, actualChanges));
+    let authorsMatch = listLength(goldenAuthors) == listLength(actualAuthors);
+    let passed = countMatch && typesMatch && authorsMatch;
+    {name: "track_changes", applicable: true, passed: passed,
+     detail: "count:${evalBoolToStr(countMatch)} types:${evalBoolToStr(typesMatch)} authors:${evalBoolToStr(authorsMatch)}"}
+  }
+}
+
+-- 3. Comments
+pure func evalCheckComments(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenComments = filter(\e. e.elSection == "comment", golden);
+  let actualComments = filter(\e. e.elSection == "comment", actual);
+  if listLength(goldenComments) == 0 then
+    {name: "comments", applicable: false, passed: true, detail: "no comments in golden"}
+  else {
+    let countMatch = listLength(goldenComments) == listLength(actualComments);
+    {name: "comments", applicable: true, passed: countMatch,
+     detail: "golden:${evalIntToString(listLength(goldenComments))} actual:${evalIntToString(listLength(actualComments))}"}
+  }
+}
+
+-- 4. Headers/footers
+pure func evalCheckHeadersFooters(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenHeaders = filter(\e. e.elSection == "header", golden);
+  let goldenFooters = filter(\e. e.elSection == "footer", golden);
+  let actualHeaders = filter(\e. e.elSection == "header", actual);
+  let actualFooters = filter(\e. e.elSection == "footer", actual);
+  if listLength(goldenHeaders) == 0 && listLength(goldenFooters) == 0 then
+    {name: "headers_footers", applicable: false, passed: true, detail: "no headers/footers in golden"}
+  else {
+    let headerMatch = listLength(goldenHeaders) == listLength(actualHeaders);
+    let footerMatch = listLength(goldenFooters) == listLength(actualFooters);
+    let passed = headerMatch && footerMatch;
+    {name: "headers_footers", applicable: true, passed: passed,
+     detail: "headers:${evalBoolToStr(headerMatch)} footers:${evalBoolToStr(footerMatch)}"}
+  }
+}
+
+-- 5. Text boxes
+pure func evalCheckTextBoxes(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenBoxes = filter(\e. e.elSection == "textbox", golden);
+  let actualBoxes = filter(\e. e.elSection == "textbox", actual);
+  if listLength(goldenBoxes) == 0 then
+    {name: "text_boxes", applicable: false, passed: true, detail: "no text boxes in golden"}
+  else {
+    let countMatch = listLength(goldenBoxes) == listLength(actualBoxes);
+    {name: "text_boxes", applicable: true, passed: countMatch,
+     detail: "golden:${evalIntToString(listLength(goldenBoxes))} actual:${evalIntToString(listLength(actualBoxes))}"}
+  }
+}
+
+-- 6. Images
+pure func evalCheckImages(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenImages = filter(\e. e.elType == "image", golden);
+  let actualImages = filter(\e. e.elType == "image", actual);
+  if listLength(goldenImages) == 0 then
+    {name: "images", applicable: false, passed: true, detail: "no images in golden"}
+  else {
+    let countMatch = listLength(goldenImages) == listLength(actualImages);
+    {name: "images", applicable: true, passed: countMatch,
+     detail: "golden:${evalIntToString(listLength(goldenImages))} actual:${evalIntToString(listLength(actualImages))}"}
+  }
+}
+
+-- 7. Metadata
+pure func evalCheckMetadata(goldenJson: Json, actualJson: Json) -> CheckResult {
+  let goldenDoc = getOrElse(getObject(goldenJson, "document"), goldenJson);
+  let actualDoc = getOrElse(getObject(actualJson, "document"), actualJson);
+  let goldenMeta = getOrElse(getObject(goldenDoc, "metadata"), goldenDoc);
+  let actualMeta = getOrElse(getObject(actualDoc, "metadata"), actualDoc);
+
+  let titleG = getOrElse(getString(goldenMeta, "title"), "");
+  let titleA = getOrElse(getString(actualMeta, "title"), "");
+  let authorG = getOrElse(getString(goldenMeta, "author"), "");
+  let authorA = getOrElse(getString(actualMeta, "author"), "");
+  let createdG = getOrElse(getString(goldenMeta, "created"), "");
+  let createdA = getOrElse(getString(actualMeta, "created"), "");
+  let modifiedG = getOrElse(getString(goldenMeta, "modified"), "");
+  let modifiedA = getOrElse(getString(actualMeta, "modified"), "");
+
+  -- Only check fields that have values in golden
+  let checks = evalMetaFieldChecks(titleG, titleA, "title",
+               evalMetaFieldChecks(authorG, authorA, "author",
+               evalMetaFieldChecks(createdG, createdA, "created",
+               evalMetaFieldChecks(modifiedG, modifiedA, "modified", {applicable: 0, passed: 0, details: ""}))));
+
+  if checks.applicable == 0 then
+    {name: "metadata", applicable: false, passed: true, detail: "no metadata in golden"}
+  else {
+    let passed = checks.applicable == checks.passed;
+    {name: "metadata", applicable: true, passed: passed,
+     detail: "${evalIntToString(checks.passed)}/${evalIntToString(checks.applicable)} fields match${checks.details}"}
+  }
+}
+
+type MetaAccum = {applicable: int, passed: int, details: string}
+
+pure func evalMetaFieldChecks(golden: string, actual: string, fieldName: string, acc: MetaAccum) -> MetaAccum =
+  if length(golden) == 0 then acc
+  else {
+    let matched = golden == actual;
+    {applicable: acc.applicable + 1,
+     passed: if matched then acc.passed + 1 else acc.passed,
+     details: "${acc.details} ${fieldName}:${evalBoolToStr(matched)}"}
+  }
+
+-- 8. Text Jaccard (overall text similarity)
+pure func evalCheckTextJaccard(golden: [EvalElement], actual: [EvalElement]) -> CheckResult {
+  let goldenWords = evalCollectWords(golden);
+  let actualWords = evalCollectWords(actual);
+  let jaccard = evalJaccard(goldenWords, actualWords);
+  let passed = jaccard >= 0.95;
+  {name: "text_similarity", applicable: true, passed: passed,
+   detail: "jaccard:${evalFloatToString(jaccard)} golden_words:${evalIntToString(listLength(goldenWords))} actual_words:${evalIntToString(listLength(actualWords))}"}
+}
+
+-- ================================================================
+-- Score Computation
+-- ================================================================
+
+-- Compute overall score from check results
+-- Contract: result is always between 0.0 and 1.0
+export pure func evalComputeScore(checks: [CheckResult]) -> float
+  ensures { result >= 0.0 && result <= 1.0 }
+{
+  let applicable = listLength(filter(\c. c.applicable, checks));
+  let passed = listLength(filter(\c. c.applicable && c.passed, checks));
+  if applicable == 0 then 1.0
+  else evalDivide(passed, applicable)
+}
+
+-- Run all 8 checks and compute score
+pure func evalRunChecks(filename: string, goldenJson: Json, actualJson: Json,
+                        golden: [EvalElement], actual: [EvalElement]) -> EvalResult {
+  let checks = [
+    evalCheckTables(golden, actual),
+    evalCheckTrackChanges(golden, actual),
+    evalCheckComments(golden, actual),
+    evalCheckHeadersFooters(golden, actual),
+    evalCheckTextBoxes(golden, actual),
+    evalCheckImages(golden, actual),
+    evalCheckMetadata(goldenJson, actualJson),
+    evalCheckTextJaccard(golden, actual)
+  ];
+
+  let score = evalComputeScore(checks);
+  let applicable = listLength(filter(\c. c.applicable, checks));
+  let passed = listLength(filter(\c. c.applicable && c.passed, checks));
+
+  {filename: filename, score: score, applicableChecks: applicable, passedChecks: passed, checks: checks}
+}
+
+-- ================================================================
+-- Formatting helpers
+-- ================================================================
+
+pure func evalBoolToStr(b: bool) -> string =
+  if b then "PASS" else "FAIL"
+
+pure func evalFloatToString(f: float) -> string =
+  "${floatToStr(f * 100.0)}%"
+
+pure func evalIntToString(n: int) -> string = intToStr(n)
+
+
+func evalPrintChecks(checks: [CheckResult]) -> () ! {IO} =
+  match checks {
+    [] => (),
+    c :: rest => {
+      let status = if c.applicable == false then "N/A"
+                   else if c.passed then "PASS"
+                   else "FAIL";
+      println("  ${c.name}: ${status} (${c.detail})");
+      evalPrintChecks(rest)
+    }
+  }

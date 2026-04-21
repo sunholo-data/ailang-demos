@@ -1,0 +1,49 @@
+-- HTTP request builders with common auth patterns
+--
+-- Eliminates repeated header construction across projects.
+-- Every AILANG API project rebuilds Bearer headers, JSON content types, etc.
+--
+-- Usage:
+--   import pkg/sunholo/http_helpers/request (authGet, authPost, bearerHeaders, jsonHeaders)
+
+module sunholo/http_helpers/request
+
+import std/net (httpRequest)
+import std/json (encode)
+import std/result (Ok, Err)
+
+-- Build Authorization: Bearer headers
+export pure func bearerHeaders(token: string) -> [{name: string, value: string}] =
+  [
+    { name: "Authorization", value: "Bearer ${token}" },
+    { name: "Content-Type", value: "application/json" }
+  ]
+
+-- Build headers for JSON requests (no auth)
+export pure func jsonHeaders() -> [{name: string, value: string}] =
+  [{ name: "Content-Type", value: "application/json" }]
+
+-- Build headers with API key
+export pure func apiKeyHeaders(key: string) -> [{name: string, value: string}] =
+  [
+    { name: "x-api-key", value: key },
+    { name: "Content-Type", value: "application/json" }
+  ]
+
+-- GET with Bearer token
+export func authGet(url: string, token: string) -> Result[{status: int, headers: [{name: string, value: string}], body: string, ok: bool}, string] ! {Net} =
+  match httpRequest("GET", url, bearerHeaders(token), "") {
+    Ok(resp) => Ok(resp),
+    Err(_) => Err("Network error: GET ${url}")
+  }
+
+-- POST with Bearer token and JSON body
+export func authPost(url: string, token: string, body: string) -> Result[{status: int, headers: [{name: string, value: string}], body: string, ok: bool}, string] ! {Net} =
+  match httpRequest("POST", url, bearerHeaders(token), body) {
+    Ok(resp) => Ok(resp),
+    Err(_) => Err("Network error: POST ${url}")
+  }
+
+-- POST JSON object with Bearer token (encodes body automatically)
+export func authPostJson(url: string, token: string, jsonBody: Json) -> Result[{status: int, headers: [{name: string, value: string}], body: string, ok: bool}, string] ! {Net} =
+  authPost(url, token, encode(jsonBody))

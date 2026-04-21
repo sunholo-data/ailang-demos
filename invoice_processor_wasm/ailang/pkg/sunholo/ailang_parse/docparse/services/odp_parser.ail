@@ -1,0 +1,220 @@
+module docparse/services/odp_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/zip (readEntry)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, trim, endsWith)
+import std/list (map, flatMap, filter, concat, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ImageBlock, ListBlock, SectionBlock, TableCell, DocMetadata, simpleCell, emptyMetadata)
+
+-- ODP Parser — converts OpenDocument Presentation to Block ADT.
+-- Pure AILANG implementation using std/zip + std/xml.
+--
+-- ODP structure (ZIP archive):
+--   content.xml    — slides (draw:page elements)
+--   meta.xml       — metadata
+--
+-- ODF Presentation XML structure:
+--   office:body > office:presentation > draw:page (slides)
+--   Each draw:page contains draw:frame > draw:text-box > text:p
+--
+-- Analogous to PPTX parser but with ODF namespaces.
+
+-- Parse an ODP file into content blocks
+export func parseOdp(filepath: string) -> [Block] ! {FS}
+  ensures { listLength(result) >= 0 }
+{
+  let xml = match readEntry(filepath, "content.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0
+  then [TextBlock({text: "ODP error: could not read content.xml", style: "error", level: 0})]
+  else match parse(xml) {
+    Ok(root) => odpExtractSlides(root),
+    Err(e) => [TextBlock({text: "ODP XML parse error: ${e}", style: "error", level: 0})]
+  }
+}
+
+-- Extract metadata from an ODP file
+export func parseOdpMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let xml = match readEntry(filepath, "meta.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0 then emptyMetadata()
+  else match parse(xml) {
+    Ok(root) => odpParseMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Navigate to office:body/office:presentation and extract slides
+export pure func odpExtractSlides(root: XmlNode) -> [Block] {
+  match findFirst(root, "office:body") {
+    Some(body) =>
+      match findFirst(body, "office:presentation") {
+        Some(pres) => {
+          let pages = findAll(pres, "draw:page");
+          flatMap(odpParseSlide, pages)
+        },
+        None => []
+      },
+    None => []
+  }
+}
+
+-- Parse a single draw:page (slide) into blocks
+-- Wraps slide content in a SectionBlock with the slide name
+pure func odpParseSlide(page: XmlNode) -> [Block] {
+  let slideName = getOrElse(getAttr(page, "draw:name"), "slide");
+  let frames = getChildren(page);
+  let blocks = flatMap(odpProcessFrame, frames);
+  if listLength(blocks) > 0
+  then [SectionBlock({kind: "slide:${slideName}", blocks: blocks})]
+  else []
+}
+
+-- Process a draw:frame or other slide child element
+pure func odpProcessFrame(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+
+  if tag == "draw:frame" then {
+    let children = getChildren(node);
+    flatMap(odpProcessFrameChild, children)
+  }
+  -- Tables can appear directly in slides
+  else if tag == "table:table" then [odpParseTable(node)]
+  else []
+}
+
+-- Process children of a draw:frame (text boxes, tables, images)
+pure func odpProcessFrameChild(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+
+  if tag == "draw:text-box" then {
+    let children = getChildren(node);
+    flatMap(odpProcessTextElement, children)
+  }
+  else if tag == "table:table" then [odpParseTable(node)]
+  else if tag == "draw:image" then {
+    let href = getOrElse(getAttr(node, "xlink:href"), "");
+    if length(href) > 0
+    then [ImageBlock({data: href, description: "", mime: odpGuessMime(href)})]
+    else []
+  }
+  else []
+}
+
+-- Guess MIME type from image path
+pure func odpGuessMime(href: string) -> string
+  tests [
+    ("media/image.png", "image/png"),
+    ("slide.jpg", "image/jpeg"),
+    ("slide.jpeg", "image/jpeg"),
+    ("icon.gif", "image/gif"),
+    ("diagram.svg", "image/svg+xml"),
+    ("scan.bmp", "image/bmp"),
+    ("photo.webp", "image/webp"),
+    ("unknown.xyz", "image/unknown")
+  ]
+{
+  if endsWith(href, ".png") then "image/png"
+  else if endsWith(href, ".jpg") || endsWith(href, ".jpeg") then "image/jpeg"
+  else if endsWith(href, ".gif") then "image/gif"
+  else if endsWith(href, ".svg") then "image/svg+xml"
+  else if endsWith(href, ".bmp") then "image/bmp"
+  else if endsWith(href, ".webp") then "image/webp"
+  else "image/unknown"
+}
+
+-- Process text elements inside a text box
+pure func odpProcessTextElement(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+
+  -- Headings
+  if tag == "text:h" then
+    let text = trim(getText(node)) in
+    let levelStr = getOrElse(getAttr(node, "text:outline-level"), "1") in
+    let level = odpParseLevel(levelStr) in
+    if length(text) > 0 then [HeadingBlock({text: text, level: level})]
+    else []
+
+  -- Paragraphs
+  else if tag == "text:p" then
+    let text = trim(getText(node)) in
+    if length(text) > 0 then [TextBlock({text: text, style: "normal", level: 0})]
+    else []
+
+  -- Lists
+  else if tag == "text:list" then odpParseList(node)
+
+  else []
+}
+
+-- Parse heading level
+-- Contract: returns 1-6
+pure func odpParseLevel(s: string) -> int
+  ensures { result >= 1 && result <= 6 }
+{
+  if s == "1" then 1
+  else if s == "2" then 2
+  else if s == "3" then 3
+  else if s == "4" then 4
+  else if s == "5" then 5
+  else if s == "6" then 6
+  else 1
+}
+
+-- Parse an ODF table
+pure func odpParseTable(table: XmlNode) -> Block {
+  let rows = findAll(table, "table:table-row");
+  let parsedRows = map(odpParseTableRow, rows);
+  match parsedRows {
+    [] => TableBlock({rows: [], headers: []}),
+    firstRow :: dataRows =>
+      TableBlock({rows: dataRows, headers: firstRow})
+  }
+}
+
+-- Parse a table row
+pure func odpParseTableRow(tr: XmlNode) -> [TableCell] {
+  let cells = findAll(tr, "table:table-cell");
+  map(odpParseTableCell, cells)
+}
+
+-- Parse a table cell
+pure func odpParseTableCell(cell: XmlNode) -> TableCell {
+  let text = trim(getText(cell));
+  {text: text, colSpan: 1, rowSpan: 1, merged: false}
+}
+
+-- Parse a text:list
+pure func odpParseList(list: XmlNode) -> [Block] {
+  let items = findAll(list, "text:list-item");
+  let texts = map(\item. trim(getText(item)), items);
+  let nonEmpty = filter(\t. length(t) > 0, texts);
+  if listLength(nonEmpty) > 0
+  then [ListBlock({items: nonEmpty, ordered: false})]
+  else []
+}
+
+-- Parse metadata from meta.xml
+export pure func odpParseMetadata(root: XmlNode) -> DocMetadata {
+  let title = odpFindMeta(root, "dc:title");
+  let author = odpFindMeta(root, "dc:creator");
+  let date = odpFindMeta(root, "dc:date");
+  {title: title, author: author, created: date, modified: "", pageCount: 0}
+}
+
+-- Find a metadata element's text
+pure func odpFindMeta(root: XmlNode, tagName: string) -> string {
+  let elements = findAll(root, tagName);
+  match elements {
+    [] => "",
+    el :: _ => trim(getText(el))
+  }
+}

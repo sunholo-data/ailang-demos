@@ -1,0 +1,1072 @@
+module docparse/services/tex_parser
+
+import std/string (split, trim, length, startsWith, endsWith, substring, find, contains, charAt, replace, toLower, replaceMany)
+import std/list (map, filter, foldl, concat, reverse, length as listLength)
+import std/option (Some, None)
+import docparse/types/document (Block, HeadingBlock, TextBlock, ListBlock, TableBlock, TableCell, SectionBlock, ImageBlock, simpleCell)
+
+-- LaTeX Parser — converts arXiv-style LaTeX source to Block ADT.
+-- Pure AILANG implementation, no external dependencies.
+--
+-- Scope (the "arXiv-paper subset"):
+--   - Sectioning: \section, \subsection, \subsubsection, \paragraph → HeadingBlock
+--   - Paragraphs → TextBlock(style: "paragraph")
+--   - Display equations: \begin{equation}, \begin{align}, $$...$$, \[...\] → TextBlock(style: "equation-display")
+--   - Lists: itemize, enumerate → ListBlock
+--   - Tables: tabular → TableBlock (simplified)
+--   - Figures: figure + \includegraphics → ImageBlock
+--   - Bibliography: thebibliography + \bibitem → SectionBlock(kind: "bibliography")
+--   - Abstract: abstract env → SectionBlock(kind: "abstract")
+--   - Inline cleanup: \textbf/\emph/\cite/\ref reduced to plain markers
+--
+-- Out of scope:
+--   - Macro expansion (\newcommand/\def are ignored; math-only macros live inside
+--     equations we preserve as raw LaTeX, so expansion doesn't affect block
+--     extraction for >95% of arXiv papers)
+--   - TikZ/PGF rendering (preserved as raw text inside TextBlock)
+--   - Multi-file \input/\include resolution (v0.15.1)
+--   - BibTeX style resolution from .bib (use .bbl or \bibitem directly)
+
+-- ============================================================================
+-- Entry point
+-- ============================================================================
+
+export pure func parseLatex(content: string) -> [Block]
+  ensures { length(content) == 0 || listLength(result) >= 0 }
+{
+  let body = texExtractDocumentBody(content);
+  let stripped = texStripComments(body);
+  -- Normalize paragraph and env markers so each starts a fresh virtual line.
+  -- This lets mid-line `\par`, `\begin{X}`, and `\end{X}` produce their own
+  -- block boundaries without a full mid-line tokenizer.
+  let normalized = texNormalizeMarkers(stripped);
+  let lines = split(normalized, "\n");
+  let state = foldl(texProcessLine, texEmptyState(), lines);
+  reverse(texFlushState(state))
+}
+
+-- Insert newlines before \par, \begin{...}, and \end{...} markers so the
+-- line-oriented parser sees each as a fresh line. Also handles the common
+-- pattern `\end{X}\begin{Y}` by splitting into two lines.
+pure func texNormalizeMarkers(s: string) -> string =
+  replaceMany(s, [
+    ("\\par ",    "\n"),
+    ("\\par\t",   "\n"),
+    ("\\par\n",   "\n"),
+    ("\\begin{",  "\n\\begin{"),
+    ("\\end{",    "\n\\end{")
+  ])
+
+-- Extract metadata (title, author) from preamble
+-- Contract: results never exceed source length (extraction is a shrinking operation)
+export pure func parseLatexMetadata(content: string) -> {title: string, author: string}
+  ensures {
+    length(result.title) <= length(content) &&
+    length(result.author) <= length(content)
+  }
+{
+  let title = texExtractBraceArg(content, "\\title");
+  let author = texExtractBraceArg(content, "\\author");
+  { title: texCleanInline(title), author: texCleanInline(author) }
+}
+
+-- ============================================================================
+-- Preprocessing: comment stripping and document body extraction
+-- ============================================================================
+
+-- Strip LaTeX comments (% to end of line). Respects escaped \%.
+-- Simple heuristic: if '%' appears after an odd number of preceding backslashes
+-- it's escaped. Otherwise it's a comment start.
+-- Contract: stripping comments never grows the input.
+pure func texStripComments(content: string) -> string
+  ensures { length(result) <= length(content) }
+{
+  let lines = split(content, "\n");
+  let stripped = map(texStripLineComment, lines);
+  foldl(texJoinNewline, "", stripped)
+}
+
+-- Contract: joining with \n grows the accumulator by at most length(line)+1
+pure func texJoinNewline(acc: string, line: string) -> string
+  ensures { length(result) >= length(line) }
+= if length(acc) == 0 then line else "${acc}\n${line}"
+
+-- Contract: a per-line comment strip is a shrinking operation
+pure func texStripLineComment(line: string) -> string
+  ensures { length(result) <= length(line) }
+{
+  let pct = find(line, "%");
+  if pct < 0 then line
+  else if pct == 0 then ""
+  else if charAt(line, pct - 1) == "\\" then line  -- escaped \% — keep whole line verbatim
+  else substring(line, 0, pct)
+}
+
+-- Extract content between \begin{document} and \end{document}.
+-- If markers absent, return input unchanged (handles fragment snippets).
+-- Contract: extraction never produces output longer than the source.
+pure func texExtractDocumentBody(content: string) -> string
+  ensures { length(result) <= length(content) }
+{
+  let beginIdx = find(content, "\\begin{document}");
+  let endIdx = find(content, "\\end{document}");
+  if beginIdx < 0 then content
+  else
+    let start = beginIdx + length("\\begin{document}") in
+    if endIdx < 0 || endIdx <= start then substring(content, start, length(content))
+    else substring(content, start, endIdx)
+}
+
+-- ============================================================================
+-- Parse state
+-- ============================================================================
+
+-- Environment modes — what multi-line construct are we currently inside?
+-- "none"        — top level (accumulating paragraph text)
+-- "equation"    — inside \begin{equation}/align/gather/multline/... accumulating raw LaTeX
+-- "itemize"     — inside \begin{itemize} accumulating list items
+-- "enumerate"   — inside \begin{enumerate} accumulating ordered list items
+-- "tabular"     — inside \begin{tabular} accumulating table rows
+-- "figure"      — inside \begin{figure} looking for \includegraphics and \caption
+-- "abstract"    — inside \begin{abstract}
+-- "biblio"      — inside \begin{thebibliography}
+-- "verbatim"    — inside \begin{verbatim}/lstlisting — pass through raw
+type TexState = {
+  blocks: [Block],         -- accumulated blocks (reversed)
+  mode: string,            -- current environment mode
+  envName: string,         -- exact \begin{NAME} for matching \end{NAME}
+  buf: [string],           -- line buffer for current env
+  textLines: [string],     -- accumulated paragraph lines (mode="none")
+  listItems: [string],     -- accumulated list items (mode=itemize/enumerate)
+  tableRows: [[string]],   -- accumulated table rows (mode=tabular)
+  figPath: string,         -- \includegraphics path (mode=figure)
+  figCaption: string       -- \caption content (mode=figure)
+}
+
+-- Contract: the empty state has no accumulated content and is at top level
+pure func texEmptyState() -> TexState
+  ensures {
+    listLength(result.blocks) == 0 &&
+    listLength(result.buf) == 0 &&
+    listLength(result.textLines) == 0 &&
+    listLength(result.listItems) == 0 &&
+    listLength(result.tableRows) == 0 &&
+    result.mode == "none"
+  }
+= {
+  blocks: [],
+  mode: "none",
+  envName: "",
+  buf: [],
+  textLines: [],
+  listItems: [],
+  tableRows: [],
+  figPath: "",
+  figCaption: ""
+}
+
+-- ============================================================================
+-- Line processor — main state machine
+-- ============================================================================
+
+pure func texProcessLine(state: TexState, line: string) -> TexState {
+  let t = trim(line);
+
+  -- Inside verbatim/equation/etc: look only for matching \end{...}
+  if state.mode == "equation" then texHandleEquationLine(state, line, t)
+  else if state.mode == "verbatim" then texHandleVerbatimLine(state, line, t)
+  else if state.mode == "itemize" || state.mode == "enumerate" then texHandleListLine(state, line, t)
+  else if state.mode == "tabular" then texHandleTabularLine(state, line, t)
+  else if state.mode == "figure" then texHandleFigureLine(state, line, t)
+  else if state.mode == "abstract" then texHandleAbstractLine(state, line, t)
+  else if state.mode == "biblio" then texHandleBiblioLine(state, line, t)
+  else texHandleTopLevelLine(state, t)
+}
+
+-- ---------------------------------------------------------------------------
+-- Top level: blank lines, sections, begin envs, or accumulate paragraph
+-- ---------------------------------------------------------------------------
+pure func texHandleTopLevelLine(state: TexState, t: string) -> TexState {
+  -- Blank line: flush accumulated paragraph
+  if length(t) == 0 then texFlushText(state)
+
+  -- Ignored preamble leftovers that slipped past document-body extraction
+  else if startsWith(t, "\\newcommand") || startsWith(t, "\\renewcommand")
+       || startsWith(t, "\\def\\") || startsWith(t, "\\DeclareMathOperator")
+       || startsWith(t, "\\usepackage") || startsWith(t, "\\documentclass")
+       || startsWith(t, "\\bibliographystyle") || startsWith(t, "\\bibliography{")
+       || startsWith(t, "\\maketitle") || startsWith(t, "\\tableofcontents")
+       || startsWith(t, "\\label{") || startsWith(t, "\\pagestyle")
+       || startsWith(t, "\\thispagestyle") || startsWith(t, "\\clearpage")
+       || startsWith(t, "\\newpage") || startsWith(t, "\\vspace")
+       || startsWith(t, "\\hspace") || startsWith(t, "\\noindent")
+       || startsWith(t, "\\centering") || startsWith(t, "\\raggedright")
+       || startsWith(t, "\\raggedleft") || startsWith(t, "\\small")
+       || startsWith(t, "\\footnotesize") || startsWith(t, "\\scriptsize")
+       || startsWith(t, "\\tiny") || startsWith(t, "\\normalsize")
+       || startsWith(t, "\\large") || startsWith(t, "\\Large")
+       || startsWith(t, "\\LARGE") || startsWith(t, "\\huge")
+       || startsWith(t, "\\Huge") || startsWith(t, "\\par")
+       || startsWith(t, "\\bigskip") || startsWith(t, "\\medskip")
+       || startsWith(t, "\\smallskip") || startsWith(t, "\\hrule")
+       || startsWith(t, "\\hline") then state
+
+  -- Sectioning
+  else if startsWith(t, "\\section*{") then texEmitHeading(state, t, "\\section*{", 1)
+  else if startsWith(t, "\\section{") then texEmitHeading(state, t, "\\section{", 1)
+  else if startsWith(t, "\\subsection*{") then texEmitHeading(state, t, "\\subsection*{", 2)
+  else if startsWith(t, "\\subsection{") then texEmitHeading(state, t, "\\subsection{", 2)
+  else if startsWith(t, "\\subsubsection*{") then texEmitHeading(state, t, "\\subsubsection*{", 3)
+  else if startsWith(t, "\\subsubsection{") then texEmitHeading(state, t, "\\subsubsection{", 3)
+  else if startsWith(t, "\\paragraph{") then texEmitHeading(state, t, "\\paragraph{", 4)
+  else if startsWith(t, "\\chapter{") then texEmitHeading(state, t, "\\chapter{", 1)
+
+  -- Display equation shortcuts: $$...$$ and \[...\] on their own line
+  else if startsWith(t, "$$") then texEnterEquation(state, "$$", t)
+  else if startsWith(t, "\\[") then texEnterEquation(state, "\\[", t)
+
+  -- Environment openers
+  else if startsWith(t, "\\begin{") then texHandleBeginEnv(state, t)
+
+  -- Stray \end at top level (malformed) — ignore
+  else if startsWith(t, "\\end{") then state
+
+  -- Regular text — accumulate
+  else {
+    blocks: state.blocks,
+    mode: state.mode,
+    envName: state.envName,
+    buf: state.buf,
+    -- Prepend (O(1)) then reverse on flush — avoids O(N^2) append chain.
+    textLines: [t] ++ state.textLines,
+    listItems: state.listItems,
+    tableRows: state.tableRows,
+    figPath: state.figPath,
+    figCaption: state.figCaption
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- Headings
+-- ---------------------------------------------------------------------------
+pure func texEmitHeading(state: TexState, line: string, prefix: string, level: int) -> TexState {
+  let flushed = texFlushText(state);
+  let inner = texExtractBalancedBrace(line, length(prefix) - 1);
+  {
+    blocks: HeadingBlock({text: texCleanInline(inner), level: level}) :: flushed.blocks,
+    mode: "none",
+    envName: "",
+    buf: [],
+    textLines: [],
+    listItems: [],
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- Environment dispatch: \begin{NAME}
+-- ---------------------------------------------------------------------------
+pure func texHandleBeginEnv(state: TexState, t: string) -> TexState {
+  let envName = texExtractBraceAt(t, 6);  -- after "\begin"
+  let flushed = texFlushText(state);
+  if envName == "equation" || envName == "equation*" || envName == "align"
+     || envName == "align*" || envName == "gather" || envName == "gather*"
+     || envName == "multline" || envName == "multline*" || envName == "eqnarray"
+     || envName == "eqnarray*" || envName == "displaymath" || envName == "math"
+  then texEnterEquationWithOpener(flushed, envName, t)
+  else if envName == "itemize" then texEnterEnvMode(flushed, "itemize", envName)
+  else if envName == "enumerate" then texEnterEnvMode(flushed, "enumerate", envName)
+  else if envName == "tabular" || envName == "tabularx" || envName == "longtable" || envName == "tabu"
+  then texEnterEnvMode(flushed, "tabular", envName)
+  else if envName == "figure" || envName == "figure*" then texEnterEnvMode(flushed, "figure", envName)
+  else if envName == "abstract" then texEnterEnvMode(flushed, "abstract", envName)
+  else if envName == "thebibliography" then texEnterEnvMode(flushed, "biblio", envName)
+  else if envName == "verbatim" || envName == "lstlisting" then texEnterEnvMode(flushed, "verbatim", envName)
+  -- Theorem-like envs: emit a labelled heading, then continue accumulating
+  -- the body as regular text. Content between \begin and \end is not given a
+  -- dedicated mode — the heading alone preserves the structural landmark.
+  else if texTheoremLabel(envName) != "" then
+    let label = texTheoremLabel(envName) in
+    let opt = texExtractOptionalAfterBegin(t, envName) in
+    let heading = if length(opt) == 0 then label else "${label} (${opt})" in
+    {
+      blocks: HeadingBlock({text: heading, level: 4}) :: flushed.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  -- Unknown env: treat as transparent (keep accumulating at top level)
+  else flushed
+}
+
+-- Map theorem-like environment names to their display labels. Empty string =
+-- not a theorem environment. Covers the standard `amsthm`/`theorem` package
+-- names plus a handful of common variants used in arXiv papers.
+pure func texTheoremLabel(envName: string) -> string =
+  if envName == "theorem" || envName == "thm" then "Theorem"
+  else if envName == "lemma" || envName == "lem" then "Lemma"
+  else if envName == "corollary" || envName == "cor" then "Corollary"
+  else if envName == "proposition" || envName == "prop" then "Proposition"
+  else if envName == "definition" || envName == "defn" || envName == "defi" then "Definition"
+  else if envName == "remark" || envName == "rem" then "Remark"
+  else if envName == "claim" then "Claim"
+  else if envName == "observation" || envName == "obs" then "Observation"
+  else if envName == "conjecture" || envName == "conj" then "Conjecture"
+  else if envName == "example" || envName == "ex" then "Example"
+  else if envName == "problem" || envName == "prob" then "Problem"
+  else if envName == "exercise" then "Exercise"
+  else if envName == "fact" then "Fact"
+  else if envName == "note" then "Note"
+  else if envName == "parag" then "Paragraph"
+  else ""
+
+-- Extract the optional title from \begin{ENV}[title] — returns "" if absent.
+-- Example: texExtractOptionalAfterBegin("\\begin{thm}[Uniqueness]", "thm")
+--   => "Uniqueness"
+pure func texExtractOptionalAfterBegin(line: string, envName: string) -> string {
+  let marker = "\\begin{${envName}}";
+  let afterIdx = length(marker);
+  if afterIdx >= length(line) then ""
+  else if charAt(line, afterIdx) == "[" then
+    let closeIdx = find(substring(line, afterIdx, length(line)), "]") in
+    if closeIdx < 0 then ""
+    else trim(substring(line, afterIdx + 1, afterIdx + closeIdx))
+  else ""
+}
+
+pure func texEnterEnvMode(state: TexState, mode: string, envName: string) -> TexState = {
+  blocks: state.blocks,
+  mode: mode,
+  envName: envName,
+  buf: [],
+  textLines: [],
+  listItems: [],
+  tableRows: [],
+  figPath: "",
+  figCaption: ""
+}
+
+-- Enter equation mode, capturing the \begin{ENV} line so the emitted block
+-- includes both opening and closing env markers.
+pure func texEnterEquationWithOpener(state: TexState, envName: string, openerLine: string) -> TexState = {
+  blocks: state.blocks,
+  mode: "equation",
+  envName: envName,
+  buf: [openerLine],
+  textLines: [],
+  listItems: [],
+  tableRows: [],
+  figPath: "",
+  figCaption: ""
+}
+
+pure func texEnterEquation(state: TexState, opener: string, t: string) -> TexState {
+  let flushed = texFlushText(state);
+  -- Handle single-line $$...$$ or \[...\]
+  let closer = if opener == "$$" then "$$" else "\\]";
+  let afterOpener = substring(t, length(opener), length(t));
+  if contains(afterOpener, closer) then
+    let eqEnd = find(afterOpener, closer) in
+    let eqText = substring(afterOpener, 0, eqEnd) in
+    {
+      blocks: TextBlock({text: "${opener}${eqText}${closer}", style: "equation-display", level: 0}) :: flushed.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else {
+    blocks: flushed.blocks,
+    mode: "equation",
+    envName: opener,
+    buf: [t],
+    textLines: [],
+    listItems: [],
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- Equation mode — accumulate until matching \end{...}, $$, or \]
+-- ---------------------------------------------------------------------------
+pure func texHandleEquationLine(state: TexState, line: string, t: string) -> TexState {
+  let isClose =
+    (state.envName == "$$" && contains(t, "$$"))
+    || (state.envName == "\\[" && contains(t, "\\]"))
+    || startsWith(t, "\\end{${state.envName}}");
+  if isClose then {
+    -- buf is stored reversed (prepend O(1)) — reverse before joining.
+    let raw = texJoinLines(reverse([line] ++ state.buf)) in
+    {
+      blocks: TextBlock({text: raw, style: "equation-display", level: 0}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  } else {
+    blocks: state.blocks,
+    mode: "equation",
+    envName: state.envName,
+    buf: [line] ++ state.buf,
+    textLines: [],
+    listItems: [],
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- Verbatim mode — accumulate raw until \end{NAME}
+-- ---------------------------------------------------------------------------
+pure func texHandleVerbatimLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{${state.envName}}") then
+    let raw = texJoinLines(reverse(state.buf)) in
+    {
+      blocks: TextBlock({text: raw, style: "verbatim", level: 0}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else {
+    blocks: state.blocks,
+    mode: state.mode,
+    envName: state.envName,
+    buf: [line] ++ state.buf,
+    textLines: [],
+    listItems: [],
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- List mode (itemize / enumerate) — split on \item
+-- ---------------------------------------------------------------------------
+pure func texHandleListLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{${state.envName}}") then
+    let ordered = state.envName == "enumerate" in
+    {
+      blocks: ListBlock({items: map(texCleanInline, reverse(state.listItems)), ordered: ordered}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else if startsWith(t, "\\item") then
+    let after = if startsWith(t, "\\item ") then substring(t, 6, length(t))
+                else if length(t) > 5 then substring(t, 5, length(t))
+                else "" in
+    {
+      blocks: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: [],
+      textLines: [],
+      listItems: [after] ++ state.listItems,
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else if listLength(state.listItems) == 0 then state
+  else {
+    -- Continuation of previous item
+    let items = state.listItems in
+    let lastIdx = listLength(items) - 1 in
+    let updated = texUpdateLastItem(items, t) in
+    {
+      blocks: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: [],
+      textLines: [],
+      listItems: updated,
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  }
+}
+
+-- listItems is stored reversed (most-recent item at head); "last" visible
+-- item = head. O(1) update.
+pure func texUpdateLastItem(items: [string], extra: string) -> [string] =
+  match items {
+    [] => [extra],
+    head :: rest => "${head} ${extra}" :: rest
+  }
+
+-- ---------------------------------------------------------------------------
+-- Tabular mode — split rows on \\ and cells on &
+-- ---------------------------------------------------------------------------
+pure func texHandleTabularLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{${state.envName}}") then
+    -- tableRows is stored reversed — reverse to restore document order.
+    let rowStrs = reverse(state.tableRows) in
+    match rowStrs {
+      [] => texEnterEnvMode(state, "none", ""),
+      headerRow :: bodyRows => {
+        let header = map(\s. simpleCell(texCleanInline(s)), headerRow) in
+        let body = map(\r. map(\s. simpleCell(texCleanInline(s)), r), bodyRows) in
+        {
+          blocks: TableBlock({headers: header, rows: body}) :: state.blocks,
+          mode: "none",
+          envName: "",
+          buf: [],
+          textLines: [],
+          listItems: [],
+          tableRows: [],
+          figPath: "",
+          figCaption: ""
+        }
+      }
+    }
+  else if startsWith(t, "\\hline") || startsWith(t, "\\toprule") || startsWith(t, "\\midrule") || startsWith(t, "\\bottomrule") then state
+  else if length(t) == 0 then state
+  else
+    -- Split on \\ for row terminator, then & for cells
+    let segs = split(t, "\\\\") in
+    texAbsorbTabularSegs(state, segs)
+}
+
+pure func texAbsorbTabularSegs(state: TexState, segs: [string]) -> TexState =
+  match segs {
+    [] => state,
+    [only] => {
+      let cells = map(trim, split(only, "&")) in
+      if listLength(cells) <= 1 && length(trim(only)) == 0 then state
+      else {
+        blocks: state.blocks,
+        mode: state.mode,
+        envName: state.envName,
+        buf: [],
+        textLines: [],
+        listItems: [],
+        tableRows: [cells] ++ state.tableRows,
+        figPath: "",
+        figCaption: ""
+      }
+    },
+    row :: rest => {
+      let cells = map(trim, split(row, "&")) in
+      let newState = {
+        blocks: state.blocks,
+        mode: state.mode,
+        envName: state.envName,
+        buf: [],
+        textLines: [],
+        listItems: [],
+        tableRows: [cells] ++ state.tableRows,
+        figPath: "",
+        figCaption: ""
+      } in
+      texAbsorbTabularSegs(newState, rest)
+    }
+  }
+
+-- ---------------------------------------------------------------------------
+-- Figure mode — look for \includegraphics and \caption, emit ImageBlock at \end
+-- ---------------------------------------------------------------------------
+pure func texHandleFigureLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{${state.envName}}") then
+    {
+      blocks: ImageBlock({data: state.figPath, description: texCleanInline(state.figCaption), mime: "image/*"}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else if contains(t, "\\includegraphics") then
+    let incIdx = find(t, "\\includegraphics") in
+    let rest = substring(t, incIdx, length(t)) in
+    -- Skip optional [options] after \includegraphics
+    let braceIdx = find(rest, "{") in
+    if braceIdx < 0 then state
+    else {
+      let path = texExtractBalancedBrace(rest, braceIdx) in
+      {
+        blocks: state.blocks,
+        mode: state.mode,
+        envName: state.envName,
+        buf: [],
+        textLines: [],
+        listItems: [],
+        tableRows: [],
+        figPath: path,
+        figCaption: state.figCaption
+      }
+    }
+  else if contains(t, "\\caption{") then
+    let capIdx = find(t, "\\caption{") in
+    let caption = texExtractBalancedBrace(t, capIdx + length("\\caption")) in
+    {
+      blocks: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: state.figPath,
+      figCaption: caption
+    }
+  else state
+}
+
+-- ---------------------------------------------------------------------------
+-- Abstract mode — accumulate, emit SectionBlock(kind=abstract) at end
+-- ---------------------------------------------------------------------------
+pure func texHandleAbstractLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{abstract}") then {
+    let text = texCleanInline(texJoinLines(reverse(state.buf))) in
+    {
+      blocks: SectionBlock({kind: "abstract", blocks: [TextBlock({text: text, style: "abstract", level: 0})]}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  } else if length(t) == 0 then state
+  else {
+    blocks: state.blocks,
+    mode: state.mode,
+    envName: state.envName,
+    buf: [t] ++ state.buf,
+    textLines: [],
+    listItems: [],
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- ---------------------------------------------------------------------------
+-- Bibliography mode — split on \bibitem, emit SectionBlock(kind=bibliography)
+-- ---------------------------------------------------------------------------
+pure func texHandleBiblioLine(state: TexState, line: string, t: string) -> TexState {
+  if startsWith(t, "\\end{thebibliography}") then
+    let entries = map(\s. TextBlock({text: texCleanInline(s), style: "bibitem", level: 0}), reverse(state.listItems)) in
+    {
+      blocks: SectionBlock({kind: "bibliography", blocks: entries}) :: state.blocks,
+      mode: "none",
+      envName: "",
+      buf: [],
+      textLines: [],
+      listItems: [],
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else if startsWith(t, "\\bibitem") then
+    -- Extract optional [] and {key}, then the body starts after
+    let body = texBibitemBody(t) in
+    {
+      blocks: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: [],
+      textLines: [],
+      listItems: [body] ++ state.listItems,
+      tableRows: [],
+      figPath: "",
+      figCaption: ""
+    }
+  else if listLength(state.listItems) == 0 then state
+  else {
+    blocks: state.blocks,
+    mode: state.mode,
+    envName: state.envName,
+    buf: [],
+    textLines: [],
+    listItems: texUpdateLastItem(state.listItems, t),
+    tableRows: [],
+    figPath: "",
+    figCaption: ""
+  }
+}
+
+-- Strip \bibitem[opt]{key} prefix from a bibitem line, return remaining body
+-- Contract: stripping the bibitem prefix is a shrinking operation
+pure func texBibitemBody(line: string) -> string
+  ensures { length(result) <= length(line) }
+{
+  -- Skip \bibitem, then optional [...], then {...}
+  let afterCmd = substring(line, 8, length(line));  -- after "\bibitem"
+  let skipped = texSkipOptionalArg(trim(afterCmd));
+  let afterKey = texSkipBraceArg(skipped);
+  trim(afterKey)
+}
+
+-- Contract: skipping an optional [...] arg is a shrinking operation
+pure func texSkipOptionalArg(s: string) -> string
+  ensures { length(result) <= length(s) }
+= if startsWith(s, "[") then
+    let close = find(s, "]") in
+    if close < 0 then s else substring(s, close + 1, length(s))
+  else s
+
+-- Contract: skipping a {...} arg is a shrinking operation
+pure func texSkipBraceArg(s: string) -> string
+  ensures { length(result) <= length(s) }
+= if startsWith(s, "{") then
+    let close = texMatchBrace(s, 0) in
+    if close < 0 then s else substring(s, close + 1, length(s))
+  else s
+
+-- ============================================================================
+-- Flushing
+-- ============================================================================
+
+-- Contract: flushing final state produces at least as many blocks as already present
+pure func texFlushState(state: TexState) -> [Block]
+  ensures { listLength(result) >= listLength(state.blocks) }
+= (texFlushText(state)).blocks
+
+-- Contract: after flushing, the text-line buffer is empty
+pure func texFlushText(state: TexState) -> TexState
+  ensures {
+    listLength(result.textLines) == 0 &&
+    listLength(result.blocks) >= listLength(state.blocks)
+  }
+{
+  if listLength(state.textLines) == 0 then state
+  else {
+    -- textLines is stored reversed (prepend on append) — reverse before joining.
+    let text = texCleanInline(texJoinLines(reverse(state.textLines))) in
+    if length(trim(text)) == 0 then {
+      blocks: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: state.buf,
+      textLines: [],
+      listItems: state.listItems,
+      tableRows: state.tableRows,
+      figPath: state.figPath,
+      figCaption: state.figCaption
+    } else {
+      blocks: TextBlock({text: text, style: "paragraph", level: 0}) :: state.blocks,
+      mode: state.mode,
+      envName: state.envName,
+      buf: state.buf,
+      textLines: [],
+      listItems: state.listItems,
+      tableRows: state.tableRows,
+      figPath: state.figPath,
+      figCaption: state.figCaption
+    }
+  }
+}
+
+-- Contract: an empty input produces an empty output
+pure func texJoinLines(lines: [string]) -> string
+  ensures { listLength(lines) > 0 || length(result) == 0 }
+= foldl(texAppendLine, "", lines)
+
+-- Contract: appending preserves at least the length of the appended line
+pure func texAppendLine(acc: string, line: string) -> string
+  ensures { length(result) >= length(line) }
+= if length(acc) == 0 then line else "${acc} ${line}"
+
+-- ============================================================================
+-- Brace-arg extraction
+-- ============================================================================
+
+-- Extract argument from \cmd{arg} given the index of the opening brace
+-- Contract: the extracted argument is a substring so cannot be longer than the source
+pure func texExtractBalancedBrace(s: string, braceStart: int) -> string
+  ensures { length(result) <= length(s) }
+{
+  let openIdx = find(substring(s, braceStart, length(s)), "{");
+  if openIdx < 0 then ""
+  else
+    let absOpen = braceStart + openIdx in
+    let closeIdx = texMatchBrace(s, absOpen) in
+    if closeIdx < 0 then substring(s, absOpen + 1, length(s))
+    else substring(s, absOpen + 1, closeIdx)
+}
+
+-- Extract the {NAME} argument right after a command at position `startIdx`
+-- (e.g., after \begin at idx 0, or \end at idx 0)
+-- Contract: the extracted name is a substring and cannot exceed source length
+pure func texExtractBraceAt(s: string, startIdx: int) -> string
+  ensures { length(result) <= length(s) }
+{
+  if startIdx >= length(s) then ""
+  else
+    let rest = substring(s, startIdx, length(s)) in
+    let openIdx = find(rest, "{") in
+    if openIdx < 0 then ""
+    else
+      let absOpen = startIdx + openIdx in
+      let closeIdx = texMatchBrace(s, absOpen) in
+      if closeIdx < 0 then ""
+      else substring(s, absOpen + 1, closeIdx)
+}
+
+-- Given position of '{' in s, return index of matching '}' (or -1)
+-- Contract: result is either -1 (not found) or a valid index into s after openIdx
+pure func texMatchBrace(s: string, openIdx: int) -> int
+  ensures { result == -1 || (result > openIdx && result < length(s)) }
+= texMatchBraceAt(s, openIdx + 1, 1)
+
+pure func texMatchBraceAt(s: string, i: int, depth: int) -> int =
+  if i >= length(s) then -1
+  else if depth == 0 then i - 1
+  else
+    let c = charAt(s, i) in
+    let prevEsc = if i > 0 then charAt(s, i - 1) == "\\" else false in
+    if c == "{" && not prevEsc then texMatchBraceAt(s, i + 1, depth + 1)
+    else if c == "}" && not prevEsc then
+      if depth == 1 then i
+      else texMatchBraceAt(s, i + 1, depth - 1)
+    else texMatchBraceAt(s, i + 1, depth)
+
+-- Extract {arg} following a named command in the source (e.g., \title{...}).
+-- Returns the raw brace content, or "" if not found.
+-- Contract: the argument is a substring and cannot exceed source length
+pure func texExtractBraceArg(content: string, cmd: string) -> string
+  ensures { length(result) <= length(content) }
+{
+  let idx = find(content, cmd);
+  if idx < 0 then ""
+  else texExtractBalancedBrace(content, idx + length(cmd))
+}
+
+-- ============================================================================
+-- Inline-command cleanup
+-- ============================================================================
+-- Reduces common inline commands to plain-text surrogates so that paragraph
+-- text is readable. Operates in a specific order:
+--   1. Balanced-brace wrap commands (\textbf{x} → **x**) — brace-aware
+--   2. Citation/ref/label commands (\cite{k} → [cite:k])
+--   3. Style-group wrappers ({\Large x} → x)
+--   4. Character escapes (\% → %, ~ → ' ', --- → em-dash)
+--   5. Unknown \cmd{x} fallback (keep inner content)
+pure func texCleanInline(s: string) -> string {
+  -- Fast path: if the line has no TeX-active chars, skip all passes.
+  -- Active chars: backslash (commands/escapes), "{" (style groups),
+  -- "~" (non-break space), "-" (en/em dash), "`" or "'" (smart quotes).
+  if find(s, "\\") < 0 then
+    if find(s, "{") < 0 then
+      if find(s, "~") < 0 then
+        if find(s, "--") < 0 then
+          if find(s, "``") < 0 then
+            if find(s, "''") < 0 then s
+            else texCleanInlineSlow(s)
+          else texCleanInlineSlow(s)
+        else texCleanInlineSlow(s)
+      else texCleanInlineSlow(s)
+    else texCleanInlineSlow(s)
+  else texCleanInlineSlow(s)
+}
+
+pure func texCleanInlineSlow(s: string) -> string {
+  let s1 = texWrapCmd(s, "\\textbf", "**", "**");
+  let s2 = texWrapCmd(s1, "\\textit", "*", "*");
+  let s3 = texWrapCmd(s2, "\\emph", "*", "*");
+  let s4 = texWrapCmd(s3, "\\texttt", "`", "`");
+  let s5 = texWrapCmd(s4, "\\underline", "_", "_");
+  let s6 = texWrapCmd(s5, "\\textsc", "", "");
+  let s7 = texWrapCmd(s6, "\\textsl", "", "");
+  let s8 = texReplaceCiteRef(s7, "\\citep", "cite");
+  let s9 = texReplaceCiteRef(s8, "\\citet", "cite");
+  let s10 = texReplaceCiteRef(s9, "\\cite", "cite");
+  let s11 = texReplaceCiteRef(s10, "\\eqref", "ref");
+  let s12 = texReplaceCiteRef(s11, "\\ref", "ref");
+  let s13 = texReplaceCiteRef(s12, "\\label", "label");
+  -- Only run the O(n^2) style-group walker if there's actually a "{\" pattern.
+  let s14 = if find(s13, "{\\") < 0 then s13 else texStripStyleGroups(s13);
+  let s15 = replaceMany(s14, [
+    ("\\%", "%"), ("\\&", "&"), ("\\$", "$"), ("\\#", "#"),
+    ("\\_", "_"), ("\\{", "{"), ("\\}", "}"),
+    ("~", " "), ("``", "\""), ("''", "\""),
+    ("---", "—"), ("--", "–"),
+    ("\\\\", " ")
+  ]);
+  texStripUnknownCmds(s15)
+}
+
+
+-- Replace all occurrences of \cmd{content} with openMark++content++closeMark.
+-- Uses brace-matching so nested braces inside content are preserved.
+pure func texWrapCmd(s: string, cmd: string, openMark: string, closeMark: string) -> string {
+  let idx = find(s, "${cmd}{");
+  if idx < 0 then s
+  else
+    let braceStart = idx + length(cmd) in
+    let closeIdx = texMatchBrace(s, braceStart) in
+    if closeIdx < 0 then s
+    else
+      let inner = substring(s, braceStart + 1, closeIdx) in
+      let replaced = "${substring(s, 0, idx)}${openMark}${inner}${closeMark}${substring(s, closeIdx + 1, length(s))}" in
+      texWrapCmd(replaced, cmd, openMark, closeMark)
+}
+
+-- Strip {\STYLE content} wrappers, keeping content. Handles \Large, \em, \bf,
+-- \rm, \it, \tt, \sf, \sc, \sl and all numbered size variants.
+pure func texStripStyleGroups(s: string) -> string =
+  texStripStyleGroupsAt(s, 0)
+
+pure func texStripStyleGroupsAt(s: string, i: int) -> string =
+  if i >= length(s) - 2 then s
+  else
+    let c = charAt(s, i) in
+    if c == "{" then
+      if i + 1 < length(s) then
+        if charAt(s, i + 1) == "\\" then
+          let close = texMatchBrace(s, i) in
+          if close < 0 then s
+          else
+            let inner = substring(s, i + 1, close) in
+            let styleEnd = texStyleCmdEnd(inner) in
+            if styleEnd > 0 then
+              -- Found a style group: replace {\STYLE content} with "content"
+              let content = trim(substring(inner, styleEnd, length(inner))) in
+              let replaced = "${substring(s, 0, i)}${content}${substring(s, close + 1, length(s))}" in
+              texStripStyleGroupsAt(replaced, i + length(content))
+            else texStripStyleGroupsAt(s, i + 1)
+        else texStripStyleGroupsAt(s, i + 1)
+      else s
+    else texStripStyleGroupsAt(s, i + 1)
+
+-- If `inner` starts with a recognized style command, return its end index
+-- (char after the command, including any trailing space). Else 0.
+pure func texStyleCmdEnd(inner: string) -> int =
+  if texStartsWithStyle(inner, "\\Huge") then texSkipSpace(inner, 5)
+  else if texStartsWithStyle(inner, "\\huge") then texSkipSpace(inner, 5)
+  else if texStartsWithStyle(inner, "\\LARGE") then texSkipSpace(inner, 6)
+  else if texStartsWithStyle(inner, "\\Large") then texSkipSpace(inner, 6)
+  else if texStartsWithStyle(inner, "\\large") then texSkipSpace(inner, 6)
+  else if texStartsWithStyle(inner, "\\normalsize") then texSkipSpace(inner, 11)
+  else if texStartsWithStyle(inner, "\\small") then texSkipSpace(inner, 6)
+  else if texStartsWithStyle(inner, "\\footnotesize") then texSkipSpace(inner, 13)
+  else if texStartsWithStyle(inner, "\\scriptsize") then texSkipSpace(inner, 11)
+  else if texStartsWithStyle(inner, "\\tiny") then texSkipSpace(inner, 5)
+  else if texStartsWithStyle(inner, "\\bfseries") then texSkipSpace(inner, 9)
+  else if texStartsWithStyle(inner, "\\itshape") then texSkipSpace(inner, 8)
+  else if texStartsWithStyle(inner, "\\ttfamily") then texSkipSpace(inner, 9)
+  else if texStartsWithStyle(inner, "\\rmfamily") then texSkipSpace(inner, 9)
+  else if texStartsWithStyle(inner, "\\sffamily") then texSkipSpace(inner, 9)
+  else if texStartsWithStyle(inner, "\\em") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\bf") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\it") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\rm") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\tt") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\sf") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\sc") then texSkipSpace(inner, 3)
+  else if texStartsWithStyle(inner, "\\sl") then texSkipSpace(inner, 3)
+  else 0
+
+-- startsWith(inner, prefix) AND the char right after prefix is a non-letter
+-- (so "\\Large" doesn't match "\\Largefoo"). Treats end-of-string as boundary.
+pure func texStartsWithStyle(inner: string, prefix: string) -> bool =
+  if not startsWith(inner, prefix) then false
+  else
+    let n = length(prefix) in
+    if n >= length(inner) then true
+    else not texIsAlpha(charAt(inner, n))
+
+pure func texSkipSpace(s: string, i: int) -> int =
+  if i >= length(s) then i
+  else if charAt(s, i) == " " then i + 1
+  else i
+
+-- Replace \CMD{key} with "[MARK:key]" for cite/ref/label style commands.
+pure func texReplaceCiteRef(s: string, cmd: string, mark: string) -> string {
+  let idx = find(s, "${cmd}{");
+  if idx < 0 then s
+  else
+    let braceStart = idx + length(cmd) in
+    let closeIdx = texMatchBrace(s, braceStart) in
+    if closeIdx < 0 then s
+    else
+      let key = substring(s, braceStart + 1, closeIdx) in
+      let replaced = "${substring(s, 0, idx)}[${mark}:${key}]${substring(s, closeIdx + 1, length(s))}" in
+      texReplaceCiteRef(replaced, cmd, mark)
+}
+
+-- Strip unknown \cmd{content} wrappers, keeping content. One pass.
+-- Heuristic: find "\\" followed by alphabetic + "{", extract balanced content.
+pure func texStripUnknownCmds(s: string) -> string =
+  texStripUnknownCmdsAt(s, 0)
+
+pure func texStripUnknownCmdsAt(s: string, i: int) -> string =
+  if i >= length(s) - 2 then s
+  else
+    let c = charAt(s, i) in
+    if c == "\\" then
+      if i + 1 < length(s) then
+        if texIsAlpha(charAt(s, i + 1)) then
+          let cmdEnd = texFindCmdEnd(s, i + 1) in
+          if cmdEnd < length(s) then
+            if charAt(s, cmdEnd) == "{" then
+              let close = texMatchBrace(s, cmdEnd) in
+              if close < 0 then s
+              else
+                let inner = substring(s, cmdEnd + 1, close) in
+                let replaced = "${substring(s, 0, i)}${inner}${substring(s, close + 1, length(s))}" in
+                let nextI = if length(inner) == 0 then i + 1 else i + length(inner) in
+                texStripUnknownCmdsAt(replaced, nextI)
+            else texStripUnknownCmdsAt(s, cmdEnd)
+          else s
+        else texStripUnknownCmdsAt(s, i + 1)
+      else s
+    else texStripUnknownCmdsAt(s, i + 1)
+
+pure func texFindCmdEnd(s: string, i: int) -> int =
+  if i >= length(s) then i
+  else if texIsAlpha(charAt(s, i)) then texFindCmdEnd(s, i + 1)
+  else i
+
+-- Contract: only single-character strings can ever be alphabetic
+pure func texIsAlpha(c: string) -> bool
+  ensures { result == false || length(c) == 1 }
+  tests [
+    ("a", true), ("Z", true), ("m", true),
+    ("0", false), ("\\", false), ("{", false), ("", false), ("ab", false)
+  ]
+{
+  let low = toLower(c);
+  low == "a" || low == "b" || low == "c" || low == "d" || low == "e" ||
+  low == "f" || low == "g" || low == "h" || low == "i" || low == "j" ||
+  low == "k" || low == "l" || low == "m" || low == "n" || low == "o" ||
+  low == "p" || low == "q" || low == "r" || low == "s" || low == "t" ||
+  low == "u" || low == "v" || low == "w" || low == "x" || low == "y" ||
+  low == "z"
+}

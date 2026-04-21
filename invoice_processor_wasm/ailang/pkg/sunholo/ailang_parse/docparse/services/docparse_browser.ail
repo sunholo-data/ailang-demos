@@ -1,0 +1,351 @@
+module docparse/services/docparse_browser
+
+-- Browser adapter for AILANG Parse
+-- Thin entry-point module that imports from the original CLI modules
+-- and exports WASM-callable functions for JavaScript.
+--
+-- JavaScript handles ZIP extraction (JSZip); this module handles
+-- pure XML -> Block -> JSON conversion.
+--
+-- This is NOT a standalone module — it requires all docparse modules
+-- to be loaded in the WASM REPL first (in dependency order).
+
+import std/xml (parse, findAll, findAllTexts, findFirst, getText, getAttr, getChildren)
+import std/json (encode, decode, jo, kv, js, jb, ja, jnum, asArray, getString, getInt, getBool, getArray, asString, getStringArrayOrEmpty)
+import std/string (length, join)
+import std/ai (callJsonSimple)
+import std/math (intToFloat)
+import std/result (Ok, Err)
+import std/option (Some, None, getOrElse, map as optMap)
+import std/list (map)
+import std/map (empty as emptyMap, insert as mapInsert)
+import docparse/types/document (Block, TextBlock, SectionBlock, DocMetadata, emptyMetadata,
+    countBlocks, filterHeadings, filterTables, filterImages)
+import docparse/services/format_router (detectFormat, getExtension, officeType,
+    needsAI, strategyDescription)
+import docparse/services/docx_parser (extractBodyBlocks, parseSectionXml,
+    hasContent, extractMetadata)
+import docparse/services/pptx_parser (extractSlideBlocks)
+import docparse/services/xlsx_parser (extractSharedStrings, parseSheetXml)
+import docparse/services/html_parser (parseHtml)
+import docparse/services/csv_parser (parseCsv)
+import docparse/services/markdown_parser (parseMarkdown)
+import docparse/services/eml_parser (parseEml, parseEmlMetadata, parseMbox, parseMboxMetadata, parseMboxThreaded)
+import docparse/services/odt_parser (odtExtractBody, odtParseMetadata, odtExtractHeadersFooters)
+import docparse/services/odp_parser (odpExtractSlides, odpParseMetadata)
+import docparse/services/ods_parser (odsExtractSheets, odsParseMetadata)
+import docparse/services/epub_parser (epubFindOpfPath, epubExtractSpine, epubParseOpfMetadata)
+import docparse/services/tex_parser (parseLatex)
+import docparse/services/output_formatter (blocksToJson, metadataToJson)
+import docparse/services/a2ui_formatter (convertBlocksJsonToA2UI as a2uiConvert, documentToA2UI, a2ui_jsonToBlockList)
+
+-- Parse DOCX body XML (word/document.xml) -> JSON array of blocks
+export pure func parseDocxBody(xml: string) -> string {
+  match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(extractBodyBlocks(root)))),
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("XML parse error: ${e}"))])]))
+  }
+}
+
+-- Parse DOCX section XML (header/footer/footnote/endnote) -> JSON array of blocks
+export pure func parseDocxSection(xml: string, kind: string) -> string {
+  let blocks = parseSectionXml(xml);
+  if hasContent(blocks)
+  then encode(ja(blocksToJson([SectionBlock({kind: kind, blocks: blocks})])))
+  else encode(ja([]))
+}
+
+-- Parse metadata from core.xml -> JSON metadata object
+export pure func parseMetadataXml(coreXml: string) -> string {
+  match parse(coreXml) {
+    Ok(root) => encode(metadataToJson(extractMetadata(root))),
+    Err(_) => encode(metadataToJson(emptyMetadata()))
+  }
+}
+
+-- Parse a single PPTX slide XML -> JSON array of blocks
+export pure func parsePptxSlide(slideXml: string) -> string {
+  if length(slideXml) == 0 then encode(ja([]))
+  else match parse(slideXml) {
+    Ok(root) => {
+      let blocks = extractSlideBlocks(root);
+      if hasContent(blocks)
+      then encode(ja(blocksToJson([SectionBlock({kind: "slide", blocks: blocks})])))
+      else encode(ja([]))
+    },
+    Err(_) => encode(ja([]))
+  }
+}
+
+-- Parse XLSX shared strings XML into Map, then parse sheet XML
+export pure func parseXlsxSheet(sheetXml: string, sharedStringsXml: string, sheetName: string) -> string {
+  let sharedStrings = parseSharedStringsToMap(sharedStringsXml);
+  let blocks = parseSheetXml(sheetXml, sharedStrings, sheetName);
+  encode(ja(blocksToJson(blocks)))
+}
+
+-- Get format info as JSON for a filename
+export pure func getFormatInfo(filename: string) -> string {
+  let ext = getExtension(filename);
+  let format = detectFormat(ext);
+  encode(jo([
+    kv("extension", js(ext)),
+    kv("format", js(format)),
+    kv("officeType", js(officeType(ext))),
+    kv("needsAI", jb(needsAI(format))),
+    kv("strategy", js(strategyDescription(format)))
+  ]))
+}
+
+-- Parse DOCX comments XML (word/comments.xml) -> JSON array of blocks
+-- Each comment becomes a SectionBlock with kind "comment" containing text blocks.
+-- The comment text includes the author prefix for context.
+export pure func parseDocxComments(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => {
+      let comments = findAll(root, "w:comment");
+      let blocks = parseCommentNodes(comments);
+      encode(ja(blocksToJson(blocks)))
+    },
+    Err(_) => encode(ja([]))
+  }
+}
+
+-- Parse a file from base64 data using AI multimodal extraction.
+-- Browser-compatible: takes base64 directly (no FS), bridges to std/ai.
+-- Accepts any MIME type (application/pdf, image/png, image/jpeg, etc.).
+-- Returns JSON array of blocks (same format as parseDocxBody).
+export func parseFileFromBase64(base64Data: string, mimeType: string, filename: string) -> string ! {AI} {
+  if length(base64Data) == 0 then encode(ja([]))
+  else {
+    let request = encode(jo([
+      kv("mode", js("multimodal")),
+      kv("mimeType", js(mimeType)),
+      kv("data", js(base64Data)),
+      kv("fileName", js(filename)),
+      kv("prompt", js(
+        "Extract content from this file as a compact JSON array of blocks. For documents: use {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, {\"type\":\"text\",\"text\":\"...\"}, {\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, {\"type\":\"list\",\"items\":[...],\"ordered\":bool}. For images: describe what you see in detail using {\"type\":\"text\",\"text\":\"...\"} blocks. Include any visible text, objects, people, colors, layout, and context. Merge adjacent text into single blocks. Use compact JSON (no whitespace). Return ONLY the JSON array."
+      ))
+    ]));
+    callJsonSimple(request)
+  }
+}
+
+-- Backwards-compatible wrapper for PDF files.
+export func parsePdfFromBase64(base64Data: string, filename: string) -> string ! {AI} =
+  parseFileFromBase64(base64Data, "application/pdf", filename)
+
+-- Describe a single embedded image using AI multimodal vision.
+-- Browser equivalent of layout_ai.describeOneBlock — uses callJsonSimple
+-- with multimodal JSON format so the AI handler sends inlineData (not raw base64 text).
+-- Returns a one-sentence description string.
+export func describeImageBase64(base64Data: string, mimeType: string) -> string ! {AI} {
+  if length(base64Data) == 0 then ""
+  else {
+    let request = encode(jo([
+      kv("mode", js("multimodal")),
+      kv("mimeType", js(mimeType)),
+      kv("data", js(base64Data)),
+      kv("prompt", js(
+        "Describe this image concisely in one or two sentences. Focus on the key content and any text visible. Return ONLY the description text, no JSON."
+      ))
+    ]));
+    callJsonSimple(request)
+  }
+}
+
+-- ── Text format parsers (HTML, CSV, Markdown, Email) ──
+-- These replace the JS-side text parsing with proper AILANG parsers via WASM.
+
+-- Parse HTML content -> JSON array of blocks
+export pure func parseHtmlContent(content: string) -> string {
+  encode(ja(blocksToJson(parseHtml(content))))
+}
+
+-- Parse CSV content -> JSON array of blocks
+export pure func parseCsvContent(content: string, delimiter: string) -> string {
+  encode(ja(blocksToJson(parseCsv(content, delimiter))))
+}
+
+-- Parse Markdown content -> JSON array of blocks
+export pure func parseMarkdownContent(content: string) -> string {
+  encode(ja(blocksToJson(parseMarkdown(content))))
+}
+
+-- Parse LaTeX content -> JSON array of blocks
+-- Single-file only — \input/\include resolution requires FS and runs server-side.
+export pure func parseTexContent(content: string) -> string {
+  encode(ja(blocksToJson(parseLatex(content))))
+}
+
+-- Parse EML email content -> JSON array of blocks
+export pure func parseEmlContent(content: string) -> string {
+  encode(ja(blocksToJson(parseEml(content))))
+}
+
+-- Parse EML metadata (Subject, From, Date) -> JSON metadata object
+export pure func parseEmlMeta(content: string) -> string {
+  encode(metadataToJson(parseEmlMetadata(content)))
+}
+
+-- Parse MBOX archive -> JSON array of blocks (all messages)
+export pure func parseMboxContent(content: string) -> string {
+  encode(ja(blocksToJson(parseMbox(content))))
+}
+
+-- Parse MBOX metadata (from first message) -> JSON metadata object
+export pure func parseMboxMeta(content: string) -> string {
+  encode(metadataToJson(parseMboxMetadata(content)))
+}
+
+-- Parse MBOX with thread reconstruction -> JSON array of thread blocks
+export pure func parseMboxThreadedContent(content: string) -> string {
+  encode(ja(blocksToJson(parseMboxThreaded(content))))
+}
+
+-- ── ODF parsers (ODT / ODP / ODS) ─────────────────────────────
+-- JS extracts content.xml / meta.xml / styles.xml from the ODF zip
+-- using JSZip, then calls these pure WASM bridges. Same pattern as
+-- parseDocxBody — the parser logic lives entirely in AILANG.
+
+-- Parse ODT content.xml -> JSON array of blocks
+export pure func parseOdtContent(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(odtExtractBody(root)))),
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("ODT XML parse error: ${e}"))])]))
+  }
+}
+
+-- Parse ODT meta.xml -> JSON metadata object
+export pure func parseOdtMetadataXml(xml: string) -> string {
+  if length(xml) == 0 then encode(metadataToJson(emptyMetadata()))
+  else match parse(xml) {
+    Ok(root) => encode(metadataToJson(odtParseMetadata(root))),
+    Err(_) => encode(metadataToJson(emptyMetadata()))
+  }
+}
+
+-- Parse ODT styles.xml -> JSON array of header/footer SectionBlocks
+export pure func parseOdtStylesXml(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(odtExtractHeadersFooters(root)))),
+    Err(_) => encode(ja([]))
+  }
+}
+
+-- Parse ODP content.xml -> JSON array of slide SectionBlocks
+export pure func parseOdpContent(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(odpExtractSlides(root)))),
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("ODP XML parse error: ${e}"))])]))
+  }
+}
+
+-- Parse ODP meta.xml -> JSON metadata object
+export pure func parseOdpMetadataXml(xml: string) -> string {
+  if length(xml) == 0 then encode(metadataToJson(emptyMetadata()))
+  else match parse(xml) {
+    Ok(root) => encode(metadataToJson(odpParseMetadata(root))),
+    Err(_) => encode(metadataToJson(emptyMetadata()))
+  }
+}
+
+-- Parse ODS content.xml -> JSON array of sheet SectionBlocks
+export pure func parseOdsContent(xml: string) -> string {
+  if length(xml) == 0 then encode(ja([]))
+  else match parse(xml) {
+    Ok(root) => encode(ja(blocksToJson(odsExtractSheets(root)))),
+    Err(e) => encode(ja([jo([kv("type", js("error")), kv("text", js("ODS XML parse error: ${e}"))])]))
+  }
+}
+
+-- Parse ODS meta.xml -> JSON metadata object
+export pure func parseOdsMetadataXml(xml: string) -> string {
+  if length(xml) == 0 then encode(metadataToJson(emptyMetadata()))
+  else match parse(xml) {
+    Ok(root) => encode(metadataToJson(odsParseMetadata(root))),
+    Err(_) => encode(metadataToJson(emptyMetadata()))
+  }
+}
+
+-- ── EPUB bridges ─────────────────────────────────────────────
+-- EPUB content parsing per chapter goes through parseHtmlContent
+-- (already exposed). These two helpers let JS walk the OPF in
+-- AILANG: container.xml → OPF path, then OPF → ordered spine list.
+
+-- Parse EPUB META-INF/container.xml -> OPF rootfile path
+export pure func parseEpubContainer(xml: string) -> string {
+  epubFindOpfPath(xml)
+}
+
+-- Parse EPUB OPF spine -> JSON array of content file paths (in reading order).
+-- opfDir is the directory portion of the OPF path (e.g., "OEBPS/").
+export pure func parseEpubSpine(opfXml: string, opfDir: string) -> string {
+  let hrefs = epubExtractSpine(opfXml, opfDir);
+  encode(ja(map(\h. js(h), hrefs)))
+}
+
+-- Parse EPUB OPF metadata -> JSON metadata object
+export pure func parseEpubMetadataXml(opfXml: string) -> string {
+  if length(opfXml) == 0 then encode(metadataToJson(emptyMetadata()))
+  else encode(metadataToJson(epubParseOpfMetadata(opfXml)))
+}
+
+-- Convert block JSON (from parseDocxBody etc.) to A2UI component JSON.
+-- Bridge: decodes JSON → Block ADT → A2UI nodes → JSON string.
+-- Eliminates the duplicate JS blocksToA2UI() implementation.
+export pure func convertBlocksToA2UI(blocksJson: string) -> string =
+  a2uiConvert(blocksJson)
+
+-- Parse a list of w:comment nodes into SectionBlocks
+pure func parseCommentNodes(nodes: [XmlNode]) -> [Block] =
+  match nodes {
+    [] => [],
+    node :: rest => {
+      let author = getOrElse(getAttr(node, "w:author"), "Unknown");
+      let paragraphs = findAll(node, "w:p");
+      let texts = extractCommentTexts(paragraphs);
+      let commentText = join(" ", texts);
+      let block = SectionBlock({kind: "comment", blocks: [
+        TextBlock({text: "[${author}] ${commentText}", style: "CommentText", level: 0})
+      ]});
+      block :: parseCommentNodes(rest)
+    }
+  }
+
+-- Extract text from comment paragraphs (find all w:t nodes and join)
+pure func extractCommentTexts(paragraphs: [XmlNode]) -> [string] =
+  match paragraphs {
+    [] => [],
+    p :: rest => {
+      let pText = join("", findAllTexts(p, "w:t"));
+      if length(pText) > 0
+      then pText :: extractCommentTexts(rest)
+      else extractCommentTexts(rest)
+    }
+  }
+
+-- Helper: parse shared strings XML into a Map[int, string]
+-- Pure version for browser (no FS). Builds indexed map for O(1) cell resolution.
+pure func parseSharedStringsToMap(xml: string) -> Map[int, string] {
+  if length(xml) == 0 then emptyMap()
+  else match parse(xml) {
+    Ok(root) => {
+      let items = findAll(root, "si");
+      let strings = extractSharedStrings(items);
+      xlsxBrowserBuildMap(strings, 0)
+    },
+    Err(_) => emptyMap()
+  }
+}
+
+-- Build Map[int, string] from a list of strings with indices
+pure func xlsxBrowserBuildMap(strings: [string], idx: int) -> Map[int, string] =
+  match strings {
+    [] => emptyMap(),
+    s :: rest => mapInsert(xlsxBrowserBuildMap(rest, idx + 1), idx, s)
+  }

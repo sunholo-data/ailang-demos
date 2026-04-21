@@ -19,15 +19,27 @@ const WB_MODULES = [
 ];
 
 // DocParse AILANG modules in dependency order (for document parsing)
+// Sourced from the vendored sunholo/ailang_parse registry package (v0.12.1).
+// Module names stay bare (docparse/...) because the package uses module_prefix = "docparse".
 const DOCPARSE_MODULES = [
-  { name: 'docparse/types/document',          path: 'ailang/docparse/types/document.ail' },
-  { name: 'docparse/services/format_router',  path: 'ailang/docparse/services/format_router.ail' },
-  { name: 'docparse/services/zip_extract',    path: 'ailang/docparse/services/zip_extract.ail' },
-  { name: 'docparse/services/docx_parser',    path: 'ailang/docparse/services/docx_parser.ail' },
-  { name: 'docparse/services/pptx_parser',    path: 'ailang/docparse/services/pptx_parser.ail' },
-  { name: 'docparse/services/xlsx_parser',    path: 'ailang/docparse/services/xlsx_parser.ail' },
-  { name: 'docparse/services/output_formatter', path: 'ailang/docparse/services/output_formatter.ail' },
-  { name: 'docparse/services/docparse_browser', path: 'ailang/docparse/services/docparse_browser.ail' },
+  { name: 'docparse/types/document',            path: 'ailang/docparse/types/document.ail' },
+  { name: 'docparse/services/format_router',     path: 'ailang/docparse/services/format_router.ail' },
+  { name: 'docparse/services/zip_extract',       path: 'ailang/docparse/services/zip_extract.ail' },
+  { name: 'docparse/services/html_parser',       path: 'ailang/docparse/services/html_parser.ail' },
+  { name: 'docparse/services/csv_parser',        path: 'ailang/docparse/services/csv_parser.ail' },
+  { name: 'docparse/services/markdown_parser',   path: 'ailang/docparse/services/markdown_parser.ail' },
+  { name: 'docparse/services/docx_parser',       path: 'ailang/docparse/services/docx_parser.ail' },
+  { name: 'docparse/services/pptx_parser',       path: 'ailang/docparse/services/pptx_parser.ail' },
+  { name: 'docparse/services/xlsx_parser',       path: 'ailang/docparse/services/xlsx_parser.ail' },
+  { name: 'docparse/services/odt_parser',        path: 'ailang/docparse/services/odt_parser.ail' },
+  { name: 'docparse/services/odp_parser',        path: 'ailang/docparse/services/odp_parser.ail' },
+  { name: 'docparse/services/ods_parser',        path: 'ailang/docparse/services/ods_parser.ail' },
+  { name: 'docparse/services/epub_parser',       path: 'ailang/docparse/services/epub_parser.ail' },
+  { name: 'docparse/services/tex_parser',        path: 'ailang/docparse/services/tex_parser.ail' },
+  { name: 'docparse/services/eml_parser',        path: 'ailang/docparse/services/eml_parser.ail' },
+  { name: 'docparse/services/output_formatter',  path: 'ailang/docparse/services/output_formatter.ail' },
+  { name: 'docparse/services/a2ui_formatter',    path: 'ailang/docparse/services/a2ui_formatter.ail' },
+  { name: 'docparse/services/docparse_browser',  path: 'ailang/docparse/services/docparse_browser.ail' },
 ];
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';

@@ -1,0 +1,247 @@
+module docparse/services/qmd_generator
+
+import std/string (length, join, intToStr, split)
+import std/list (map, foldl, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, DocMetadata, countBlocks, cellText)
+
+-- QMD Generator — converts Block ADT to Quarto Markdown (.qmd) format.
+-- Pure string concatenation: generates YAML front matter + Quarto-flavored Markdown.
+--
+-- Supports all 9 Block variants:
+--   HeadingBlock  -> # / ## / ### etc.
+--   TextBlock     -> paragraph text with optional inline styling
+--   TableBlock    -> pipe tables (simple) or grid tables (merged cells)
+--   ListBlock     -> - / 1. with nesting
+--   ImageBlock    -> ![caption](path) or description placeholder
+--   AudioBlock    -> transcription blockquote
+--   VideoBlock    -> description placeholder
+--   SectionBlock  -> Quarto divs or heading-based sections
+--   ChangeBlock   -> CriticMarkup {++ ++} / {-- --}
+--
+-- Output is a complete .qmd file suitable for `quarto render`.
+
+-- Generate a complete QMD document from a ParsedDocument
+export pure func generateQmd(doc: ParsedDocument) -> string
+  ensures { length(result) > 0 }
+{
+  let frontMatter = qmdFrontMatter(doc.metadata, doc.filename);
+  let body = qmdBlocksToStr(doc.blocks);
+  "${frontMatter}${body}"
+}
+
+-- Generate just the body markdown from blocks (no front matter)
+export pure func generateQmdBody(blocks: [Block]) -> string =
+  qmdBlocksToStr(blocks)
+
+-- YAML front matter for Quarto
+pure func qmdFrontMatter(meta: DocMetadata, filename: string) -> string {
+  let title = if length(meta.title) > 0
+    then meta.title
+    else filename;
+  "---\ntitle: \"${qmdEscapeYaml(title)}\"\n${qmdAuthorField(meta.author)}${qmdDateField(meta.created)}format:\n  html:\n    theme: cosmo\n  pdf:\n    documentclass: article\n  docx: default\n---\n\n"
+}
+
+-- Author field (only if non-empty)
+pure func qmdAuthorField(author: string) -> string =
+  if length(author) > 0
+  then "author: \"${qmdEscapeYaml(author)}\"\n"
+  else ""
+
+-- Date field (only if non-empty)
+pure func qmdDateField(date: string) -> string =
+  if length(date) > 0
+  then "date: \"${qmdEscapeYaml(date)}\"\n"
+  else ""
+
+-- Escape quotes in YAML string values (split on quote, rejoin with escaped quote)
+pure func qmdEscapeYaml(s: string) -> string =
+  join("\\\"", split(s, "\""))
+
+-- Convert a list of blocks to QMD markdown
+pure func qmdBlocksToStr(blocks: [Block]) -> string =
+  foldl(\acc b. "${acc}${qmdBlockToStr(b)}", "", blocks)
+
+-- Convert a single Block to QMD markdown
+pure func qmdBlockToStr(block: Block) -> string =
+  match block {
+    HeadingBlock(h) =>
+      "${qmdHeadingPrefix(h.level)}${h.text}\n\n",
+
+    TextBlock(t) =>
+      if length(t.text) > 0
+      then if length(t.style) > 0 && t.style != "normal" && t.style != "Normal"
+        then "${qmdStyledText(t.text, t.style)}\n\n"
+        else "${t.text}\n\n"
+      else "",
+
+    TableBlock(t) =>
+      "${qmdTableToStr(t.headers, t.rows)}\n",
+
+    ListBlock(l) =>
+      "${qmdListToStr(l.items, l.ordered, 1)}\n",
+
+    ImageBlock(i) =>
+      qmdImageToStr(i.data, i.description, i.mime),
+
+    AudioBlock(a) =>
+      if length(a.transcription) > 0
+      then "::: {.callout-note}\n## Audio Transcription\n${a.transcription}\n:::\n\n"
+      else "*[Audio]*\n\n",
+
+    VideoBlock(v) =>
+      if length(v.description) > 0
+      then "*[Video: ${v.description}]*\n\n"
+      else "*[Video]*\n\n",
+
+    SectionBlock(s) =>
+      qmdSectionToStr(s.kind, s.blocks),
+
+    ChangeBlock(c) =>
+      qmdChangeToStr(c.changeType, c.author, c.date, c.text)
+  }
+
+-- Heading prefix from level
+pure func qmdHeadingPrefix(level: int) -> string =
+  if level == 1 then "# "
+  else if level == 2 then "## "
+  else if level == 3 then "### "
+  else if level == 4 then "#### "
+  else if level == 5 then "##### "
+  else if level == 6 then "###### "
+  else "## "
+
+-- Styled text using Quarto span syntax: [text]{.class}
+pure func qmdStyledText(text: string, style: string) -> string =
+  if style == "bold" || style == "Bold" then "**${text}**"
+  else if style == "italic" || style == "Italic" then "*${text}*"
+  else if style == "code" || style == "Code" then "`${text}`"
+  else "[${text}]{.${style}}"
+
+-- Image: use Quarto image syntax with figure div
+pure func qmdImageToStr(data: string, description: string, mime: string) -> string =
+  if length(data) > 0 && length(mime) > 0
+  then "![${description}](data:${mime};base64,${data})\n\n"
+  else if length(description) > 0
+    then "![${description}]()\n\n"
+    else "![Image]()\n\n"
+
+-- Section blocks → Quarto divs
+pure func qmdSectionToStr(kind: string, blocks: [Block]) -> string =
+  if kind == "slide" then "---\n\n${qmdBlocksToStr(blocks)}"
+  else if kind == "sheet" then "::: {.panel-tabset}\n## Sheet\n\n${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "header" then "::: {.callout-tip appearance=\"minimal\"}\n**Header:** ${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "footer" then "::: {.callout-tip appearance=\"minimal\"}\n**Footer:** ${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "footnote" then "::: {.aside}\n${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "endnote" then "::: {.aside}\n${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "textbox" then "::: {.callout-note appearance=\"simple\"}\n${qmdBlocksToStr(blocks)}:::\n\n"
+  else if kind == "comment" then "::: {.callout-warning}\n## Comment\n${qmdBlocksToStr(blocks)}:::\n\n"
+  else "::: {.${kind}}\n${qmdBlocksToStr(blocks)}:::\n\n"
+
+-- Track changes → CriticMarkup syntax
+-- Insertions: {++ text ++}
+-- Deletions: {-- text --}
+-- With attribution as a Quarto comment
+pure func qmdChangeToStr(changeType: string, author: string, date: string, text: string) -> string {
+  let attribution = "<!-- ${changeType} by ${author}, ${date} -->\n";
+  if changeType == "delete" || changeType == "move-from"
+  then "{-- ${text} --}${attribution}\n"
+  else "{++ ${text} ++}${attribution}\n"
+}
+
+-- Render table as pipe table (Quarto standard)
+pure func qmdTableToStr(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let hasSpans = qmdHasSpannedCells(headers, rows);
+  if hasSpans
+  then qmdGridTable(headers, rows)
+  else qmdPipeTable(headers, rows)
+}
+
+-- Check if any cells have colspan > 1 (need grid table)
+pure func qmdHasSpannedCells(headers: [TableCell], rows: [[TableCell]]) -> bool {
+  let headerSpans = foldl(\acc c. acc || c.colSpan > 1, false, headers);
+  let rowSpans = foldl(\acc row. acc || foldl(\a c. a || c.colSpan > 1, false, row), false, rows);
+  headerSpans || rowSpans
+}
+
+-- Simple pipe table (no merged cells)
+pure func qmdPipeTable(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let headerLine = "| ${qmdPipeCells(headers)}\n";
+  let sepLine = "| ${qmdPipeSep(headers)}\n";
+  let rowLines = foldl(\acc row. "${acc}| ${qmdPipeCells(row)}\n", "", rows);
+  "${headerLine}${sepLine}${rowLines}"
+}
+
+pure func qmdPipeCells(cells: [TableCell]) -> string =
+  match cells {
+    [] => "",
+    c :: [] => "${cellText(c)} |",
+    c :: rest => "${cellText(c)} | ${qmdPipeCells(rest)}"
+  }
+
+pure func qmdPipeSep(cells: [TableCell]) -> string =
+  match cells {
+    [] => "",
+    _ :: [] => "--- |",
+    _ :: rest => "--- | ${qmdPipeSep(rest)}"
+  }
+
+-- Grid table for merged cells (Quarto/Pandoc grid table format)
+-- Grid tables use +---+---+ borders and support colspan
+pure func qmdGridTable(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let border = qmdGridBorder(headers);
+  let headerRow = qmdGridRow(headers);
+  let headerSep = qmdGridHeaderSep(headers);
+  let bodyRows = foldl(\acc row. "${acc}${qmdGridRow(row)}${border}\n", "", rows);
+  "${border}\n${headerRow}\n${headerSep}\n${bodyRows}"
+}
+
+-- Generate +------+------+ border line
+pure func qmdGridBorder(cells: [TableCell]) -> string {
+  let body = foldl(\acc c. "${acc}${qmdGridDashes(10)}+", "", cells);
+  "+${body}"
+}
+
+-- Generate +=======+=======+ header separator
+pure func qmdGridHeaderSep(cells: [TableCell]) -> string {
+  let body = foldl(\acc c. "${acc}${qmdGridEquals(10)}+", "", cells);
+  "+${body}"
+}
+
+-- Generate a row: | cell1    | cell2    |
+pure func qmdGridRow(cells: [TableCell]) -> string {
+  let body = foldl(\acc c. "${acc}${qmdGridCellPad(cellText(c), 9)}| ", "", cells);
+  "| ${body}"
+}
+
+-- Pad a cell value to width
+pure func qmdGridCellPad(text: string, width: int) -> string {
+  let padLen = width - length(text);
+  if padLen > 0
+  then "${text}${qmdSpaces(padLen)}"
+  else text
+}
+
+-- Generate n dashes
+pure func qmdGridDashes(n: int) -> string =
+  if n <= 0 then ""
+  else "-${qmdGridDashes(n - 1)}"
+
+-- Generate n equals signs
+pure func qmdGridEquals(n: int) -> string =
+  if n <= 0 then ""
+  else "=${qmdGridEquals(n - 1)}"
+
+-- Generate n spaces
+pure func qmdSpaces(n: int) -> string =
+  if n <= 0 then ""
+  else " ${qmdSpaces(n - 1)}"
+
+-- Render list items
+pure func qmdListToStr(items: [string], ordered: bool, idx: int) -> string =
+  match items {
+    [] => "",
+    item :: rest =>
+      if ordered
+      then "${intToStr(idx)}. ${item}\n${qmdListToStr(rest, ordered, idx + 1)}"
+      else "- ${item}\n${qmdListToStr(rest, ordered, idx + 1)}"
+  }

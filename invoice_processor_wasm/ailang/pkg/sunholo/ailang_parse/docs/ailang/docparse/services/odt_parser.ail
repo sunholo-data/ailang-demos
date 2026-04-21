@@ -1,0 +1,320 @@
+module docparse/services/odt_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/zip (readEntry)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, trim, contains, startsWith, substring, endsWith)
+import std/list (map, flatMap, filter, concat, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ImageBlock, ListBlock, SectionBlock, TableCell, DocMetadata, simpleCell, emptyMetadata)
+
+-- ODT Parser — converts OpenDocument Text to Block ADT.
+-- Pure AILANG implementation using std/zip + std/xml.
+--
+-- ODT structure (ZIP archive):
+--   content.xml    — main content (text:h, text:p, table:table, text:list)
+--   meta.xml       — metadata (dc:title, dc:creator, dc:date)
+--   styles.xml     — style definitions
+--   META-INF/manifest.xml — media types
+--
+-- ODF XML namespace prefixes:
+--   text:   — text elements (text:h, text:p, text:span, text:list)
+--   table:  — table elements (table:table, table:table-row, table:table-cell)
+--   office: — document structure (office:body, office:text)
+--   draw:   — drawing elements (draw:frame, draw:image)
+--   dc:     — Dublin Core metadata
+--
+-- This is the strategic gap: nobody does native ODT parsing.
+
+-- Parse an ODT file into content blocks
+export func parseOdt(filepath: string) -> [Block] ! {FS}
+  ensures { listLength(result) >= 0 }
+{
+  let xml = match readEntry(filepath, "content.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0
+  then [TextBlock({text: "ODT error: could not read content.xml", style: "error", level: 0})]
+  else match parse(xml) {
+    Ok(root) => odtExtractBody(root),
+    Err(e) => [TextBlock({text: "ODT XML parse error: ${e}", style: "error", level: 0})]
+  }
+}
+
+-- Extract headers and footers from styles.xml
+-- ODF stores headers/footers in style:master-page elements
+export func parseOdtHeadersFooters(filepath: string) -> [Block] ! {FS} {
+  let xml = match readEntry(filepath, "styles.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0 then []
+  else match parse(xml) {
+    Ok(root) => odtExtractHeadersFooters(root),
+    Err(_) => []
+  }
+}
+
+-- Extract header/footer blocks from styles.xml
+export pure func odtExtractHeadersFooters(root: XmlNode) -> [Block] {
+  let masterPages = findAll(root, "style:master-page");
+  flatMap(odtExtractMasterPage, masterPages)
+}
+
+-- Extract headers/footers from a single master-page
+pure func odtExtractMasterPage(mp: XmlNode) -> [Block] {
+  let headers = match findFirst(mp, "style:header") {
+    Some(h) =>
+      let blocks = odtProcessChildren(getChildren(h)) in
+      if listLength(blocks) > 0 then [SectionBlock({kind: "header", blocks: blocks})]
+      else [],
+    None => []
+  };
+  let footers = match findFirst(mp, "style:footer") {
+    Some(f) =>
+      let blocks = odtProcessChildren(getChildren(f)) in
+      if listLength(blocks) > 0 then [SectionBlock({kind: "footer", blocks: blocks})]
+      else [],
+    None => []
+  };
+  concat(headers, footers)
+}
+
+-- Extract metadata from an ODT file
+export func parseOdtMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let xml = match readEntry(filepath, "meta.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(xml) == 0 then emptyMetadata()
+  else match parse(xml) {
+    Ok(root) => odtParseMetadata(root),
+    Err(_) => emptyMetadata()
+  }
+}
+
+-- Navigate to office:body/office:text and extract blocks
+export pure func odtExtractBody(root: XmlNode) -> [Block] {
+  -- ODF: root > office:body > office:text
+  match findFirst(root, "office:body") {
+    Some(body) =>
+      match findFirst(body, "office:text") {
+        Some(text) => odtProcessChildren(getChildren(text)),
+        None => []
+      },
+    None => {
+      -- Try direct children (some ODT files have flat structure)
+      let textNodes = findAll(root, "office:text");
+      flatMap(\t. odtProcessChildren(getChildren(t)), textNodes)
+    }
+  }
+}
+
+-- Process a list of ODF child nodes into blocks
+pure func odtProcessChildren(nodes: [XmlNode]) -> [Block] =
+  flatMap(odtProcessNode, nodes)
+
+-- Process a single ODF node into blocks
+pure func odtProcessNode(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+
+  -- Headings: text:h with text:outline-level attribute
+  if tag == "text:h" then
+    let text = trim(getText(node)) in
+    let level = odtHeadingLevel(node) in
+    if length(text) > 0 then [HeadingBlock({text: text, level: level})]
+    else []
+
+  -- Paragraphs: text:p (may contain embedded draw:frame children)
+  else if tag == "text:p" then
+    let text = trim(getText(node)) in
+    let embeddedFrames = flatMap(odtProcessNode, filter(\c. getTag(c) == "draw:frame", getChildren(node))) in
+    let textBlocks = if length(text) > 0 then [TextBlock({text: text, style: "normal", level: 0})] else [] in
+    concat(textBlocks, embeddedFrames)
+
+  -- Tables: table:table
+  else if tag == "table:table" then [odtParseTable(node)]
+
+  -- Lists: text:list
+  else if tag == "text:list" then odtParseList(node)
+
+  -- Sections: text:section
+  else if tag == "text:section" then
+    let blocks = odtProcessChildren(getChildren(node)) in
+    let name = getOrElse(getAttr(node, "text:name"), "section") in
+    if listLength(blocks) > 0 then [SectionBlock({kind: name, blocks: blocks})]
+    else []
+
+  -- Frames: draw:frame (may contain images or text boxes)
+  else if tag == "draw:frame" then odtProcessFrame(node)
+
+  -- Skip everything else (office:forms, text:sequence-decls, etc.)
+  else []
+}
+
+-- Get heading level from text:outline-level attribute
+-- Contract: returns 1-6, defaulting to 1
+pure func odtHeadingLevel(node: XmlNode) -> int
+  ensures { result >= 1 && result <= 6 }
+{
+  let levelStr = getOrElse(getAttr(node, "text:outline-level"), "1");
+  if levelStr == "1" then 1
+  else if levelStr == "2" then 2
+  else if levelStr == "3" then 3
+  else if levelStr == "4" then 4
+  else if levelStr == "5" then 5
+  else if levelStr == "6" then 6
+  else 1
+}
+
+-- Parse an ODF table:table into a TableBlock
+pure func odtParseTable(table: XmlNode) -> Block {
+  let rows = findAll(table, "table:table-row");
+  let parsedRows = map(odtParseTableRow, rows);
+  match parsedRows {
+    [] => TableBlock({rows: [], headers: []}),
+    firstRow :: dataRows =>
+      TableBlock({rows: dataRows, headers: firstRow})
+  }
+}
+
+-- Parse a single table:table-row
+pure func odtParseTableRow(tr: XmlNode) -> [TableCell] {
+  let cells = findAll(tr, "table:table-cell");
+  map(odtParseTableCell, cells)
+}
+
+-- Parse a table:table-cell into a TableCell
+-- Handles table:number-columns-spanned for colspan
+pure func odtParseTableCell(cell: XmlNode) -> TableCell {
+  let text = trim(getText(cell));
+  let colSpanStr = getOrElse(getAttr(cell, "table:number-columns-spanned"), "1");
+  let colSpan = odtParseSpan(colSpanStr);
+  {text: text, colSpan: colSpan, rowSpan: 1, merged: false}
+}
+
+-- Parse colspan/rowspan value
+-- Contract: always returns at least 1
+pure func odtParseSpan(s: string) -> int
+  ensures { result >= 1 }
+{
+  if s == "1" then 1
+  else if s == "2" then 2
+  else if s == "3" then 3
+  else if s == "4" then 4
+  else if s == "5" then 5
+  else if s == "6" then 6
+  else if s == "7" then 7
+  else if s == "8" then 8
+  else if s == "9" then 9
+  else if s == "10" then 10
+  else 1
+}
+
+-- Parse a text:list into a ListBlock
+pure func odtParseList(list: XmlNode) -> [Block] {
+  let items = findAll(list, "text:list-item");
+  let texts = map(odtListItemText, items);
+  let nonEmpty = filter(\t. length(t) > 0, texts);
+  if listLength(nonEmpty) > 0
+  then [ListBlock({items: nonEmpty, ordered: false})]
+  else []
+}
+
+-- Extract text from a text:list-item (contains text:p children)
+pure func odtListItemText(item: XmlNode) -> string =
+  trim(getText(item))
+
+-- Process a draw:frame (may contain draw:image or draw:text-box)
+pure func odtProcessFrame(frame: XmlNode) -> [Block] {
+  -- Check for text box first
+  match findFirst(frame, "draw:text-box") {
+    Some(textBox) =>
+      let blocks = odtProcessChildren(getChildren(textBox)) in
+      if listLength(blocks) > 0 then [SectionBlock({kind: "textbox", blocks: blocks})]
+      else [],
+    None =>
+      -- Check for image (draw:image with xlink:href)
+      match findFirst(frame, "draw:image") {
+        Some(img) =>
+          let href = getOrElse(getAttr(img, "xlink:href"), "") in
+          let desc = getOrElse(getAttr(frame, "draw:name"), "") in
+          if length(href) > 0
+          then [ImageBlock({data: href, description: desc, mime: odtGuessMime(href)})]
+          else [],
+        None => []
+      }
+  }
+}
+
+-- Guess MIME type from image path
+pure func odtGuessMime(href: string) -> string
+  tests [
+    ("Pictures/image.png", "image/png"),
+    ("photo.jpg", "image/jpeg"),
+    ("photo.jpeg", "image/jpeg"),
+    ("icon.gif", "image/gif"),
+    ("logo.svg", "image/svg+xml"),
+    ("scan.bmp", "image/bmp"),
+    ("pic.webp", "image/webp"),
+    ("unknown.xyz", "image/unknown")
+  ]
+{
+  if endsWith(href, ".png") then "image/png"
+  else if endsWith(href, ".jpg") || endsWith(href, ".jpeg") then "image/jpeg"
+  else if endsWith(href, ".gif") then "image/gif"
+  else if endsWith(href, ".svg") then "image/svg+xml"
+  else if endsWith(href, ".bmp") then "image/bmp"
+  else if endsWith(href, ".webp") then "image/webp"
+  else "image/unknown"
+}
+
+-- Parse metadata from meta.xml
+export pure func odtParseMetadata(root: XmlNode) -> DocMetadata {
+  let title = odtFindMeta(root, "dc:title");
+  let author = odtFindMeta(root, "dc:creator");
+  let date = odtFindMeta(root, "dc:date");
+  let pageCount = odtFindPageCount(root);
+  {title: title, author: author, created: date, modified: "", pageCount: pageCount}
+}
+
+-- Find a metadata element's text
+pure func odtFindMeta(root: XmlNode, tagName: string) -> string {
+  let elements = findAll(root, tagName);
+  match elements {
+    [] => "",
+    el :: _ => trim(getText(el))
+  }
+}
+
+-- Find page count from meta:document-statistic
+pure func odtFindPageCount(root: XmlNode) -> int {
+  let stats = findAll(root, "meta:document-statistic");
+  match stats {
+    [] => 0,
+    stat :: _ =>
+      let countStr = getOrElse(getAttr(stat, "meta:page-count"), "0") in
+      odtParsePageCount(countStr)
+  }
+}
+
+-- Parse page count string
+pure func odtParsePageCount(s: string) -> int
+  ensures { result >= 0 }
+{
+  if s == "0" then 0
+  else if s == "1" then 1
+  else if s == "2" then 2
+  else if s == "3" then 3
+  else if s == "4" then 4
+  else if s == "5" then 5
+  else if s == "10" then 10
+  else if s == "20" then 20
+  else if s == "50" then 50
+  else if s == "100" then 100
+  else 0
+}

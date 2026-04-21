@@ -1,0 +1,290 @@
+module docparse/services/xlsx_generator
+
+import std/string (length, intToStr)
+import std/list (foldl, length as listLength)
+import std/zip (createArchive)
+import std/result (Ok, Err)
+import std/map (empty as emptyMap, insert as mapInsert, lookup as mapLookup)
+import std/option (getOrElse)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape, xmlDecl)
+
+-- XLSX Generator — converts Block ADT to a valid .xlsx file.
+--
+-- Strategy: each TableBlock becomes a sheet. Non-table blocks go into a "Content" sheet as text.
+-- SectionBlock(kind="sheet") children become their own sheet.
+--
+-- XLSX structure:
+--   [Content_Types].xml
+--   _rels/.rels
+--   xl/workbook.xml
+--   xl/_rels/workbook.xml.rels
+--   xl/styles.xml
+--   xl/sharedStrings.xml
+--   xl/worksheets/sheet1.xml ... sheetN.xml
+--
+-- Limitations:
+--   - Text-only cells (no number/date detection)
+--   - No cell formatting (bold, colors)
+--   - No merged cells in output (colspan tracking only)
+
+-- Generate an XLSX file from ParsedDocument
+export func generateXlsx(doc: ParsedDocument, outputPath: string) -> string ! {FS}
+  ensures { length(result) > 0 }
+{
+  let sheets = xlsxCollectSheets(doc.blocks);
+  let sheetCount = listLength(sheets);
+
+  -- Collect all unique strings for shared strings table
+  let allStrings = xlsxCollectAllStrings(sheets);
+  let sharedStringsXml = xlsxBuildSharedStrings(allStrings);
+  -- Build O(1) string-to-index map for cell XML generation
+  let stringIndex = xlsxBuildStringIndex(allStrings, 0);
+
+  let contentTypes = xlsxContentTypes(sheetCount);
+  let rootRels = xlsxRootRels();
+  let workbook = xlsxWorkbook(sheets);
+  let workbookRels = xlsxWorkbookRels(sheetCount);
+  let styles = xlsxMinimalStyles();
+  let sheetEntries = xlsxBuildSheetEntries(sheets, stringIndex, 1);
+
+  let baseEntries = [
+    {name: "[Content_Types].xml", content: contentTypes},
+    {name: "_rels/.rels", content: rootRels},
+    {name: "xl/workbook.xml", content: workbook},
+    {name: "xl/_rels/workbook.xml.rels", content: workbookRels},
+    {name: "xl/styles.xml", content: styles},
+    {name: "xl/sharedStrings.xml", content: sharedStringsXml}
+  ];
+
+  let allEntries = xlsxAppendList(baseEntries, sheetEntries);
+
+  let result = createArchive(outputPath, allEntries);
+  match result {
+    Ok(_) => "Generated XLSX: ${outputPath} (${intToStr(sheetCount)} sheets)",
+    Err(e) => "Error generating XLSX: ${e}"
+  }
+}
+
+-- A sheet with a name and rows of cells
+type XlsxSheet = { name: string, rows: [[string]] }
+
+-- Collect blocks into sheets
+pure func xlsxCollectSheets(blocks: [Block]) -> [XlsxSheet] {
+  xlsxCollectSheetsAcc(blocks, [], 1)
+}
+
+pure func xlsxCollectSheetsAcc(blocks: [Block], acc: [XlsxSheet], sheetIdx: int) -> [XlsxSheet] =
+  match blocks {
+    [] => if listLength(acc) == 0 then [{name: "Sheet1", rows: []}] else acc,
+    SectionBlock(s) :: rest =>
+      if s.kind == "sheet"
+      then xlsxCollectSheetsAcc(rest,
+        xlsxAppendSheet(acc, {name: "Sheet${intToStr(sheetIdx)}", rows: xlsxBlocksToRows(s.blocks)}),
+        sheetIdx + 1)
+      else xlsxCollectSheetsAcc(rest, acc, sheetIdx),
+    TableBlock(t) :: rest =>
+      xlsxCollectSheetsAcc(rest,
+        xlsxAppendSheet(acc, {name: "Sheet${intToStr(sheetIdx)}", rows: xlsxTableToRows(t.headers, t.rows)}),
+        sheetIdx + 1),
+    b :: rest =>
+      -- Non-table blocks: accumulate text into a "Content" sheet
+      let textRow = [xlsxBlockToText(b)] in
+      if length(xlsxBlockToText(b)) > 0
+      then xlsxCollectSheetsAcc(rest,
+        xlsxAppendToContentSheet(acc, textRow, sheetIdx),
+        sheetIdx)
+      else xlsxCollectSheetsAcc(rest, acc, sheetIdx)
+  }
+
+pure func xlsxBlockToText(block: Block) -> string =
+  match block {
+    HeadingBlock(h) => h.text,
+    TextBlock(t) => t.text,
+    ListBlock(l) => foldl(\acc item. if length(acc) > 0 then "${acc}, ${item}" else item, "", l.items),
+    ImageBlock(i) => "[Image: ${i.description}]",
+    AudioBlock(a) => "[Audio: ${a.transcription}]",
+    VideoBlock(v) => "[Video: ${v.description}]",
+    ChangeBlock(c) => "${c.text} (${c.changeType} by ${c.author})",
+    _ => ""
+  }
+
+pure func xlsxBlocksToRows(blocks: [Block]) -> [[string]] =
+  match blocks {
+    [] => [],
+    TableBlock(t) :: rest => xlsxTableToRowsConcat(t.headers, t.rows, xlsxBlocksToRows(rest)),
+    b :: rest =>
+      let text = xlsxBlockToText(b) in
+      if length(text) > 0
+      then [text] :: xlsxBlocksToRows(rest)
+      else xlsxBlocksToRows(rest)
+  }
+
+pure func xlsxTableToRows(headers: [TableCell], rows: [[TableCell]]) -> [[string]] {
+  let headerRow = xlsxCellsToStrings(headers);
+  let dataRows = xlsxRowsToStrings(rows);
+  if listLength(headerRow) > 0 then headerRow :: dataRows
+  else dataRows
+}
+
+pure func xlsxTableToRowsConcat(headers: [TableCell], rows: [[TableCell]], rest: [[string]]) -> [[string]] {
+  let tableRows = xlsxTableToRows(headers, rows);
+  xlsxAppendRows(tableRows, rest)
+}
+
+pure func xlsxCellsToStrings(cells: [TableCell]) -> [string] =
+  match cells {
+    [] => [],
+    c :: rest => c.text :: xlsxCellsToStrings(rest)
+  }
+
+pure func xlsxRowsToStrings(rows: [[TableCell]]) -> [[string]] =
+  match rows {
+    [] => [],
+    row :: rest => xlsxCellsToStrings(row) :: xlsxRowsToStrings(rest)
+  }
+
+pure func xlsxAppendSheet(sheets: [XlsxSheet], sheet: XlsxSheet) -> [XlsxSheet] =
+  match sheets {
+    [] => [sheet],
+    x :: rest => x :: xlsxAppendSheet(rest, sheet)
+  }
+
+pure func xlsxAppendToContentSheet(sheets: [XlsxSheet], row: [string], sheetIdx: int) -> [XlsxSheet] =
+  -- If there's already a content sheet, append to it; otherwise create one
+  match sheets {
+    [] => [{name: "Content", rows: [row]}],
+    s :: rest =>
+      if s.name == "Content"
+      then {name: "Content", rows: xlsxAppendRows(s.rows, [row])} :: rest
+      else s :: xlsxAppendToContentSheet(rest, row, sheetIdx)
+  }
+
+pure func xlsxAppendRows(rows: [[string]], more: [[string]]) -> [[string]] =
+  match rows {
+    [] => more,
+    r :: rest => r :: xlsxAppendRows(rest, more)
+  }
+
+-- Collect all strings for shared strings table
+pure func xlsxCollectAllStrings(sheets: [XlsxSheet]) -> [string] =
+  match sheets {
+    [] => [],
+    s :: rest => xlsxAppendStrList(xlsxRowsStrings(s.rows), xlsxCollectAllStrings(rest))
+  }
+
+pure func xlsxRowsStrings(rows: [[string]]) -> [string] =
+  match rows {
+    [] => [],
+    row :: rest => xlsxAppendStrList(row, xlsxRowsStrings(rest))
+  }
+
+pure func xlsxAppendStrList(a: [string], b: [string]) -> [string] =
+  match a {
+    [] => b,
+    x :: rest => x :: xlsxAppendStrList(rest, b)
+  }
+
+-- Build O(1) string-to-index map from the shared strings list
+pure func xlsxBuildStringIndex(strings: [string], idx: int) -> Map[string, int] =
+  match strings {
+    [] => emptyMap(),
+    s :: rest => mapInsert(xlsxBuildStringIndex(rest, idx + 1), s, idx)
+  }
+
+-- Build shared strings XML
+pure func xlsxBuildSharedStrings(strings: [string]) -> string {
+  let count = intToStr(listLength(strings));
+  "${xmlDecl()}<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"${count}\" uniqueCount=\"${count}\">${foldl(\acc s. "${acc}<si><t>${xmlEscape(s)}</t></si>", "", strings)}</sst>"
+}
+
+-- Build sheet XML entries
+pure func xlsxBuildSheetEntries(sheets: [XlsxSheet], stringIndex: Map[string, int], idx: int) -> [{name: string, content: string}] =
+  match sheets {
+    [] => [],
+    s :: rest =>
+      let entry = {name: "xl/worksheets/sheet${intToStr(idx)}.xml", content: xlsxSheetXml(s.rows, stringIndex)} in
+      entry :: xlsxBuildSheetEntries(rest, stringIndex, idx + 1)
+  }
+
+-- Build a single worksheet XML
+pure func xlsxSheetXml(rows: [[string]], stringIndex: Map[string, int]) -> string {
+  "${xmlDecl()}<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>${xlsxRowsToXml(rows, stringIndex, 1)}</sheetData></worksheet>"
+}
+
+pure func xlsxRowsToXml(rows: [[string]], stringIndex: Map[string, int], rowIdx: int) -> string =
+  match rows {
+    [] => "",
+    row :: rest =>
+      "<row r=\"${intToStr(rowIdx)}\">${xlsxCellsToXml(row, stringIndex, rowIdx, 1)}</row>${xlsxRowsToXml(rest, stringIndex, rowIdx + 1)}"
+  }
+
+pure func xlsxCellsToXml(cells: [string], stringIndex: Map[string, int], rowIdx: int, colIdx: int) -> string =
+  match cells {
+    [] => "",
+    cell :: rest =>
+      let colLetter = xlsxColLetter(colIdx) in
+      let cellRef = "${colLetter}${intToStr(rowIdx)}" in
+      let sIdx = getOrElse(mapLookup(stringIndex, cell), 0) in
+      "<c r=\"${cellRef}\" t=\"s\"><v>${intToStr(sIdx)}</v></c>${xlsxCellsToXml(rest, stringIndex, rowIdx, colIdx + 1)}"
+  }
+
+-- Convert column number to letter (1=A, 2=B, ... 26=Z, 27=AA)
+pure func xlsxColLetter(col: int) -> string =
+  if col <= 0 then "A"
+  else if col <= 26 then xlsxSingleLetter(col)
+  else "${xlsxSingleLetter((col - 1) / 26)}${xlsxSingleLetter(((col - 1) % 26) + 1)}"
+
+pure func xlsxSingleLetter(n: int) -> string =
+  if n == 1 then "A" else if n == 2 then "B" else if n == 3 then "C"
+  else if n == 4 then "D" else if n == 5 then "E" else if n == 6 then "F"
+  else if n == 7 then "G" else if n == 8 then "H" else if n == 9 then "I"
+  else if n == 10 then "J" else if n == 11 then "K" else if n == 12 then "L"
+  else if n == 13 then "M" else if n == 14 then "N" else if n == 15 then "O"
+  else if n == 16 then "P" else if n == 17 then "Q" else if n == 18 then "R"
+  else if n == 19 then "S" else if n == 20 then "T" else if n == 21 then "U"
+  else if n == 22 then "V" else if n == 23 then "W" else if n == 24 then "X"
+  else if n == 25 then "Y" else if n == 26 then "Z" else "A"
+
+-- Append list helper
+pure func xlsxAppendList(a: [{name: string, content: string}], b: [{name: string, content: string}]) -> [{name: string, content: string}] =
+  match a {
+    [] => b,
+    x :: rest => x :: xlsxAppendList(rest, b)
+  }
+
+-- [Content_Types].xml
+pure func xlsxContentTypes(sheetCount: int) -> string {
+  "${xmlDecl()}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/>${xlsxSheetContentTypes(sheetCount, 1)}</Types>"
+}
+
+pure func xlsxSheetContentTypes(count: int, idx: int) -> string =
+  if idx > count then ""
+  else "<Override PartName=\"/xl/worksheets/sheet${intToStr(idx)}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>${xlsxSheetContentTypes(count, idx + 1)}"
+
+-- Root rels
+pure func xlsxRootRels() -> string =
+  "${xmlDecl()}<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>"
+
+-- Workbook XML
+pure func xlsxWorkbook(sheets: [XlsxSheet]) -> string =
+  "${xmlDecl()}<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>${xlsxSheetEntries(sheets, 1)}</sheets></workbook>"
+
+pure func xlsxSheetEntries(sheets: [XlsxSheet], idx: int) -> string =
+  match sheets {
+    [] => "",
+    s :: rest =>
+      "<sheet name=\"${xmlEscape(s.name)}\" sheetId=\"${intToStr(idx)}\" r:id=\"rId${intToStr(idx)}\"/>${xlsxSheetEntries(rest, idx + 1)}"
+  }
+
+-- Workbook rels
+pure func xlsxWorkbookRels(sheetCount: int) -> string =
+  "${xmlDecl()}<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">${xlsxSheetRelsEntries(sheetCount, 1)}<Relationship Id=\"rId${intToStr(sheetCount + 1)}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/><Relationship Id=\"rId${intToStr(sheetCount + 2)}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings\" Target=\"sharedStrings.xml\"/></Relationships>"
+
+pure func xlsxSheetRelsEntries(count: int, idx: int) -> string =
+  if idx > count then ""
+  else "<Relationship Id=\"rId${intToStr(idx)}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet${intToStr(idx)}.xml\"/>${xlsxSheetRelsEntries(count, idx + 1)}"
+
+-- Minimal styles
+pure func xlsxMinimalStyles() -> string =
+  "${xmlDecl()}<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts><fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs><cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>"

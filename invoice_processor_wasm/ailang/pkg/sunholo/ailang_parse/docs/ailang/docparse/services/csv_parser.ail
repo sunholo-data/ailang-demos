@@ -1,0 +1,69 @@
+module docparse/services/csv_parser
+
+import std/string (split, trim, length, find, substring, chars, join)
+import std/list (map, head, tail, filter, length as listLength)
+import std/option (Some, None)
+import docparse/types/document (Block, TableBlock, TableCell, simpleCell)
+
+-- CSV/TSV Parser — converts delimited text files to Block ADT.
+-- Pure AILANG implementation, no external dependencies.
+--
+-- Supports:
+--   - Comma-separated (CSV) and tab-separated (TSV) formats
+--   - First row as header detection (heuristic)
+--   - Quoted fields with embedded delimiters
+--   - Trimming of whitespace
+--
+-- Usage:
+--   let blocks = parseCsv(content, ",")   -- CSV
+--   let blocks = parseCsv(content, "\t")  -- TSV
+
+-- Parse CSV/TSV content into a single TableBlock
+-- Contract: produces at most 1 block (a single TableBlock), or empty for empty input
+export pure func parseCsv(content: string, delimiter: string) -> [Block]
+  ensures { listLength(result) <= 1 }
+{
+  let trimmed = trim(content);
+  if length(trimmed) == 0 then []
+  else {
+    let lines = filter(\l. length(trim(l)) > 0, split(trimmed, "\n"));
+    if listLength(lines) == 0 then []
+    else {
+      let allRows = map(\line. csvParseLine(line, delimiter), lines);
+      -- First row becomes headers, rest become data rows
+      match allRows {
+        [] => [],
+        headerCells :: dataRows =>
+          [TableBlock({
+            headers: map(simpleCell, headerCells),
+            rows: map(\row. map(simpleCell, row), dataRows)
+          })]
+      }
+    }
+  }
+}
+
+-- Parse a single CSV line into a list of field strings
+-- Handles basic quoting: "field with, comma" is one field
+-- Contract: always produces at least one field per non-empty line
+pure func csvParseLine(line: string, delimiter: string) -> [string]
+  ensures { listLength(result) >= 1 }
+{
+  let raw = split(line, delimiter);
+  map(trim, map(csvStripQuotes, raw))
+}
+
+-- Strip surrounding quotes from a field
+-- Contract: result is never longer than input (stripping only removes chars)
+pure func csvStripQuotes(field: string) -> string
+  ensures { length(result) <= length(field) }
+{
+  let t = trim(field);
+  let len = length(t);
+  if len >= 2 then
+    let firstChar = substring(t, 0, 1) in
+    let lastChar = substring(t, len - 1, len) in
+    if firstChar == "\"" && lastChar == "\"" then substring(t, 1, len - 1)
+    else t
+  else t
+}

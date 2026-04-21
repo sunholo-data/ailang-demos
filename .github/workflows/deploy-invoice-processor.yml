@@ -154,22 +154,11 @@ jobs:
 
           echo "All WASM files verified successfully"
 
-      - name: Copy docparse modules
+      - name: Clean up dev-only docparse symlinks
         run: |
-          # Clean up any dev symlinks and set up real files for deployment
+          # Drop any stale dev symlinks — docparse now ships via the vendored
+          # sunholo/ailang_parse registry package (see "Vendor AILANG package modules").
           rm -rf invoice_processor_wasm/ailang/docparse
-          mkdir -p invoice_processor_wasm/ailang/docparse/types
-          mkdir -p invoice_processor_wasm/ailang/docparse/services
-          # Copy original source modules (single source of truth)
-          cp docparse/types/document.ail invoice_processor_wasm/ailang/docparse/types/
-          cp docparse/services/format_router.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/zip_extract.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/docx_parser.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/pptx_parser.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/xlsx_parser.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/output_formatter.ail invoice_processor_wasm/ailang/docparse/services/
-          cp docparse/services/docparse_browser.ail invoice_processor_wasm/ailang/docparse/services/
-          echo "Copied $(find invoice_processor_wasm/ailang/docparse -name '*.ail' | wc -l) docparse modules"
 
       - name: Copy verify_demo modules
         run: |
@@ -339,10 +328,10 @@ jobs:
           cp website_builder/types/*.ail _site/website_builder/ailang/website_builder/types/
           cp website_builder/services/*.ail _site/website_builder/ailang/website_builder/services/
           # DocParse modules (used by website builder for document parsing)
-          mkdir -p _site/website_builder/ailang/docparse/types
-          mkdir -p _site/website_builder/ailang/docparse/services
-          cp docparse/types/*.ail _site/website_builder/ailang/docparse/types/
-          cp docparse/services/*.ail _site/website_builder/ailang/docparse/services/
+          # Sourced from the vendored sunholo/ailang_parse registry package.
+          mkdir -p _site/website_builder/ailang/docparse
+          cp -r invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/types _site/website_builder/ailang/docparse/types
+          cp -r invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/services _site/website_builder/ailang/docparse/services
 
           # Co-Presenter
           mkdir -p _site/co-presenter

@@ -1,0 +1,151 @@
+module docparse/services/tex_archive_extract
+
+import std/string (length, substring, contains, find)
+import std/fs (readFile, fileExists, mkdirAll, isDir, writeFile, writeFileBytes)
+import std/tar (extractAll)
+import std/gzip (decompressFile)
+import std/bytes (fromBase64)
+import std/option (Some, None)
+import std/io (println)
+import std/list (foldl, length as listLength)
+import std/result (Ok, Err)
+
+-- Extract an arXiv-style .tar.gz source bundle into a temp directory and
+-- locate the main .tex file. Returns a record with:
+--   dir:  directory containing the extracted files (used as basedir for
+--         texInputResolver.expandInputs)
+--   main: absolute path to the main .tex file (the one with \documentclass)
+--
+-- This module depends on std/tar (AILANG v0.12.0+) and is server/CLI-only — the
+-- WASM demo cannot extract archives and will fall back to single-file
+-- .tex parsing.
+--
+-- Design:
+--   - Extract to /tmp/ailang_parse_tex_<basename>/ for predictable cleanup.
+--   - Heuristic for "main" .tex: first file whose content contains
+--     \documentclass. arXiv bundles almost always have exactly one such file.
+--   - If no \documentclass is found, fall back to the largest .tex file
+--     (rare — some templated papers put \documentclass in a separate .cls).
+
+type ArchiveResult = {
+  dir: string,
+  main: string,
+  files: [string]
+}
+
+-- Trim the extension and any path prefix from an archive path for temp-dir
+-- naming. "data/foo/paper.tar.gz" -> "paper".
+pure func archiveBasename(p: string) -> string {
+  let slash = archiveLastIndex(p, "/");
+  let stem = if slash < 0 then p else substring(p, slash + 1, length(p));
+  -- Strip .tar.gz, .tgz, .tex.gz
+  if archiveEndsWith(stem, ".tar.gz") then substring(stem, 0, length(stem) - 7)
+  else if archiveEndsWith(stem, ".tex.gz") then substring(stem, 0, length(stem) - 7)
+  else if archiveEndsWith(stem, ".tgz") then substring(stem, 0, length(stem) - 4)
+  else if archiveEndsWith(stem, ".gz") then substring(stem, 0, length(stem) - 3)
+  else stem
+}
+
+pure func archiveEndsWith(s: string, suf: string) -> bool {
+  if length(s) < length(suf) then false
+  else substring(s, length(s) - length(suf), length(s)) == suf
+}
+
+pure func archiveLastIndex(hay: string, needle: string) -> int =
+  archiveLastIndexFrom(hay, needle, 0, -1)
+
+pure func archiveLastIndexFrom(hay: string, needle: string, start: int, best: int) -> int {
+  let rest = substring(hay, start, length(hay));
+  let hit = find(rest, needle);
+  if hit < 0 then best
+  else archiveLastIndexFrom(hay, needle, start + hit + 1, start + hit)
+}
+
+-- Return true if the given path looks like a gzipped tar archive.
+export pure func isTarGz(path: string) -> bool =
+  archiveEndsWith(path, ".tar.gz") || archiveEndsWith(path, ".tgz")
+  || archiveEndsWith(path, ".tex.gz")
+
+-- Walk the extracted file list and pick the main .tex file.
+-- Preference order:
+--   1. A .tex file whose content contains \documentclass
+--   2. The first .tex file in the listing
+pure func pickMainTex(files: [string]) -> string =
+  archivePickMain(files, "", false)
+
+-- Recursive search: returns "" if no .tex found.
+-- Args: remaining files, first-.tex-seen path, found-documentclass?
+pure func archivePickMain(files: [string], firstTex: string, foundMain: bool) -> string =
+  match files {
+    [] => firstTex,
+    path :: rest => {
+      if archiveEndsWith(path, ".tex") then {
+        let carry = if length(firstTex) == 0 then path else firstTex;
+        archivePickMain(rest, carry, foundMain)
+      } else archivePickMain(rest, firstTex, foundMain)
+    }
+  }
+
+-- Search the extracted files for the one containing \documentclass. Reads
+-- each .tex candidate (cheap — arXiv bundles are typically <20 .tex files).
+func findMainByContent(files: [string]) -> string ! {IO, FS} =
+  archiveFindMainAt(files, 0, "")
+
+func archiveFindMainAt(files: [string], i: int, fallback: string) -> string ! {IO, FS} {
+  let n = listLength(files);
+  if i >= n then fallback
+  else {
+    let path = archiveNth(files, i);
+    if archiveEndsWith(path, ".tex") then {
+      let content = readFile(path);
+      let nextFallback = if length(fallback) == 0 then path else fallback;
+      if contains(content, "\\documentclass") then path
+      else archiveFindMainAt(files, i + 1, nextFallback)
+    } else archiveFindMainAt(files, i + 1, fallback)
+  }
+}
+
+pure func archiveNth(xs: [string], i: int) -> string =
+  match xs {
+    [] => "",
+    x :: rest => if i <= 0 then x else archiveNth(rest, i - 1)
+  }
+
+-- --- Main entry point --------------------------------------------------------
+
+-- Extract an arXiv-style .tar.gz bundle and return the main .tex path.
+-- Destination: /tmp/ailang_parse_tex_<basename>/
+--
+-- Fails (returns Err) if the archive cannot be extracted or contains no
+-- .tex files. Caller is responsible for cleaning up the extracted directory
+-- if desired — we deliberately leave it so that \includegraphics, .bbl,
+-- etc. remain resolvable during parsing.
+export func extractArxivBundle(archivePath: string) -> Result[ArchiveResult, string] ! {IO, FS} {
+  let base = archiveBasename(archivePath);
+  let destDir = "/tmp/ailang_parse_tex_${base}";
+  let tmpTarPath = "/tmp/ailang_parse_tex_${base}.tar";
+  mkdirAll(destDir);
+  -- Step 1: decompress .tar.gz → raw .tar bytes (base64-encoded over the
+  -- AILANG boundary, per std/gzip convention).
+  match decompressFile(archivePath) {
+    Err(msg) => Err("gzip decompress failed: ${msg}"),
+    Ok(b64) => match fromBase64(b64) {
+      None => Err("gzip output was not valid base64"),
+      Some(tarBytes) => {
+        -- Step 2: write raw .tar to temp, extract, return file list.
+        writeFileBytes(tmpTarPath, tarBytes);
+        match extractAll(tmpTarPath, destDir) {
+          Err(msg) => Err("tar extract failed: ${msg}"),
+          Ok(files) => {
+            if listLength(files) == 0 then Err("archive is empty: ${archivePath}")
+            else {
+              let main = findMainByContent(files);
+              if length(main) == 0 then Err("no .tex file found in ${archivePath}")
+              else Ok({ dir: destDir, main: main, files: files })
+            }
+          }
+        }
+      }
+    }
+  }
+}

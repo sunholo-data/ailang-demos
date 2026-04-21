@@ -1,0 +1,280 @@
+module docparse/services/epub_parser
+
+import std/zip (listEntries, readEntry)
+import std/xml (parse, findAll, findAllAttrs, findFirst, getText, getAttr, getChildren, getTag)
+import std/result (Ok, Err)
+import std/option (Some, None, getOrElse)
+import std/string (length, trim, endsWith, contains, startsWith, split, find, substring)
+import std/list (map, flatMap, filter, concat, foldl, length as listLength)
+import docparse/types/document (Block, TextBlock, HeadingBlock, ImageBlock, SectionBlock, DocMetadata)
+import docparse/services/html_parser (parseHtml)
+
+-- EPUB Parser — extracts structured content from EPUB ebooks.
+-- Pure AILANG implementation using std/zip + html_parser.
+--
+-- EPUB structure (ZIP archive):
+--   META-INF/container.xml  — points to the OPF file
+--   content.opf             — package document (metadata + spine order)
+--   OEBPS/*.xhtml           — content chapters (XHTML)
+--   toc.ncx or nav.xhtml    — table of contents
+--
+-- Strategy:
+--   1. Read container.xml to find OPF location
+--   2. Read OPF to extract metadata and spine (reading order)
+--   3. Read each spine XHTML file and parse with html_parser
+--   4. Wrap each chapter in a SectionBlock
+--
+-- Requires well-formed XHTML content files (standard for EPUB).
+
+-- Parse an EPUB file into blocks
+-- Contract: always returns at least an empty list
+export func parseEpub(filepath: string) -> [Block] ! {FS}
+  ensures { listLength(result) >= 0 }
+{
+  -- Step 1: List all entries in the ZIP
+  let entries = match listEntries(filepath) {
+    Ok(e) => e,
+    Err(_) => []
+  };
+
+  if listLength(entries) == 0
+  then [TextBlock({text: "EPUB error: could not read ZIP entries", style: "error", level: 0})]
+  else {
+    -- Step 2: Find OPF file path from container.xml
+    let containerXml = match readEntry(filepath, "META-INF/container.xml") {
+      Ok(c) => c,
+      Err(_) => ""
+    };
+
+    let opfPath = if length(containerXml) > 0
+      then epubFindOpfPath(containerXml)
+      else epubGuessOpfPath(entries);
+
+    -- Step 3: Read OPF and extract metadata + spine
+    let opfXml = if length(opfPath) > 0
+      then match readEntry(filepath, opfPath) {
+        Ok(c) => c,
+        Err(_) => ""
+      }
+      else "";
+
+    let opfDir = epubDirName(opfPath);
+
+    -- Step 4: Find content files from OPF spine or by scanning entries
+    let contentFiles = if length(opfXml) > 0
+      then epubExtractSpine(opfXml, opfDir)
+      else epubFindXhtmlEntries(entries);
+
+    -- Step 5: Parse each content file
+    let blocks = flatMap(\entry. epubParseContentFile(filepath, entry), contentFiles);
+
+    blocks
+  }
+}
+
+-- Extract EPUB metadata from OPF
+export func parseEpubMetadata(filepath: string) -> DocMetadata ! {FS} {
+  let containerXml = match readEntry(filepath, "META-INF/container.xml") {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  let opfPath = if length(containerXml) > 0
+    then epubFindOpfPath(containerXml)
+    else "";
+
+  let opfXml = if length(opfPath) > 0
+    then match readEntry(filepath, opfPath) {
+      Ok(c) => c,
+      Err(_) => ""
+    }
+    else "";
+
+  if length(opfXml) > 0 then epubParseOpfMetadata(opfXml)
+  else {title: "", author: "", created: "", modified: "", pageCount: 0}
+}
+
+-- Find OPF path from container.xml
+-- Looks for <rootfile full-path="..."/>
+export pure func epubFindOpfPath(containerXml: string) -> string {
+  match parse(containerXml) {
+    Ok(root) => {
+      let rootfiles = findAll(root, "rootfile");
+      match rootfiles {
+        [] => "",
+        rf :: _ => getOrElse(getAttr(rf, "full-path"), "")
+      }
+    },
+    Err(_) => ""
+  }
+}
+
+-- Guess OPF path by scanning ZIP entries
+pure func epubGuessOpfPath(entries: [string]) -> string {
+  let opfFiles = filter(\e. endsWith(e, ".opf"), entries);
+  match opfFiles {
+    [] => "",
+    first :: _ => first
+  }
+}
+
+-- Get directory prefix from a path (e.g., "OEBPS/content.opf" -> "OEBPS/")
+pure func epubDirName(path: string) -> string {
+  let lastSlash = epubLastSlash(path, 0, -1);
+  if lastSlash >= 0 then substring(path, 0, lastSlash + 1)
+  else ""
+}
+
+-- Find the last '/' in a string by scanning character by character
+pure func epubLastSlash(s: string, pos: int, lastFound: int) -> int {
+  if pos >= length(s) then lastFound
+  else
+    let ch = substring(s, pos, pos + 1) in
+    if ch == "/" then epubLastSlash(s, pos + 1, pos)
+    else epubLastSlash(s, pos + 1, lastFound)
+}
+
+-- Extract spine item hrefs from OPF XML
+-- Reads <manifest> items and <spine> itemrefs to get ordered content files
+export pure func epubExtractSpine(opfXml: string, opfDir: string) -> [string] {
+  match parse(opfXml) {
+    Ok(root) => {
+      -- Build manifest: find all <item> elements
+      let items = findAll(root, "item");
+      -- Find spine itemrefs (bulk attr extraction)
+      let spineIds = findAllAttrs(root, "itemref", "idref");
+
+      if listLength(spineIds) > 0 then {
+        -- Use spine order: look up each idref in manifest
+        let hrefs = flatMap(\sid. epubLookupManifest(items, sid, opfDir), spineIds);
+        -- Filter to only XHTML/HTML content
+        filter(epubIsContentFile, hrefs)
+      }
+      else {
+        -- No spine — fall back to manifest items with media-type application/xhtml+xml
+        let xhtmlItems = filter(\item.
+          getOrElse(getAttr(item, "media-type"), "") == "application/xhtml+xml",
+          items);
+        map(\item. {
+          let href = getOrElse(getAttr(item, "href"), "");
+          "${opfDir}${href}"
+        }, xhtmlItems)
+      }
+    },
+    Err(_) => []
+  }
+}
+
+-- Look up a manifest item by id and return its href (with opfDir prefix)
+pure func epubLookupManifest(items: [XmlNode], targetId: string, opfDir: string) -> [string] {
+  match items {
+    [] => [],
+    item :: rest =>
+      let itemId = getOrElse(getAttr(item, "id"), "") in
+      if itemId == targetId then
+        let href = getOrElse(getAttr(item, "href"), "") in
+        if length(href) > 0 then ["${opfDir}${href}"]
+        else []
+      else epubLookupManifest(rest, targetId, opfDir)
+  }
+}
+
+-- Check if a filename is an XHTML/HTML content file
+pure func epubIsContentFile(path: string) -> bool =
+  endsWith(path, ".xhtml") || endsWith(path, ".html") || endsWith(path, ".htm")
+
+-- Find XHTML entries by scanning ZIP entry list
+pure func epubFindXhtmlEntries(entries: [string]) -> [string] =
+  filter(epubIsContentFile, entries)
+
+-- Parse a single content file from the EPUB ZIP
+-- Wraps content in a SectionBlock named after the filename
+func epubParseContentFile(filepath: string, entryPath: string) -> [Block] ! {FS} {
+  let content = match readEntry(filepath, entryPath) {
+    Ok(c) => c,
+    Err(_) => ""
+  };
+
+  if length(content) == 0 then []
+  else {
+    let blocks = parseHtml(content);
+    -- Filter out empty/error-only results
+    if listLength(blocks) == 0 then []
+    else {
+      let chapterDir = epubDirName(entryPath);
+      let resolvedBlocks = epubResolveImagePaths(blocks, chapterDir);
+      let chapterName = epubBaseName(entryPath);
+      [SectionBlock({kind: "chapter:${chapterName}", blocks: resolvedBlocks})]
+    }
+  }
+}
+
+-- Extract filename from a path (e.g., "OEBPS/ch01.xhtml" -> "ch01.xhtml")
+pure func epubBaseName(path: string) -> string {
+  let lastSlash = epubLastSlash(path, 0, -1);
+  if lastSlash >= 0 then substring(path, lastSlash + 1, length(path))
+  else path
+}
+
+-- Parse OPF metadata (title, author, date)
+export pure func epubParseOpfMetadata(opfXml: string) -> DocMetadata {
+  match parse(opfXml) {
+    Ok(root) => {
+      let title = epubFindMetaText(root, "dc:title");
+      let author = epubFindMetaText(root, "dc:creator");
+      let date = epubFindMetaText(root, "dc:date");
+      {title: title, author: author, created: date, modified: "", pageCount: 0}
+    },
+    Err(_) => {title: "", author: "", created: "", modified: "", pageCount: 0}
+  }
+}
+
+-- Find text content of a metadata element
+pure func epubFindMetaText(root: XmlNode, tagName: string) -> string {
+  let elements = findAll(root, tagName);
+  match elements {
+    [] => "",
+    el :: _ => trim(getText(el))
+  }
+}
+
+-- Resolve relative image paths in blocks to full ZIP entry paths
+-- chapterDir is the directory prefix of the chapter (e.g., "OEBPS/Text/")
+pure func epubResolveImagePaths(blocks: [Block], chapterDir: string) -> [Block] =
+  match blocks {
+    [] => [],
+    b :: rest => epubResolveOneImage(b, chapterDir) :: epubResolveImagePaths(rest, chapterDir)
+  }
+
+-- Resolve a single block's image path
+pure func epubResolveOneImage(b: Block, chapterDir: string) -> Block =
+  match b {
+    ImageBlock(img) =>
+      let resolved = epubResolvePath(chapterDir, img.data) in
+      ImageBlock({data: resolved, description: img.description, mime: img.mime}),
+    SectionBlock(s) =>
+      SectionBlock({kind: s.kind, blocks: epubResolveImagePaths(s.blocks, chapterDir)}),
+    _ => b
+  }
+
+-- Resolve a relative path against a directory base
+-- "image.jpg" with base "OEBPS/Text/" => "OEBPS/Text/image.jpg"
+-- "../Images/img.png" with base "OEBPS/Text/" => "OEBPS/Images/img.png"
+pure func epubResolvePath(baseDir: string, relPath: string) -> string =
+  if startsWith(relPath, "http://") || startsWith(relPath, "https://") then relPath
+  else if startsWith(relPath, "/") then substring(relPath, 1, length(relPath))
+  else if startsWith(relPath, "../") then
+    epubResolvePath(epubParentDir(baseDir), substring(relPath, 3, length(relPath)))
+  else "${baseDir}${relPath}"
+
+-- Get parent directory (e.g., "OEBPS/Text/" -> "OEBPS/")
+-- Strips trailing slash, then finds last slash
+pure func epubParentDir(dir: string) -> string {
+  -- Remove trailing slash if present
+  let trimmed = if length(dir) > 0 && endsWith(dir, "/")
+    then substring(dir, 0, length(dir) - 1)
+    else dir;
+  let lastSlash = epubLastSlash(trimmed, 0, -1);
+  if lastSlash >= 0 then substring(trimmed, 0, lastSlash + 1)
+  else ""
+}

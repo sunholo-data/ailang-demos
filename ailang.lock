@@ -1,11 +1,80 @@
 {
-  "ailang_version": "v0.9.2-213-g8d72a3b7-dirty",
-  "generated_at": "2026-03-27T15:36:13.185439Z",
-  "generator": "ailang lock v0.9.2-213-g8d72a3b7-dirty",
+  "ailang_version": "v0.13.0",
+  "generated_at": "2026-04-21T06:49:19.495508Z",
+  "generator": "ailang lock v0.13.0",
   "packages": [
     {
-      "ailang": ">=0.9.5",
-      "content_hash": "sha256:a3e463d35bba9cfd443bbc7e7c7f74188281be2f943c7983b2ee99f1ed89d13a",
+      "ailang": ">=0.9.2",
+      "content_hash": "sha256:2272a5cddae4692b50cc732a88935c70a86e7b7dd7bcdbb58654fe371ad2aa42",
+      "effects": [],
+      "exports": [
+        "sunholo/a2ui/components"
+      ],
+      "interface_hash": "sha256:5a0908aceb029ed7e4a5bcf9e627697922fb1ed8756a32a6b67c9d0faa0328e6",
+      "name": "sunholo/a2ui",
+      "source": "registry",
+      "version": "0.1.0"
+    },
+    {
+      "ailang": ">=0.12.0",
+      "content_hash": "sha256:2c05962c97b64d9401fcd73e43410e7097b2f06e7031485b6212a685ca16d42d",
+      "effects": [
+        "AI",
+        "Clock",
+        "Env",
+        "FS",
+        "IO",
+        "Net"
+      ],
+      "exports": [
+        "docparse/services/a2ui_formatter",
+        "docparse/services/ai_generator",
+        "docparse/services/csv_parser",
+        "docparse/services/direct_ai_parser",
+        "docparse/services/docx_generator",
+        "docparse/services/docx_parser",
+        "docparse/services/eml_parser",
+        "docparse/services/epub_parser",
+        "docparse/services/eval",
+        "docparse/services/format_router",
+        "docparse/services/html_generator",
+        "docparse/services/html_parser",
+        "docparse/services/layout_ai",
+        "docparse/services/markdown_parser",
+        "docparse/services/mcp/account",
+        "docparse/services/mcp/auth",
+        "docparse/services/mcp/estimate",
+        "docparse/services/mcp/tools",
+        "docparse/services/odp_generator",
+        "docparse/services/odp_parser",
+        "docparse/services/ods_generator",
+        "docparse/services/ods_parser",
+        "docparse/services/odt_generator",
+        "docparse/services/odt_parser",
+        "docparse/services/output_formatter",
+        "docparse/services/pptx_generator",
+        "docparse/services/pptx_parser",
+        "docparse/services/qmd_generator",
+        "docparse/services/samples",
+        "docparse/services/tex_archive_extract",
+        "docparse/services/tex_input_resolver",
+        "docparse/services/tex_parser",
+        "docparse/services/tools",
+        "docparse/services/unstructured_compat",
+        "docparse/services/xlsx_generator",
+        "docparse/services/xlsx_parser",
+        "docparse/services/xml_helpers",
+        "docparse/services/zip_extract",
+        "docparse/types/document"
+      ],
+      "interface_hash": "sha256:aeb8bcb9c393e67de136729a6a7e6a256e1d7490956f67e8fcaa24562d8c08ab",
+      "name": "sunholo/ailang_parse",
+      "source": "registry",
+      "version": "0.12.1"
+    },
+    {
+      "ailang": ">=0.12.1",
+      "content_hash": "sha256:3446eac4994d04c55cfc29fb490c911503ad2ca5c04ec491edc256509d311dee",
       "effects": [
         "Env",
         "FS",
@@ -15,14 +84,32 @@
         "sunholo/gcp_auth/project",
         "sunholo/gcp_auth/token"
       ],
-      "interface_hash": "sha256:2e381af52297f5d02ab20b70ebc79d261973b3bc664f91fb11036f086588f137",
+      "interface_hash": "sha256:22db0a58575c0664a3b1643c7010aa1c1619097b3b106196041e68674490ef39",
       "name": "sunholo/gcp_auth",
       "source": "registry",
-      "version": "0.8.0"
+      "version": "0.8.1"
+    },
+    {
+      "ailang": ">=0.12.1",
+      "content_hash": "sha256:6eb092fed518310808a1d5d4cade1cfd0e7b0ea09a7c02a475af37140638856b",
+      "effects": [
+        "Clock",
+        "Env",
+        "FS",
+        "Net"
+      ],
+      "exports": [
+        "sunholo/gemini_files/endpoints",
+        "sunholo/gemini_files/upload"
+      ],
+      "interface_hash": "sha256:d2471c71e04ea530961f43779aeddd7bae19c458469992110760f04f4469231c",
+      "name": "sunholo/gemini_files",
+      "source": "registry",
+      "version": "0.2.0"
     },
     {
       "ailang": ">=0.9.2",
-      "content_hash": "sha256:3bfd4f52215d68fb424cde0c58e54abfb1d909e3cf164d593d9461b8092c1ea9",
+      "content_hash": "sha256:a38b9ea6a5a29fbefa60157b4ad022c8e7333f28c9c28728936c16bb7a329d60",
       "effects": [],
       "exports": [
         "sunholo/gemini_live/config",
@@ -35,6 +122,21 @@
       "name": "sunholo/gemini_live",
       "source": "registry",
       "version": "0.4.0"
+    },
+    {
+      "ailang": ">=0.12.1",
+      "content_hash": "sha256:40b433ad3cf6f2eb1be00265e6d554b7872fc8665ad6f7b1c1d7261edd76795b",
+      "effects": [
+        "Net"
+      ],
+      "exports": [
+        "sunholo/http_helpers/request",
+        "sunholo/http_helpers/response"
+      ],
+      "interface_hash": "sha256:cbedfe91ddeb989f8134dddd82c04e0cb1ce2e24844ed71f1d73971a0ce26c37",
+      "name": "sunholo/http_helpers",
+      "source": "registry",
+      "version": "0.1.4"
     },
     {
       "ailang": ">=0.9.2",

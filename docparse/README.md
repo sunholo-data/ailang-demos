@@ -264,27 +264,18 @@ docparse --check       # Type-check all 10 modules
 
 ## Architecture
 
+All parser logic lives in **[sunholo/ailang-parse](https://www.sunholo.com/ailang-parse/)** (registry package `sunholo/ailang_parse`). The WASM browser demo loads those modules at runtime from the vendored registry cache — see [invoice_processor_wasm/js/docparse-loader.js](../invoice_processor_wasm/js/docparse-loader.js) for the module list.
+
 ```
 docparse/
-├── docparse                    # CLI wrapper (handles caps, AI, flags)
-├── main.ail                    # Entry point, CLI args, format routing
-├── types/
-│   └── document.ail            # Block ADT, TableCell, metadata types
-├── services/
-│   ├── format_router.ail       # Format detection (pure, 36 inline tests)
-│   ├── zip_extract.ail         # ZIP layer wrapping std/zip (9 inline tests)
-│   ├── docx_parser.ail         # DOCX XML -> Blocks (6 inline tests)
-│   ├── pptx_parser.ail         # PPTX slides -> Blocks
-│   ├── xlsx_parser.ail         # XLSX worksheets -> Blocks
-│   ├── direct_ai_parser.ail    # PDF + image -> Blocks (AI multimodal)
-│   ├── layout_ai.ail           # AI image descriptions + self-healing (optional)
-│   ├── output_formatter.ail    # JSON, markdown, console output
-│   └── docparse_browser.ail    # WASM browser adapter
+├── README.md
+├── DESIGN.md                   # Original design doc (historical)
+├── site/index.html             # Showcase landing page
 └── data/
     ├── sample.docx             # Basic test document
-    ├── output.json             # Structured JSON output
-    ├── output.md               # LLM-ready markdown output
-    └── test_files/             # 17 real-world test files
+    ├── output.json             # Example structured output
+    ├── output.md               # Example LLM-ready markdown
+    └── test_files/             # 17 real-world test files used by the WASM demo
 ```
 
 ### AI Self-Healing

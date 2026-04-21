@@ -1,0 +1,91 @@
+module docparse/services/xml_helpers
+
+import std/string (length, split, join, contains)
+import std/list (map, foldl)
+import std/xml (escapeXml as stdEscapeXml, xmlElement, xmlText, serialize)
+
+-- XML Helper utilities for document generation.
+-- Provides XML escaping and common template builders for Office XML formats.
+--
+-- All functions are pure — no effects. These build XML strings that get
+-- passed to std/zip.createArchive for packaging into Office documents.
+
+-- Escape special XML characters in text content.
+-- Delegates to std/xml.escapeXml (Go builtin — single pass, handles & < > ").
+export pure func xmlEscape(text: string) -> string
+  ensures { length(result) >= length(text) }
+=
+  stdEscapeXml(text)
+
+-- Escape text for XML attribute values (same escaping as content)
+export pure func xmlAttrEscape(text: string) -> string =
+  xmlEscape(text)
+
+-- Build an XML element with attributes and text content
+-- xmlElem("w:t", [], "Hello") => "<w:t>Hello</w:t>"
+-- xmlElem("w:pStyle", [("w:val", "Heading1")], "") => "<w:pStyle w:val=\"Heading1\"/>"
+export pure func xmlElem(tag: string, attrs: [{key: string, val: string}], content: string) -> string {
+  let attrStr = xmlRenderAttrs(attrs);
+  if length(content) == 0
+  then "<${tag}${attrStr}/>"
+  else "<${tag}${attrStr}>${content}</${tag}>"
+}
+
+-- Build an XML element wrapping child elements (not text)
+-- xmlWrap("w:p", [], "<w:r>...</w:r>") => "<w:p><w:r>...</w:r></w:p>"
+export pure func xmlWrap(tag: string, attrs: [{key: string, val: string}], children: string) -> string {
+  let attrStr = xmlRenderAttrs(attrs);
+  if length(children) == 0
+  then "<${tag}${attrStr}/>"
+  else "<${tag}${attrStr}>${children}</${tag}>"
+}
+
+-- Render attribute list to string: [("w:val", "Heading1")] => " w:val=\"Heading1\""
+pure func xmlRenderAttrs(attrs: [{key: string, val: string}]) -> string =
+  foldl(\acc a. "${acc} ${a.key}=\"${xmlAttrEscape(a.val)}\"", "", attrs)
+
+-- XML declaration header
+export pure func xmlDecl() -> string =
+  "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+
+-- DOCX namespace constants
+export pure func docxNs() -> string =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+export pure func docxRelsNs() -> string =
+  "http://schemas.openxmlformats.org/package/2006/relationships"
+
+export pure func docxContentTypesNs() -> string =
+  "http://schemas.openxmlformats.org/package/2006/content-types"
+
+export pure func docxRelTypeDoc() -> string =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+
+-- Build a DOCX [Content_Types].xml with standard entries
+export pure func docxContentTypes() -> string {
+  "${xmlDecl()}<Types xmlns=\"${docxContentTypesNs()}\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>"
+}
+
+-- Build a DOCX _rels/.rels with document relationship
+export pure func docxRootRels() -> string {
+  "${xmlDecl()}<Relationships xmlns=\"${docxRelsNs()}\"><Relationship Id=\"rId1\" Type=\"${docxRelTypeDoc()}\" Target=\"word/document.xml\"/></Relationships>"
+}
+
+-- Wrap content in a Word paragraph run: <w:r><w:t>text</w:t></w:r>
+-- Uses tree API: xmlText auto-escapes, serialize renders to string.
+export pure func docxRun(text: string) -> string =
+  serialize(xmlElement("w:r", [], [
+    xmlElement("w:t", [{name: "xml:space", value: "preserve"}], [xmlText(text)])
+  ]))
+
+-- Wrap a run in a paragraph: <w:p>...</w:p>
+export pure func docxParagraph(content: string) -> string =
+  "<w:p>${content}</w:p>"
+
+-- Build a styled paragraph (e.g., heading)
+export pure func docxStyledParagraph(style: string, text: string) -> string =
+  "<w:p><w:pPr><w:pStyle w:val=\"${xmlAttrEscape(style)}\"/></w:pPr>${docxRun(text)}</w:p>"
+
+-- Tree API: generators can import std/xml (xmlElement, xmlText, serialize) directly
+-- for tree-based XML construction. xmlText auto-escapes on serialize.
+

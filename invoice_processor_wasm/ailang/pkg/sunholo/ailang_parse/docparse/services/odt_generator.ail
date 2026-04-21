@@ -1,0 +1,145 @@
+module docparse/services/odt_generator
+
+import std/string (length, intToStr)
+import std/list (foldl, length as listLength)
+import std/zip (createArchive)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, AudioBlock, VideoBlock, SectionBlock, ChangeBlock, TableCell, ParsedDocument, countBlocks)
+import docparse/services/xml_helpers (xmlEscape, xmlDecl)
+
+-- ODT Generator — converts Block ADT to a valid .odt file.
+--
+-- ODF is simpler than OOXML: single content.xml for all content.
+-- Nobody does native ODT generation without LibreOffice — this is first-of-kind.
+--
+-- ODT structure (ZIP):
+--   mimetype               - "application/vnd.oasis.opendocument.text" (uncompressed, first entry)
+--   META-INF/manifest.xml  - file registry
+--   content.xml            - all content
+--   styles.xml             - style definitions
+--   meta.xml               - metadata
+--
+-- ODF namespace prefixes:
+--   text:   — headings, paragraphs, lists
+--   table:  — tables
+--   office: — document structure
+--   style:  — style definitions
+
+-- Generate an ODT file from ParsedDocument
+export func generateOdt(doc: ParsedDocument, outputPath: string) -> string ! {FS}
+  ensures { length(result) > 0 }
+{
+  let contentXml = odtBuildContent(doc.blocks);
+  let stylesXml = odtMinimalStyles();
+  let metaXml = odtBuildMeta(doc.metadata.title, doc.metadata.author);
+  let manifest = odtManifest();
+  let mimetype = "application/vnd.oasis.opendocument.text";
+
+  let entries = [
+    {name: "mimetype", content: mimetype},
+    {name: "META-INF/manifest.xml", content: manifest},
+    {name: "content.xml", content: contentXml},
+    {name: "styles.xml", content: stylesXml},
+    {name: "meta.xml", content: metaXml}
+  ];
+
+  let result = createArchive(outputPath, entries);
+  match result {
+    Ok(_) => "Generated ODT: ${outputPath}",
+    Err(e) => "Error generating ODT: ${e}"
+  }
+}
+
+-- ODF namespace declaration string
+pure func odfNs() -> string =
+  "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:meta=\"urn:oasis:names:tc:opendocument:xmlns:meta:1.0\""
+
+-- Build content.xml
+pure func odtBuildContent(blocks: [Block]) -> string {
+  let body = foldl(\acc b. "${acc}${odtBlockToXml(b)}", "", blocks);
+  "${xmlDecl()}<office:document-content ${odfNs()} office:version=\"1.2\"><office:automatic-styles><style:style style:name=\"Bold\" style:family=\"text\"><style:text-properties fo:font-weight=\"bold\"/></style:style><style:style style:name=\"Italic\" style:family=\"text\"><style:text-properties fo:font-style=\"italic\"/></style:style></office:automatic-styles><office:body><office:text>${body}</office:text></office:body></office:document-content>"
+}
+
+-- Convert a Block to ODF XML
+pure func odtBlockToXml(block: Block) -> string =
+  match block {
+    HeadingBlock(h) =>
+      "<text:h text:outline-level=\"${intToStr(h.level)}\">${xmlEscape(h.text)}</text:h>",
+
+    TextBlock(t) =>
+      if length(t.text) > 0
+      then "<text:p text:style-name=\"Standard\">${xmlEscape(t.text)}</text:p>"
+      else "",
+
+    TableBlock(t) =>
+      odtTableToXml(t.headers, t.rows),
+
+    ListBlock(l) =>
+      odtListToXml(l.items, l.ordered),
+
+    ImageBlock(i) =>
+      "<text:p text:style-name=\"Standard\">[Image: ${xmlEscape(i.description)}]</text:p>",
+
+    AudioBlock(a) =>
+      "<text:p text:style-name=\"Standard\">[Audio: ${xmlEscape(a.transcription)}]</text:p>",
+
+    VideoBlock(v) =>
+      "<text:p text:style-name=\"Standard\">[Video: ${xmlEscape(v.description)}]</text:p>",
+
+    SectionBlock(s) =>
+      "<text:section text:name=\"${xmlEscape(s.kind)}\">${foldl(\acc b. "${acc}${odtBlockToXml(b)}", "", s.blocks)}</text:section>",
+
+    ChangeBlock(c) =>
+      "<text:p text:style-name=\"Standard\">${xmlEscape(c.text)} (${xmlEscape(c.changeType)} by ${xmlEscape(c.author)}, ${xmlEscape(c.date)})</text:p>"
+  }
+
+-- Build an ODF table
+pure func odtTableToXml(headers: [TableCell], rows: [[TableCell]]) -> string {
+  let colCount = if listLength(headers) > 0 then listLength(headers)
+    else match rows {
+      r :: _ => listLength(r),
+      [] => 1
+    };
+  let columns = odtTableColumns(colCount);
+  let headerRow = if listLength(headers) > 0
+    then "<table:table-header-rows><table:table-row>${odtTableCells(headers)}</table:table-row></table:table-header-rows>"
+    else "";
+  let dataRows = foldl(\acc row. "${acc}<table:table-row>${odtTableCells(row)}</table:table-row>", "", rows);
+  "<table:table table:name=\"Table\">${columns}${headerRow}${dataRows}</table:table>"
+}
+
+pure func odtTableColumns(count: int) -> string =
+  if count <= 0 then ""
+  else "<table:table-column/>${odtTableColumns(count - 1)}"
+
+pure func odtTableCells(cells: [TableCell]) -> string =
+  foldl(\acc c. "${acc}${odtTableCell(c)}", "", cells)
+
+pure func odtTableCell(cell: TableCell) -> string {
+  let spanAttr = if cell.colSpan > 1
+    then " table:number-columns-spanned=\"${intToStr(cell.colSpan)}\""
+    else "";
+  if cell.merged then "<table:covered-table-cell/>"
+  else "<table:table-cell${spanAttr}><text:p>${xmlEscape(cell.text)}</text:p></table:table-cell>"
+}
+
+-- Build an ODF list
+pure func odtListToXml(items: [string], ordered: bool) -> string {
+  let listItems = foldl(\acc item. "${acc}<text:list-item><text:p>${xmlEscape(item)}</text:p></text:list-item>", "", items);
+  "<text:list>${listItems}</text:list>"
+}
+
+-- Minimal styles.xml
+pure func odtMinimalStyles() -> string =
+  "${xmlDecl()}<office:document-styles ${odfNs()} office:version=\"1.2\"><office:styles><style:style style:name=\"Standard\" style:family=\"paragraph\"/></office:styles></office:document-styles>"
+
+-- Build meta.xml
+pure func odtBuildMeta(title: string, author: string) -> string {
+  let titleTag = if length(title) > 0 then "<dc:title>${xmlEscape(title)}</dc:title>" else "";
+  let authorTag = if length(author) > 0 then "<dc:creator>${xmlEscape(author)}</dc:creator>" else "";
+  "${xmlDecl()}<office:document-meta ${odfNs()} office:version=\"1.2\"><office:meta>${titleTag}${authorTag}<meta:generator>AILANG Parse</meta:generator></office:meta></office:document-meta>"
+}
+
+-- manifest.xml
+pure func odtManifest() -> string =
+  "${xmlDecl()}<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\"><manifest:file-entry manifest:media-type=\"application/vnd.oasis.opendocument.text\" manifest:full-path=\"/\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"content.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"styles.xml\"/><manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"meta.xml\"/></manifest:manifest>"

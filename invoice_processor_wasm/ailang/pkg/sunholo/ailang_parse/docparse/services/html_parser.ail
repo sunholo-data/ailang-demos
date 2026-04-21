@@ -1,0 +1,479 @@
+module docparse/services/html_parser
+
+import std/xml (parse, findAll, findFirst, getText, getAttr, getChildren, getTag)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (length, trim, contains, startsWith, find, substring, replace, toLower, split, join, charAt, endsWith, replaceMany, startsWithIgnoreCase)
+import std/list (map, flatMap, filter, concat, length as listLength)
+import std/bytes (fromInts, toString as bytesToStr)
+import docparse/types/document (Block, TextBlock, HeadingBlock, TableBlock, ListBlock, ImageBlock, SectionBlock, TableCell, simpleCell)
+
+-- HTML Parser — converts well-formed HTML/XHTML to Block ADT.
+-- Pure AILANG implementation using std/xml.
+--
+-- Reuses the same XML tree-walking pattern as DOCX/PPTX parsers but
+-- with HTML tag names instead of Office XML namespaces.
+--
+-- Supports:
+--   - Headings (h1 through h6)
+--   - Paragraphs (p, div with text)
+--   - Tables (table/thead/tbody/tr/th/td)
+--   - Ordered and unordered lists (ol, ul, li)
+--   - Images (img src + alt)
+--   - Sections (article, section, main, aside, nav, header, footer)
+--   - Inline text extraction (span, a, em, strong, b, i, code, etc.)
+--
+-- Requires well-formed XML (XHTML). Malformed HTML with unclosed tags
+-- (e.g., <br>, <img> without />) will fail to parse.
+--
+-- Usage:
+--   let blocks = parseHtml(content)
+
+-- Parse HTML content string into Block ADT
+-- Contract: returns error block on malformed input, never crashes
+export pure func parseHtml(content: string) -> [Block]
+  ensures { listLength(result) >= 0 }
+{
+  let sanitized = htmlSanitize(content);
+  match parse(sanitized) {
+    Ok(root) => htmlExtractBlocks(root),
+    Err(e) => [TextBlock({text: "HTML parse error: ${e}", style: "error", level: 0})]
+  }
+}
+
+-- ============================================================
+-- HTML Sanitizer — pre-process HTML for XML parser compatibility
+-- ============================================================
+
+-- Sanitize HTML so it can be parsed by a strict XML parser.
+-- Handles: void elements, HTML entities, DOCTYPE, style blocks, zero-width chars.
+pure func htmlSanitize(content: string) -> string
+  ensures { length(result) >= 0 }
+{
+  let noDoctype = htmlStripDoctype(content);
+  let noStyles = htmlStripStyleBlocks(noDoctype);
+  let noZeroWidth = htmlStripZeroWidthChars(noStyles);
+  let entitiesFixed = htmlReplaceEntities(noZeroWidth);
+  htmlCloseVoidElements(entitiesFixed)
+}
+
+-- Strip <style>...</style> blocks (CSS content often breaks XML parsing)
+-- Uses split on "<style" then finds matching </style> to remove each block
+pure func htmlStripStyleBlocks(content: string) -> string
+  ensures { length(result) <= length(content) }
+{
+  let lower = toLower(content);
+  let stylePos = find(lower, "<style");
+  if stylePos < 0 then content
+  else {
+    let before = substring(content, 0, stylePos);
+    let afterStyle = substring(content, stylePos, length(content));
+    let lowerAfter = toLower(afterStyle);
+    let closePos = find(lowerAfter, "</style>");
+    if closePos < 0 then content
+    else {
+      let rest = substring(afterStyle, closePos + 8, length(afterStyle));
+      htmlStripStyleBlocks("${before}${rest}")
+    }
+  }
+}
+
+-- Strip zero-width Unicode characters that waste tokens in AI pipelines.
+-- Common in HTML email preheaders: ZWSP, ZWNJ, ZWJ, LRM, RLM, BOM.
+pure func htmlStripZeroWidthChars(content: string) -> string {
+  replaceMany(content, [
+    (bytesToStr(fromInts([226, 128, 139])), ""),
+    (bytesToStr(fromInts([226, 128, 140])), ""),
+    (bytesToStr(fromInts([226, 128, 141])), ""),
+    (bytesToStr(fromInts([226, 128, 142])), ""),
+    (bytesToStr(fromInts([226, 128, 143])), ""),
+    (bytesToStr(fromInts([239, 187, 191])), ""),
+    (bytesToStr(fromInts([194, 173])), "")
+  ])
+}
+
+-- Strip <!DOCTYPE ...> declarations
+pure func htmlStripDoctype(content: string) -> string
+  ensures { length(result) <= length(content) }
+{
+  let lower = toLower(content);
+  let pos = find(lower, "<!doctype");
+  if pos < 0 then content
+  else {
+    let closePos = find(substring(content, pos, length(content)), ">");
+    if closePos < 0 then content
+    else {
+      let before = substring(content, 0, pos);
+      let after = substring(content, pos + closePos + 1, length(content));
+      htmlStripDoctype("${before}${after}")
+    }
+  }
+}
+
+-- Replace common HTML entities with Unicode equivalents via Aho-Corasick multi-pattern replace.
+-- XML only supports &amp; &lt; &gt; &apos; &quot; — everything else must be replaced.
+-- Uses native replaceMany for single-pass O(n) performance.
+pure func htmlReplaceEntities(content: string) -> string
+  ensures { length(result) >= 0 }
+{
+  replaceMany(content, [
+    ("&nbsp;", bytesToStr(fromInts([194, 160]))),
+    ("&mdash;", bytesToStr(fromInts([226, 128, 148]))),
+    ("&ndash;", bytesToStr(fromInts([226, 128, 147]))),
+    ("&lsquo;", bytesToStr(fromInts([226, 128, 152]))),
+    ("&rsquo;", bytesToStr(fromInts([226, 128, 153]))),
+    ("&ldquo;", bytesToStr(fromInts([226, 128, 156]))),
+    ("&rdquo;", bytesToStr(fromInts([226, 128, 157]))),
+    ("&bull;", bytesToStr(fromInts([226, 128, 162]))),
+    ("&hellip;", bytesToStr(fromInts([226, 128, 166]))),
+    ("&copy;", bytesToStr(fromInts([194, 169]))),
+    ("&reg;", bytesToStr(fromInts([194, 174]))),
+    ("&trade;", bytesToStr(fromInts([226, 132, 162]))),
+    ("&euro;", bytesToStr(fromInts([226, 130, 172]))),
+    ("&pound;", bytesToStr(fromInts([194, 163]))),
+    ("&yen;", bytesToStr(fromInts([194, 165]))),
+    ("&cent;", bytesToStr(fromInts([194, 162]))),
+    ("&deg;", bytesToStr(fromInts([194, 176]))),
+    ("&times;", bytesToStr(fromInts([195, 151]))),
+    ("&divide;", bytesToStr(fromInts([195, 183]))),
+    ("&laquo;", bytesToStr(fromInts([194, 171]))),
+    ("&raquo;", bytesToStr(fromInts([194, 187]))),
+    ("&iexcl;", bytesToStr(fromInts([194, 161]))),
+    ("&iquest;", bytesToStr(fromInts([194, 191])))
+  ])
+}
+
+-- Close HTML5 void elements so XML parser accepts them.
+-- Optimized: single pass via split on "<", check each fragment against all void tags.
+-- Converts <tag ...> to <tag .../> and <tag> to <tag/>
+pure func htmlCloseVoidElements(content: string) -> string
+  ensures { length(result) >= length(content) }
+{
+  -- Split on "<" — first fragment is before any tag, rest start with tag content
+  let parts = split(content, "<");
+  match parts {
+    [] => content,
+    first :: rest => {
+      let fixed = map(htmlFixVoidFragment, rest);
+      "${first}${join("", fixed)}"
+    }
+  }
+}
+
+-- Process one fragment that was preceded by "<" in the original content.
+-- If it starts with a void tag name, ensure the tag is self-closed.
+-- Always prepends "<" back since we split on it.
+pure func htmlFixVoidFragment(fragment: string) -> string {
+  let voidTag = htmlMatchVoidTag(fragment);
+  if length(voidTag) == 0 then "<${fragment}"
+  else {
+    -- Found a void tag — check if it needs closing
+    let closeAngle = find(fragment, ">");
+    if closeAngle < 0 then "<${fragment}"
+    else {
+      let beforeClose = substring(fragment, 0, closeAngle);
+      if endsWith(trim(beforeClose), "/") then "<${fragment}"
+      else {
+        -- Insert / before >
+        "<${beforeClose}/${substring(fragment, closeAngle, length(fragment))}"
+      }
+    }
+  }
+}
+
+-- Check if a fragment starts with a void tag name (case-insensitive).
+-- Returns the tag name if matched, empty string if not.
+-- Uses startsWithIgnoreCase to avoid toLower on the entire fragment.
+pure func htmlMatchVoidTag(fragment: string) -> string {
+  if htmlIsVoidTagAt(fragment, "br") then "br"
+  else if htmlIsVoidTagAt(fragment, "hr") then "hr"
+  else if htmlIsVoidTagAt(fragment, "meta") then "meta"
+  else if htmlIsVoidTagAt(fragment, "img") then "img"
+  else if htmlIsVoidTagAt(fragment, "input") then "input"
+  else if htmlIsVoidTagAt(fragment, "link") then "link"
+  else if htmlIsVoidTagAt(fragment, "col") then "col"
+  else if htmlIsVoidTagAt(fragment, "area") then "area"
+  else if htmlIsVoidTagAt(fragment, "base") then "base"
+  else if htmlIsVoidTagAt(fragment, "embed") then "embed"
+  else if htmlIsVoidTagAt(fragment, "source") then "source"
+  else if htmlIsVoidTagAt(fragment, "track") then "track"
+  else if htmlIsVoidTagAt(fragment, "wbr") then "wbr"
+  else ""
+}
+
+-- Check if fragment starts with tagName (case-insensitive) followed by a word boundary
+pure func htmlIsVoidTagAt(fragment: string, tagName: string) -> bool {
+  if startsWithIgnoreCase(fragment, tagName) then {
+    let tagLen = length(tagName);
+    if tagLen >= length(fragment) then true
+    else {
+      let next = charAt(fragment, tagLen);
+      next == " " || next == ">" || next == "/" || next == "\t" || next == "\n"
+    }
+  }
+  else false
+}
+
+-- Extract blocks from an HTML root element
+-- Looks for <body> first; falls back to processing root children directly
+pure func htmlExtractBlocks(root: XmlNode) -> [Block] {
+  match findFirst(root, "body") {
+    Some(body) => htmlProcessChildren(getChildren(body)),
+    None => {
+      -- No <body> — might be a fragment or the root IS the content
+      let tag = getTag(root);
+      if tag == "html" then {
+        -- Try to find body inside html
+        let children = getChildren(root);
+        let bodyChildren = flatMap(htmlFindBody, children);
+        if listLength(bodyChildren) > 0 then bodyChildren
+        else htmlProcessChildren(children)
+      }
+      else htmlProcessNode(root)
+    }
+  }
+}
+
+-- Helper to find body inside html children
+pure func htmlFindBody(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+  if tag == "body" then htmlProcessChildren(getChildren(node))
+  else []
+}
+
+-- Process a list of child nodes into blocks
+pure func htmlProcessChildren(nodes: [XmlNode]) -> [Block] =
+  flatMap(htmlProcessNode, nodes)
+
+-- Process a single HTML node into zero or more blocks
+pure func htmlProcessNode(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+
+  -- Headings
+  if tag == "h1" then [HeadingBlock({text: htmlDeepText(node), level: 1})]
+  else if tag == "h2" then [HeadingBlock({text: htmlDeepText(node), level: 2})]
+  else if tag == "h3" then [HeadingBlock({text: htmlDeepText(node), level: 3})]
+  else if tag == "h4" then [HeadingBlock({text: htmlDeepText(node), level: 4})]
+  else if tag == "h5" then [HeadingBlock({text: htmlDeepText(node), level: 5})]
+  else if tag == "h6" then [HeadingBlock({text: htmlDeepText(node), level: 6})]
+
+  -- Paragraphs
+  else if tag == "p" then
+    let text = trim(htmlDeepText(node)) in
+    if length(text) > 0 then [TextBlock({text: text, style: "normal", level: 0})]
+    else []
+
+  -- Tables
+  else if tag == "table" then [htmlParseTable(node)]
+
+  -- Lists
+  else if tag == "ul" then htmlParseList(node, false)
+  else if tag == "ol" then htmlParseList(node, true)
+
+  -- Images
+  else if tag == "img" then
+    let src = getOrElse(getAttr(node, "src"), "") in
+    let alt = getOrElse(getAttr(node, "alt"), "") in
+    [ImageBlock({data: src, description: alt, mime: "image/unknown"})]
+
+  -- Semantic sections — recurse into children wrapped in SectionBlock
+  else if tag == "article" || tag == "section" || tag == "main" ||
+          tag == "aside" || tag == "nav" then
+    let blocks = htmlProcessChildren(getChildren(node)) in
+    if listLength(blocks) > 0 then [SectionBlock({kind: tag, blocks: blocks})]
+    else []
+
+  -- Header/footer sections
+  else if tag == "header" || tag == "footer" then
+    let blocks = htmlProcessChildren(getChildren(node)) in
+    if listLength(blocks) > 0 then [SectionBlock({kind: tag, blocks: blocks})]
+    else []
+
+  -- Block-level containers (div, blockquote, figure, details) — recurse
+  else if tag == "div" || tag == "blockquote" || tag == "figure" ||
+          tag == "details" || tag == "fieldset" || tag == "form" then
+    htmlProcessChildren(getChildren(node))
+
+  -- Pre/code blocks → TextBlock with "code" style
+  else if tag == "pre" then
+    let text = htmlDeepText(node) in
+    if length(text) > 0 then [TextBlock({text: text, style: "code", level: 0})]
+    else []
+
+  -- Definition lists
+  else if tag == "dl" then htmlParseDl(node)
+
+  -- Skip script, style, head, meta, link, noscript
+  else if tag == "script" || tag == "style" || tag == "head" ||
+          tag == "meta" || tag == "link" || tag == "noscript" ||
+          tag == "template" then []
+
+  -- Horizontal rule → section break marker
+  else if tag == "hr" then [TextBlock({text: "---", style: "separator", level: 0})]
+
+  -- Line break — skip (inline element)
+  else if tag == "br" then []
+
+  -- Fallback: try to extract text from inline elements
+  else
+    let text = trim(htmlDeepText(node)) in
+    if length(text) > 0 then [TextBlock({text: text, style: "normal", level: 0})]
+    else []
+}
+
+-- Extract all text from a node and its children (deep text).
+-- Inserts newlines around block-level child elements so that
+-- "SummaryMaria reported..." becomes "Summary\nMaria reported...".
+-- For leaf nodes (no children), falls back to getText().
+pure func htmlDeepText(node: XmlNode) -> string {
+  let children = getChildren(node);
+  if listLength(children) == 0 then getText(node)
+  else {
+    let texts = map(htmlChildTextWithSpacing, children);
+    let joined = join("", texts);
+    htmlCollapseNewlines(joined)
+  }
+}
+
+-- Render a child node's text, adding a newline before block-level tags.
+-- Text nodes (tag == "") pass through as-is to preserve inline spacing.
+pure func htmlChildTextWithSpacing(node: XmlNode) -> string {
+  let tag = getTag(node);
+  let text = htmlDeepText(node);
+  if length(trim(text)) == 0 then ""
+  else if tag == "br" then "\n"
+  else if htmlIsBlockTag(tag) then "\n${text}"
+  else text
+}
+
+-- Collapse runs of 3+ newlines down to 2 (one blank line max).
+pure func htmlCollapseNewlines(s: string) -> string {
+  let collapsed = replace(s, "\n\n\n", "\n\n");
+  if collapsed == s then s
+  else htmlCollapseNewlines(collapsed)
+}
+
+-- Is a tag a block-level HTML element that should have whitespace around it?
+pure func htmlIsBlockTag(tag: string) -> bool =
+  tag == "div" || tag == "p" || tag == "h1" || tag == "h2" || tag == "h3" ||
+  tag == "h4" || tag == "h5" || tag == "h6" || tag == "table" || tag == "tr" ||
+  tag == "td" || tag == "th" || tag == "ul" || tag == "ol" || tag == "li" ||
+  tag == "blockquote" || tag == "pre" || tag == "section" || tag == "article" ||
+  tag == "header" || tag == "footer" || tag == "nav" || tag == "aside" ||
+  tag == "figure" || tag == "figcaption" || tag == "dl" || tag == "dt" ||
+  tag == "dd" || tag == "hr"
+
+-- Parse an HTML <table> into a TableBlock
+-- Handles <thead>/<tbody> structure or flat <tr> rows
+pure func htmlParseTable(table: XmlNode) -> Block
+  ensures { isTable(result) }
+{
+  -- Try thead/tbody structure first
+  let theadRows = htmlFindTheadRows(table);
+  let tbodyRows = htmlFindTbodyRows(table);
+
+  -- Fall back to direct <tr> children if no thead/tbody
+  let directRows = findAll(table, "tr");
+
+  let allRows = if listLength(theadRows) > 0 || listLength(tbodyRows) > 0
+    then concat(theadRows, tbodyRows)
+    else directRows;
+
+  let parsedRows = map(htmlParseTableRow, allRows);
+
+  match parsedRows {
+    [] => TableBlock({rows: [], headers: []}),
+    firstRow :: dataRows =>
+      TableBlock({rows: dataRows, headers: firstRow})
+  }
+}
+
+-- Check if a block is a table (for contract)
+pure func isTable(block: Block) -> bool =
+  match block {
+    TableBlock(_) => true,
+    _ => false
+  }
+
+-- Find <tr> rows inside <thead>
+pure func htmlFindTheadRows(table: XmlNode) -> [XmlNode] {
+  match findFirst(table, "thead") {
+    Some(thead) => findAll(thead, "tr"),
+    None => []
+  }
+}
+
+-- Find <tr> rows inside <tbody>
+pure func htmlFindTbodyRows(table: XmlNode) -> [XmlNode] {
+  match findFirst(table, "tbody") {
+    Some(tbody) => findAll(tbody, "tr"),
+    None => []
+  }
+}
+
+-- Parse a single <tr> into TableCells
+-- Contract: row-level cell count is preserved
+pure func htmlParseTableRow(tr: XmlNode) -> [TableCell] {
+  let thCells = findAll(tr, "th");
+  let tdCells = findAll(tr, "td");
+  let allCells = concat(thCells, tdCells);
+  map(htmlParseTableCell, allCells)
+}
+
+-- Parse a <td> or <th> into a TableCell
+-- Reads colspan attribute for merged cells
+pure func htmlParseTableCell(cell: XmlNode) -> TableCell {
+  let text = trim(htmlDeepText(cell));
+  let colSpanStr = getOrElse(getAttr(cell, "colspan"), "1");
+  let colSpan = htmlParseIntDefault(colSpanStr);
+  let rowSpanStr = getOrElse(getAttr(cell, "rowspan"), "1");
+  let rowSpan = htmlParseIntDefault(rowSpanStr);
+  {text: text, colSpan: colSpan, rowSpan: rowSpan, merged: false}
+}
+
+-- Parse an integer string for colspan/rowspan values
+-- Contract: always returns at least 1 (spans cannot be zero or negative)
+pure func htmlParseIntDefault(s: string) -> int
+  ensures { result >= 1 }
+{
+  if s == "1" then 1
+  else if s == "2" then 2
+  else if s == "3" then 3
+  else if s == "4" then 4
+  else if s == "5" then 5
+  else if s == "6" then 6
+  else if s == "7" then 7
+  else if s == "8" then 8
+  else if s == "9" then 9
+  else if s == "10" then 10
+  else 1
+}
+
+-- Parse a <ul> or <ol> into a ListBlock
+-- Contract: produces exactly one ListBlock if items exist
+pure func htmlParseList(list: XmlNode, ordered: bool) -> [Block] {
+  let items = findAll(list, "li");
+  let texts = map(htmlDeepText, items);
+  let nonEmpty = filter(\t. length(trim(t)) > 0, texts);
+  if listLength(nonEmpty) > 0
+  then [ListBlock({items: map(trim, nonEmpty), ordered: ordered})]
+  else []
+}
+
+-- Parse a <dl> (definition list) into blocks
+-- Each <dt>/<dd> pair becomes a text block
+pure func htmlParseDl(dl: XmlNode) -> [Block] {
+  let children = getChildren(dl);
+  flatMap(htmlParseDlChild, children)
+}
+
+-- Process a single <dt> or <dd> node
+pure func htmlParseDlChild(node: XmlNode) -> [Block] {
+  let tag = getTag(node);
+  let text = trim(htmlDeepText(node));
+  if tag == "dt" && length(text) > 0
+    then [TextBlock({text: text, style: "dt", level: 0})]
+  else if tag == "dd" && length(text) > 0
+    then [TextBlock({text: text, style: "dd", level: 0})]
+  else []
+}

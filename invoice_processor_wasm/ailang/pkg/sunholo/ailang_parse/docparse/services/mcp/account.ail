@@ -1,0 +1,83 @@
+module docparse/services/mcp/account
+
+import std/string (length)
+import std/json (encode, jo, kv, js)
+import std/env (getEnvOr)
+import std/net (httpGet, httpPost)
+import std/result (Ok, Err)
+
+-- View your account: tier, quota, usage, keys, pricing, and parse history.
+-- Without an apiKey, returns pricing tiers so the agent can advise on signup.
+-- With an apiKey, returns entitlements, quota remaining, and recent history.
+-- Actions: "status" (default), "pricing", "usage", "history", "keys".
+@route("POST", "/mcp/v1/account")
+export func mcpAccount(apiKey: string, action: string) -> string ! {Env, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+  if mode == "local" then
+    encode(jo([
+      kv("error", js("LOCAL_MODE")),
+      kv("message", js("Account management is not available in local mode. Local parsing has no quotas or billing.")),
+      kv("suggested_fix", js("Use the hosted API at https://docparse.ailang.sunholo.com for account features. Connect via MCP with a hosted URL."))
+    ]))
+  else {
+    let baseUrl = getEnvOr("DOCPARSE_API_URL", "https://docparse.ailang.sunholo.com");
+    let act = if length(action) > 0 then action else "status";
+
+    if act == "pricing" then
+      mcpAccountPricing(baseUrl)
+    else if length(apiKey) == 0 then
+      encode(jo([
+        kv("error", js("AUTH_REQUIRED")),
+        kv("message", js("An API key is required for account actions. Use mcpAuth to get one, or pass action='pricing' to see tiers without auth.")),
+        kv("suggested_fix", js("Call mcpAuth to start device authorization and get an API key."))
+      ]))
+    else if act == "status" then
+      mcpAccountStatus(baseUrl, apiKey)
+    else if act == "usage" then
+      mcpAccountUsage(baseUrl, apiKey)
+    else if act == "history" then
+      mcpAccountHistory(baseUrl, apiKey)
+    else if act == "keys" then
+      mcpAccountKeys(baseUrl, apiKey)
+    else
+      encode(jo([
+        kv("error", js("INVALID_ACTION")),
+        kv("message", js("Unknown action: ${act}")),
+        kv("supported_actions", js("status, pricing, usage, history, keys"))
+      ]))
+  }
+}
+
+-- Get pricing tiers (no auth needed).
+func mcpAccountPricing(baseUrl: string) -> string ! {Net} {
+  let resp = httpGet("${baseUrl}/api/v1/pricing");
+  resp
+}
+
+-- Get entitlements and quota status.
+func mcpAccountStatus(baseUrl: string, apiKey: string) -> string ! {Net} {
+  let body = "{\"apiKey\":\"${apiKey}\"}";
+  let resp = httpPost("${baseUrl}/me/entitlements", body);
+  resp
+}
+
+-- Get per-key usage stats.
+func mcpAccountUsage(baseUrl: string, apiKey: string) -> string ! {Net} {
+  let body = "{\"apiKey\":\"${apiKey}\"}";
+  let resp = httpPost("${baseUrl}/api/v1/keys/usage", body);
+  resp
+}
+
+-- Get parse request history.
+func mcpAccountHistory(baseUrl: string, apiKey: string) -> string ! {Net} {
+  let body = "{\"apiKey\":\"${apiKey}\"}";
+  let resp = httpPost("${baseUrl}/api/v1/requests/history", body);
+  resp
+}
+
+-- List API keys.
+func mcpAccountKeys(baseUrl: string, apiKey: string) -> string ! {Net} {
+  let body = "{\"apiKey\":\"${apiKey}\"}";
+  let resp = httpPost("${baseUrl}/api/v1/keys/list", body);
+  resp
+}

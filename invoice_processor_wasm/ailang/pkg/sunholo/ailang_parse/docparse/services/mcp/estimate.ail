@@ -1,0 +1,65 @@
+module docparse/services/mcp/estimate
+
+import std/string (length, toLower, contains)
+import std/json (encode, jo, kv, js, jb)
+import std/fs (fileExists)
+import std/env (getEnvOr)
+import std/net (httpPost)
+import std/result (Ok, Err)
+import docparse/services/format_router (detectFormat, getExtension, needsAI, strategyDescription)
+import docparse/services/samples (sampleResolvePath)
+
+-- Estimate cost and latency before parsing a document.
+-- Returns whether AI is required, estimated latency, and quota impact.
+-- Use this to advise humans on whether to proceed before consuming quota.
+@route("POST", "/mcp/v1/estimate")
+export func mcpEstimate(filepath: string, outputFormat: string) -> string ! {FS, Env, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+
+  -- Resolve sample IDs
+  let resolved = if contains(filepath, ".") then filepath
+                 else sampleResolvePath(filepath);
+
+  if mode == "hosted" then
+    mcpEstimateHosted(resolved, outputFormat)
+  else
+    mcpEstimateLocal(resolved, outputFormat)
+}
+
+-- Local estimate: use format detection to predict cost.
+func mcpEstimateLocal(filepath: string, outputFormat: string) -> string ! {FS} {
+  if not fileExists(filepath) then
+    encode(jo([
+      kv("error", js("FILE_NOT_FOUND")),
+      kv("message", js("File not found: ${filepath}")),
+      kv("suggested_fix", js("Check the file path or use a sample_id from mcpFormats"))
+    ]))
+  else {
+    let ext = getExtension(filepath);
+    let format = detectFormat(ext);
+    let aiRequired = needsAI(format);
+    let strategy = strategyDescription(format);
+    let estimatedMs = if aiRequired then 2000 else 15;
+
+    encode(jo([
+      kv("filepath", js(filepath)),
+      kv("format", js(format)),
+      kv("extension", js(ext)),
+      kv("strategy", js(strategy)),
+      kv("ai_required", jb(aiRequired)),
+      kv("deterministic", jb(not aiRequired)),
+      kv("estimated_ms", js(if aiRequired then "1000-5000" else "5-50")),
+      kv("counts_as_ai_request", jb(aiRequired)),
+      kv("mode", js("local")),
+      kv("note", js(if aiRequired then "AI-powered parsing requires --caps AI and an AI backend (e.g. --ai gemini-2.5-flash)" else "Deterministic parsing, no AI needed"))
+    ]))
+  }
+}
+
+-- Hosted estimate: call the API.
+func mcpEstimateHosted(filepath: string, outputFormat: string) -> string ! {Env, Net} {
+  let baseUrl = getEnvOr("DOCPARSE_API_URL", "https://docparse.ailang.sunholo.com");
+  let body = "{\"filepath\":\"${filepath}\",\"outputFormat\":\"${outputFormat}\"}";
+  let resp = httpPost("${baseUrl}/api/v1/estimate", body);
+  resp
+}

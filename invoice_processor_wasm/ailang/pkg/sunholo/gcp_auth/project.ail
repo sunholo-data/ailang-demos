@@ -8,7 +8,7 @@
 --
 --   match getDefaultProject() {
 --     Ok(project) => -- use project ID
---     Err(e) => println("No project: " ++ e)
+--     Err(e) => println("No project: ${e}")
 --   }
 
 module sunholo/gcp_auth/project

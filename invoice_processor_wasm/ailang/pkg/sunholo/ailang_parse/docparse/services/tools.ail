@@ -1,0 +1,188 @@
+module docparse/services/tools
+
+import std/json (encode, jo, kv, js, ja, jb)
+import std/list (map)
+
+-- Returns canonical tool definitions for Claude, OpenAI, MCP, and A2A agent frameworks.
+-- Each format includes input schemas so agents can auto-discover how to call AILANG Parse.
+-- Includes all 7 MCP tools: 4 local + 3 hosted-only (auth, authPoll, account).
+@nowrap
+@route("GET", "/api/v1/tools")
+export pure func tools() -> string {
+  encode(jo([
+    kv("tools", ja([
+      mcpParseToolDef(),
+      mcpConvertToolDef(),
+      mcpFormatsToolDef(),
+      mcpEstimateToolDef(),
+      mcpAuthToolDef(),
+      mcpAuthPollToolDef(),
+      mcpAccountToolDef()
+    ])),
+    kv("mcp", js("/mcp/")),
+    kv("a2a", js("/.well-known/agent.json"))
+  ]))
+}
+
+pure func mcpParseToolDef() -> Json =
+  jo([
+    kv("name", js("mcpParse")),
+    kv("description", js("Parse any document into structured blocks, markdown, or HTML. Accepts a file path or sample_id. Office formats (DOCX, PPTX, XLSX, ODT, ODP, ODS) are deterministic and instant. PDF, images, audio, video require AI. In hosted mode, pass an apiKey from mcpAuth.")),
+    kv("endpoint", js("POST /mcp/v1/parse")),
+    kv("mcp_tool", js("docparse.services.mcp.tools.mcpParse")),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("filepath", jo([
+          kv("type", js("string")),
+          kv("description", js("Absolute file path, or a sample_id (e.g. sample_docx_formatting) from mcpFormats"))
+        ])),
+        kv("outputFormat", jo([
+          kv("type", js("string")),
+          kv("enum", ja(map(js, ["blocks", "markdown", "html"]))),
+          kv("default", js("blocks")),
+          kv("description", js("blocks = structured JSON; markdown = rendered Markdown; html = rendered HTML"))
+        ])),
+        kv("apiKey", jo([
+          kv("type", js("string")),
+          kv("description", js("API key (dp_...) for hosted mode. Get one via mcpAuth. Not needed in local mode."))
+        ])),
+        kv("requestId", jo([
+          kv("type", js("string")),
+          kv("description", js("Request ID from a previous parse to replay it. Optional."))
+        ]))
+      ])),
+      kv("required", ja([js("filepath")]))
+    ]))
+  ])
+
+pure func mcpConvertToolDef() -> Json =
+  jo([
+    kv("name", js("mcpConvert")),
+    kv("description", js("Convert a document from one format to another. Parses the input, then generates the output. Supports: DOCX, PPTX, XLSX, ODT, ODP, ODS, HTML, Markdown, QMD (Quarto). In hosted mode, pass an apiKey.")),
+    kv("endpoint", js("POST /mcp/v1/convert")),
+    kv("mcp_tool", js("docparse.services.mcp.tools.mcpConvert")),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("input", jo([
+          kv("type", js("string")),
+          kv("description", js("Path to input file, or a sample_id"))
+        ])),
+        kv("outputFormat", jo([
+          kv("type", js("string")),
+          kv("enum", ja(map(js, ["docx", "pptx", "xlsx", "odt", "odp", "ods", "html", "md", "qmd"]))),
+          kv("description", js("Target format for conversion"))
+        ])),
+        kv("outputPath", jo([
+          kv("type", js("string")),
+          kv("description", js("Path to write output file. If omitted, uses input filename with new extension."))
+        ])),
+        kv("apiKey", jo([
+          kv("type", js("string")),
+          kv("description", js("API key (dp_...) for hosted mode. Not needed in local mode."))
+        ]))
+      ])),
+      kv("required", ja([js("input"), js("outputFormat")]))
+    ]))
+  ])
+
+pure func mcpFormatsToolDef() -> Json =
+  jo([
+    kv("name", js("mcpFormats")),
+    kv("description", js("List all supported formats, features, samples, pricing tiers, and service capabilities. This is the main discovery tool — call it first to understand what AILANG Parse can do.")),
+    kv("endpoint", js("GET /mcp/v1/formats")),
+    kv("mcp_tool", js("docparse.services.mcp.tools.mcpFormats")),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([])),
+      kv("required", ja([]))
+    ]))
+  ])
+
+pure func mcpEstimateToolDef() -> Json =
+  jo([
+    kv("name", js("mcpEstimate")),
+    kv("description", js("Estimate cost and latency before parsing. Returns whether AI is required, estimated time, and whether it counts against AI quota. Use this to advise humans before consuming quota.")),
+    kv("endpoint", js("POST /mcp/v1/estimate")),
+    kv("mcp_tool", js("docparse.services.mcp.estimate.mcpEstimate")),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("filepath", jo([
+          kv("type", js("string")),
+          kv("description", js("File path or sample_id to estimate"))
+        ])),
+        kv("outputFormat", jo([
+          kv("type", js("string")),
+          kv("default", js("blocks")),
+          kv("description", js("Output format (blocks, markdown, html)"))
+        ]))
+      ])),
+      kv("required", ja([js("filepath")]))
+    ]))
+  ])
+
+pure func mcpAuthToolDef() -> Json =
+  jo([
+    kv("name", js("mcpAuth")),
+    kv("description", js("Start device authorization to get an API key (RFC 8628). Returns a verification URL and user code. Tell the human to open the URL and sign in. Then call mcpAuthPoll with the device_code. Hosted mode only.")),
+    kv("endpoint", js("POST /mcp/v1/auth")),
+    kv("mcp_tool", js("docparse.services.mcp.auth.mcpAuth")),
+    kv("hosted_only", jb(true)),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("label", jo([
+          kv("type", js("string")),
+          kv("default", js("mcp-agent")),
+          kv("description", js("Label for this API key (e.g. 'claude-desktop', 'cursor')"))
+        ]))
+      ])),
+      kv("required", ja([]))
+    ]))
+  ])
+
+pure func mcpAuthPollToolDef() -> Json =
+  jo([
+    kv("name", js("mcpAuthPoll")),
+    kv("description", js("Poll for device authorization completion. Returns pending (keep polling every 5s), approved (with api_key and tier info), or expired (start over). Hosted mode only.")),
+    kv("endpoint", js("POST /mcp/v1/auth/poll")),
+    kv("mcp_tool", js("docparse.services.mcp.auth.mcpAuthPoll")),
+    kv("hosted_only", jb(true)),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("deviceCode", jo([
+          kv("type", js("string")),
+          kv("description", js("The device_code returned by mcpAuth"))
+        ]))
+      ])),
+      kv("required", ja([js("deviceCode")]))
+    ]))
+  ])
+
+pure func mcpAccountToolDef() -> Json =
+  jo([
+    kv("name", js("mcpAccount")),
+    kv("description", js("View account: tier, quota, usage, keys, pricing, and parse history. Pass action='pricing' without an apiKey to see tiers. Other actions (status, usage, history, keys) require an apiKey. Hosted mode only.")),
+    kv("endpoint", js("POST /mcp/v1/account")),
+    kv("mcp_tool", js("docparse.services.mcp.account.mcpAccount")),
+    kv("hosted_only", jb(true)),
+    kv("inputSchema", jo([
+      kv("type", js("object")),
+      kv("properties", jo([
+        kv("apiKey", jo([
+          kv("type", js("string")),
+          kv("description", js("API key (dp_...). Required for all actions except 'pricing'."))
+        ])),
+        kv("action", jo([
+          kv("type", js("string")),
+          kv("enum", ja(map(js, ["status", "pricing", "usage", "history", "keys"]))),
+          kv("default", js("status")),
+          kv("description", js("status = tier + quota remaining; pricing = tier details (no auth); usage = per-key stats; history = recent parses; keys = list API keys"))
+        ]))
+      ])),
+      kv("required", ja([]))
+    ]))
+  ])

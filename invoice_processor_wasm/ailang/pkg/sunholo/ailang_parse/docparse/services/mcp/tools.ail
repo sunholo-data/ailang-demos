@@ -1,0 +1,489 @@
+module docparse/services/mcp/tools
+
+import std/string (length, intToStr, toLower, split, contains)
+import std/list (concat, last, map, filter)
+import std/option (Some, None)
+import std/json (encode, decode, jo, kv, js, ja, jb, getString)
+import std/fs (readFile, writeFile, fileExists)
+import std/env (getEnvOr)
+import std/net (httpGet, httpPost)
+import std/result (Ok, Err)
+import docparse/types/document (Block, TextBlock, TableCell, SectionBlock, ParsedDocument, ExtractionResult, DocMetadata, emptyMetadata, countBlocks, filterHeadings, filterTables, filterImages)
+import docparse/services/format_router (detectFormat, getExtension, needsAI, strategyDescription)
+import docparse/services/docx_parser (parseDocx, parseDocxMetadata, parseDocxHeaders, parseDocxFooters, parseDocxFootnotes, parseDocxEndnotes, parseDocxComments, parseDocxImages)
+import docparse/services/pptx_parser (parsePptx, parsePptxMetadata)
+import docparse/services/xlsx_parser (parseXlsx, parseXlsxMetadata)
+import docparse/services/odt_parser (parseOdt, parseOdtMetadata, parseOdtHeadersFooters)
+import docparse/services/odp_parser (parseOdp, parseOdpMetadata)
+import docparse/services/ods_parser (parseOds, parseOdsMetadata)
+import docparse/services/csv_parser (parseCsv)
+import docparse/services/markdown_parser (parseMarkdown)
+import docparse/services/html_parser (parseHtml)
+import docparse/services/eml_parser (parseEml, parseEmlMetadata, parseMbox, parseMboxMetadata)
+import docparse/services/epub_parser (parseEpub, parseEpubMetadata)
+import docparse/services/direct_ai_parser (parsePdf, parseDocumentImage, parseAudio, parseVideo, parsePdfMetadata)
+import docparse/services/output_formatter (formatResult, renderMarkdown, renderMarkdownMetaJson, blocksToJson)
+import docparse/services/html_generator (generateHtml)
+import docparse/services/docx_generator (generateDocx)
+import docparse/services/pptx_generator (generatePptx)
+import docparse/services/xlsx_generator (generateXlsx)
+import docparse/services/odt_generator (generateOdt)
+import docparse/services/odp_generator (generateOdp)
+import docparse/services/ods_generator (generateOds)
+import docparse/services/qmd_generator (generateQmd)
+import docparse/services/samples (sampleResolvePath)
+
+-- Parse any document into structured blocks, markdown, or HTML.
+-- Accepts a file path or sample_id (e.g. sample_docx_formatting).
+-- Office formats (DOCX, PPTX, XLSX, ODT, ODP, ODS) are deterministic.
+-- PDF, images, audio, video require AI.
+-- In hosted mode, pass an apiKey (from mcpAuth) or use Bearer token auth.
+-- Pass a requestId from a previous parse to replay it.
+@route("POST", "/mcp/v1/parse")
+export func mcpParse(filepath: string, outputFormat: string, apiKey: string, requestId: string) -> string ! {AI, Env, FS, IO, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+
+  if mode == "hosted" then
+    mcpParseHosted(filepath, outputFormat, apiKey, requestId)
+  else
+    mcpParseLocal(filepath, outputFormat)
+}
+
+-- Hosted mode: call the docparse API with auth.
+func mcpParseHosted(filepath: string, outputFormat: string, apiKey: string, requestId: string) -> string ! {Env, Net} {
+  if length(apiKey) == 0 then
+    encode(jo([
+      kv("error", js("AUTH_REQUIRED")),
+      kv("message", js("An API key is required for hosted parsing. Use mcpAuth to get one via device authorization.")),
+      kv("suggested_fix", js("Call mcpAuth to start device authorization and get an API key."))
+    ]))
+  else {
+    let baseUrl = getEnvOr("DOCPARSE_API_URL", "https://docparse.ailang.sunholo.com");
+    let fmt = if length(outputFormat) > 0 then toLower(outputFormat) else "blocks";
+
+    -- Build request body
+    let body = if length(requestId) > 0 then
+      "{\"request_id\":\"${requestId}\",\"outputFormat\":\"${fmt}\",\"apiKey\":\"${apiKey}\"}"
+    else if contains(filepath, ".") then
+      "{\"filepath\":\"${filepath}\",\"outputFormat\":\"${fmt}\",\"apiKey\":\"${apiKey}\"}"
+    else
+      "{\"sample_id\":\"${filepath}\",\"outputFormat\":\"${fmt}\",\"apiKey\":\"${apiKey}\"}";
+
+    let resp = httpPost("${baseUrl}/api/v1/parse", body);
+    resp
+  }
+}
+
+-- Local mode: parse directly from filesystem.
+func mcpParseLocal(filepath: string, outputFormat: string) -> string ! {AI, Env, FS, IO, Net} {
+  -- Resolve sample IDs
+  let resolved = if contains(filepath, ".") then filepath
+                 else sampleResolvePath(filepath);
+
+  -- Validate file exists
+  if not fileExists(resolved) then
+    encode(jo([
+      kv("error", js("FILE_NOT_FOUND")),
+      kv("message", js("File not found: ${resolved}")),
+      kv("suggested_fix", js("Check the file path or use a sample_id from mcpFormats"))
+    ]))
+  else {
+    let ext = getExtension(resolved);
+    let format = detectFormat(ext);
+    let fmt = if length(outputFormat) > 0 then toLower(outputFormat) else "blocks";
+
+    if needsAI(format) then
+      mcpParseAI(resolved, ext, format, fmt)
+    else
+      mcpParseDeterministic(resolved, ext, format, fmt)
+  }
+}
+
+-- Parse deterministic formats (no AI needed).
+func mcpParseDeterministic(filepath: string, ext: string, format: string, outputFormat: string) -> string ! {IO, FS} {
+  let doc = if ext == "docx" then mcpParseDocx(filepath)
+    else if ext == "pptx" then mcpParsePptx(filepath)
+    else if ext == "xlsx" then mcpParseXlsx(filepath)
+    else if ext == "odt" then mcpParseOdt(filepath)
+    else if ext == "odp" then mcpParseOdp(filepath)
+    else if ext == "ods" then mcpParseOds(filepath)
+    else if ext == "csv" || ext == "tsv" then mcpParseCsv(filepath, ext)
+    else if ext == "md" || ext == "markdown" then mcpParseMarkdown(filepath)
+    else if ext == "html" || ext == "htm" || ext == "xhtml" then mcpParseHtml(filepath)
+    else if ext == "epub" then mcpParseEpub(filepath)
+    else if ext == "eml" then mcpParseEml(filepath)
+    else if ext == "mbox" then mcpParseMbox(filepath)
+    else mcpParseText(filepath, ext);
+
+  mcpFormatOutput(doc, outputFormat)
+}
+
+-- Parse AI-required formats.
+func mcpParseAI(filepath: string, ext: string, format: string, outputFormat: string) -> string ! {AI, Env, FS, IO, Net} {
+  let doc = if format == "pdf" then mcpParsePdfDoc(filepath)
+    else if format == "image" then mcpParseImageDoc(filepath, ext)
+    else if format == "audio" then mcpParseAudioDoc(filepath, ext)
+    else if format == "video" then mcpParseVideoDoc(filepath, ext)
+    else {
+      format: "unknown",
+      filename: filepath,
+      metadata: emptyMetadata(),
+      blocks: []
+    };
+
+  mcpFormatOutput(doc, outputFormat)
+}
+
+-- Format output based on requested format.
+func mcpFormatOutput(doc: ParsedDocument, outputFormat: string) -> string ! {} {
+  if outputFormat == "markdown" then renderMarkdown(doc)
+  else if outputFormat == "markdown+metadata" then renderMarkdownMetaJson(doc)
+  else if outputFormat == "html" then generateHtml(doc)
+  else {
+    -- Default: blocks (JSON)
+    let result = {
+      document: doc,
+      warnings: [],
+      aiCallsUsed: 0
+    };
+    formatResult(result)
+  }
+}
+
+-- DOCX: full structural parse (metadata, headers, footers, footnotes, endnotes, comments, images).
+func mcpParseDocx(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseDocxMetadata(filepath);
+  let blocks = parseDocx(filepath);
+  let headers = parseDocxHeaders(filepath);
+  let footers = parseDocxFooters(filepath);
+  let footnotes = parseDocxFootnotes(filepath);
+  let endnotes = parseDocxEndnotes(filepath);
+  let comments = parseDocxComments(filepath);
+  let images = parseDocxImages(filepath);
+  let allBlocks = concat(headers, concat(blocks, concat(footers, concat(footnotes, concat(endnotes, concat(comments, images))))));
+  { format: "docx", filename: filepath, metadata: metadata, blocks: allBlocks }
+}
+
+func mcpParsePptx(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parsePptxMetadata(filepath);
+  let blocks = parsePptx(filepath);
+  { format: "pptx", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseXlsx(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseXlsxMetadata(filepath);
+  let blocks = parseXlsx(filepath);
+  { format: "xlsx", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseOdt(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseOdtMetadata(filepath);
+  let blocks = parseOdt(filepath);
+  let hf = parseOdtHeadersFooters(filepath);
+  { format: "odt", filename: filepath, metadata: metadata, blocks: concat(blocks, hf) }
+}
+
+func mcpParseOdp(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseOdpMetadata(filepath);
+  let blocks = parseOdp(filepath);
+  { format: "odp", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseOds(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseOdsMetadata(filepath);
+  let blocks = parseOds(filepath);
+  { format: "ods", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseCsv(filepath: string, ext: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  let blocks = parseCsv(content, ext);
+  { format: ext, filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+func mcpParseMarkdown(filepath: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  let blocks = parseMarkdown(content);
+  { format: "markdown", filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+func mcpParseHtml(filepath: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  let blocks = parseHtml(content);
+  { format: "html", filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+func mcpParseEpub(filepath: string) -> ParsedDocument ! {FS} {
+  let metadata = parseEpubMetadata(filepath);
+  let blocks = parseEpub(filepath);
+  { format: "epub", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseEml(filepath: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  let metadata = parseEmlMetadata(content);
+  let blocks = parseEml(content);
+  { format: "eml", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseMbox(filepath: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  let metadata = parseMboxMetadata(content);
+  let blocks = parseMbox(content);
+  { format: "mbox", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseText(filepath: string, ext: string) -> ParsedDocument ! {FS} {
+  let content = readFile(filepath);
+  { format: ext, filename: filepath, metadata: emptyMetadata(), blocks: [TextBlock({ text: content, style: "plain", level: 0 })] }
+}
+
+-- AI-required parsers
+func mcpParsePdfDoc(filepath: string) -> ParsedDocument ! {AI, Env, FS, Net} {
+  let blocks = parsePdf(filepath);
+  let metadata = parsePdfMetadata(filepath);
+  { format: "pdf", filename: filepath, metadata: metadata, blocks: blocks }
+}
+
+func mcpParseImageDoc(filepath: string, ext: string) -> ParsedDocument ! {FS, AI} {
+  let blocks = parseDocumentImage(filepath, ext);
+  { format: ext, filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+func mcpParseAudioDoc(filepath: string, ext: string) -> ParsedDocument ! {FS, AI} {
+  let blocks = parseAudio(filepath, ext);
+  { format: ext, filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+func mcpParseVideoDoc(filepath: string, ext: string) -> ParsedDocument ! {FS, AI} {
+  let blocks = parseVideo(filepath, ext);
+  { format: ext, filename: filepath, metadata: emptyMetadata(), blocks: blocks }
+}
+
+-- Convert a document from one format to another.
+-- Parses the input file, then generates the output in the target format.
+-- Returns the output file path on success.
+-- In hosted mode, pass an apiKey (from mcpAuth) for authenticated access.
+@route("POST", "/mcp/v1/convert")
+export func mcpConvert(input: string, outputFormat: string, outputPath: string, apiKey: string) -> string ! {AI, Env, FS, IO, Net} {
+  let mode = getEnvOr("DOCPARSE_MODE", "local");
+
+  if mode == "hosted" && length(apiKey) == 0 then
+    encode(jo([
+      kv("error", js("AUTH_REQUIRED")),
+      kv("message", js("An API key is required for hosted conversion. Use mcpAuth to get one via device authorization.")),
+      kv("suggested_fix", js("Call mcpAuth to start device authorization and get an API key."))
+    ]))
+  else {
+  -- Resolve sample IDs
+  let resolved = if contains(input, ".") then input
+                 else sampleResolvePath(input);
+
+  if not fileExists(resolved) then
+    encode(jo([
+      kv("error", js("FILE_NOT_FOUND")),
+      kv("message", js("File not found: ${resolved}"))
+    ]))
+  else {
+    let ext = getExtension(resolved);
+    let format = detectFormat(ext);
+    let outFmt = toLower(outputFormat);
+
+    -- Parse source
+    let doc = if needsAI(format) then
+      mcpParseAI(resolved, ext, format, "blocks")
+    else
+      mcpParseDeterministic(resolved, ext, format, "blocks");
+
+    -- Re-parse doc from the blocks output (it was stringified)
+    -- Actually, we need the ParsedDocument directly, not the string.
+    -- Refactor: parse to doc, then generate.
+    let sourceDoc = if ext == "docx" then mcpParseDocx(resolved)
+      else if ext == "pptx" then mcpParsePptx(resolved)
+      else if ext == "xlsx" then mcpParseXlsx(resolved)
+      else if ext == "odt" then mcpParseOdt(resolved)
+      else if ext == "odp" then mcpParseOdp(resolved)
+      else if ext == "ods" then mcpParseOds(resolved)
+      else if ext == "csv" || ext == "tsv" then mcpParseCsv(resolved, ext)
+      else if ext == "md" || ext == "markdown" then mcpParseMarkdown(resolved)
+      else if ext == "html" || ext == "htm" || ext == "xhtml" then mcpParseHtml(resolved)
+      else if ext == "epub" then mcpParseEpub(resolved)
+      else if ext == "eml" then mcpParseEml(resolved)
+      else if ext == "mbox" then mcpParseMbox(resolved)
+      else mcpParseText(resolved, ext);
+
+    -- Determine output path
+    let outPath = if length(outputPath) > 0 then outputPath
+      else mcpReplaceExt(resolved, outFmt);
+
+    -- Generate
+    mcpGenerate(sourceDoc, outFmt, outPath)
+  }
+  }
+}
+
+-- Generate output in target format.
+func mcpGenerate(doc: ParsedDocument, outFmt: string, outPath: string) -> string ! {FS} {
+  if outFmt == "html" || outFmt == "htm" then {
+    let html = generateHtml(doc);
+    writeFile(outPath, html);
+    encode(jo([kv("output", js(outPath)), kv("format", js("html"))]))
+  }
+  else if outFmt == "docx" then {
+    let msg = generateDocx(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("docx")), kv("message", js(msg))]))
+  }
+  else if outFmt == "pptx" then {
+    let msg = generatePptx(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("pptx")), kv("message", js(msg))]))
+  }
+  else if outFmt == "xlsx" then {
+    let msg = generateXlsx(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("xlsx")), kv("message", js(msg))]))
+  }
+  else if outFmt == "odt" then {
+    let msg = generateOdt(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("odt")), kv("message", js(msg))]))
+  }
+  else if outFmt == "odp" then {
+    let msg = generateOdp(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("odp")), kv("message", js(msg))]))
+  }
+  else if outFmt == "ods" then {
+    let msg = generateOds(doc, outPath);
+    encode(jo([kv("output", js(outPath)), kv("format", js("ods")), kv("message", js(msg))]))
+  }
+  else if outFmt == "md" || outFmt == "markdown" then {
+    let md = renderMarkdown(doc);
+    writeFile(outPath, md);
+    encode(jo([kv("output", js(outPath)), kv("format", js("markdown"))]))
+  }
+  else if outFmt == "qmd" then {
+    let qmd = generateQmd(doc);
+    writeFile(outPath, qmd);
+    encode(jo([kv("output", js(outPath)), kv("format", js("qmd"))]))
+  }
+  else
+    encode(jo([
+      kv("error", js("UNSUPPORTED_FORMAT")),
+      kv("message", js("Unsupported output format: ${outFmt}")),
+      kv("supported", ja(map(js, ["html", "docx", "pptx", "xlsx", "odt", "odp", "ods", "md", "qmd"])))
+    ]))
+}
+
+-- Replace file extension helper.
+pure func mcpReplaceExt(filepath: string, newExt: string) -> string {
+  let parts = split(filepath, ".");
+  match parts {
+    [] => "${filepath}.${newExt}",
+    [single] => "${single}.${newExt}",
+    _ => "${mcpJoinButLast(parts)}.${newExt}"
+  }
+}
+
+pure func mcpJoinButLast(parts: [string]) -> string =
+  match parts {
+    [] => "",
+    [_] => "",
+    [a, _] => a,
+    head :: rest => "${head}.${mcpJoinButLast(rest)}"
+  }
+
+-- List all supported formats, features, samples, and service capabilities.
+-- Returns input/output formats, output modes, sample files for testing,
+-- and service info including pricing and auth details.
+-- This is the main discovery tool for agents to understand what AILANG Parse can do.
+@route("GET", "/mcp/v1/formats")
+export pure func mcpFormats() -> string {
+  encode(jo([
+    kv("input_formats", ja([
+      mcpFormatEntry("docx", "Microsoft Word", false, true, true, true, true),
+      mcpFormatEntry("pptx", "Microsoft PowerPoint", false, true, false, false, true),
+      mcpFormatEntry("xlsx", "Microsoft Excel", false, true, false, false, false),
+      mcpFormatEntry("odt", "OpenDocument Text", false, true, true, true, false),
+      mcpFormatEntry("odp", "OpenDocument Presentation", false, true, false, false, false),
+      mcpFormatEntry("ods", "OpenDocument Spreadsheet", false, true, false, false, false),
+      mcpFormatEntry("html", "HTML", false, true, false, false, false),
+      mcpFormatEntry("md", "Markdown", false, false, false, false, false),
+      mcpFormatEntry("csv", "CSV/TSV", false, true, false, false, false),
+      mcpFormatEntry("epub", "EPUB ebook", false, true, false, false, true),
+      mcpFormatEntry("eml", "Email (RFC 5322)", false, false, false, false, false),
+      mcpFormatEntry("mbox", "Mailbox", false, false, false, false, false),
+      mcpFormatEntry("pdf", "PDF", true, true, false, false, true),
+      mcpFormatEntry("png", "PNG image", true, false, false, false, true),
+      mcpFormatEntry("jpg", "JPEG image", true, false, false, false, true),
+      mcpFormatEntry("mp3", "MP3 audio", true, false, false, false, false),
+      mcpFormatEntry("mp4", "MP4 video", true, false, false, false, false)
+    ])),
+    kv("output_formats", ja(map(js, ["docx", "pptx", "xlsx", "odt", "odp", "ods", "html", "md", "qmd"]))),
+    kv("output_modes", ja([
+      jo([kv("id", js("blocks")), kv("description", js("Structured JSON with typed Block ADT (Heading, Text, Table, Image, Change, Comment, Section, Code)"))]),
+      jo([kv("id", js("markdown")), kv("description", js("Rendered Markdown suitable for LLM consumption"))]),
+      jo([kv("id", js("html")), kv("description", js("Rendered HTML with semantic structure"))])
+    ])),
+    kv("samples", ja([
+      mcpSampleEntry("sample_docx_formatting", "docx", "Rich formatting with styles, bold, italic, nested lists", false),
+      mcpSampleEntry("sample_docx_tables", "docx", "Tables with merged cells and column spans", false),
+      mcpSampleEntry("sample_docx_comments", "docx", "Comments with author attribution and track changes", false),
+      mcpSampleEntry("sample_docx_track_changes", "docx", "Track changes with insertions, deletions, and moves", false),
+      mcpSampleEntry("sample_docx_footnotes", "docx", "Footnotes and endnotes", false),
+      mcpSampleEntry("sample_docx_hyperlinks", "docx", "Hyperlinks with URLs and anchors", false),
+      mcpSampleEntry("sample_docx_real_world", "docx", "Complex real-world document", false),
+      mcpSampleEntry("sample_pptx_notes", "pptx", "Slides with speaker notes", false),
+      mcpSampleEntry("sample_pptx_formatting", "pptx", "Rich text formatting in slides", false),
+      mcpSampleEntry("sample_xlsx_merged", "xlsx", "Merged cell ranges", false),
+      mcpSampleEntry("sample_xlsx_formulas", "xlsx", "Formulas with cached values", false),
+      mcpSampleEntry("sample_xlsx_formats", "xlsx", "Number formatting (currency, percentages, dates)", false),
+      mcpSampleEntry("sample_csv", "csv", "Format capabilities matrix", false),
+      mcpSampleEntry("sample_markdown", "md", "Architecture guide with tables and code", false),
+      mcpSampleEntry("sample_html", "html", "Getting started guide with rich structure", false),
+      mcpSampleEntry("sample_odt", "odt", "Styled tables", false),
+      mcpSampleEntry("sample_odp", "odp", "Text frames", false),
+      mcpSampleEntry("sample_ods", "ods", "Merged cells", false),
+      mcpSampleEntry("sample_epub", "epub", "Alice in Wonderland (full book)", false),
+      mcpSampleEntry("sample_eml_welcome", "eml", "Welcome email with HTML and CSV attachment", false),
+      mcpSampleEntry("sample_eml_release", "eml", "Release notes with text and HTML", false),
+      mcpSampleEntry("sample_eml_bug", "eml", "Bug report with encoded headers and attachments", false),
+      mcpSampleEntry("sample_mbox_thread", "mbox", "4-message reply thread", false),
+      mcpSampleEntry("sample_pdf", "pdf", "Report with tables (AI required)", true),
+      mcpSampleEntry("sample_mp3", "mp3", "Audio transcription (AI required)", true),
+      mcpSampleEntry("sample_mp4", "mp4", "Video extraction (AI required)", true)
+    ])),
+    kv("service", jo([
+      kv("name", js("AILANG Parse")),
+      kv("description", js("Universal document parsing and generation. Per-document pricing, not per-page.")),
+      kv("api_url", js("https://docparse.ailang.sunholo.com")),
+      kv("auth_method", js("RFC 8628 Device Authorization — call mcpAuth to get started")),
+      kv("pricing_model", js("per-document (1 request = 1 document, any page count)")),
+      kv("tiers", ja([
+        jo([kv("name", js("Free")), kv("price", js("EUR 0")), kv("requests_month", js("1,000")), kv("ai_parses_month", js("50")), kv("daily_limit", js("500")), kv("max_file_mb", js("10"))]),
+        jo([kv("name", js("Pro")), kv("price", js("EUR 29/month")), kv("requests_month", js("100,000")), kv("ai_parses_month", js("500")), kv("daily_limit", js("5,000")), kv("max_file_mb", js("25"))]),
+        jo([kv("name", js("Business")), kv("price", js("EUR 99/month")), kv("requests_month", js("500,000")), kv("ai_parses_month", js("2,000")), kv("daily_limit", js("20,000")), kv("max_file_mb", js("50"))])
+      ])),
+      kv("tools_available", ja([js("mcpParse"), js("mcpConvert"), js("mcpFormats"), js("mcpEstimate"), js("mcpAuth"), js("mcpAuthPoll"), js("mcpAccount")])),
+      kv("docs_url", js("https://www.sunholo.com/docparse/"))
+    ]))
+  ]))
+}
+
+pure func mcpFormatEntry(ext: string, name: string, aiRequired: bool, tables: bool, trackChanges: bool, comments: bool, images: bool) -> Json =
+  jo([
+    kv("extension", js(ext)),
+    kv("name", js(name)),
+    kv("ai_required", jb(aiRequired)),
+    kv("deterministic", jb(not aiRequired)),
+    kv("features", jo([
+      kv("tables", jb(tables)),
+      kv("track_changes", jb(trackChanges)),
+      kv("comments", jb(comments)),
+      kv("images", jb(images))
+    ]))
+  ])
+
+pure func mcpSampleEntry(id: string, format: string, description: string, aiRequired: bool) -> Json =
+  jo([
+    kv("id", js(id)),
+    kv("format", js(format)),
+    kv("description", js(description)),
+    kv("ai_required", jb(aiRequired))
+  ])

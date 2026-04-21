@@ -10,7 +10,7 @@
 --
 --   match getAccessToken() {
 --     Ok(token) => -- use token for Bearer auth
---     Err(e) => println("Auth failed: " ++ e)
+--     Err(e) => println("Auth failed: ${e}")
 --   }
 
 module sunholo/gcp_auth/token
@@ -89,8 +89,8 @@ func getMetadataToken() -> Result[string, string] ! {Net} {
           },
           Err(e) => Err("gcp_auth: metadata ok but JSON decode failed: ${e} body=${response.body}")
         }
-      } else Err("gcp_auth: metadata status=${response.status} body=${response.body}"),
-    Err(e) => Err("gcp_auth: metadata httpRequest failed: ${e}")
+      } else Err("gcp_auth: metadata status=${show(response.status)} body=${response.body}"),
+    Err(e) => Err("gcp_auth: metadata httpRequest failed: ${show(e)}")
   }
 }
 
@@ -111,7 +111,7 @@ func exchangeRefreshToken(creds: ADCCredentials) -> Result[string, string] ! {Ne
           },
           Err(e) => Err("Failed to parse OAuth2 response: ${e}")
         }
-      } else Err("OAuth2 request failed with status: ${response.status}")
+      } else Err("OAuth2 request failed with status: ${show(response.status)}")
     },
     Err(_) => Err("Network error during OAuth2 token exchange")
   }
