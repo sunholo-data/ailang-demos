@@ -2,11 +2,11 @@
 
 Universal document parsing in AILANG. Extracts structured content from DOCX, PPTX, XLSX, PDF, and image files into JSON and markdown, with optional AI for image descriptions and document summarization. Office formats use deterministic XML parsing; PDFs and images use AI multimodal extraction.
 
-> **This is a showcase demo.** For production use, install the public CLI: **[sunholo/ailang-parse](https://github.com/sunholo-data/ailang-parse)** — 15 formats (adds ODT/ODP/ODS, HTML, Markdown, CSV, EPUB, EML, MBOX, TEX), document *generation*, Z3 contract verification (`--prove`), evaluation harness (`--eval`), and batch mode. The modules in this directory are a subset kept for the WASM browser demo.
+> **This is a showcase demo.** For production use, install the public CLI: **[sunholo/ailang-parse](https://www.sunholo.com/ailang-parse/)** — 15 formats (adds ODT/ODP/ODS, HTML, Markdown, CSV, EPUB, EML, MBOX, TEX), document *generation*, Z3 contract verification (`--prove`), evaluation harness (`--eval`), and batch mode. The modules in this directory are a subset kept for the WASM browser demo.
 
 ## Quick Start
 
-Install the production CLI once (see [ailang-parse](https://github.com/sunholo-data/ailang-parse)), then:
+Install the production CLI once (see [ailang-parse](https://www.sunholo.com/ailang-parse/)), then:
 
 ```bash
 # Parse any Office document
