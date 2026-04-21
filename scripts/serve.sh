@@ -116,6 +116,11 @@ if [ -d "$REPO_ROOT/website_builder/portal/dist" ]; then
     ln -sf "$VENDORED_DOCPARSE/types" "$SITE/website_builder/ailang/docparse/types"
     ln -sf "$VENDORED_DOCPARSE/services" "$SITE/website_builder/ailang/docparse/services"
   fi
+  VENDORED_PKG="$SITE/ailang/pkg"
+  if [ -d "$VENDORED_PKG" ]; then
+    mkdir -p "$SITE/website_builder/ailang"
+    ln -sfn "$VENDORED_PKG" "$SITE/website_builder/ailang/pkg"
+  fi
 fi
 
 # DocParse hub

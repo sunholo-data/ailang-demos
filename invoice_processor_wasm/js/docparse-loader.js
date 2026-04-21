@@ -15,6 +15,7 @@ export const DOCPARSE_MODULE = 'docparse/services/docparse_browser';
 
 // Modules to load in dependency order (published registry package v0.12.1)
 export const DOCPARSE_MODULES = [
+  { name: 'pkg/sunholo/a2ui/components',           path: 'ailang/pkg/sunholo/a2ui/components.ail' },
   { name: 'docparse/types/document',              path: `${SRC}/types/document.ail` },
   { name: 'docparse/services/format_router',       path: `${SRC}/services/format_router.ail` },
   { name: 'docparse/services/zip_extract',         path: `${SRC}/services/zip_extract.ail` },

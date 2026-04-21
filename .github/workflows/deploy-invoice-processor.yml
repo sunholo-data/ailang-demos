@@ -332,6 +332,8 @@ jobs:
           mkdir -p _site/website_builder/ailang/docparse
           cp -r invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/types _site/website_builder/ailang/docparse/types
           cp -r invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/services _site/website_builder/ailang/docparse/services
+          # pkg/sunholo/a2ui/components is imported by docparse/services/a2ui_formatter.
+          cp -r invoice_processor_wasm/ailang/pkg _site/website_builder/ailang/pkg
 
           # Co-Presenter
           mkdir -p _site/co-presenter

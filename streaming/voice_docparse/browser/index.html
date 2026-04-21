@@ -706,6 +706,7 @@ const core = new GeminiLiveCore({
   modules: [
     { name: STREAM_MODULE,                           path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
     // DocParse modules from the vendored sunholo/ailang_parse registry package.
+    { name: 'pkg/sunholo/a2ui/components',            path: '../../ailang/pkg/sunholo/a2ui/components.ail' },
     { name: 'docparse/types/document',               path: '../../ailang/pkg/sunholo/ailang_parse/docparse/types/document.ail' },
     { name: 'docparse/services/format_router',        path: '../../ailang/pkg/sunholo/ailang_parse/docparse/services/format_router.ail' },
     { name: 'docparse/services/zip_extract',          path: '../../ailang/pkg/sunholo/ailang_parse/docparse/services/zip_extract.ail' },

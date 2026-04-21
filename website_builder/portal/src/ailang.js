@@ -22,6 +22,7 @@ const WB_MODULES = [
 // Sourced from the vendored sunholo/ailang_parse registry package (v0.12.1).
 // Module names stay bare (docparse/...) because the package uses module_prefix = "docparse".
 const DOCPARSE_MODULES = [
+  { name: 'pkg/sunholo/a2ui/components',         path: 'ailang/pkg/sunholo/a2ui/components.ail' },
   { name: 'docparse/types/document',            path: 'ailang/docparse/types/document.ail' },
   { name: 'docparse/services/format_router',     path: 'ailang/docparse/services/format_router.ail' },
   { name: 'docparse/services/zip_extract',       path: 'ailang/docparse/services/zip_extract.ail' },
