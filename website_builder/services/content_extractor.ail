@@ -4,7 +4,7 @@ module website_builder/services/content_extractor
 -- for the AI site structurer to consume.
 
 import std/json (encode, decode, jo, kv, js, ja)
-import std/string (length)
+import std/string (length, concat)
 import std/list (map, flatMap, length as listLength)
 import std/result (Ok, Err)
 
@@ -65,21 +65,27 @@ export pure func bundleContent(items: [string]) -> string
 -- Simulates what a real user would upload (3 text items + 3 image descriptions).
 export pure func testFlowerShopContent() -> string {
   let text1 = wrapTextContent(
-    "Sarah's Flower Studio has been creating beautiful arrangements for weddings, " ++
-    "events, and everyday joy since 2015. Based in Edinburgh, we source locally " ++
-    "grown flowers whenever possible and specialise in seasonal, sustainable designs.",
+    concat([
+      "Sarah's Flower Studio has been creating beautiful arrangements for weddings, ",
+      "events, and everyday joy since 2015. Based in Edinburgh, we source locally ",
+      "grown flowers whenever possible and specialise in seasonal, sustainable designs."
+    ]),
     "About the business"
   );
   let text2 = wrapTextContent(
-    "We offer: Wedding bouquets and venue flowers, Corporate event arrangements, " ++
-    "Weekly office flower subscriptions, Funeral tributes, Birthday and anniversary gifts. " ++
-    "Free delivery within Edinburgh. Order by 2pm for same-day delivery.",
+    concat([
+      "We offer: Wedding bouquets and venue flowers, Corporate event arrangements, ",
+      "Weekly office flower subscriptions, Funeral tributes, Birthday and anniversary gifts. ",
+      "Free delivery within Edinburgh. Order by 2pm for same-day delivery."
+    ]),
     "Services"
   );
   let text3 = wrapTextContent(
-    "Contact us: Phone 0131 555 1234, Email hello@sarahsflowers.co.uk, " ++
-    "Visit us at 42 Rose Street, Edinburgh EH2 2NH. " ++
-    "Open Monday-Saturday 9am-6pm, Sunday 10am-4pm.",
+    concat([
+      "Contact us: Phone 0131 555 1234, Email hello@sarahsflowers.co.uk, ",
+      "Visit us at 42 Rose Street, Edinburgh EH2 2NH. ",
+      "Open Monday-Saturday 9am-6pm, Sunday 10am-4pm."
+    ]),
     "Contact details"
   );
   let img1 = wrapImageContent("", "image/jpeg", "spring_bouquet.jpg",

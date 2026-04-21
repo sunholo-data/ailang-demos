@@ -170,16 +170,16 @@ export pure func stringsToJson(strs: [string]) -> [Json]
 -- Pretty print a document summary to console
 export func printSummary(doc: ParsedDocument) -> () ! {IO} {
   println("=== Document Summary ===");
-  println("Format:   " ++ doc.format);
-  println("Filename: " ++ doc.filename);
-  println("Title:    " ++ doc.metadata.title);
-  println("Author:   " ++ doc.metadata.author);
-  println("Blocks:   " ++ show(countBlocks(doc.blocks)));
-  println("Headings: " ++ show(countBlocks(filterHeadings(doc.blocks))));
-  println("Tables:   " ++ show(countBlocks(filterTables(doc.blocks))));
-  println("Images:   " ++ show(countBlocks(filterImages(doc.blocks))));
-  println("Sections: " ++ show(countBlocks(filterSections(doc.blocks))));
-  println("Changes:  " ++ show(countBlocks(filterChanges(doc.blocks))));
+  println("Format:   ${doc.format}");
+  println("Filename: ${doc.filename}");
+  println("Title:    ${doc.metadata.title}");
+  println("Author:   ${doc.metadata.author}");
+  println("Blocks:   ${countBlocks(doc.blocks)}");
+  println("Headings: ${countBlocks(filterHeadings(doc.blocks))}");
+  println("Tables:   ${countBlocks(filterTables(doc.blocks))}");
+  println("Images:   ${countBlocks(filterImages(doc.blocks))}");
+  println("Sections: ${countBlocks(filterSections(doc.blocks))}");
+  println("Changes:  ${countBlocks(filterChanges(doc.blocks))}");
   println("========================")
 }
 
@@ -190,25 +190,25 @@ export func printBlocks(blocks: [Block]) -> () ! {IO} =
 func printBlock(block: Block) -> () ! {IO} =
   match block {
     TextBlock(b) =>
-      println("[text:" ++ b.style ++ "] " ++ b.text),
+      println("[text:${b.style}] ${b.text}"),
     HeadingBlock(b) =>
-      println("[h" ++ show(b.level) ++ "] " ++ b.text),
+      println("[h${b.level}] ${b.text}"),
     TableBlock(b) =>
-      println("[table] " ++ show(countCellRows(b.rows)) ++ " rows, " ++ show(countCells(b.headers)) ++ " cols" ++ mergeInfo(b.headers, b.rows)),
+      println("[table] ${countCellRows(b.rows)} rows, ${countCells(b.headers)} cols${mergeInfo(b.headers, b.rows)}"),
     ListBlock(b) =>
-      println("[list] " ++ show(countItems(b.items)) ++ " items"),
+      println("[list] ${countItems(b.items)} items"),
     ImageBlock(b) =>
-      println("[image:" ++ b.mime ++ "] " ++ b.description),
+      println("[image:${b.mime}] ${b.description}"),
     AudioBlock(b) =>
-      println("[audio:" ++ b.mime ++ "] " ++ b.transcription),
+      println("[audio:${b.mime}] ${b.transcription}"),
     VideoBlock(b) =>
-      println("[video:" ++ b.mime ++ "] " ++ b.description),
+      println("[video:${b.mime}] ${b.description}"),
     SectionBlock(b) => {
-      println("[" ++ b.kind ++ "]");
+      println("[${b.kind}]");
       printBlocks(b.blocks)
     },
     ChangeBlock(b) =>
-      println("[" ++ b.changeType ++ ":" ++ b.author ++ "] " ++ b.text)
+      println("[${b.changeType}:${b.author}] ${b.text}")
   }
 
 pure func countCellRows(rows: [[TableCell]]) -> int = listLength(rows)
@@ -222,7 +222,7 @@ pure func mergeInfo(headers: [TableCell], rows: [[TableCell]]) -> string {
   let mergedCount = countMergedCells(headers) + countMergedInRows(rows);
   let spanCount = countSpannedCells(headers) + countSpannedInRows(rows);
   if mergedCount > 0 || spanCount > 0
-  then " (merged:" ++ show(mergedCount) ++ " spanned:" ++ show(spanCount) ++ ")"
+  then " (merged:${mergedCount} spanned:${spanCount})"
   else ""
 }
 
@@ -243,44 +243,44 @@ pure func countSpannedInRows(rows: [[TableCell]]) -> int =
 export pure func renderMarkdown(doc: ParsedDocument) -> string {
   let header = renderMetadataHeader(doc.metadata, doc.format, doc.filename);
   let body = renderBlocksMd(doc.blocks);
-  header ++ "\n" ++ body
+  "${header}\n${body}"
 }
 
 pure func renderMetadataHeader(meta: DocMetadata, format: string, filename: string) -> string {
   let titleLine = if length(meta.title) > 0
-    then "# " ++ meta.title ++ "\n\n"
+    then "# ${meta.title}\n\n"
     else "";
   let metaLines = if length(meta.author) > 0
-    then "**Author:** " ++ meta.author ++ "\n"
+    then "**Author:** ${meta.author}\n"
     else "";
-  titleLine ++ metaLines
+  "${titleLine}${metaLines}"
 }
 
 pure func renderBlocksMd(blocks: [Block]) -> string =
-  foldl(\acc b. acc ++ renderBlockMd(b), "", blocks)
+  foldl(\acc b. "${acc}${renderBlockMd(b)}", "", blocks)
 
 pure func renderBlockMd(block: Block) -> string =
   match block {
     HeadingBlock(h) =>
-      headingPrefix(h.level) ++ h.text ++ "\n\n",
+      "${headingPrefix(h.level)}${h.text}\n\n",
     TextBlock(t) =>
-      if length(t.text) > 0 then t.text ++ "\n\n"
+      if length(t.text) > 0 then "${t.text}\n\n"
       else "",
     TableBlock(t) =>
-      renderTableMd(t.headers, t.rows) ++ "\n",
+      "${renderTableMd(t.headers, t.rows)}\n",
     ListBlock(l) =>
-      renderListMd(l.items, l.ordered, 1) ++ "\n",
+      "${renderListMd(l.items, l.ordered, 1)}\n",
     ImageBlock(i) =>
       if length(i.description) > 0
-      then "[Image: " ++ i.description ++ "]\n\n"
+      then "[Image: ${i.description}]\n\n"
       else "[Image]\n\n",
     AudioBlock(a) =>
       if length(a.transcription) > 0
-      then "[Audio transcription: " ++ a.transcription ++ "]\n\n"
+      then "[Audio transcription: ${a.transcription}]\n\n"
       else "[Audio]\n\n",
     VideoBlock(v) =>
       if length(v.description) > 0
-      then "[Video: " ++ v.description ++ "]\n\n"
+      then "[Video: ${v.description}]\n\n"
       else "[Video]\n\n",
     SectionBlock(s) =>
       renderSectionMd(s.kind, s.blocks),
@@ -309,7 +309,7 @@ pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
     else if kind == "endnote" then "*Endnote:*\n"
     else if kind == "textbox" then "> "
     else "";
-  label ++ renderBlocksMd(blocks)
+  "${label}${renderBlocksMd(blocks)}"
 }
 
 -- Render a track change annotation as markdown
@@ -317,36 +317,36 @@ pure func renderSectionMd(kind: string, blocks: [Block]) -> string {
 pure func renderChangeMd(changeType: string, author: string, date: string, text: string) -> string
   ensures { length(result) > 0 }
 {
-  let attribution = " *(" ++ changeType ++ " by " ++ author ++ ", " ++ date ++ ")*";
+  let attribution = " *(${changeType} by ${author}, ${date})*";
   if changeType == "delete" || changeType == "move-from"
-  then "~~" ++ text ++ "~~" ++ attribution ++ "\n\n"
-  else "**" ++ text ++ "**" ++ attribution ++ "\n\n"
+  then "~~${text}~~${attribution}\n\n"
+  else "**${text}**${attribution}\n\n"
 }
 
 -- Render a table as markdown
 pure func renderTableMd(headers: [TableCell], rows: [[TableCell]]) -> string {
-  let headerLine = "| " ++ renderCellsMd(headers) ++ "\n";
-  let sepLine = "| " ++ renderSepMd(headers) ++ "\n";
+  let headerLine = "| ${renderCellsMd(headers)}\n";
+  let sepLine = "| ${renderSepMd(headers)}\n";
   let rowLines = renderRowsMd(rows);
-  headerLine ++ sepLine ++ rowLines
+  "${headerLine}${sepLine}${rowLines}"
 }
 
 pure func renderCellsMd(cells: [TableCell]) -> string =
   match cells {
     [] => "",
-    c :: [] => cellText(c) ++ " |",
-    c :: rest => cellText(c) ++ " | " ++ renderCellsMd(rest)
+    c :: [] => "${cellText(c)} |",
+    c :: rest => "${cellText(c)} | ${renderCellsMd(rest)}"
   }
 
 pure func renderSepMd(cells: [TableCell]) -> string =
   match cells {
     [] => "",
     _ :: [] => "--- |",
-    _ :: rest => "--- | " ++ renderSepMd(rest)
+    _ :: rest => "--- | ${renderSepMd(rest)}"
   }
 
 pure func renderRowsMd(rows: [[TableCell]]) -> string =
-  foldl(\acc row. acc ++ "| " ++ renderCellsMd(row) ++ "\n", "", rows)
+  foldl(\acc row. "${acc}| ${renderCellsMd(row)}\n", "", rows)
 
 -- Render list items
 pure func renderListMd(items: [string], ordered: bool, idx: int) -> string =
@@ -354,6 +354,6 @@ pure func renderListMd(items: [string], ordered: bool, idx: int) -> string =
     [] => "",
     item :: rest =>
       if ordered
-      then show(idx) ++ ". " ++ item ++ "\n" ++ renderListMd(rest, ordered, idx + 1)
-      else "- " ++ item ++ "\n" ++ renderListMd(rest, ordered, idx + 1)
+      then "${idx}. ${item}\n${renderListMd(rest, ordered, idx + 1)}"
+      else "- ${item}\n${renderListMd(rest, ordered, idx + 1)}"
   }

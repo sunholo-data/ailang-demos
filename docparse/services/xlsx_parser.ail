@@ -173,7 +173,7 @@ pure func xlsxStripSuffix(s: string) -> string {
 pure func xlsxFormatSheetName(name: string) -> string {
   if startsWith(name, "sheet") then {
     let numPart = substring(name, 5, length(name));
-    "Sheet " ++ numPart
+    "Sheet ${numPart}"
   }
   else name
 }

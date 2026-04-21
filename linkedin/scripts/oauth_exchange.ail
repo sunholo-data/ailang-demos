@@ -33,11 +33,7 @@ export func main() -> () ! {IO @limit=20, FS @limit=5, Net @limit=1, Env} {
 
 func oauthExchange(code: string, clientId: string, clientSecret: string, orgUrn: string) -> () ! {IO, FS, Net} {
   let url = "https://www.linkedin.com/oauth/v2/accessToken";
-  let body = "grant_type=authorization_code" ++
-             "&code=" ++ code ++
-             "&client_id=" ++ clientId ++
-             "&client_secret=" ++ clientSecret ++
-             "&redirect_uri=http://localhost:8080/callback";
+  let body = "grant_type=authorization_code&code=${code}&client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=http://localhost:8080/callback";
   let headers = [
     { name: "Content-Type", value: "application/x-www-form-urlencoded" }
   ];
@@ -48,7 +44,7 @@ func oauthExchange(code: string, clientId: string, clientSecret: string, orgUrn:
     Ok(response) => {
       if response.ok then oauthSaveTokens(response.body, clientId, clientSecret, orgUrn)
       else {
-        println("Error: LinkedIn returned status " ++ show(response.status));
+        println("Error: LinkedIn returned status ${response.status}");
         println(response.body)
       }
     },
@@ -76,23 +72,23 @@ func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: strin
         ]));
 
         let home = getEnvOr("HOME", "/tmp");
-        let credsPath = home ++ "/.ailang/linkedin/credentials.json";
+        let credsPath = "${home}/.ailang/linkedin/credentials.json";
         writeFile(credsPath, creds);
 
-        println("=== Credentials saved to " ++ credsPath ++ " ===");
-        println("Access token:  " ++ oauthTruncate(accessToken));
-        println("Refresh token: " ++ oauthTruncate(refreshToken));
-        println("Org URN:       " ++ orgUrn)
+        println("=== Credentials saved to ${credsPath} ===");
+        println("Access token:  ${oauthTruncate(accessToken)}");
+        println("Refresh token: ${oauthTruncate(refreshToken)}");
+        println("Org URN:       ${orgUrn}")
       }
     },
     Err(e) => {
-      println("Error parsing response: " ++ e);
+      println("Error parsing response: ${e}");
       println(responseBody)
     }
   }
 }
 
 func oauthTruncate(s: string) -> string {
-  if length(s) > 20 then substring(s, 0, 20) ++ "..."
+  if length(s) > 20 then "${substring(s, 0, 20)}..."
   else s
 }

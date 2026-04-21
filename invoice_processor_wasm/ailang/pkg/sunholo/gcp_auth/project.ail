@@ -27,7 +27,7 @@ export func getDefaultProject() -> Result[string, string] ! {FS, Env} {
   if envProject != "" then Ok(envProject)
   else {
     let home = getEnvOr("HOME", "/tmp");
-    let activeConfigPath = home ++ "/.config/gcloud/active_config";
+    let activeConfigPath = "${home}/.config/gcloud/active_config";
     let activeFound = fileExists(activeConfigPath);
     if activeFound then readActiveConfigAndProject(home, activeConfigPath)
     else tryQuotaProject(home)
@@ -36,10 +36,10 @@ export func getDefaultProject() -> Result[string, string] ! {FS, Env} {
 
 func readActiveConfigAndProject(home: string, activeConfigPath: string) -> Result[string, string] ! {FS} {
   let activeConfigName = trim(readFile(activeConfigPath));
-  let configPath = home ++ "/.config/gcloud/configurations/config_" ++ activeConfigName;
+  let configPath = "${home}/.config/gcloud/configurations/config_${activeConfigName}";
   let configFound = fileExists(configPath);
   if configFound then parseGcloudConfig(configPath)
-  else Err("Config file not found: " ++ configPath)
+  else Err("Config file not found: ${configPath}")
 }
 
 func parseGcloudConfig(path: string) -> Result[string, string] ! {FS} {
@@ -63,7 +63,7 @@ func findProjectLine(lines: [string]) -> Result[string, string] =
   }
 
 func tryQuotaProject(home: string) -> Result[string, string] ! {FS} {
-  let path = home ++ "/.config/gcloud/application_default_credentials.json";
+  let path = "${home}/.config/gcloud/application_default_credentials.json";
   let found = fileExists(path);
   if found then {
     let content = readFile(path);
@@ -73,7 +73,7 @@ func tryQuotaProject(home: string) -> Result[string, string] ! {FS} {
         if isSome(projectOpt) then Ok(getOrElse(projectOpt, ""))
         else Err("No quota_project_id in ADC file. Run: gcloud auth application-default set-quota-project PROJECT_ID")
       },
-      Err(e) => Err("Failed to parse ADC file: " ++ e)
+      Err(e) => Err("Failed to parse ADC file: ${e}")
     }
   } else Err("No gcloud config or ADC file found")
 }

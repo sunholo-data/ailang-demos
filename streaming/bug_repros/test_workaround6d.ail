@@ -53,5 +53,5 @@ export func safeCalculate(op: string, a: int, b: int) -> Result[int, string]
   let ca = clamp(a);
   let cb = clamp(b);
   let code = opCode(op);
-  optionToResult(doCalc(code, ca, cb), "Unknown operation or error: " ++ op)
+  optionToResult(doCalc(code, ca, cb), "Unknown operation or error: ${op}")
 }

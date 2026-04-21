@@ -50,10 +50,10 @@ export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
 
   match getDefaultProject() {
     Ok(projectId) => {
-      println("Project: " ++ projectId);
+      println("Project: ${projectId}");
       runTrustedPipeline(projectId)
     },
-    Err(e) => println("Failed: " ++ e)
+    Err(e) => println("Failed: ${e}")
   }
 }
 
@@ -64,7 +64,7 @@ func runTrustedPipeline(projectId: string) -> () ! {IO, Env, FS, Net} {
       println("");
       runBoundedQueries(projectId, token)
     },
-    Err(e) => println("Auth failed: " ++ e)
+    Err(e) => println("Auth failed: ${e}")
   }
 }
 
@@ -90,11 +90,11 @@ func runBoundedQueries(projectId: string, token: string) -> () ! {IO, Net} {
 func runAndReport(projectId: string, token: string, sql: string) -> () ! {IO, Net} {
   match query(projectId, sql, token) {
     Ok(result) => {
-      println("  Rows: " ++ show(countRows(result.rows)));
-      println("  Complete: " ++ show(result.jobComplete));
+      println("  Rows: ${countRows(result.rows)}");
+      println("  Complete: ${result.jobComplete}");
       printRows(result.rows, 0)
     },
-    Err(e) => println("  Error: " ++ e)
+    Err(e) => println("  Error: ${e}")
   }
 }
 
@@ -108,7 +108,7 @@ func printRows(rows: [[string]], idx: int) -> () ! {IO} =
   match rows {
     [] => (),
     row :: rest => {
-      println("  [" ++ show(idx) ++ "] " ++ joinRow(row));
+      println("  [${idx}] ${joinRow(row)}");
       printRows(rest, idx + 1)
     }
   }
@@ -117,5 +117,5 @@ func joinRow(values: [string]) -> string =
   match values {
     [] => "",
     v :: [] => v,
-    v :: rest => v ++ " | " ++ joinRow(rest)
+    v :: rest => "${v} | ${joinRow(rest)}"
   }

@@ -40,7 +40,7 @@ pure func validateOnePage(page: Json) -> [string] =
 
 -- Helper: check one palette colour field
 pure func checkPaletteField(palette: Json, field: string) -> [string] =
-  checkStringField(palette, field, "Palette missing field: " ++ field)
+  checkStringField(palette, field, "Palette missing field: ${field}")
 
 -- Helper: validate palette has all 5 required colour fields
 pure func validatePalette(brief: Json) -> [string] =
@@ -73,7 +73,7 @@ export func validateSiteStructure(siteJson: string) -> {valid: bool, errors: [st
       let allErrors = concat(titleErrors, concat(pagesErrors, designErrors));
       {valid: listLength(allErrors) == 0, errors: allErrors}
     },
-    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+    Err(e) => {valid: false, errors: ["Invalid JSON: ${e}"]}
   }
 }
 
@@ -91,7 +91,7 @@ export func validatePages(siteJson: string) -> {valid: bool, errors: [string]}
         None => {valid: false, errors: ["No pages array found"]}
       }
     },
-    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+    Err(e) => {valid: false, errors: ["Invalid JSON: ${e}"]}
   }
 }
 
@@ -109,7 +109,7 @@ export func validateDesignBrief(siteJson: string) -> {valid: bool, errors: [stri
         None => {valid: false, errors: ["No designBrief found"]}
       }
     },
-    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+    Err(e) => {valid: false, errors: ["Invalid JSON: ${e}"]}
   }
 }
 
@@ -130,7 +130,7 @@ export func validateHasHomePage(siteJson: string) -> {valid: bool, errors: [stri
         None => {valid: false, errors: ["No pages array"]}
       }
     },
-    Err(e) => {valid: false, errors: ["Invalid JSON: " ++ e]}
+    Err(e) => {valid: false, errors: ["Invalid JSON: ${e}"]}
   }
 }
 

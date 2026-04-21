@@ -59,13 +59,13 @@ export pure func blockText(block: Block) -> string =
   match block {
     TextBlock(b) => b.text,
     TableBlock(_) => "[table]",
-    ImageBlock(b) => "[image: " ++ b.description ++ "]",
-    AudioBlock(b) => "[audio: " ++ b.transcription ++ "]",
-    VideoBlock(b) => "[video: " ++ b.description ++ "]",
+    ImageBlock(b) => "[image: ${b.description}]",
+    AudioBlock(b) => "[audio: ${b.transcription}]",
+    VideoBlock(b) => "[video: ${b.description}]",
     ListBlock(b) => join(", ", b.items),
     HeadingBlock(b) => b.text,
-    SectionBlock(b) => "[" ++ b.kind ++ "]",
-    ChangeBlock(b) => "[" ++ b.changeType ++ " by " ++ b.author ++ "] " ++ b.text
+    SectionBlock(b) => "[${b.kind}]",
+    ChangeBlock(b) => "[${b.changeType} by ${b.author}] ${b.text}"
   }
 
 export pure func isHeading(block: Block) -> bool =

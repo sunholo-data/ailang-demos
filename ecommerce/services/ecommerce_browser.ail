@@ -34,7 +34,7 @@ export pure func generateQuery(name: string, arg1: string, arg2: string) -> stri
     "deviceBreakdown" => sqlResult(deviceBreakdownQuery()),
     "browserBreakdown" => sqlResult(browserBreakdownQuery()),
     "sessionMetrics" => sqlResult(sessionMetricsQuery()),
-    _ => encode(jo([kv("error", js("Unknown query: " ++ name))]))
+    _ => encode(jo([kv("error", js("Unknown query: ${name}"))]))
   }
 }
 
@@ -46,7 +46,7 @@ pure func intQuery(name: string, arg: string, fallback: int) -> string {
     "topProductsByRevenue" => sqlResult(topProductsByRevenueQuery(limit)),
     "topCategoriesByViews" => sqlResult(topCategoriesByViewsQuery(limit)),
     "geoDistribution" => sqlResult(geoDistributionQuery(limit)),
-    _ => encode(jo([kv("error", js("Unknown int query: " ++ name))]))
+    _ => encode(jo([kv("error", js("Unknown int query: ${name}"))]))
   }
 }
 

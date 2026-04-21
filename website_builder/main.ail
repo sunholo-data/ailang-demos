@@ -50,9 +50,9 @@ export func main() -> () ! {IO @limit=200, FS @limit=50, AI @limit=50, Env} {
   let styleDirection = getEnvOr("STYLE", "Warm and friendly");
   let doGenerate = hasEnv("GENERATE");
 
-  println("Description:     " ++ description);
-  println("Style direction: " ++ styleDirection);
-  println("Generate HTML:   " ++ if doGenerate then "yes" else "no (set GENERATE=true to enable)");
+  println("Description:     ${description}");
+  println("Style direction: ${styleDirection}");
+  println("Generate HTML:   ${if doGenerate then "yes" else "no (set GENERATE=true to enable)"}");
   println("");
 
   -- Step 1: Bundle test content
@@ -73,9 +73,9 @@ export func main() -> () ! {IO @limit=200, FS @limit=50, AI @limit=50, Env} {
   let siteJson = structureSite(contentJson, description, styleDirection);
   let siteTitle = extractSiteTitle(siteJson);
   let slugs = extractPageSlugs(siteJson);
-  println("  Site: " ++ siteTitle);
-  println("  Pages: " ++ join(", ", slugs));
-  println("  JSON size: " ++ show(length(siteJson)) ++ " chars");
+  println("  Site: ${siteTitle}");
+  println("  Pages: ${join(", ", slugs)}");
+  println("  JSON size: ${length(siteJson)} chars");
   println("");
 
   -- Step 4: Validate with contracts
@@ -85,7 +85,7 @@ export func main() -> () ! {IO @limit=200, FS @limit=50, AI @limit=50, Env} {
     println("  [PASS] All validations passed")
   else {
     println("  [WARN] Validation issues:");
-    forEachE(\e. println("    - " ++ e), validation.errors)
+    forEachE(\e. println("    - ${e}"), validation.errors)
   };
   println("");
 
@@ -93,25 +93,25 @@ export func main() -> () ! {IO @limit=200, FS @limit=50, AI @limit=50, Env} {
   if doGenerate then {
     println("[5/5] Generating HTML...");
     forEachE(\slug. {
-      println("  Generating " ++ slug ++ ".html...");
+      println("  Generating ${slug}.html...");
       let html = generatePageHtml(siteJson, slug);
       -- Validate the generated HTML
       let htmlCheck = validateHtml(html);
       if htmlCheck.valid then
         println("    [PASS] HTML valid")
       else
-        forEachE(\e. println("    [WARN] " ++ e), htmlCheck.errors);
+        forEachE(\e. println("    [WARN] ${e}"), htmlCheck.errors);
       -- Write to file
-      let filename = "website_builder/output/" ++ slug ++ ".html";
+      let filename = "website_builder/output/${slug}.html";
       writeFile(filename, html);
-      println("    Wrote " ++ filename ++ " (" ++ show(length(html)) ++ " chars)")
+      println("    Wrote ${filename} (${length(html)} chars)")
     }, slugs);
 
     -- Generate shared CSS
     println("  Generating style.css...");
     let css = generateSiteCss(siteJson);
     writeFile("website_builder/output/style.css", css);
-    println("    Wrote website_builder/output/style.css (" ++ show(length(css)) ++ " chars)");
+    println("    Wrote website_builder/output/style.css (${length(css)} chars)");
     println("")
   }
   else

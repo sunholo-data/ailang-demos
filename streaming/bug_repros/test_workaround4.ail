@@ -27,6 +27,6 @@ func extractData(msg: string) -> Result[MyRecord, string] {
         None => Err("No data object")
       }
     },
-    Err(e) => Err("Parse error: " ++ e)
+    Err(e) => Err("Parse error: ${e}")
   }
 }

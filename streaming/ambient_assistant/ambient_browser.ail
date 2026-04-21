@@ -20,18 +20,18 @@ import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
 import std/io (println)
 import std/json (encode, decode, jo, kv, js, jb, ja, jnum,
                  get, has, asString, asBool, getString, getObject, getArray, getBool)
-import std/string (length)
+import std/string (length, concat as strConcat)
 import std/list (concat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
 -- Package imports (no pkg/ prefix — WASM registers modules by their internal declaration name)
-import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
-import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
-import sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import pkg/sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
                                          buildToolResponse as pkgBuildToolResponse, buildToolResponseScheduled as pkgBuildToolResponseScheduled)
-import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
+import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration (from package)
@@ -44,33 +44,35 @@ export pure func defaultModel() -> string = "models/gemini-2.5-flash-native-audi
 export pure func defaultVoice() -> string = pkgDefaultVoice()
 
 export pure func ambientInstruction() -> string =
-  "You are AILANG, an ambient voice assistant running in a browser. "
-    ++ "SPEAKING RULE: You must ONLY speak when directly addressed by name — "
-    ++ "'AILANG', 'hey AILANG', or similar. "
-    ++ "If someone speaks without saying your name, you MUST stay COMPLETELY SILENT — "
-    ++ "do not speak, do not acknowledge, do not comment. "
-    ++ "NEVER respond vocally to questions like 'are you working?', 'hello?', or 'what time is it?' "
-    ++ "unless they include your name 'AILANG'. "
-    ++ "When addressed by name, respond with full awareness of everything you have heard. "
-    ++ "VOICE: ALWAYS speak with a British English accent throughout the entire conversation. "
-    ++ "Never switch to an American accent, even mid-sentence. Maintain British pronunciation consistently. "
-    ++ "Keep responses conversational and helpful. "
-    ++ "TOOLS: You have these tools: "
-    ++ "currentTime, calculate, remindLater, cacheResult, getCachedResult, "
-    ++ "summarizeContext, takeScreenshot, saveNote, webFetch, delegate. "
-    ++ "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools "
-    ++ "to gather context based on what you hear. If someone mentions a time, call currentTime. "
-    ++ "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. "
-    ++ "If someone mentions reminders, call remindLater. Use tools silently in the background — "
-    ++ "do NOT speak about them unless addressed by name. "
-    ++ "When the user finally addresses you by name, you will already have the data ready. "
-    ++ "takeScreenshot captures the user's screen — use when asked 'what is on my screen?'. "
-    ++ "webFetch retrieves content from a URL — use when someone mentions a website. "
-    ++ "DELEGATION: For complex tasks that need deep reasoning, code review, document analysis, "
-    ++ "research, or multi-step work — use the delegate tool. It sends your request to a specialist "
-    ++ "AI agent via AILANG Cloud Messaging. The task runs in the background and results are returned "
-    ++ "when ready. While waiting, you can tell the user you are working on it. "
-    ++ "For simple tasks (time, calculations, URLs, notes, screenshots) — use the direct tools instead."
+  strConcat([
+    "You are AILANG, an ambient voice assistant running in a browser. ",
+    "SPEAKING RULE: You must ONLY speak when directly addressed by name — ",
+    "'AILANG', 'hey AILANG', or similar. ",
+    "If someone speaks without saying your name, you MUST stay COMPLETELY SILENT — ",
+    "do not speak, do not acknowledge, do not comment. ",
+    "NEVER respond vocally to questions like 'are you working?', 'hello?', or 'what time is it?' ",
+    "unless they include your name 'AILANG'. ",
+    "When addressed by name, respond with full awareness of everything you have heard. ",
+    "VOICE: ALWAYS speak with a British English accent throughout the entire conversation. ",
+    "Never switch to an American accent, even mid-sentence. Maintain British pronunciation consistently. ",
+    "Keep responses conversational and helpful. ",
+    "TOOLS: You have these tools: ",
+    "currentTime, calculate, remindLater, cacheResult, getCachedResult, ",
+    "summarizeContext, takeScreenshot, saveNote, webFetch, delegate. ",
+    "PROACTIVE TOOL USE: Even when you are NOT addressed by name, you SHOULD use tools ",
+    "to gather context based on what you hear. If someone mentions a time, call currentTime. ",
+    "If someone mentions a calculation, call calculate. If someone mentions a URL, call webFetch. ",
+    "If someone mentions reminders, call remindLater. Use tools silently in the background — ",
+    "do NOT speak about them unless addressed by name. ",
+    "When the user finally addresses you by name, you will already have the data ready. ",
+    "takeScreenshot captures the user's screen — use when asked 'what is on my screen?'. ",
+    "webFetch retrieves content from a URL — use when someone mentions a website. ",
+    "DELEGATION: For complex tasks that need deep reasoning, code review, document analysis, ",
+    "research, or multi-step work — use the delegate tool. It sends your request to a specialist ",
+    "AI agent via AILANG Cloud Messaging. The task runs in the background and results are returned ",
+    "when ready. While waiting, you can tell the user you are working on it. ",
+    "For simple tasks (time, calculations, URLs, notes, screenshots) — use the direct tools instead."
+  ])
 
 export pure func voiceCatalog() -> string = pkgVoiceCatalog()
 
@@ -97,7 +99,7 @@ export func startAmbientSession(apiKey: string, voice: string, thinkingBudget: i
       let setupMsg = buildAmbientSetup(model, voice, ambientInstruction(), thinkingBudget);
       match transmit(conn, setupMsg) {
         Ok(_) => {
-          println(encode(jo([kv("type", js("log")), kv("text", js("Ambient mode active. Voice: " ++ voice ++ " | Proactive: ON"))])));
+          println(encode(jo([kv("type", js("log")), kv("text", js("Ambient mode active. Voice: ${voice} | Proactive: ON"))])));
           -- No initial prompt — mic starts immediately
           onEvent(conn, \event. handleEvent(event, conn));
           runEventLoop(conn);

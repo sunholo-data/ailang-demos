@@ -31,23 +31,7 @@ pure func stripFences(raw: string) -> string {
 export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI}
   ensures { length(result) > 50 }
 {
-  let prompt = "Generate a complete, mobile-responsive HTML page.\n\n" ++
-    "Site structure and design brief:\n" ++ siteJson ++ "\n\n" ++
-    "Render the page with slug: " ++ pageSlug ++ "\n\n" ++
-    "Use the designBrief for colours, fonts, and layout — but apply creative judgement " ++
-    "to make it beautiful. The brief is direction, not rigid constraint.\n\n" ++
-    "Requirements:\n" ++
-    "- Single HTML file with inline <style> block (all CSS embedded)\n" ++
-    "- Link Google Fonts in <head> per the designBrief typography\n" ++
-    "- Mobile-first responsive design (must look great on a phone)\n" ++
-    "- Navigation bar linking all pages using RELATIVE href format: about.html, gallery.html, contact.html, index.html (for home). NEVER use # anchors or absolute paths like /about for page links.\n" ++
-    "- CSS :checked hamburger toggle on mobile (no JS needed for menu)\n" ++
-    "- Images: use <img src='filename.jpg' alt='description'> using the exact filenames from each section's 'images' array\n" ++
-    "- Clean semantic HTML5, proper heading hierarchy\n" ++
-    "- Accessible: alt text, aria labels, lang attribute, viewport meta\n" ++
-    "- For contact/enquiry forms: set action='#' method='POST'. Include a hidden honeypot field as the first form field: <input type='text' name='_hp' style='display:none' tabindex='-1' autocomplete='off'>. Do NOT add any form submission JavaScript.\n" ++
-    "- Minimal JS only for hamburger toggle if needed\n\n" ++
-    "Return JSON: {\"html\":\"complete html page\"}";
+  let prompt = "Generate a complete, mobile-responsive HTML page.\n\nSite structure and design brief:\n${siteJson}\n\nRender the page with slug: ${pageSlug}\n\nUse the designBrief for colours, fonts, and layout — but apply creative judgement to make it beautiful. The brief is direction, not rigid constraint.\n\nRequirements:\n- Single HTML file with inline <style> block (all CSS embedded)\n- Link Google Fonts in <head> per the designBrief typography\n- Mobile-first responsive design (must look great on a phone)\n- Navigation bar linking all pages using RELATIVE href format: about.html, gallery.html, contact.html, index.html (for home). NEVER use # anchors or absolute paths like /about for page links.\n- CSS :checked hamburger toggle on mobile (no JS needed for menu)\n- Images: use <img src='filename.jpg' alt='description'> using the exact filenames from each section's 'images' array\n- Clean semantic HTML5, proper heading hierarchy\n- Accessible: alt text, aria labels, lang attribute, viewport meta\n- For contact/enquiry forms: set action='#' method='POST'. Include a hidden honeypot field as the first form field: <input type='text' name='_hp' style='display:none' tabindex='-1' autocomplete='off'>. Do NOT add any form submission JavaScript.\n- Minimal JS only for hamburger toggle if needed\n\nReturn JSON: {\"html\":\"complete html page\"}";
   let response = callJsonSimple(prompt);
   match decode(response) {
     Ok(json) => match getString(json, "html") {
@@ -63,17 +47,7 @@ export func generatePageHtml(siteJson: string, pageSlug: string) -> string ! {AI
 export func generateSiteCss(siteJson: string) -> string ! {AI}
   ensures { length(result) > 50 }
 {
-  let prompt = "Generate mobile-first CSS for a multi-page website.\n\n" ++
-    "Site structure and design brief:\n" ++ siteJson ++ "\n\n" ++
-    "Requirements:\n" ++
-    "- Mobile-first: base styles for phones, @media for tablet (768px+) and desktop (1024px+)\n" ++
-    "- CSS custom properties for palette colours (--primary, --secondary, etc)\n" ++
-    "- Responsive navigation (hamburger on mobile, horizontal on desktop)\n" ++
-    "- Hero sections with full-width imagery\n" ++
-    "- Gallery grid: 1 col mobile, 2 tablet, 3 desktop\n" ++
-    "- Smooth transitions and subtle hover states\n" ++
-    "- Print basics\n\n" ++
-    "Return JSON: {\"css\":\"complete css\"}";
+  let prompt = "Generate mobile-first CSS for a multi-page website.\n\nSite structure and design brief:\n${siteJson}\n\nRequirements:\n- Mobile-first: base styles for phones, @media for tablet (768px+) and desktop (1024px+)\n- CSS custom properties for palette colours (--primary, --secondary, etc)\n- Responsive navigation (hamburger on mobile, horizontal on desktop)\n- Hero sections with full-width imagery\n- Gallery grid: 1 col mobile, 2 tablet, 3 desktop\n- Smooth transitions and subtle hover states\n- Print basics\n\nReturn JSON: {\"css\":\"complete css\"}";
   let response = callJsonSimple(prompt);
   match decode(response) {
     Ok(json) => match getString(json, "css") {

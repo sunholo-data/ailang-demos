@@ -12,33 +12,7 @@ import std/string (length)
 export func structureSite(contentJson: string, description: string, styleDirection: string) -> string ! {AI}
   ensures { length(result) > 10 }
 {
-  let prompt = "You are a talented website designer helping a non-technical person.\n\n" ++
-    "The user wants a website for: " ++ description ++ "\n\n" ++
-    "Style direction (starting point, you have creative freedom): " ++ styleDirection ++ "\n\n" ++
-    "They uploaded this content:\n" ++ contentJson ++ "\n\n" ++
-    "Create a complete website with MULTIPLE PAGES. Choose the right number of pages\n" ++
-    "for this type of site (typically 3-7). Always include a home page.\n" ++
-    "Pick pages that suit the business — e.g. portfolio, menu, services, testimonials,\n" ++
-    "pricing, team, FAQ, blog, events, gallery, contact. Be creative.\n\n" ++
-    "IMAGES — the uploaded content includes image items with a 'filename' field.\n" ++
-    "Distribute image filenames across relevant sections. Any section showing images\n" ++
-    "must include an 'images' array with the exact filenames.\n\n" ++
-    "SECTIONS — be creative. Invent section types that suit the business and style.\n" ++
-    "Examples: hero, story, split-image-text, masonry-gallery, team-grid,\n" ++
-    "testimonials, stats-bar, features-grid, timeline, cta-banner, contact-form.\n" ++
-    "Do not limit yourself to these — choose layouts that make this site distinctive.\n\n" ++
-    "Return compact JSON (no whitespace) with this structure:\n" ++
-    "{\"title\":\"...\",\"description\":\"...\",\"designBrief\":{" ++
-    "\"mood\":\"...\",\"palette\":{\"primary\":\"#hex\",\"secondary\":\"#hex\"," ++
-    "\"accent\":\"#hex\",\"background\":\"#hex\",\"text\":\"#hex\"}," ++
-    "\"typography\":{\"headingFont\":\"Google Font name\",\"bodyFont\":\"Google Font name\"}," ++
-    "\"layout\":{\"style\":\"...\",\"headerStyle\":\"...\",\"imageStyle\":\"...\"}," ++
-    "\"personality\":\"one sentence describing how the website should feel\"}," ++
-    "\"pages\":[" ++
-    "{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[{\"type\":\"hero\",\"title\":\"...\",\"images\":[\"filename.jpg\"],\"content\":\"...\"},{\"type\":\"features-grid\",\"title\":\"...\",\"content\":\"...\"}]}," ++
-    "{\"slug\":\"about\",\"title\":\"About\",\"sections\":[...]}," ++
-    "... more pages as appropriate for this business ..." ++
-    "]}";
+  let prompt = "You are a talented website designer helping a non-technical person.\n\nThe user wants a website for: ${description}\n\nStyle direction (starting point, you have creative freedom): ${styleDirection}\n\nThey uploaded this content:\n${contentJson}\n\nCreate a complete website with MULTIPLE PAGES. Choose the right number of pages\nfor this type of site (typically 3-7). Always include a home page.\nPick pages that suit the business — e.g. portfolio, menu, services, testimonials,\npricing, team, FAQ, blog, events, gallery, contact. Be creative.\n\nIMAGES — the uploaded content includes image items with a 'filename' field.\nDistribute image filenames across relevant sections. Any section showing images\nmust include an 'images' array with the exact filenames.\n\nSECTIONS — be creative. Invent section types that suit the business and style.\nExamples: hero, story, split-image-text, masonry-gallery, team-grid,\ntestimonials, stats-bar, features-grid, timeline, cta-banner, contact-form.\nDo not limit yourself to these — choose layouts that make this site distinctive.\n\nReturn compact JSON (no whitespace) with this structure:\n{\"title\":\"...\",\"description\":\"...\",\"designBrief\":{\"mood\":\"...\",\"palette\":{\"primary\":\"#hex\",\"secondary\":\"#hex\",\"accent\":\"#hex\",\"background\":\"#hex\",\"text\":\"#hex\"},\"typography\":{\"headingFont\":\"Google Font name\",\"bodyFont\":\"Google Font name\"},\"layout\":{\"style\":\"...\",\"headerStyle\":\"...\",\"imageStyle\":\"...\"},\"personality\":\"one sentence describing how the website should feel\"},\"pages\":[{\"slug\":\"home\",\"title\":\"Home\",\"sections\":[{\"type\":\"hero\",\"title\":\"...\",\"images\":[\"filename.jpg\"],\"content\":\"...\"},{\"type\":\"features-grid\",\"title\":\"...\",\"content\":\"...\"}]},{\"slug\":\"about\",\"title\":\"About\",\"sections\":[...]},... more pages as appropriate for this business ...]}";
   callJsonSimple(prompt)
 }
 
@@ -46,9 +20,7 @@ export func structureSite(contentJson: string, description: string, styleDirecti
 export func suggestPages(description: string) -> string ! {AI}
   ensures { length(result) > 5 }
 {
-  let prompt = "A user wants a website for: " ++ description ++ "\n\n" ++
-    "Suggest 3-5 pages that would work well. " ++
-    "Return compact JSON array: [{\"slug\":\"home\",\"title\":\"Home\",\"purpose\":\"...\"},...]";
+  let prompt = "A user wants a website for: ${description}\n\nSuggest 3-5 pages that would work well. Return compact JSON array: [{\"slug\":\"home\",\"title\":\"Home\",\"purpose\":\"...\"},...]";
   callJsonSimple(prompt)
 }
 
@@ -57,16 +29,6 @@ export func suggestPages(description: string) -> string ! {AI}
 export func refineSite(currentStructure: string, feedback: string) -> string ! {AI}
   ensures { length(result) > 10 }
 {
-  let prompt = "You are refining a website based on user feedback.\n\n" ++
-    "Current website (structure + design brief):\n" ++ currentStructure ++ "\n\n" ++
-    "User says: \"" ++ feedback ++ "\"\n\n" ++
-    "The user is not technical. Interpret their feedback generously.\n" ++
-    "Examples: 'more purple' = change palette, 'bigger photos' = change layout, " ++
-    "'add my phone number' = change content.\n\n" ++
-    "REMOVAL: If asked to remove an image or section, do it immediately and completely.\n" ++
-    "Remove the filename from the section's 'images' array (or the whole section if empty).\n" ++
-    "Do not keep something the user explicitly wants gone.\n\n" ++
-    "Apply the requested changes and return the COMPLETE updated structure " ++
-    "(including designBrief) as compact JSON. Keep everything they did not mention.";
+  let prompt = "You are refining a website based on user feedback.\n\nCurrent website (structure + design brief):\n${currentStructure}\n\nUser says: \"${feedback}\"\n\nThe user is not technical. Interpret their feedback generously.\nExamples: 'more purple' = change palette, 'bigger photos' = change layout, 'add my phone number' = change content.\n\nREMOVAL: If asked to remove an image or section, do it immediately and completely.\nRemove the filename from the section's 'images' array (or the whole section if empty).\nDo not keep something the user explicitly wants gone.\n\nApply the requested changes and return the COMPLETE updated structure (including designBrief) as compact JSON. Keep everything they did not mention.";
   callJsonSimple(prompt)
 }

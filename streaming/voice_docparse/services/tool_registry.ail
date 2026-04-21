@@ -53,7 +53,7 @@ export func dispatchToolCall(call: ToolCall) -> Result[string, string] ! {FS @li
 {
   let filepath = extractFilepath(call.args);
   if length(filepath) == 0 then Err("No filepath provided")
-  else if not fileExists(filepath) then Err("File not found: " ++ filepath)
+  else if not fileExists(filepath) then Err("File not found: ${filepath}")
   else {
     match call.name {
       "parseDocument" => handleParseDocument(filepath),
@@ -64,7 +64,7 @@ export func dispatchToolCall(call: ToolCall) -> Result[string, string] ! {FS @li
         let query = extractQuery(call.args);
         handleSearchDocument(filepath, query)
       },
-      _ => Err("Unknown tool: " ++ call.name)
+      _ => Err("Unknown tool: ${call.name}")
     }
   }
 }
@@ -90,13 +90,13 @@ func parseDocOk(s: string) -> Result[string, string] =
 
 func handleParseDocument(filepath: string) -> Result[string, string] ! {FS} {
   let blocks = parseDocBlocks(filepath);
-  if listLength(blocks) == 0 then Err("No content extracted from " ++ filepath)
+  if listLength(blocks) == 0 then Err("No content extracted from ${filepath}")
   else parseDocOk(renderBlocks(blocks))
 }
 
 -- Extract only tables
 func tablesOk(md: string, count: int) -> Result[string, string] =
-  Ok("Found " ++ intToStr(count) ++ " tables:\n\n" ++ md)
+  Ok("Found ${intToStr(count)} tables:\n\n${md}")
 
 func handleExtractTables(filepath: string) -> Result[string, string] ! {FS} {
   let blocks = parseDocx(filepath);
@@ -108,7 +108,7 @@ func handleExtractTables(filepath: string) -> Result[string, string] ! {FS} {
 
 -- Extract document outline (headings only)
 func headingsOk(outline: string, count: int) -> Result[string, string] =
-  Ok("Document outline (" ++ intToStr(count) ++ " headings):\n\n" ++ outline)
+  Ok("Document outline (${intToStr(count)} headings):\n\n${outline}")
 
 func handleExtractHeadings(filepath: string) -> Result[string, string] ! {FS} {
   let blocks = parseDocx(filepath);
@@ -125,12 +125,7 @@ func countContentOk(blocks: [Block]) -> Result[string, string] {
   let images = listLength(filter(isImage, blocks));
   let headings = listLength(filter(isHeading, blocks));
   let paragraphs = total - tables - images - headings;
-  Ok("Document contains: " ++
-     intToStr(paragraphs) ++ " paragraphs, " ++
-     intToStr(tables) ++ " tables, " ++
-     intToStr(images) ++ " images, " ++
-     intToStr(headings) ++ " headings (" ++
-     intToStr(total) ++ " blocks total)")
+  Ok("Document contains: ${intToStr(paragraphs)} paragraphs, ${intToStr(tables)} tables, ${intToStr(images)} images, ${intToStr(headings)} headings (${intToStr(total)} blocks total)")
 }
 
 func handleCountContent(filepath: string) -> Result[string, string] ! {FS} {
@@ -140,7 +135,7 @@ func handleCountContent(filepath: string) -> Result[string, string] ! {FS} {
 
 -- Search for text in document
 func searchOk(md: string, count: int, query: string) -> Result[string, string] =
-  Ok("Found " ++ intToStr(count) ++ " matches for '" ++ query ++ "':\n\n" ++ md)
+  Ok("Found ${intToStr(count)} matches for '${query}':\n\n${md}")
 
 func handleSearchDocument(filepath: string, query: string) -> Result[string, string] ! {FS} {
   if length(query) == 0 then Err("No search query provided")
@@ -148,7 +143,7 @@ func handleSearchDocument(filepath: string, query: string) -> Result[string, str
     let blocks = parseDocx(filepath);
     let matches = filter(\b. containsText(blockText(b), query), blocks);
     let count = listLength(matches);
-    if count == 0 then Ok("No matches found for '" ++ query ++ "'")
+    if count == 0 then Ok("No matches found for '${query}'")
     else searchOk(renderBlocks(matches), count, query)
   }
 }

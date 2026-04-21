@@ -73,7 +73,7 @@ export func main() -> () ! {IO @limit=200, Stream @limit=500, Env} {
 }
 
 func runChat(apiKey: string, userMessage: string) -> () ! {IO, Stream} {
-  println("You: " ++ userMessage);
+  println("You: ${userMessage}");
   println("");
   println("Claude: ");
 
@@ -92,7 +92,7 @@ func runChat(apiKey: string, userMessage: string) -> () ! {IO, Stream} {
       println("");
       println("=== Stream Complete ===")
     },
-    Err(e) => println("Connection failed: " ++ show(e))
+    Err(e) => println("Connection failed: ${e}")
   }
 }
 
@@ -126,7 +126,7 @@ func handleSSEEvent(event: StreamEvent) -> bool ! {IO} =
     },
     StreamError(err) => {
       println("");
-      println("[Error] SSE error: " ++ show(err));
+      println("[Error] SSE error: ${err}");
       false
     },
     _ => true
@@ -159,7 +159,7 @@ func handleClaudeEvent(event: ClaudeEvent) -> bool ! {IO} =
     },
     ClaudeError(err) => {
       println("");
-      println("[Error] " ++ err.errType ++ ": " ++ err.message);
+      println("[Error] ${err.errType}: ${err.message}");
       false
     },
     UnknownEvent(t) => true

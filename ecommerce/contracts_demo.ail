@@ -60,28 +60,28 @@ export func main() -> () ! {IO @limit=20} {
 
   println("1. Price discount with contracts...");
   let discounted = applyDiscount(99.99, 20.0);
-  println("   applyDiscount(99.99, 20.0) = $" ++ show(discounted));
+  println("   applyDiscount(99.99, 20.0) = $${discounted}");
   println("   requires: price >= 0, 0 <= discountPct <= 100");
   println("   ensures:  result >= 0");
   println("");
 
   println("2. Quantity validation...");
   let qty = validateQuantity(5);
-  println("   validateQuantity(5) = " ++ show(qty));
+  println("   validateQuantity(5) = ${qty}");
   println("   requires: qty > 0");
   println("   ensures:  result > 0");
   println("");
 
   println("3. Calculate total with contracts...");
   let total = calculateTotal(29.99, 3);
-  println("   calculateTotal(29.99, 3) = $" ++ show(total));
+  println("   calculateTotal(29.99, 3) = $${total}");
   println("   requires: unitPrice >= 0, quantity > 0");
   println("   ensures:  result >= 0");
   println("");
 
   println("4. Clamp quantity to inventory bounds...");
   let clamped = clampQuantity(150, 1, 100);
-  println("   clampQuantity(150, 1, 100) = " ++ show(clamped));
+  println("   clampQuantity(150, 1, 100) = ${clamped}");
   println("   requires: minQty >= 0, maxQty >= minQty");
   println("   ensures:  result >= minQty");
   println("");

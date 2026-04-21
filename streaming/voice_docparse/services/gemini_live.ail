@@ -25,7 +25,7 @@ export pure func geminiLiveUrl(region: string) -> string
 {
   if region == "global"
     then "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
-    else "wss://" ++ region ++ "-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+    else "wss://${region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
 }
 
 -- Connect to Gemini Live API using ADC (Bearer token auth)
@@ -33,10 +33,10 @@ export func connectGemini(token: string, region: string) -> Result[StreamConn, s
   ensures { match result { Ok(_) => true, Err(e) => length(e) > 0 } }
 {
   let url = geminiLiveUrl(region);
-  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
+  let config = { headers: [{ name: "Authorization", value: "Bearer ${token}" }] };
   match connect(url, config) {
     Ok(conn) => Ok(conn),
-    Err(e) => Err("Failed to connect to Gemini Live API: " ++ show(e))
+    Err(e) => Err("Failed to connect to Gemini Live API: ${e}")
   }
 }
 

@@ -77,27 +77,14 @@ pure func isDivByZero(reason: string) -> bool =
 export func safetyReport(stats: SafetyStats) -> string
   ensures { length(result) > 0 }
 {
-  "=== Safety Report ===" ++
-  "\nTotal tool calls:       " ++ show(stats.toolCallsTotal) ++
-  "\n  Succeeded:            " ++ show(stats.toolCallsSucceeded) ++
-  "\n  Rejected:             " ++ show(stats.toolCallsFailed) ++
-  "\nContracts checked:      " ++ show(stats.contractsChecked) ++
-  "\nPath traversal blocked: " ++ show(stats.pathRejections) ++
-  "\nUnsafe query blocked:   " ++ show(stats.queryRejections) ++
-  "\nDiv-by-zero blocked:    " ++ show(stats.divisionByZeroBlocked) ++
-  "\nOverflows clamped:      " ++ show(stats.overflowsClamped)
+  "=== Safety Report ===\nTotal tool calls:       ${stats.toolCallsTotal}\n  Succeeded:            ${stats.toolCallsSucceeded}\n  Rejected:             ${stats.toolCallsFailed}\nContracts checked:      ${stats.contractsChecked}\nPath traversal blocked: ${stats.pathRejections}\nUnsafe query blocked:   ${stats.queryRejections}\nDiv-by-zero blocked:    ${stats.divisionByZeroBlocked}\nOverflows clamped:      ${stats.overflowsClamped}"
 }
 
 -- Compact one-line summary for voice output
 export func safetyOneLiner(stats: SafetyStats) -> string
   ensures { length(result) > 0 }
 {
-  show(stats.toolCallsTotal) ++ " calls (" ++
-  show(stats.toolCallsSucceeded) ++ " ok, " ++
-  show(stats.toolCallsFailed) ++ " blocked: " ++
-  show(stats.pathRejections) ++ " path, " ++
-  show(stats.queryRejections) ++ " query, " ++
-  show(stats.divisionByZeroBlocked) ++ " div0)"
+  "${stats.toolCallsTotal} calls (${stats.toolCallsSucceeded} ok, ${stats.toolCallsFailed} blocked: ${stats.pathRejections} path, ${stats.queryRejections} query, ${stats.divisionByZeroBlocked} div0)"
 }
 
 -- Check if the session is "clean" (no rejected tool calls)

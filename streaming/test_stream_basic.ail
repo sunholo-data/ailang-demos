@@ -11,7 +11,7 @@ import std/string (startsWith)
 func testDefaultConfig() -> () ! {IO} {
   println("[Test 1] defaultConfig...");
   let cfg = defaultConfig(());
-  println("  Result: " ++ show(cfg));
+  println("  Result: ${cfg}");
   println("  PASS");
   println("")
 }
@@ -23,7 +23,7 @@ func testConnect() -> () ! {IO, Stream} {
   println("[Test 2] connect + disconnect...");
   let cfg = defaultConfig(());
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  connect(): " ++ show(conn));
+  println("  connect(): ${conn}");
   disconnect(conn);
   println("  disconnect(): OK (auto-unwrapped Ok(StreamConn))");
   println("  PASS");
@@ -38,7 +38,7 @@ func testStatus() -> () ! {IO, Stream} {
   let cfg = defaultConfig(());
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
   let st = status(conn);
-  println("  status(): " ++ show(st));
+  println("  status(): ${st}");
   disconnect(conn);
   println("  PASS");
   println("")
@@ -55,7 +55,7 @@ func testOnEvent() -> () ! {IO, Stream} {
   -- NOTE: can't transmit yet (Text/Bin constructors missing)
   -- Just register handler and see what events arrive (Opened event)
   onEvent(conn, \event. {
-    println("  Event: " ++ show(event));
+    println("  Event: ${event}");
     false  -- stop after first event
   });
   runEventLoop(conn);
@@ -70,10 +70,10 @@ func testOnEvent() -> () ! {IO, Stream} {
 func testWithStream() -> () ! {IO, Stream} {
   println("[Test 5] withStream (was broken, now fixed)...");
   let result = withStream("wss://ws.postman-echo.com/raw", \event. {
-    println("  withStream event: " ++ show(event));
+    println("  withStream event: ${event}");
     false
   });
-  println("  withStream returned: " ++ show(result));
+  println("  withStream returned: ${result}");
   println("  PASS");
   println("")
 }
@@ -85,7 +85,7 @@ func testBadUrl() -> () ! {IO, Stream} {
   println("[Test 6] Connect to bad URL...");
   let cfg = defaultConfig(());
   let result = connect("wss://this-will-fail.invalid/ws", cfg);
-  println("  Error result: " ++ show(result));
+  println("  Error result: ${result}");
   println("  PASS");
   println("")
 }
@@ -97,13 +97,13 @@ func testTransmit() -> () ! {IO, Stream} {
   println("[Test 7] transmit with plain string...");
   let cfg = defaultConfig(());
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connected: " ++ show(conn));
+  println("  Connected: ${conn}");
   let sendResult = transmit(conn, "Hello from AILANG!");
-  println("  transmit() returned: " ++ show(sendResult));
+  println("  transmit() returned: ${sendResult}");
 
   -- Listen for echo
   onEvent(conn, \event. {
-    println("  Echo event: " ++ show(event));
+    println("  Echo event: ${event}");
     false
   });
   runEventLoop(conn);
@@ -119,7 +119,7 @@ func testHeaders() -> () ! {IO, Stream} {
   println("[Test 8] Config with custom headers...");
   let cfg = {headers: [{name: "X-Custom", value: "ailang-test"}]};
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connect with headers: " ++ show(conn));
+  println("  Connect with headers: ${conn}");
   disconnect(conn);
   println("  PASS");
   println("")
@@ -132,16 +132,16 @@ func testEchoRoundTrip() -> () ! {IO, Stream} {
   println("[Test 9] Full echo round-trip...");
   let cfg = defaultConfig(());
   let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connected: " ++ show(conn));
+  println("  Connected: ${conn}");
 
   -- Send after connection opens
   let sr = transmit(conn, "AILANG echo test 123");
-  println("  Sent: " ++ show(sr));
+  println("  Sent: ${sr}");
 
   -- Listen for events — stop as soon as we see a Message (the echo)
   -- NOTE: can't track mutable count in pure AILANG closures
   onEvent(conn, \event. {
-    println("  Event: " ++ show(event));
+    println("  Event: ${event}");
     -- Stop when we get a Message (the echo), keep going on Opened
     not (startsWith(show(event), "Message"))
   });

@@ -30,7 +30,7 @@ func describeOneBlock(b: Block) -> Block ! {AI} =
   match b {
     ImageBlock(img) => {
       let description = if length(img.data) > 0
-        then call("Describe this image concisely in one sentence. Focus on the key content and any text visible. Image data (base64): " ++ img.data)
+        then call("Describe this image concisely in one sentence. Focus on the key content and any text visible. Image data (base64): ${img.data}")
         else "";
       ImageBlock({data: img.data, description: description, mime: img.mime})
     },
@@ -51,11 +51,7 @@ export func inferTableStructure(block: Block) -> Block ! {AI}
       let tableDesc = formatTableForAI(tbl.headers, tbl.rows);
       let tableSchema = "{\"type\":\"object\",\"properties\":{\"headers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}}";
       let response = callJson(
-        "Analyze this table and return a JSON object with:" ++
-        " \"headers\": [list of header strings]," ++
-        " \"rows\": [[row1 cells], [row2 cells], ...]." ++
-        " Fix any merged cell issues, align columns, and clean up whitespace." ++
-        " Table data:\n" ++ tableDesc,
+        "Analyze this table and return a JSON object with: \"headers\": [list of header strings], \"rows\": [[row1 cells], [row2 cells], ...]. Fix any merged cell issues, align columns, and clean up whitespace. Table data:\n${tableDesc}",
         tableSchema
       );
       match parseTableResponse(response) {
@@ -74,11 +70,7 @@ export func inferReadingOrder(blocks: [Block]) -> [Block] ! {AI}
 {
   let blockSummary = summarizeBlocks(blocks, 0);
   let response = callJsonSimple(
-    "Given these document blocks in their original order, " ++
-    "return the correct reading order as a JSON array of block indices (0-based). " ++
-    "Consider: multi-column layouts should be read column by column, " ++
-    "headers before their content, captions near their images.\n" ++
-    "Blocks:\n" ++ blockSummary
+    "Given these document blocks in their original order, return the correct reading order as a JSON array of block indices (0-based). Consider: multi-column layouts should be read column by column, headers before their content, captions near their images.\nBlocks:\n${blockSummary}"
   );
   match parseOrderResponse(response, blocks) {
     Some(reordered) => reordered,
@@ -93,12 +85,7 @@ export func cleanExtractedText(blocks: [Block]) -> [Block] ! {AI}
 {
   let rawText = collectBlockTexts(blocks);
   let response = call(
-    "Clean up this extracted document text. Fix:" ++
-    " broken paragraphs (merge lines that were split mid-sentence)," ++
-    " remove OCR artifacts," ++
-    " fix obvious encoding issues." ++
-    " Return the cleaned text with paragraph breaks as \\n\\n.\n\n" ++
-    rawText
+    "Clean up this extracted document text. Fix: broken paragraphs (merge lines that were split mid-sentence), remove OCR artifacts, fix obvious encoding issues. Return the cleaned text with paragraph breaks as \\n\\n.\n\n${rawText}"
   );
   [TextBlock({text: response, style: "cleaned", level: 0})]
 }
@@ -159,16 +146,16 @@ pure func aiCountMergedInRows(rows: [[TableCell]]) -> int =
 
 -- Format a table for AI analysis
 pure func formatTableForAI(headers: [TableCell], rows: [[TableCell]]) -> string {
-  let headerLine = "Headers: " ++ joinTableCells(headers);
+  let headerLine = "Headers: ${joinTableCells(headers)}";
   let rowLines = formatRows(rows, 1);
-  headerLine ++ "\n" ++ rowLines
+  "${headerLine}\n${rowLines}"
 }
 
 pure func formatRows(rows: [[TableCell]], idx: int) -> string =
   match rows {
     [] => "",
     row :: rest =>
-      "Row " ++ show(idx) ++ ": " ++ joinTableCells(row) ++ "\n" ++ formatRows(rest, idx + 1)
+      "Row ${idx}: ${joinTableCells(row)}\n${formatRows(rest, idx + 1)}"
   }
 
 pure func joinTableCells(cells: [TableCell]) -> string =
@@ -179,27 +166,27 @@ pure func summarizeBlocks(blocks: [Block], idx: int) -> string =
   match blocks {
     [] => "",
     b :: rest =>
-      show(idx) ++ ": " ++ blockSummary(b) ++ "\n" ++ summarizeBlocks(rest, idx + 1)
+      "${idx}: ${blockSummary(b)}\n${summarizeBlocks(rest, idx + 1)}"
   }
 
 pure func blockSummary(b: Block) -> string =
   match b {
-    TextBlock(t) => "[text] " ++ truncateStr(t.text, 60),
-    HeadingBlock(h) => "[h" ++ show(h.level) ++ "] " ++ h.text,
-    TableBlock(t) => "[table] " ++ show(countRows(t.rows)) ++ " rows",
-    ListBlock(l) => "[list] " ++ show(aiCountItems(l.items)) ++ " items",
-    ImageBlock(i) => "[image] " ++ i.mime,
-    AudioBlock(a) => "[audio] " ++ a.mime,
-    VideoBlock(v) => "[video] " ++ v.mime,
-    SectionBlock(s) => "[" ++ s.kind ++ "] " ++ show(aiCountItems2(s.blocks)) ++ " blocks",
-    ChangeBlock(c) => "[" ++ c.changeType ++ "] " ++ truncateStr(c.text, 60)
+    TextBlock(t) => "[text] ${truncateStr(t.text, 60)}",
+    HeadingBlock(h) => "[h${h.level}] ${h.text}",
+    TableBlock(t) => "[table] ${countRows(t.rows)} rows",
+    ListBlock(l) => "[list] ${aiCountItems(l.items)} items",
+    ImageBlock(i) => "[image] ${i.mime}",
+    AudioBlock(a) => "[audio] ${a.mime}",
+    VideoBlock(v) => "[video] ${v.mime}",
+    SectionBlock(s) => "[${s.kind}] ${aiCountItems2(s.blocks)} blocks",
+    ChangeBlock(c) => "[${c.changeType}] ${truncateStr(c.text, 60)}"
   }
 
 pure func aiCountItems2(blocks: [Block]) -> int = listLength(blocks)
 
 pure func truncateStr(s: string, maxLen: int) -> string {
   if length(s) <= maxLen then s
-  else substring(s, 0, maxLen) ++ "..."
+  else "${substring(s, 0, maxLen)}..."
 }
 
 pure func countRows(rows: [[TableCell]]) -> int = listLength(rows)

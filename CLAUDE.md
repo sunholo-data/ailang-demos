@@ -28,10 +28,7 @@ demos/
 │   ├── claude_chat/       # Claude SSE streaming
 │   ├── gemini_live/       # Gemini Live WebSocket bidi (audio)
 │   ├── safe_agent/        # Contract-verified tool calling (REST + SSE)
-│   ├── transcription/     # Deepgram speech-to-text
-│   ├── voice_analytics/   # Voice → BigQuery queries
-│   ├── voice_docparse/    # Voice → document analysis
-│   └── voice_pipeline/    # STT → LLM → TTS pipeline
+│   └── voice_docparse/    # Voice → document analysis
 ├── linkedin/              # LinkedIn marketing automation
 │   ├── main.ail
 │   ├── services/
@@ -101,11 +98,9 @@ GOOGLE_API_KEY="" ailang run --entry main \
   --caps IO,FS,Stream,Net,Env --verify-contracts \
   streaming/safe_agent/main.ail "Calculate 500 times 300"
 
-# ── Not yet tested (need API keys or missing features) ──
-
-# Transcription (needs DEEPGRAM_API_KEY)
-# Voice Pipeline (needs DEEPGRAM_API_KEY + ELEVENLABS_API_KEY)
-# Voice Analytics / Voice DocParse (should work now — have writeFileBytes + std/process)
+# Voice DocParse (should work — has writeFileBytes + std/process)
+GOOGLE_API_KEY="" ailang run --entry main \
+  --caps IO,FS,Stream,Net,Env streaming/voice_docparse/main.ail
 ```
 
 ## Auth Patterns
@@ -128,11 +123,9 @@ GOOGLE_API_KEY="" ailang run --entry main \
 | Gemini SSE | SSE (`ssePost`) | **YES** | `?alt=sse` endpoint |
 | Gemini Live | WebSocket (`connect`) | **YES** | Audio→WAV native, 30 voices, `&& afplay` to play |
 | Safe Agent | REST + SSE | **YES** | Contract verification works |
-| Transcription | WebSocket (`connect`) | No | Needs Deepgram key |
-| Voice Analytics | WebSocket (`connect`) | No | Audio-only model output |
 | Voice DocParse | WebSocket (`connect`) | No | Audio-only model output |
-| Voice Pipeline | WebSocket (`connect`) | No | Needs Deepgram + ElevenLabs keys |
 | Ambient Assistant | WebSocket (`connect`) | **YES** | Proactive audio, tools, mic, video, async |
+| Co-Presenter | WebSocket (`connect`) | No (browser-only) | Silent listener, tools, Gemini 3 Flash Live |
 
 ## Ambient Assistant (ambient)
 

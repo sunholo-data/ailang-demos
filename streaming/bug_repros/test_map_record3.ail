@@ -9,7 +9,7 @@ func testPlainRecords(xs: [{name: string}]) -> [string] =
 
 -- Test 2: map strings (should work)
 func testStrings(xs: [string]) -> [string] =
-  map(\s. s ++ "!", xs)
+  map(\s. "${s}!", xs)
 
 -- Test 3: map ints
 func testInts(xs: [int]) -> [int] =

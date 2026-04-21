@@ -524,10 +524,10 @@ const core = new GeminiLiveCore({
   workletPath: '../streaming/shared/audio-worklet.js',
   modules: [
     // Package dependencies (loaded before main module for import resolution)
-    { name: 'sunholo/gemini_live/voices',    path: '../ailang/pkg/sunholo/gemini_live/voices.ail' },
-    { name: 'sunholo/gemini_live/endpoints', path: '../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
-    { name: 'sunholo/gemini_live/messages',  path: '../ailang/pkg/sunholo/gemini_live/messages.ail' },
-    { name: 'sunholo/gemini_live/parsers',   path: '../ailang/pkg/sunholo/gemini_live/parsers.ail' },
+    { name: 'pkg/sunholo/gemini_live/voices',    path: '../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'pkg/sunholo/gemini_live/endpoints', path: '../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    { name: 'pkg/sunholo/gemini_live/messages',  path: '../ailang/pkg/sunholo/gemini_live/messages.ail' },
+    { name: 'pkg/sunholo/gemini_live/parsers',   path: '../ailang/pkg/sunholo/gemini_live/parsers.ail' },
     // Main module (last — has exports like buildAudioChunk, buildTextMessage)
     { name: WASM_MODULE, path: '../ailang/co_presenter/co_presenter.ail' },
   ],

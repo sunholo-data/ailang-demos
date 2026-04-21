@@ -84,7 +84,7 @@ func linkedinDispatch(cmd: string, rest: [string]) -> () ! {IO, FS, Net, Env} {
   else if cmd == "status" then linkedinCmdStatus()
   else if cmd == "setup" then linkedinCmdSetup()
   else {
-    println("Unknown command: " ++ cmd);
+    println("Unknown command: ${cmd}");
     linkedinShowUsage()
   }
 }
@@ -96,7 +96,7 @@ func linkedinCmdList() -> () ! {IO, FS} {
   println("");
   let posts = linkedinLoadAllPosts();
   let total = listLength(posts);
-  println("Found " ++ show(total) ++ " posts with content:");
+  println("Found ${total} posts with content:");
   println("");
   linkedinPrintPostList(posts)
 }
@@ -110,7 +110,7 @@ func linkedinPrintPostList(posts: [MarketingPost]) -> () ! {IO, FS} =
     post :: rest => {
       let published = linkedinIsPublished(post.slug);
       let status = if published then "[PUBLISHED]" else "[DRAFT]    ";
-      println("  " ++ status ++ " " ++ post.slug ++ " — " ++ post.title);
+      println("  ${status} ${post.slug} — ${post.title}");
       linkedinPrintPostList(rest)
     }
   }
@@ -133,21 +133,21 @@ func linkedinDryRun(args: [string]) -> () ! {IO, FS} {
     slug :: _ => {
       match linkedinLoadPost(slug) {
         Ok(post) => {
-          println("=== DRY RUN: " ++ post.slug ++ " ===");
+          println("=== DRY RUN: ${post.slug} ===");
           println("");
-          println("Title: " ++ post.title);
-          println("Link:  " ++ post.link);
+          println("Title: ${post.title}");
+          println("Link:  ${post.link}");
           println("");
           println("--- Post Body ---");
           println(post.body);
           println("--- End ---");
           println("");
-          println("Characters: " ++ show(length(post.body)));
+          println("Characters: ${length(post.body)}");
           let ok = length(post.body) <= 3000;
           if ok then println("Length: OK (under 3000 char limit)")
           else println("WARNING: Post exceeds 3000 char LinkedIn limit!")
         },
-        Err(e) => println("Error: " ++ e)
+        Err(e) => println("Error: ${e}")
       }
     }
   }
@@ -158,34 +158,34 @@ func linkedinPublishPost(slug: string) -> () ! {IO, FS, Net, Env} {
     Ok(post) => {
       let alreadyPublished = linkedinIsPublished(slug);
       if alreadyPublished then {
-        println("Post " ++ slug ++ " is already published.");
+        println("Post ${slug} is already published.");
         println("Use the LinkedIn web UI to edit or delete it.")
       }
       else linkedinDoPublish(post)
     },
-    Err(e) => println("Error loading post: " ++ e)
+    Err(e) => println("Error loading post: ${e}")
   }
 }
 
 func linkedinDoPublish(post: MarketingPost) -> () ! {IO, FS, Net, Env} {
-  println("Publishing: " ++ post.slug ++ " — " ++ post.title);
+  println("Publishing: ${post.slug} — ${post.title}");
   match linkedinGetToken() {
     Ok(token) => {
       match linkedinGetOrgUrn() {
         Ok(orgUrn) => {
-          println("Auth: OK | Org: " ++ orgUrn);
+          println("Auth: OK | Org: ${orgUrn}");
           match linkedinCreatePost(token, orgUrn, post.body) {
             Ok(result) => {
-              println("Published! URN: " ++ result.postUrn);
+              println("Published! URN: ${result.postUrn}");
               linkedinSaveState(post.slug, result.postUrn, "now")
             },
-            Err(e) => println("Error publishing: " ++ e)
+            Err(e) => println("Error publishing: ${e}")
           }
         },
-        Err(e) => println("Error: " ++ e)
+        Err(e) => println("Error: ${e}")
       }
     },
-    Err(e) => println("Auth error: " ++ e)
+    Err(e) => println("Auth error: ${e}")
   }
 }
 
@@ -217,7 +217,7 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
         let comments = linkedinGetAllComments(token, states);
         linkedinOutputComments(comments, jsonMode)
       },
-      Err(e) => println("Auth error: " ++ e)
+      Err(e) => println("Auth error: ${e}")
     }
   }
 }
@@ -226,17 +226,17 @@ func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Ne
   let states = linkedinLoadState();
   let postUrn = linkedinFindUrnForSlug(slug, states);
   if length(postUrn) == 0 then {
-    println("Post " ++ slug ++ " is not published yet.")
+    println("Post ${slug} is not published yet.")
   }
   else {
     match linkedinGetToken() {
       Ok(token) => {
         match linkedinGetComments(token, postUrn) {
           Ok(comments) => linkedinOutputComments(comments, jsonMode),
-          Err(e) => println("Error: " ++ e)
+          Err(e) => println("Error: ${e}")
         }
       },
-      Err(e) => println("Auth error: " ++ e)
+      Err(e) => println("Auth error: ${e}")
     }
   }
 }
@@ -251,7 +251,7 @@ func linkedinOutputComments(comments: [LinkedInComment], jsonMode: bool) -> () !
   if jsonMode then println(linkedinCommentsToJson(comments))
   else {
     let count = listLength(comments);
-    println("Found " ++ show(count) ++ " comments:");
+    println("Found ${count} comments:");
     println("");
     linkedinPrintComments(comments)
   }
@@ -261,8 +261,8 @@ func linkedinPrintComments(comments: [LinkedInComment]) -> () ! {IO} =
   match comments {
     [] => println(""),
     c :: rest => {
-      println("  [" ++ c.authorName ++ "] " ++ c.text);
-      println("  Post: " ++ c.parentPostUrn ++ " | " ++ c.createdAt);
+      println("  [${c.authorName}] ${c.text}");
+      println("  Post: ${c.parentPostUrn} | ${c.createdAt}");
       println("");
       linkedinPrintComments(rest)
     }
@@ -279,20 +279,20 @@ func linkedinCmdStatus() -> () ! {IO, FS, Net, Env} {
     Ok(token) => {
       println("Auth:     OK (token available)");
       match linkedinGetOrgUrn() {
-        Ok(urn) => println("Org URN:  " ++ urn),
-        Err(e) => println("Org URN:  " ++ e)
+        Ok(urn) => println("Org URN:  ${urn}"),
+        Err(e) => println("Org URN:  ${e}")
       }
     },
-    Err(e) => println("Auth:     FAILED — " ++ e)
+    Err(e) => println("Auth:     FAILED — ${e}")
   };
 
   -- Check content
   let posts = linkedinLoadAllPosts();
-  println("Posts:    " ++ show(listLength(posts)) ++ " with content");
+  println("Posts:    ${listLength(posts)} with content");
 
   -- Check published
   let states = linkedinLoadState();
-  println("Published: " ++ show(listLength(states)));
+  println("Published: ${listLength(states)}");
   println("")
 }
 

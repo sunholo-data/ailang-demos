@@ -2,7 +2,7 @@ module docparse/services/direct_ai_parser
 
 import std/ai (call, callJson, callJsonSimple)
 import std/fs (readFileBytes)
-import std/string (length, substring, trim, find, startsWith, intToStr, stringToInt)
+import std/string (length, substring, trim, find, startsWith, intToStr, stringToInt, concat as strConcat)
 import std/json (decode, encode, jo, kv, js, jnum, ja, getString, getInt, getBool, getArray, asString, asArray)
 import std/option (Some, None, getOrElse)
 import std/list (map, flatMap, concat, any)
@@ -112,29 +112,14 @@ func parsePdfAllPages(base64Data: string, filepath: string, page: int, totalPage
 func parsePdfOnePage(base64Data: string, filepath: string, page: int, singlePage: bool) -> [Block] ! {AI} {
   let pageInstruction = if singlePage
     then "Extract ALL content from this entire PDF"
-    else "This is a multi-page PDF. Extract ALL content that appears on page " ++ intToStr(page) ++ " only. " ++
-         "You CAN see all pages — focus your extraction on page " ++ intToStr(page) ++ " and skip content from other pages.";
+    else "This is a multi-page PDF. Extract ALL content that appears on page ${intToStr(page)} only. You CAN see all pages — focus your extraction on page ${intToStr(page)} and skip content from other pages.";
   let request = encode(jo([
     kv("mode", js("multimodal")),
     kv("mimeType", js(pdfMimeType())),
     kv("data", js(base64Data)),
     kv("fileName", js(filepath)),
     kv("prompt", js(
-      pageInstruction ++ " Return a JSON array of blocks. " ++
-      "Block types: {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, " ++
-      "{\"type\":\"text\",\"text\":\"...\"}, " ++
-      "{\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, " ++
-      "{\"type\":\"list\",\"items\":[\"full item text here\",...],\"ordered\":bool}. " ++
-      "CRITICAL RULES: " ++
-      "1. Create a SEPARATE text block for EACH paragraph or visual text section. Do NOT merge paragraphs. " ++
-      "2. Include the COMPLETE text of every list item and paragraph — do NOT omit or truncate. " ++
-      "3. Use heading blocks for titles, section headers, and any text that serves as a header (with appropriate level 1-6). " ++
-      "4. For tables, include ALL rows and ALL cell content. " ++
-      "For tables with multi-row headers (e.g. 'Three Months Ended' spanning columns), " ++
-      "use separate header rows: first row for group headers, second for sub-headers. " ++
-      "5. Preserve the document's reading order. " ++
-      "Use compact JSON. Return ONLY the JSON array." ++
-      " If the page has no content, return []."
+      "${pageInstruction} Return a JSON array of blocks. Block types: {\"type\":\"heading\",\"text\":\"...\",\"level\":N}, {\"type\":\"text\",\"text\":\"...\"}, {\"type\":\"table\",\"headers\":[...],\"rows\":[[...]]}, {\"type\":\"list\",\"items\":[\"full item text here\",...],\"ordered\":bool}. CRITICAL RULES: 1. Create a SEPARATE text block for EACH paragraph or visual text section. Do NOT merge paragraphs. 2. Include the COMPLETE text of every list item and paragraph — do NOT omit or truncate. 3. Use heading blocks for titles, section headers, and any text that serves as a header (with appropriate level 1-6). 4. For tables, include ALL rows and ALL cell content. For tables with multi-row headers (e.g. 'Three Months Ended' spanning columns), use separate header rows: first row for group headers, second for sub-headers. 5. Preserve the document's reading order. Use compact JSON. Return ONLY the JSON array. If the page has no content, return []."
     ))
   ]));
   let response = callJsonSimple(request);
@@ -154,8 +139,7 @@ export func parseImage(filepath: string, mime: string) -> [Block] ! {FS, AI} {
           kv("data", js(base64Data)),
           kv("fileName", js(filepath)),
           kv("prompt", js(
-            "Describe this image in detail. Include what it shows, any visible text or labels, " ++
-            "key data or information conveyed, and visual structure. Be concise but thorough."
+            "Describe this image in detail. Include what it shows, any visible text or labels, key data or information conveyed, and visual structure. Be concise but thorough."
           ))
         ]));
         let description = call(request);
@@ -177,12 +161,14 @@ export func parseAudio(filepath: string, mime: string) -> [Block] ! {FS, AI} {
           kv("data", js(base64Data)),
           kv("fileName", js(filepath)),
           kv("prompt", js(
-            "Transcribe and analyze this audio file. Return a JSON object with:\n" ++
-            "- \"transcription\": full text transcription of all speech\n" ++
-            "- \"summary\": brief summary of the audio content\n" ++
-            "- \"speakers\": number of distinct speakers detected\n" ++
-            "- \"language\": detected language\n" ++
-            "Include ALL spoken content. Return ONLY the JSON."
+            strConcat([
+              "Transcribe and analyze this audio file. Return a JSON object with:\n",
+              "- \"transcription\": full text transcription of all speech\n",
+              "- \"summary\": brief summary of the audio content\n",
+              "- \"speakers\": number of distinct speakers detected\n",
+              "- \"language\": detected language\n",
+              "Include ALL spoken content. Return ONLY the JSON."
+            ])
           ))
         ]));
         let audioSchema = "{\"type\":\"object\",\"properties\":{\"transcription\":{\"type\":\"string\"},\"summary\":{\"type\":\"string\"},\"speakers\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"}}}";
@@ -205,16 +191,18 @@ export func parseVideo(filepath: string, mime: string) -> [Block] ! {FS, AI} {
           kv("data", js(base64Data)),
           kv("fileName", js(filepath)),
           kv("prompt", js(
-            "Analyze this video file. Extract ALL content from both visuals and audio. " ++
-            "Return a JSON array of blocks. Each block must be one of these types:\n" ++
-            "- {\"type\":\"heading\",\"text\":\"...\",\"level\":1} (level 1-6)\n" ++
-            "- {\"type\":\"text\",\"text\":\"...\"}\n" ++
-            "- {\"type\":\"table\",\"headers\":[\"col1\",\"col2\"],\"rows\":[[\"a\",\"b\"]]}\n" ++
-            "- {\"type\":\"list\",\"items\":[\"item1\",\"item2\"],\"ordered\":false}\n" ++
-            "- {\"type\":\"image\",\"description\":\"what is shown in this scene\"}\n" ++
-            "- {\"type\":\"transcription\",\"text\":\"spoken words\"}\n\n" ++
-            "Include scene descriptions, any on-screen text, tables or data shown, " ++
-            "and full transcription of speech. Return ONLY the JSON array."
+            strConcat([
+              "Analyze this video file. Extract ALL content from both visuals and audio. ",
+              "Return a JSON array of blocks. Each block must be one of these types:\n",
+              "- {\"type\":\"heading\",\"text\":\"...\",\"level\":1} (level 1-6)\n",
+              "- {\"type\":\"text\",\"text\":\"...\"}\n",
+              "- {\"type\":\"table\",\"headers\":[\"col1\",\"col2\"],\"rows\":[[\"a\",\"b\"]]}\n",
+              "- {\"type\":\"list\",\"items\":[\"item1\",\"item2\"],\"ordered\":false}\n",
+              "- {\"type\":\"image\",\"description\":\"what is shown in this scene\"}\n",
+              "- {\"type\":\"transcription\",\"text\":\"spoken words\"}\n\n",
+              "Include scene descriptions, any on-screen text, tables or data shown, ",
+              "and full transcription of speech. Return ONLY the JSON array."
+            ])
           ))
         ]));
         let videoSchema = "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"level\":{\"type\":\"integer\"},\"headers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"rows\":{\"type\":\"array\"},\"items\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"ordered\":{\"type\":\"boolean\"},\"description\":{\"type\":\"string\"}}}}";
@@ -237,9 +225,11 @@ export func parsePdfMetadata(filepath: string) -> DocMetadata ! {FS, AI} {
           kv("data", js(base64Data)),
           kv("fileName", js(filepath)),
           kv("prompt", js(
-            "Extract metadata from this PDF. Return JSON: " ++
-            "{\"title\":\"...\",\"author\":\"...\",\"pageCount\":N}. " ++
-            "Use empty string if unavailable. Return ONLY the JSON."
+            strConcat([
+              "Extract metadata from this PDF. Return JSON: ",
+              "{\"title\":\"...\",\"author\":\"...\",\"pageCount\":N}. ",
+              "Use empty string if unavailable. Return ONLY the JSON."
+            ])
           ))
         ]));
         let metadataSchema = "{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"author\":{\"type\":\"string\"},\"pageCount\":{\"type\":\"integer\"}}}";
@@ -280,7 +270,7 @@ pure func repairJsonArray(s: string) -> Option[string] {
   if startsWith(s, "[") then {
     let lastBrace = findLastBrace(s, length(s) - 1);
     if lastBrace > 0
-    then Some(substring(s, 0, lastBrace + 1) ++ "]")
+    then Some("${substring(s, 0, lastBrace + 1)}]")
     else None
   }
   else None
@@ -397,10 +387,10 @@ pure func parseAudioResponse(response: string, data: string, mime: string) -> [B
       let lang = getOrElse(getString(json, "language"), "");
       let blocks = [AudioBlock({data: data, transcription: transcription, mime: mime})];
       let withSummary = if length(summary) > 0
-        then blocks ++ [TextBlock({text: "Summary: " ++ summary, style: "ai-summary", level: 0})]
+        then blocks ++ [TextBlock({text: "Summary: ${summary}", style: "ai-summary", level: 0})]
         else blocks;
       if length(lang) > 0
-        then withSummary ++ [TextBlock({text: "Language: " ++ lang, style: "ai-metadata", level: 0})]
+        then withSummary ++ [TextBlock({text: "Language: ${lang}", style: "ai-metadata", level: 0})]
         else withSummary
     },
     Err(_) => [AudioBlock({data: data, transcription: response, mime: mime})]
@@ -445,7 +435,7 @@ pure func videoSummaryFromBlocks(blocks: [Block]) -> string =
   match blocks {
     [] => "video content",
     b :: _ => match b {
-      TextBlock(t) => if length(t.text) > 100 then substring(t.text, 0, 100) ++ "..."
+      TextBlock(t) => if length(t.text) > 100 then "${substring(t.text, 0, 100)}..."
                       else t.text,
       HeadingBlock(h) => h.text,
       _ => "video content"

@@ -26,16 +26,16 @@ export type QueryResult = {
 -- Execute a query with an existing access token
 -- Budget: exactly 1 Net operation per query
 export func query(projectId: string, sql: string, token: string) -> Result[QueryResult, string] ! {Net @limit=1} {
-  let url = "https://bigquery.googleapis.com/bigquery/v2/projects/" ++ projectId ++ "/queries";
+  let url = "https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/queries";
   let body = buildQueryRequest(sql);
   let headers = [
-    { name: "Authorization", value: "Bearer " ++ token },
+    { name: "Authorization", value: "Bearer ${token}" },
     { name: "Content-Type", value: "application/json" }
   ];
   match httpRequest("POST", url, headers, body) {
     Ok(response) => {
       if response.ok then parseQueryResponse(response.body)
-      else Err("BigQuery API error (status " ++ show(response.status) ++ "): " ++ response.body)
+      else Err("BigQuery API error (status ${response.status}): ${response.body}")
     },
     Err(_) => Err("Network error connecting to BigQuery API")
   }
@@ -46,7 +46,7 @@ export func query(projectId: string, sql: string, token: string) -> Result[Query
 export func queryWithAuth(projectId: string, sql: string) -> Result[QueryResult, string] ! {Env, FS @limit=10, Net @limit=2} {
   match getAccessToken() {
     Ok(token) => query(projectId, sql, token),
-    Err(e) => Err("Authentication failed: " ++ e)
+    Err(e) => Err("Authentication failed: ${e}")
   }
 }
 
@@ -63,7 +63,7 @@ func buildQueryRequest(sql: string) -> string =
 func parseQueryResponse(body: string) -> Result[QueryResult, string] {
   match decode(body) {
     Ok(json) => extractQueryResult(json),
-    Err(e) => Err("Failed to parse BigQuery response: " ++ e)
+    Err(e) => Err("Failed to parse BigQuery response: ${e}")
   }
 }
 

@@ -24,7 +24,7 @@ export func main() -> () ! {IO @limit=50, AI @limit=10} {
     "Electronics",
     "user likes premium audio, noise cancellation"
   );
-  println("Recommendations: " ++ recommendations);
+  println("Recommendations: ${recommendations}");
   println("");
 
   -- Demo 2: AI-generated product description
@@ -33,7 +33,7 @@ export func main() -> () ! {IO @limit=50, AI @limit=10} {
     "Ultra-Comfort Running Shoes",
     "breathable mesh, gel cushioning, arch support, lightweight"
   );
-  println("Description: " ++ description);
+  println("Description: ${description}");
   println("");
 
   -- Demo 3: Show some sample product data processing
@@ -53,7 +53,7 @@ func printProducts(products: [{name: string, price: float}]) -> () ! {IO} =
   match products {
     [] => (),
     p :: rest => {
-      println("  - " ++ p.name ++ ": $" ++ showPrice(p.price));
+      println("  - ${p.name}: $${showPrice(p.price)}");
       printProducts(rest)
     }
   }

@@ -35,11 +35,7 @@ export func exchangeCode(code: string) -> string ! {IO, FS, Net, Env} {
 
 func oauthDoExchange(code: string, clientId: string, clientSecret: string, orgUrn: string) -> string ! {IO, FS, Net} {
   let url = "https://www.linkedin.com/oauth/v2/accessToken";
-  let body = "grant_type=authorization_code" ++
-             "&code=" ++ code ++
-             "&client_id=" ++ clientId ++
-             "&client_secret=" ++ clientSecret ++
-             "&redirect_uri=http://localhost:8080/callback";
+  let body = "grant_type=authorization_code&code=${code}&client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=http://localhost:8080/callback";
   let headers = [
     { name: "Content-Type", value: "application/x-www-form-urlencoded" }
   ];
@@ -49,7 +45,7 @@ func oauthDoExchange(code: string, clientId: string, clientSecret: string, orgUr
   match httpRequest("POST", url, headers, body) {
     Ok(response) => {
       if response.ok then oauthSaveTokens(response.body, clientId, clientSecret, orgUrn)
-      else "Error: LinkedIn returned status " ++ show(response.status) ++ " — " ++ response.body
+      else "Error: LinkedIn returned status ${response.status} — ${response.body}"
     },
     Err(_) => "Error: Network error during token exchange"
   }
@@ -61,7 +57,7 @@ func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: strin
       let accessToken = getOrElse(getString(json, "access_token"), "");
       let refreshToken = getOrElse(getString(json, "refresh_token"), "");
 
-      if length(accessToken) == 0 then "Error: No access_token in response — " ++ responseBody
+      if length(accessToken) == 0 then "Error: No access_token in response — ${responseBody}"
       else {
         let creds = encode(jo([
           kv("access_token", js(accessToken)),
@@ -72,18 +68,18 @@ func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: strin
         ]));
 
         let home = getEnvOr("HOME", "/tmp");
-        let credsPath = home ++ "/.ailang/linkedin/credentials.json";
+        let credsPath = "${home}/.ailang/linkedin/credentials.json";
         writeFile(credsPath, creds);
 
-        println("Credentials saved to " ++ credsPath);
-        "Credentials saved! Access token: " ++ oauthTruncate(accessToken) ++ " — test with: linkedin status"
+        println("Credentials saved to ${credsPath}");
+        "Credentials saved! Access token: ${oauthTruncate(accessToken)} — test with: linkedin status"
       }
     },
-    Err(e) => "Error parsing response: " ++ e ++ " — " ++ responseBody
+    Err(e) => "Error parsing response: ${e} — ${responseBody}"
   }
 }
 
 func oauthTruncate(s: string) -> string {
-  if length(s) > 20 then substring(s, 0, 20) ++ "..."
+  if length(s) > 20 then "${substring(s, 0, 20)}..."
   else s
 }

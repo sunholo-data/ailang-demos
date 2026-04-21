@@ -8,4 +8,4 @@ export pure func greetA(name: string) -> string =
 
 -- Internal helper — should only be used by this module
 pure func format(name: string) -> string =
-  "Hello from A: " ++ name
+  "Hello from A: ${name}"

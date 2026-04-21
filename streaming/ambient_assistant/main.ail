@@ -48,7 +48,7 @@ import pkg/sunholo/gcp_auth/token (getAccessToken)
 import pkg/sunholo/gcp_auth/project (getDefaultProject)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
-import std/string (length, join, substring, stringToInt, endsWith, startsWith, trim, split)
+import std/string (length, join, substring, stringToInt, endsWith, startsWith, trim, split, concat as strConcat)
 import std/list (length as listLength, map, forEachE, concat, nth, filter)
 import std/json (encode, decode, getString, getObject, getArray, getBool, getInt,
                  jo, kv, js, ja, jb, filterStrings)
@@ -94,17 +94,17 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
 
   println("=== AILANG Ambient Assistant ===");
   let modeLabel = if interactive then "Interactive (type follow-ups)" else "Single prompt";
-  println("Mode: " ++ modeLabel ++ " | Only responds when addressed");
-  println("Model: " ++ modelName);
-  let features = "Proactive"
-    ++ (if toolsEnabled then " | Tools" else "")
-    ++ (if affectiveEnabled then " | Affective*" else "")
-    ++ (if thinkingBudget >= 0 then " | Thinking: " ++ show(thinkingBudget) else "")
-    ++ (if noInterrupt then " | NoInterrupt" else "")
-    ++ (if interactive then " | Interactive" else "")
-    ++ (if micEnabled then " | Mic" else "")
-    ++ (if length(videoMode) > 0 then " | Video:" ++ videoMode else "");
-  println("Voice: " ++ voice ++ " | Features: " ++ features);
+  println("Mode: ${modeLabel} | Only responds when addressed");
+  println("Model: ${modelName}");
+  let toolsLabel = if toolsEnabled then " | Tools" else "";
+  let affectiveLabel = if affectiveEnabled then " | Affective*" else "";
+  let thinkingLabel = if thinkingBudget >= 0 then " | Thinking: ${thinkingBudget}" else "";
+  let interruptLabel = if noInterrupt then " | NoInterrupt" else "";
+  let interactiveLabel = if interactive then " | Interactive" else "";
+  let micLabel = if micEnabled then " | Mic" else "";
+  let videoLabel = if length(videoMode) > 0 then " | Video:${videoMode}" else "";
+  let features = "Proactive${toolsLabel}${affectiveLabel}${thinkingLabel}${interruptLabel}${interactiveLabel}${micLabel}${videoLabel}";
+  println("Voice: ${voice} | Features: ${features}");
   if affectiveEnabled && useGoogleAi == false then
     println("Note: Affective dialog requires Gen AI SDK or AI Studio (not raw Vertex AI WebSocket)")
   else ();
@@ -114,15 +114,15 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
   println("");
 
   let sessionDir = getEnvOr("GEMINI_SESSION_DIR", "/tmp/ailang_ambient");
-  let handlePath = sessionDir ++ "/session.handle";
+  let handlePath = "${sessionDir}/session.handle";
 
   let newSession = getEnvOr("GEMINI_NEW_SESSION", "");
   let handle = if newSession == "1" then ""
     else if fileExists(handlePath) then readFile(handlePath)
     else "";
   if length(handle) > 0 then
-    println("Session: Resuming | Dir: " ++ sessionDir)
-  else println("Session: New | Dir: " ++ sessionDir);
+    println("Session: Resuming | Dir: ${sessionDir}")
+  else println("Session: New | Dir: ${sessionDir}");
 
   let args = getArgs();
   let prompt = if listLength(args) > 0 then join(" ", args)
@@ -140,18 +140,18 @@ export func main() -> () ! {IO @limit=5000, FS @limit=50000, Stream @limit=50000
         match getAccessToken() {
           Ok(token) => {
             let region = getEnvOr("GEMINI_REGION", "us-central1");
-            println("Auth: OK (ADC) | Project: " ++ projectId ++ " | Region: " ++ region);
+            println("Auth: OK (ADC) | Project: ${projectId} | Region: ${region}");
             startAmbientSession(token, region, projectId, modelName, prompt, voice, handle, sessionDir,
               toolsEnabled, proactiveEnabled, affectiveEnabled, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
           },
           Err(e) => {
-            println("Error: ADC authentication failed: " ++ e);
+            println("Error: ADC authentication failed: ${e}");
             println("Run: gcloud auth application-default login");
             println("Or set GOOGLE_API_KEY for Google AI Studio")
           }
         }
       },
-      Err(e) => println("Error: Project detection failed: " ++ e)
+      Err(e) => println("Error: Project detection failed: ${e}")
     }
   }
 }
@@ -165,7 +165,7 @@ func startAmbientSessionGoogleAi(apiKey: string, modelName: string, prompt: stri
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1beta");
   let url = googleAiUrl(apiKey, apiVersion);
   let config = { headers: [] };
-  let modelId = "models/" ++ modelName;
+  let modelId = "models/${modelName}";
   runAmbientSession(url, config, modelId, prompt, voice, handle, sessionDir,
     toolsEnabled, proactiveEnabled, affectiveEnabled, true, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
 }
@@ -174,9 +174,8 @@ func startAmbientSessionGoogleAi(apiKey: string, modelName: string, prompt: stri
 func startAmbientSession(token: string, region: string, projectId: string, modelName: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", "v1");
   let url = vertexAiUrl(region, apiVersion);
-  let config = { headers: [{ name: "Authorization", value: "Bearer " ++ token }] };
-  let modelId = "projects/" ++ projectId ++ "/locations/" ++ region ++
-                "/publishers/google/models/" ++ modelName;
+  let config = { headers: [{ name: "Authorization", value: "Bearer ${token}" }] };
+  let modelId = "projects/${projectId}/locations/${region}/publishers/google/models/${modelName}";
   runAmbientSession(url, config, modelId, prompt, voice, handle, sessionDir,
     toolsEnabled, proactiveEnabled, affectiveEnabled, false, thinkingBudget, includeThoughts, noInterrupt, interactive, micEnabled, videoMode, videoFps)
 }
@@ -184,48 +183,49 @@ func startAmbientSession(token: string, region: string, projectId: string, model
 -- Shared session logic for both Google AI Studio and Vertex AI
 func runAmbientSession(url: string, config: {headers: List[{name: string, value: string}]}, modelId: string, prompt: string, voice: string, handle: string, sessionDir: string, toolsEnabled: bool, proactiveEnabled: bool, affectiveEnabled: bool, isGoogleAi: bool, thinkingBudget: int, includeThoughts: bool, noInterrupt: bool, interactive: bool, micEnabled: bool, videoMode: string, videoFps: string) -> () ! {IO, FS, Stream, Process, Env} {
   let apiVersion = getEnvOr("GEMINI_API_VERSION", if isGoogleAi then "v1beta" else "v1");
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let wavPath = sessionDir ++ "/output.wav";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
-  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let wavPath = "${sessionDir}/output.wav";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
+  let turnUsagePath = "${sessionDir}/turn_usage.txt";
 
   match connect(url, config) {
     Ok(conn) => {
-      println("[Connected] " ++ url);
+      println("[Connected] ${url}");
       let sessionConfig = if length(handle) > 0 then
         jo([kv("handle", js(handle))])
       else jo([]);
 
       -- Ambient system instruction: passive listener, responds only when addressed
-      let sysInstruction = "You are AILANG, an ambient voice assistant. "
-        ++ "You are always listening but should ONLY respond when directly addressed by name — "
-        ++ "'AILANG', 'hey AILANG', or similar. "
-        ++ "When not addressed, stay completely silent. "
-        ++ "When addressed, respond with full awareness of everything you've heard in the conversation. "
-        ++ "You passively build context from all audio you receive. "
-        ++ "Speak with a British English accent. Keep responses conversational and helpful. "
-        ++ "You have tools available: currentTime, calculate, readFile, listFiles, runCommand, "
-        ++ "summarizeContext, searchNotes, remindLater, cacheResult, getCachedResult, prefetch, takeScreenshot. "
-        ++ "takeScreenshot captures the user's screen or webcam on demand — use it when the user says "
-        ++ "'what's on my screen?', 'look at this', or 'can you see this?' without needing continuous video. "
-        ++ "Use tools proactively when the user asks about time, calculations, files, "
-        ++ "conversation history, notes, or wants to set reminders. "
-        ++ "runCommand supports: git (status/log/diff/branch/show/blame/add/commit), "
-        ++ "gh (pr/issue list/view), ailang (messages/check/docs/prompt/version), "
-        ++ "plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname. "
-        ++ "PROACTIVE DATA GATHERING: When you hear conversational cues suggesting information "
-        ++ "will be needed soon, silently pre-fetch it using the prefetch tool. Examples: "
-        ++ "'let's look at the issues' -> prefetch(key='gh_issues', command='gh', subcommand='issue list'); "
-        ++ "'we need to check the build' -> prefetch(key='gh_runs', command='gh', subcommand='run list'); "
-        ++ "'what's changed since yesterday' -> prefetch(key='git_log', command='git', subcommand='log', args='--since=yesterday --oneline'). "
-        ++ "When pre-fetching, do NOT speak the results — just cache them silently. "
-        ++ "When the user asks directly about cached data, use getCachedResult to retrieve and speak it. "
-        ++ "You can also use cacheResult to store computed summaries for quick retrieval."
-        ++ (if length(videoMode) > 0 then
-          " You can see the user's " ++ (if videoMode == "screen" then "screen" else "webcam")
-          ++ ". Use visual context to help with conversations. "
-          ++ "When you see code, documents, or UI, you can reference what you see."
-        else "");
+      let videoSuffix = if length(videoMode) > 0 then
+        " You can see the user's ${(if videoMode == "screen" then "screen" else "webcam")}. Use visual context to help with conversations. When you see code, documents, or UI, you can reference what you see."
+      else "";
+      let sysInstruction = strConcat([
+        "You are AILANG, an ambient voice assistant. ",
+        "You are always listening but should ONLY respond when directly addressed by name — ",
+        "'AILANG', 'hey AILANG', or similar. ",
+        "When not addressed, stay completely silent. ",
+        "When addressed, respond with full awareness of everything you've heard in the conversation. ",
+        "You passively build context from all audio you receive. ",
+        "Speak with a British English accent. Keep responses conversational and helpful. ",
+        "You have tools available: currentTime, calculate, readFile, listFiles, runCommand, ",
+        "summarizeContext, searchNotes, remindLater, cacheResult, getCachedResult, prefetch, takeScreenshot. ",
+        "takeScreenshot captures the user's screen or webcam on demand — use it when the user says ",
+        "'what's on my screen?', 'look at this', or 'can you see this?' without needing continuous video. ",
+        "Use tools proactively when the user asks about time, calculations, files, ",
+        "conversation history, notes, or wants to set reminders. ",
+        "runCommand supports: git (status/log/diff/branch/show/blame/add/commit), ",
+        "gh (pr/issue list/view), ailang (messages/check/docs/prompt/version), ",
+        "plus ls, date, echo, wc, head, tail, grep, pwd, whoami, uname. ",
+        "PROACTIVE DATA GATHERING: When you hear conversational cues suggesting information ",
+        "will be needed soon, silently pre-fetch it using the prefetch tool. Examples: ",
+        "'let's look at the issues' -> prefetch(key='gh_issues', command='gh', subcommand='issue list'); ",
+        "'we need to check the build' -> prefetch(key='gh_runs', command='gh', subcommand='run list'); ",
+        "'what's changed since yesterday' -> prefetch(key='git_log', command='git', subcommand='log', args='--since=yesterday --oneline'). ",
+        "When pre-fetching, do NOT speak the results — just cache them silently. ",
+        "When the user asks directly about cached data, use getCachedResult to retrieve and speak it. ",
+        "You can also use cacheResult to store computed summaries for quick retrieval.",
+        videoSuffix
+      ]);
 
       -- Generation config
       let baseGenKvs = [
@@ -278,27 +278,27 @@ func runAmbientSession(url: string, config: {headers: List[{name: string, value:
       let setupMsg = encode(jo([kv("setup", jo(allKvs))]));
 
       -- Initialize per-turn temp files
-      let turnDonePath = sessionDir ++ "/turn_done.flag";
-      let setupDonePath = sessionDir ++ "/setup_done.flag";
-      let pendingToolsDir = sessionDir ++ "/pending_tools";
+      let turnDonePath = "${sessionDir}/turn_done.flag";
+      let setupDonePath = "${sessionDir}/setup_done.flag";
+      let pendingToolsDir = "${sessionDir}/pending_tools";
       writeFile(pcmPath, "");
       writeFile(turnTextPath, "");
       writeFile(turnUsagePath, "");
       writeFile(turnDonePath, "");
       writeFile(setupDonePath, "");
-      writeFile(sessionDir ++ "/speaking.flag", "");
+      writeFile("${sessionDir}/speaking.flag", "");
       -- Create pending_tools directory for async tool execution
       exec("mkdir", ["-p", pendingToolsDir]);
 
       -- Save user prompt to transcript
-      let transcriptPath = sessionDir ++ "/transcript.jsonl";
-      appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(prompt))])) ++ "\n");
+      let transcriptPath = "${sessionDir}/transcript.jsonl";
+      appendFile(transcriptPath, "${encode(jo([kv("role", js("user")), kv("text", js(prompt))]))}\n");
 
       -- Register event handler and run
       let allowedPath = getEnvOr("HOME", "/tmp");
       match transmit(conn, setupMsg) {
-        Ok(_) => println("[Setup] Ambient mode (voice: " ++ voice ++ ", proactive: ON, tools: ON)"),
-        Err(e) => println("[Error] Setup failed: " ++ show(e))
+        Ok(_) => println("[Setup] Ambient mode (voice: ${voice}, proactive: ON, tools: ON)"),
+        Err(e) => println("[Error] Setup failed: ${e}")
       };
       println("");
 
@@ -317,14 +317,14 @@ func runAmbientSession(url: string, config: {headers: List[{name: string, value:
         -- Video: spawn capture_frames.sh (outputs base64 JPEG lines via ffmpeg)
         let scriptDir = getEnvOr("GEMINI_SCRIPT_DIR", "streaming/ambient_assistant/scripts");
         let sources = if length(videoMode) > 0 then {
-          println("[Video] Starting " ++ videoMode ++ " capture (ffmpeg " ++ videoFps ++ " FPS)...");
-          let videoSrc = asyncExecProcess(scriptDir ++ "/capture_frames.sh",
+          println("[Video] Starting ${videoMode} capture (ffmpeg ${videoFps} FPS)...");
+          let videoSrc = asyncExecProcess("${scriptDir}/capture_frames.sh",
             [videoMode, videoFps],
             "video", 6, 65536);
           concat(baseSources, [videoSrc])
         } else baseSources;
         -- Initialize video line buffer for accumulating partial base64 lines
-        let videoBufferPath = sessionDir ++ "/video_line_buffer.txt";
+        let videoBufferPath = "${sessionDir}/video_line_buffer.txt";
         writeFile(videoBufferPath, "");
         -- Spawn sox for streaming audio playback (plays PCM as frames arrive)
         let soxHandle = spawnSoxPlayback();
@@ -344,7 +344,7 @@ func runAmbientSession(url: string, config: {headers: List[{name: string, value:
       reportSummary(prompt, turnTextPath, turnUsagePath, transcriptPath);
       println("")
     },
-    Err(e) => println("[Error] Connection failed: " ++ show(e))
+    Err(e) => println("[Error] Connection failed: ${e}")
   }
 }
 
@@ -374,11 +374,11 @@ func handleSelectEvent(event: StreamEvent, conn: StreamConn, prompt: string, ses
     },
     Opened(_) => true,
     Closed(code, reason) => {
-      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      println("[Closed ${code}] ${reason}");
       false
     },
     StreamError(e) => {
-      println("[Error] " ++ show(e));
+      println("[Error] ${e}");
       false
     },
     Ping(_) => true,
@@ -400,13 +400,13 @@ func handleStdinLine(line: string, conn: StreamConn, sessionDir: string, setupDo
 
 func handleExitCommand(pcmPath: string, sessionDir: string) -> bool ! {IO, FS, Process} {
   println("[Exiting] Interactive session ending...");
-  let wavPath2 = sessionDir ++ "/output.wav";
+  let wavPath2 = "${sessionDir}/output.wav";
   reportAudioOutput(pcmPath, wavPath2);
   false
 }
 
 func reportWaiting(line: string) -> bool ! {IO} {
-  println("[Waiting] Session setup not complete yet — message queued: " ++ line);
+  println("[Waiting] Session setup not complete yet — message queued: ${line}");
   true
 }
 
@@ -419,7 +419,7 @@ func sendMicAudio(pcmData: bytes, conn: StreamConn, setupDonePath: string, sessi
   if setupReady != "1" then true
   else {
     -- Mic gating: skip sending while model is speaking or cooling down
-    let speakingFlag = sessionDir ++ "/speaking.flag";
+    let speakingFlag = "${sessionDir}/speaking.flag";
     let flagVal = if fileExists(speakingFlag) then readFile(speakingFlag) else "";
     if flagVal == "1" then true  -- actively speaking, drop mic data
     else if flagVal == "" then {
@@ -435,7 +435,7 @@ func sendMicAudio(pcmData: bytes, conn: StreamConn, setupDonePath: string, sessi
       ]));
       match transmit(conn, audioMsg) {
         Ok(_) => true,
-        Err(e) => { println("[Mic Error] " ++ show(e)); true }
+        Err(e) => { println("[Mic Error] ${e}"); true }
       }
     } else {
       -- Cooldown counter: decrement until 0, then clear flag
@@ -464,10 +464,10 @@ func handleVideoBytes(data: bytes, conn: StreamConn, sessionDir: string, setupDo
   let setupReady = if fileExists(setupDonePath) then readFile(setupDonePath) else "";
   if setupReady != "1" then true
   else {
-    let videoBufferPath = sessionDir ++ "/video_line_buffer.txt";
+    let videoBufferPath = "${sessionDir}/video_line_buffer.txt";
     let existing = if fileExists(videoBufferPath) then readFile(videoBufferPath) else "";
     let newData = bytesToString(data);
-    let combined = existing ++ newData;
+    let combined = "${existing}${newData}";
     -- Split on newlines: complete lines are frames, last element may be partial
     let parts = split(combined, "\n");
     let numParts = listLength(parts);
@@ -515,22 +515,22 @@ func sendVideoFrame(jpegB64: string, conn: StreamConn) -> () ! {IO, Stream} {
     ]))
   ]));
   match transmit(conn, videoMsg) {
-    Ok(_) => println("[Video] Frame sent (" ++ show(length(jpegB64)) ++ " bytes b64)"),
-    Err(e) => println("[Video Error] " ++ show(e))
+    Ok(_) => println("[Video] Frame sent (${length(jpegB64)} bytes b64)"),
+    Err(e) => println("[Video Error] ${e}")
   }
 }
 
 func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream} {
   println("");
-  println("[You] " ++ line);
+  println("[You] ${line}");
   -- Reset per-turn files for new response
   writeFile(pcmPath, "");
-  writeFile(sessionDir ++ "/turn_text.txt", "");
-  writeFile(sessionDir ++ "/turn_usage.txt", "");
-  writeFile(sessionDir ++ "/turn_done.flag", "");
+  writeFile("${sessionDir}/turn_text.txt", "");
+  writeFile("${sessionDir}/turn_usage.txt", "");
+  writeFile("${sessionDir}/turn_done.flag", "");
   -- Save to transcript
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
-  appendFile(transcriptPath, encode(jo([kv("role", js("user")), kv("text", js(line))])) ++ "\n");
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
+  appendFile(transcriptPath, "${encode(jo([kv("role", js("user")), kv("text", js(line))]))}\n");
   -- Send as new turn to Gemini
   -- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
   let textMsg = encode(jo([
@@ -544,7 +544,7 @@ func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath
   ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
-    Err(e) => { println("[Error] Send failed: " ++ show(e)); true }
+    Err(e) => { println("[Error] Send failed: ${e}"); true }
   }
 }
 
@@ -561,17 +561,17 @@ func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDi
     Binary(data) => match decode(data) {
       Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi),
       Err(_) => {
-        println("[Audio] " ++ show(length(data)) ++ " bytes (PCM 24kHz)");
+        println("[Audio] ${length(data)} bytes (PCM 24kHz)");
         true
       }
     },
     Opened(_) => true,
     Closed(code, reason) => {
-      println("[Closed " ++ show(code) ++ "] " ++ reason);
+      println("[Closed ${code}] ${reason}");
       false
     },
     StreamError(e) => {
-      println("[Error] " ++ show(e));
+      println("[Error] ${e}");
       false
     },
     Ping(_) => true
@@ -611,7 +611,7 @@ func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, 
               None => match getObject(json, "usageMetadata") {
                 Some(um) => handleUsageMetadata(um, sessionDir),
                 None => {
-                  println("[MSG] " ++ encode(json));
+                  println("[MSG] ${encode(json)}");
                   true
                 }
               }
@@ -646,7 +646,7 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
               None => match getObject(json, "usageMetadata") {
                 Some(um) => handleUsageMetadata(um, sessionDir),
                 None => {
-                  println("[MSG] " ++ encode(json));
+                  println("[MSG] ${encode(json)}");
                   true
                 }
               }
@@ -664,7 +664,7 @@ func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir:
 -- Use clientContent.turns for text input (works with 2.0 and 2.5 models)
 func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> bool ! {IO, Stream} {
   println("[Setup Complete] Ambient mode active — listening...");
-  println("[Sending] " ++ prompt);
+  println("[Sending] ${prompt}");
   println("");
   let textMsg = encode(jo([
     kv("clientContent", jo([
@@ -677,17 +677,17 @@ func handleSetupComplete(conn: StreamConn, prompt: string, isGoogleAi: bool) -> 
   ]));
   match transmit(conn, textMsg) {
     Ok(_) => true,
-    Err(e) => { println("[Error] Send failed: " ++ show(e)); false }
+    Err(e) => { println("[Error] Send failed: ${e}"); false }
   }
 }
 
 -- Interactive: save handle, then play any accumulated audio (mic mode workaround —
 -- turnComplete may never fire with continuous mic, so we play on session update instead)
 func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} {
-  let handlePath = sessionDir ++ "/session.handle";
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let wavPath = sessionDir ++ "/output.wav";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
+  let handlePath = "${sessionDir}/session.handle";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let wavPath = "${sessionDir}/output.wav";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
   match getString(sr, "newHandle") {
     Some(h) => {
       writeFile(handlePath, h);
@@ -697,9 +697,9 @@ func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle:
       };
       -- Start mic cooldown (~3 sec at 7 events/sec = 21 ticks before unmute)
       -- turnComplete may not fire with continuous mic, so session update is the fallback signal
-      let currentFlag = if fileExists(sessionDir ++ "/speaking.flag") then readFile(sessionDir ++ "/speaking.flag") else "";
+      let currentFlag = if fileExists("${sessionDir}/speaking.flag") then readFile("${sessionDir}/speaking.flag") else "";
       if currentFlag == "1" then {
-        writeFile(sessionDir ++ "/speaking.flag", "21");
+        writeFile("${sessionDir}/speaking.flag", "21");
         println("[Mic] Muted (cooldown 3s)")
       } else ();
       -- Play accumulated audio (skipped when streaming — already played in real-time)
@@ -707,7 +707,7 @@ func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle:
       let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
       if length(said) > 0 then {
         println("");
-        println("AILANG: " ++ said);
+        println("AILANG: ${said}");
         writeFile(turnTextPath, "")
       } else ();
       writeFile(pcmPath, "");
@@ -719,7 +719,7 @@ func handleSessionResumptionInteractive(sr: Json, sessionDir: string, soxHandle:
 
 -- Single-prompt: disconnect after turn done
 func handleSessionResumption(sr: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
-  let handlePath = sessionDir ++ "/session.handle";
+  let handlePath = "${sessionDir}/session.handle";
   match getString(sr, "newHandle") {
     Some(h) => {
       writeFile(handlePath, h);
@@ -735,26 +735,26 @@ func handleSessionResumption(sr: Json, sessionDir: string, turnDonePath: string)
 }
 
 func handleUsageMetadata(um: Json, sessionDir: string) -> bool ! {FS} {
-  let turnUsagePath = sessionDir ++ "/turn_usage.txt";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let turnUsagePath = "${sessionDir}/turn_usage.txt";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   let pTok = getOrElse(getInt(um, "promptTokenCount"), 0);
   let rTok = getOrElse(getInt(um, "candidatesTokenCount"), 0);
   let tTok = getOrElse(getInt(um, "totalTokenCount"), 0);
-  let usageStr = show(pTok) ++ " prompt + " ++ show(rTok) ++ " response = " ++ show(tTok) ++ " total";
+  let usageStr = "${pTok} prompt + ${rTok} response = ${tTok} total";
   writeFile(turnUsagePath, usageStr);
-  appendFile(transcriptPath, encode(jo([
+  appendFile(transcriptPath, "${encode(jo([
     kv("type", js("usage")),
     kv("prompt_tokens", js(show(pTok))),
     kv("response_tokens", js(show(rTok))),
     kv("total_tokens", js(show(tTok))),
     kv("raw", um)
-  ])) ++ "\n");
+  ]))}\n");
   true
 }
 
 -- Handle toolCall: dispatch to ambient tools (extended set)
 func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process} {
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getArray(tc, "functionCalls") {
     Some(calls) => {
       match nth(calls, 0) {
@@ -764,29 +764,29 @@ func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath:
             Some(a) => encode(a),
             None => "{}"
           };
-          println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+          println("[Tool] ${fnName}(${argsJson})");
           let result = match dispatchAmbientTool(fnName, argsJson, allowedPath, sessionDir) {
             Ok(r) => r,
-            Err(e) => "Error: " ++ e
+            Err(e) => "Error: ${e}"
           };
           -- If result is a screenshot, send the frame as video and use text response
           let truncResult = if startsWith(result, "SCREENSHOT:") then {
             let b64Frame = substring(result, 11, length(result));
             sendVideoFrame(b64Frame, conn);
-            "Screenshot captured and sent (" ++ show(length(b64Frame)) ++ " bytes)"
+            "Screenshot captured and sent (${length(b64Frame)} bytes)"
           } else if length(result) > 2000 then substring(result, 0, 2000) else result;
-          println("[Tool Result] " ++ truncResult);
+          println("[Tool Result] ${truncResult}");
           let responseMsg = buildToolResponseMsg(fnName, truncResult);
           match transmit(conn, responseMsg) {
             Ok(_) => (),
-            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+            Err(e) => println("[Error] Tool response failed: ${e}")
           };
-          appendFile(transcriptPath, encode(jo([
+          appendFile(transcriptPath, "${encode(jo([
             kv("type", js("tool_call")),
             kv("name", js(fnName)),
             kv("args", js(argsJson)),
             kv("result", js(truncResult))
-          ])) ++ "\n");
+          ]))}\n");
           true
         },
         None => true
@@ -812,42 +812,42 @@ pure func isSlowTool(name: string) -> bool =
 
 -- Async-aware tool handler: fast tools sync, slow tools spawned as subprocess
 func handleToolCallAsync(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process, Env} {
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getArray(tc, "functionCalls") {
     Some(calls) => match nth(calls, 0) {
       Some(call) => {
         let fnName = getOrElse(getString(call, "name"), "");
-        let callId = getOrElse(getString(call, "id"), fnName ++ "_" ++ show(getNextCallId(sessionDir)));
+        let callId = getOrElse(getString(call, "id"), "${fnName}_${getNextCallId(sessionDir)}");
         let argsJson = match getObject(call, "args") {
           Some(a) => encode(a),
           None => "{}"
         };
-        println("[Tool] " ++ fnName ++ "(" ++ argsJson ++ ")");
+        println("[Tool] ${fnName}(${argsJson})");
         if isSlowTool(fnName) then
           spawnAsyncTool(callId, fnName, argsJson, sessionDir, allowedPath, transcriptPath)
         else {
           -- Fast path: dispatch synchronously
           let result = match dispatchAmbientTool(fnName, argsJson, allowedPath, sessionDir) {
             Ok(r) => r,
-            Err(e) => "Error: " ++ e
+            Err(e) => "Error: ${e}"
           };
           -- If result is a screenshot, send the frame as video and use text response
           let truncResult = if startsWith(result, "SCREENSHOT:") then {
             let b64Frame = substring(result, 11, length(result));
             sendVideoFrame(b64Frame, conn);
-            "Screenshot captured and sent (" ++ show(length(b64Frame)) ++ " bytes)"
+            "Screenshot captured and sent (${length(b64Frame)} bytes)"
           } else if length(result) > 2000 then substring(result, 0, 2000) else result;
-          println("[Tool Result] " ++ truncResult);
+          println("[Tool Result] ${truncResult}");
           match transmit(conn, buildToolResponseMsg(fnName, truncResult)) {
             Ok(_) => (),
-            Err(e) => println("[Error] Tool response failed: " ++ show(e))
+            Err(e) => println("[Error] Tool response failed: ${e}")
           };
-          appendFile(transcriptPath, encode(jo([
+          appendFile(transcriptPath, "${encode(jo([
             kv("type", js("tool_call")),
             kv("name", js(fnName)),
             kv("args", js(argsJson)),
             kv("result", js(truncResult))
-          ])) ++ "\n");
+          ]))}\n");
           true
         }
       },
@@ -859,7 +859,7 @@ func handleToolCallAsync(tc: Json, conn: StreamConn, sessionDir: string, allowed
 
 -- Monotonic call ID counter for async tools (when Gemini doesn't provide an id)
 func getNextCallId(sessionDir: string) -> int ! {FS} {
-  let counterPath = sessionDir ++ "/pending_tools/counter.txt";
+  let counterPath = "${sessionDir}/pending_tools/counter.txt";
   let current = if fileExists(counterPath) then
     match stringToInt(trim(readFile(counterPath))) { Some(n) => n, None => 0 }
   else 0;
@@ -871,16 +871,16 @@ func getNextCallId(sessionDir: string) -> int ! {FS} {
 -- Spawn a slow tool as a background subprocess.
 -- Validates command safety first (sync), then spawns execution (async).
 func spawnAsyncTool(callId: string, fnName: string, argsJson: string, sessionDir: string, allowedPath: string, transcriptPath: string) -> bool ! {IO, FS, Process, Env} {
-  let pendingDir = sessionDir ++ "/pending_tools";
-  let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
-  let resultPath = pendingDir ++ "/" ++ callId ++ ".result";
-  let donePath = pendingDir ++ "/" ++ callId ++ ".done";
+  let pendingDir = "${sessionDir}/pending_tools";
+  let pendingPath = "${pendingDir}/${callId}.json";
+  let resultPath = "${pendingDir}/${callId}.result";
+  let donePath = "${pendingDir}/${callId}.done";
 
   -- Build and validate the shell command
   match buildToolShellCommand(fnName, argsJson, allowedPath, sessionDir) {
     Err(reason) => {
       -- Validation failed — send error response synchronously
-      println("[Tool Error] " ++ reason);
+      println("[Tool Error] ${reason}");
       false
     },
     Ok(shellCmd) => {
@@ -891,17 +891,17 @@ func spawnAsyncTool(callId: string, fnName: string, argsJson: string, sessionDir
       ])));
       writeFile(resultPath, "");
       -- Mark that pending tools exist (so checkPendingTools can skip exec("ls") when idle)
-      writeFile(pendingDir ++ "/has_pending", "1");
+      writeFile("${pendingDir}/has_pending", "1");
       -- Spawn: run command, write output, touch done marker
-      let fullCmd = shellCmd ++ " > " ++ resultPath ++ " 2>&1; touch " ++ donePath;
+      let fullCmd = "${shellCmd} > ${resultPath} 2>&1; touch ${donePath}";
       spawnProcess("sh", ["-c", fullCmd]);
-      println("[Tool Async] " ++ fnName ++ " (id=" ++ callId ++ ") spawned in background");
-      appendFile(transcriptPath, encode(jo([
+      println("[Tool Async] ${fnName} (id=${callId}) spawned in background");
+      appendFile(transcriptPath, "${encode(jo([
         kv("type", js("tool_call_async")),
         kv("name", js(fnName)),
         kv("args", js(argsJson)),
         kv("callId", js(callId))
-      ])) ++ "\n");
+      ]))}\n");
       true
     }
   }
@@ -914,7 +914,7 @@ func buildToolShellCommand(fnName: string, argsJson: string, allowedPath: string
     "runCommand" => buildRunCommandShell(argsJson),
     "prefetch" => buildPrefetchShell(argsJson, sessionDir),
     "searchNotes" => buildSearchNotesShell(argsJson, allowedPath),
-    _ => Err("No async handler for tool: " ++ fnName)
+    _ => Err("No async handler for tool: ${fnName}")
   }
 
 -- Build shell command for runCommand (validates allowlist + subcommands)
@@ -927,13 +927,13 @@ func buildRunCommandShell(argsJson: string) -> Result[string, string] ! {} {
         None => []
       };
       if not isAllowedCommand(cmd) then
-        Err("Command rejected: '" ++ cmd ++ "' is not in the allowlist")
+        Err("Command rejected: '${cmd}' is not in the allowlist")
       else match validateSubcommands(cmd, args) {
         Err(reason) => Err(reason),
-        Ok(_) => Ok(cmd ++ " " ++ join(" ", args))
+        Ok(_) => Ok("${cmd} ${join(" ", args)}")
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -948,13 +948,13 @@ func buildPrefetchShell(argsJson: string, sessionDir: string) -> Result[string, 
       let fullArgs = split(subcommand, " ");
       let allArgs = if length(extraArgs) > 0 then concat(fullArgs, split(extraArgs, " ")) else fullArgs;
       if not isAllowedCommand(command) then
-        Err("Command rejected: '" ++ command ++ "' is not in the allowlist")
+        Err("Command rejected: '${command}' is not in the allowlist")
       else match validateSubcommands(command, allArgs) {
         Err(reason) => Err(reason),
-        Ok(_) => Ok(command ++ " " ++ join(" ", allArgs))
+        Ok(_) => Ok("${command} ${join(" ", allArgs)}")
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
@@ -968,18 +968,18 @@ func buildSearchNotesShell(argsJson: string, allowedPath: string) -> Result[stri
         let notesDir = getEnvOr("AILANG_NOTES_DIR", allowedPath);
         if not isPathSafe(notesDir, allowedPath) then
           Err("Notes directory outside allowed path")
-        else Ok("grep -rl --include='*.md' --include='*.txt' --include='*.org' '" ++ keyword ++ "' " ++ notesDir)
+        else Ok("grep -rl --include='*.md' --include='*.txt' --include='*.org' '${keyword}' ${notesDir}")
       }
     },
-    Err(e) => Err("Invalid args: " ++ e)
+    Err(e) => Err("Invalid args: ${e}")
   }
 }
 
 -- Check for completed async tools and send their responses to Gemini.
 -- Called on each event tick from handleSelectEvent.
 func checkPendingTools(conn: StreamConn, sessionDir: string) -> () ! {IO, FS, Stream, Process} {
-  let pendingDir = sessionDir ++ "/pending_tools";
-  let markerPath = pendingDir ++ "/has_pending";
+  let pendingDir = "${sessionDir}/pending_tools";
+  let markerPath = "${pendingDir}/has_pending";
   -- Fast path: skip exec("ls") when no tools are pending (readFile is FS op, not Process op)
   let hasPending = if fileExists(markerPath) then readFile(markerPath) else "";
   if hasPending != "1" then ()
@@ -1009,10 +1009,10 @@ func processDoneFile(doneFile: string, conn: StreamConn, sessionDir: string, pen
 
 -- Read result of a completed async tool and send toolResponse to Gemini
 func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir: string, callId: string) -> () ! {IO, FS, Stream, Process} {
-  let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
-  let resultPath = pendingDir ++ "/" ++ callId ++ ".result";
-  let donePath = pendingDir ++ "/" ++ callId ++ ".done";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let pendingPath = "${pendingDir}/${callId}.json";
+  let resultPath = "${pendingDir}/${callId}.result";
+  let donePath = "${pendingDir}/${callId}.done";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
 
   let fnName = match decode(readFile(pendingPath)) {
     Ok(j) => getOrElse(getString(j, "fnName"), "unknown"),
@@ -1021,8 +1021,8 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
   let result = if fileExists(resultPath) then readFile(resultPath) else "(no output)";
   let truncResult = if length(result) > 2000 then substring(result, 0, 2000) else result;
 
-  println("[Tool Async] " ++ fnName ++ " (id=" ++ callId ++ ") completed");
-  println("[Tool Result] " ++ truncResult);
+  println("[Tool Async] ${fnName} (id=${callId}) completed");
+  println("[Tool Result] ${truncResult}");
 
   -- Notify via macOS notification (mirrors to Apple Watch)
   notifyToolComplete(fnName, truncResult);
@@ -1032,14 +1032,14 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
 
   match transmit(conn, buildToolResponseMsg(fnName, truncResult)) {
     Ok(_) => (),
-    Err(e) => println("[Error] Tool response send failed: " ++ show(e))
+    Err(e) => println("[Error] Tool response send failed: ${e}")
   };
-  appendFile(transcriptPath, encode(jo([
+  appendFile(transcriptPath, "${encode(jo([
     kv("type", js("tool_call_result")),
     kv("name", js(fnName)),
     kv("callId", js(callId)),
     kv("result", js(truncResult))
-  ])) ++ "\n");
+  ]))}\n");
 
   -- Clean up pending files
   exec("rm", ["-f", pendingPath, resultPath, donePath])
@@ -1048,9 +1048,9 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
 -- Send a macOS notification when an async tool completes.
 -- Mirrors to Apple Watch for quiet nudges when ambient gathers info.
 func notifyToolComplete(fnName: string, result: string) -> () ! {Process} {
-  let summary = if length(result) > 80 then substring(result, 0, 80) ++ "..." else result;
-  let title = "Ambient: " ++ fnName ++ " complete";
-  let script = "display notification \"" ++ summary ++ "\" with title \"" ++ title ++ "\" sound name \"Tink\"";
+  let summary = if length(result) > 80 then "${substring(result, 0, 80)}..." else result;
+  let title = "Ambient: ${fnName} complete";
+  let script = "display notification \"${summary}\" with title \"${title}\" sound name \"Tink\"";
   match exec("osascript", ["-e", script]) {
     Ok(_) => (),
     Err(_) => ()
@@ -1062,17 +1062,17 @@ func handlePrefetchCache(fnName: string, callId: string, sessionDir: string, res
   if fnName == "prefetch" then {
     -- The callId often contains the cache key info, but we need to read it from pending metadata
     -- For now, use the callId as cache key (prefetch sets key in args)
-    let pendingDir = sessionDir ++ "/pending_tools";
-    let pendingPath = pendingDir ++ "/" ++ callId ++ ".json";
+    let pendingDir = "${sessionDir}/pending_tools";
+    let pendingPath = "${pendingDir}/${callId}.json";
     match decode(readFile(pendingPath)) {
       Ok(j) => {
         let argsStr = getOrElse(getString(j, "argsJson"), "{}");
         match decode(argsStr) {
           Ok(args) => {
             let cacheKey = getOrElse(getString(args, "key"), callId);
-            let cacheDir = sessionDir ++ "/cache";
+            let cacheDir = "${sessionDir}/cache";
             exec("mkdir", ["-p", cacheDir]);
-            let cachePath = cacheDir ++ "/" ++ cacheKey ++ ".json";
+            let cachePath = "${cacheDir}/${cacheKey}.json";
             -- Get expiry (5 min TTL)
             match exec("date", ["+%s"]) {
               Ok(dateOut) => {
@@ -1083,7 +1083,7 @@ func handlePrefetchCache(fnName: string, callId: string, sessionDir: string, res
                   kv("expires", js(show(expires))),
                   kv("cachedAt", js(show(now)))
                 ])));
-                println("[Cache] Prefetch result cached as '" ++ cacheKey ++ "'")
+                println("[Cache] Prefetch result cached as '${cacheKey}'")
               },
               Err(_) => ()
             }
@@ -1098,7 +1098,7 @@ func handlePrefetchCache(fnName: string, callId: string, sessionDir: string, res
 func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
   match getArray(tcc, "ids") {
     Some(ids) => {
-      println("[Tool Canceled] " ++ show(listLength(ids)) ++ " pending call(s) canceled");
+      println("[Tool Canceled] ${listLength(ids)} pending call(s) canceled");
       true
     },
     None => { println("[Tool Canceled]"); true }
@@ -1107,27 +1107,27 @@ func handleToolCallCancellation(tcc: Json) -> bool ! {IO} {
 
 func handleGoAway(ga: Json) -> bool ! {IO} {
   let timeLeft = getOrElse(getInt(ga, "timeLeft"), 0);
-  println("[GoAway] Server closing in " ++ show(timeLeft) ++ "ms — save handle for reconnection");
+  println("[GoAway] Server closing in ${timeLeft}ms — save handle for reconnection");
   true
 }
 
 -- Interactive: on turnComplete, play audio inline and show prompt for next input
 func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: string, soxHandle: Option[ProcessHandle]) -> bool ! {IO, FS, Process} {
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let wavPath = sessionDir ++ "/output.wav";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let wavPath = "${sessionDir}/output.wav";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getBool(sc, "interrupted") {
     Some(true) => {
       println("[Interrupted] Generation canceled — clearing audio");
       writeFile(pcmPath, "");
-      writeFile(sessionDir ++ "/speaking.flag", "");
+      writeFile("${sessionDir}/speaking.flag", "");
       true
     },
     _ => match getBool(sc, "turnComplete") {
       Some(true) => {
         -- Start mic cooldown (~3 sec at 7 events/sec = 21 ticks before unmute)
-        writeFile(sessionDir ++ "/speaking.flag", "21");
+        writeFile("${sessionDir}/speaking.flag", "21");
         println("[Mic] Muted (cooldown 3s)");
         -- Play accumulated audio (skipped when streaming — already played in real-time)
         maybePlayTurnAudio(soxHandle, pcmPath, wavPath);
@@ -1135,7 +1135,7 @@ func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: 
         let said = if fileExists(turnTextPath) then readFile(turnTextPath) else "";
         if length(said) > 0 then {
           println("");
-          println("AILANG: " ++ said)
+          println("AILANG: ${said}")
         } else ();
         println("");
         println("[Turn Complete] Type next message, speak, or 'exit' to quit");
@@ -1161,9 +1161,9 @@ func handleServerContentInteractive(sc: Json, sessionDir: string, turnDonePath: 
 
 -- Single-prompt: set turnDone flag for disconnect
 func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> bool ! {IO, FS} {
-  let pcmPath = sessionDir ++ "/output.pcm";
-  let turnTextPath = sessionDir ++ "/turn_text.txt";
-  let transcriptPath = sessionDir ++ "/transcript.jsonl";
+  let pcmPath = "${sessionDir}/output.pcm";
+  let turnTextPath = "${sessionDir}/turn_text.txt";
+  let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getBool(sc, "interrupted") {
     Some(true) => {
       println("[Interrupted] Generation canceled — clearing audio");
@@ -1194,7 +1194,7 @@ func handleServerContent(sc: Json, sessionDir: string, turnDonePath: string) -> 
 func handleOutputTranscription(ot: Json, transcriptPath: string, turnTextPath: string) -> bool ! {FS} {
   match getString(ot, "text") {
     Some(t) => {
-      appendFile(transcriptPath, encode(jo([kv("role", js("model")), kv("text", js(t))])) ++ "\n");
+      appendFile(transcriptPath, "${encode(jo([kv("role", js("model")), kv("text", js(t))]))}\n");
       appendFile(turnTextPath, t);
       true
     },
@@ -1204,7 +1204,7 @@ func handleOutputTranscription(ot: Json, transcriptPath: string, turnTextPath: s
 
 func handleInputTranscription(it: Json) -> bool ! {IO} {
   match getString(it, "text") {
-    Some(t) => { println("[Heard] " ++ t); true },
+    Some(t) => { println("[Heard] ${t}"); true },
     None => true
   }
 }
@@ -1225,7 +1225,7 @@ func logThoughtParts(parts: List[Json]) -> () ! {IO} {
   forEachE(\part.
     match getBool(part, "thought") {
       Some(true) => match getString(part, "text") {
-        Some(t) => println("[Thinking] " ++ t),
+        Some(t) => println("[Thinking] ${t}"),
         None => ()
       },
       _ => ()
@@ -1278,7 +1278,7 @@ func closeSoxPlayback(soxHandle: Option[ProcessHandle]) -> () ! {IO, Process} =
 func playTurnAudio(pcmPath: string, wavPath: string) -> () ! {IO, FS, Process} =
   match readFileBytes(pcmPath) {
     Ok(b64pcm) => playFromB64(b64pcm, wavPath),
-    Err(e) => println("[Play] Failed to read PCM file: " ++ e)
+    Err(e) => println("[Play] Failed to read PCM file: ${e}")
   }
 
 func playFromB64(b64pcm: string, wavPath: string) -> () ! {IO, FS, Process} {
@@ -1291,7 +1291,7 @@ func playFromB64(b64pcm: string, wavPath: string) -> () ! {IO, FS, Process} {
 func doPlayDecode(b64pcm: string, b64len: int, wavPath: string) -> () ! {IO, FS, Process} =
   match fromBase64(b64pcm) {
     Some(pcmData) => doPlayPcm(pcmData, wavPath),
-    None => println("[Play] base64 decode failed (b64 length: " ++ show(b64len) ++ ")")
+    None => println("[Play] base64 decode failed (b64 length: ${b64len})")
   }
 
 func doPlayPcm(pcmData: bytes, wavPath: string) -> () ! {IO, FS, Process} {
@@ -1301,14 +1301,14 @@ func doPlayPcm(pcmData: bytes, wavPath: string) -> () ! {IO, FS, Process} {
 }
 
 func doPlayWav(pcmData: bytes, dataSize: int, wavPath: string) -> () ! {IO, FS, Process} {
-  println("[Play] " ++ show(dataSize) ++ " bytes PCM -> WAV (" ++ wavPath ++ ")");
+  println("[Play] ${dataSize} bytes PCM -> WAV (${wavPath})");
   let header = wavHeader(dataSize);
   let wavData = bytesConcat(header, pcmData);
   writeFileBytes(wavPath, wavData);
   match exec("afplay", [wavPath]) {
     Ok(_) => println("[Play] Done"),
     Err(NotFound(_)) => println("[Play] afplay not found"),
-    Err(e) => println("[Play] afplay error: " ++ show(e))
+    Err(e) => println("[Play] afplay error: ${e}")
   }
 }
 
@@ -1321,7 +1321,7 @@ func accumulateAudioParts(parts: List[Json], pcmPath: string) -> () ! {IO, FS} {
             match fromBase64(b64) {
               Some(pcmData) => {
                 appendFileBytes(pcmPath, pcmData);
-                println("[Audio] Frame: " ++ show(bytesLen(pcmData)) ++ " bytes PCM")
+                println("[Audio] Frame: ${bytesLen(pcmData)} bytes PCM")
               },
               None => println("[Audio] Frame: base64 decode failed")
             }
@@ -1344,7 +1344,7 @@ func accumulateAndStreamAudio(parts: List[Json], pcmPath: string, soxHandle: Opt
             match fromBase64(b64) {
               Some(pcmData) => {
                 appendFileBytes(pcmPath, pcmData);
-                println("[Audio] Frame: " ++ show(bytesLen(pcmData)) ++ " bytes PCM");
+                println("[Audio] Frame: ${bytesLen(pcmData)} bytes PCM");
                 streamToSox(soxHandle, pcmData)
               },
               None => println("[Audio] Frame: base64 decode failed")
@@ -1362,7 +1362,7 @@ func streamToSox(soxHandle: Option[ProcessHandle], pcmData: bytes) -> () ! {Proc
   match soxHandle {
     Some(h) => match writeProcessStdin(h, pcmData) {
       Ok(_) => (),
-      Err(e) => println("[Stream] Write error: " ++ e)
+      Err(e) => println("[Stream] Write error: ${e}")
     },
     None => ()
   }
@@ -1372,9 +1372,9 @@ func handleModelTurnInteractive(turn: Json, pcmPath: string, turnDonePath: strin
   match getArray(turn, "parts") {
     Some(parts) => {
       -- Gate mic while model is speaking (prevents echo feedback)
-      let prevFlag = if fileExists(sessionDir ++ "/speaking.flag") then readFile(sessionDir ++ "/speaking.flag") else "";
+      let prevFlag = if fileExists("${sessionDir}/speaking.flag") then readFile("${sessionDir}/speaking.flag") else "";
       if prevFlag != "1" then println("[Mic] Muted (model speaking)") else ();
-      writeFile(sessionDir ++ "/speaking.flag", "1");
+      writeFile("${sessionDir}/speaking.flag", "1");
       logThoughtParts(parts);
       accumulateAndStreamAudio(parts, pcmPath, soxHandle);
       writeFile(turnDonePath, "1");
@@ -1423,8 +1423,8 @@ func reportAudioOutput(pcmPath: string, wavPath: string) -> () ! {IO, FS, Proces
             println("[Playing...]");
             match exec("afplay", [wavPath]) {
               Ok(_) => (),
-              Err(NotFound(_)) => println("Play manually: afplay " ++ wavPath),
-              Err(_) => println("Play manually: afplay " ++ wavPath)
+              Err(NotFound(_)) => println("Play manually: afplay ${wavPath}"),
+              Err(_) => println("Play manually: afplay ${wavPath}")
             }
           } else {
             println("[Audio] No audio data received")
@@ -1433,7 +1433,7 @@ func reportAudioOutput(pcmPath: string, wavPath: string) -> () ! {IO, FS, Proces
         None => println("[Audio] Failed to decode PCM data")
       }
     },
-    Err(e) => println("[Audio] Failed to read PCM file: " ++ e)
+    Err(e) => println("[Audio] Failed to read PCM file: ${e}")
   }
 }
 
@@ -1446,19 +1446,19 @@ func reportSummary(prompt: string, turnTextPath: string, turnUsagePath: string, 
   let usage = if fileExists(turnUsagePath) then readFile(turnUsagePath) else "";
   println("");
   println("--- Ambient Summary ---");
-  println("You:    " ++ prompt);
+  println("You:    ${prompt}");
   if length(said) > 0 then
-    println("AILANG: " ++ said)
+    println("AILANG: ${said}")
   else println("AILANG: (stayed silent — not addressed)");
   if length(usage) > 0 then
-    println("Tokens: " ++ usage)
+    println("Tokens: ${usage}")
   else ();
   if length(said) > 0 then
-    appendFile(transcriptPath, encode(jo([
+    appendFile(transcriptPath, "${encode(jo([
       kv("type", js("summary")),
       kv("user", js(prompt)),
       kv("model", js(said)),
       kv("usage", js(usage))
-    ])) ++ "\n")
+    ]))}\n")
   else ()
 }

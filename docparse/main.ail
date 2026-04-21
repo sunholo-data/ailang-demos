@@ -64,7 +64,7 @@ export func main() -> () ! {IO @limit=200, FS @limit=40, AI @limit=30, Env} {
 
   -- Check file exists
   if not fileExists(filepath) then {
-    println("Error: File not found: " ++ filepath);
+    println("Error: File not found: ${filepath}");
     println("");
     println("Usage: ailang run --entry main --caps IO,FS,Env docparse/main.ail <file>");
     println("       ailang run --entry main --caps IO,FS,Env,AI --ai gemini-3-flash-preview docparse/main.ail <file> describe");
@@ -75,9 +75,9 @@ export func main() -> () ! {IO @limit=200, FS @limit=40, AI @limit=30, Env} {
     let ext = getExtension(filepath);
     let format = detectFormat(ext);
     let strategy = strategyDescription(format);
-    println("File:     " ++ filepath);
-    println("Format:   " ++ format ++ " (" ++ ext ++ ")");
-    println("Strategy: " ++ strategy);
+    println("File:     ${filepath}");
+    println("Format:   ${format} (${ext})");
+    println("Strategy: ${strategy}");
     let aiRequired = needsAI(format);
     if aiRequired then println("AI:       required (format needs AI extraction)")
     else if doSummarize then println("AI:       enabled (summarize)")
@@ -93,7 +93,7 @@ export func main() -> () ! {IO @limit=200, FS @limit=40, AI @limit=30, Env} {
       "audio" => parseAudioDocument(filepath, ext, doSummarize),
       "video" => parseVideoDocument(filepath, ext, doSummarize),
       "text" => parseTextDocument(filepath),
-      _ => println("Format '" ++ format ++ "' not yet supported in this demo.")
+      _ => println("Format '${format}' not yet supported in this demo.")
     }
   }
 }
@@ -109,7 +109,7 @@ func parseOfficeDocument(filepath: string, ext: string, useAI: bool, doSummarize
     "word" => parseWordDocument(filepath, useAI, doSummarize),
     "powerpoint" => parsePowerPointDocument(filepath, useAI, doSummarize),
     "excel" => parseExcelDocument(filepath, doSummarize),
-    _ => println("Office type '" ++ office ++ "' not yet supported.")
+    _ => println("Office type '${office}' not yet supported.")
   }
 }
 
@@ -125,30 +125,30 @@ func parseWordDocument(filepath: string, useAI: bool, doSummarize: bool) -> () !
   -- Step 2b: Parse document content (pure XML parsing)
   println("Parsing document XML...");
   let blocks = parseDocx(filepath);
-  println("Extracted " ++ show(countBlocks(blocks)) ++ " content blocks.");
+  println("Extracted ${countBlocks(blocks)} content blocks.");
   println("");
 
   -- Step 2c: Extract headers and footers
   println("Extracting headers/footers...");
   let headerBlocks = parseDocxHeaders(filepath);
   let footerBlocks = parseDocxFooters(filepath);
-  println("Found " ++ show(countBlocks(headerBlocks)) ++ " headers, " ++ show(countBlocks(footerBlocks)) ++ " footers.");
+  println("Found ${countBlocks(headerBlocks)} headers, ${countBlocks(footerBlocks)} footers.");
 
   -- Step 2d: Extract footnotes and endnotes
   println("Extracting footnotes/endnotes...");
   let footnoteBlocks = parseDocxFootnotes(filepath);
   let endnoteBlocks = parseDocxEndnotes(filepath);
-  println("Found " ++ show(countBlocks(footnoteBlocks)) ++ " footnotes, " ++ show(countBlocks(endnoteBlocks)) ++ " endnotes.");
+  println("Found ${countBlocks(footnoteBlocks)} footnotes, ${countBlocks(endnoteBlocks)} endnotes.");
 
   -- Step 2e: Extract comments
   println("Extracting comments...");
   let commentBlocks = parseDocxComments(filepath);
-  println("Found " ++ show(countBlocks(commentBlocks)) ++ " comments.");
+  println("Found ${countBlocks(commentBlocks)} comments.");
 
   -- Step 2f: Extract embedded images
   println("Extracting images...");
   let imageBlocks = parseDocxImages(filepath);
-  println("Found " ++ show(countBlocks(imageBlocks)) ++ " embedded images.");
+  println("Found ${countBlocks(imageBlocks)} embedded images.");
   println("");
 
   -- Combine all blocks: headers + body + footers + footnotes + endnotes + comments + images
@@ -162,11 +162,11 @@ func parseWordDocument(filepath: string, useAI: bool, doSummarize: bool) -> () !
   -- Step 2f: AI image descriptions (optional)
   let imageCount = countBlocks(filterImages(combinedBlocks));
   let describedBlocks = if useAI && imageCount > 0 then {
-    println("Describing " ++ show(imageCount) ++ " images with AI...");
+    println("Describing ${imageCount} images with AI...");
     describeImages(combinedBlocks)
   } else {
     if imageCount > 0
-    then println("Images: " ++ show(imageCount) ++ " (pass 'describe' arg for AI descriptions)")
+    then println("Images: ${imageCount} (pass 'describe' arg for AI descriptions)")
     else println("No images found.");
     combinedBlocks
   };
@@ -216,13 +216,13 @@ func parsePowerPointDocument(filepath: string, useAI: bool, doSummarize: bool) -
   -- Step 2b: Parse all slides
   println("Parsing slides...");
   let blocks = parsePptx(filepath);
-  println("Extracted " ++ show(countBlocks(blocks)) ++ " slide blocks.");
+  println("Extracted ${countBlocks(blocks)} slide blocks.");
   println("");
 
   -- Step 2c: Extract embedded images
   println("Extracting images...");
   let imageBlocks = parsePptxImages(filepath);
-  println("Found " ++ show(countBlocks(imageBlocks)) ++ " embedded images.");
+  println("Found ${countBlocks(imageBlocks)} embedded images.");
   println("");
 
   -- Combine slide blocks + images
@@ -231,11 +231,11 @@ func parsePowerPointDocument(filepath: string, useAI: bool, doSummarize: bool) -
   -- Step 2d: AI image descriptions (optional)
   let imageCount = countBlocks(filterImages(combinedBlocks));
   let describedBlocks = if useAI && imageCount > 0 then {
-    println("Describing " ++ show(imageCount) ++ " images with AI...");
+    println("Describing ${imageCount} images with AI...");
     describeImages(combinedBlocks)
   } else {
     if imageCount > 0
-    then println("Images: " ++ show(imageCount) ++ " (pass 'describe' arg for AI descriptions)")
+    then println("Images: ${imageCount} (pass 'describe' arg for AI descriptions)")
     else println("No images found.");
     combinedBlocks
   };
@@ -285,7 +285,7 @@ func parseExcelDocument(filepath: string, doSummarize: bool) -> () ! {IO, FS, AI
   -- Step 2b: Parse all worksheets
   println("Parsing worksheets...");
   let blocks = parseXlsx(filepath);
-  println("Extracted " ++ show(countBlocks(blocks)) ++ " sheet blocks.");
+  println("Extracted ${countBlocks(blocks)} sheet blocks.");
   println("");
 
   -- Step 3: Build result
@@ -325,7 +325,7 @@ func parsePdfDocument(filepath: string, doSummarize: bool) -> () ! {IO, FS, AI} 
   -- Step 2b: Extract content via AI
   println("Extracting content via AI...");
   let blocks = parsePdf(filepath);
-  println("Extracted " ++ show(countBlocks(blocks)) ++ " content blocks.");
+  println("Extracted ${countBlocks(blocks)} content blocks.");
   println("");
 
   -- Step 3: Build result
@@ -363,7 +363,7 @@ func parseImageDocument(filepath: string, ext: string, doSummarize: bool) -> () 
   let mime = imageMimeType(ext);
   println("Describing image via AI...");
   let blocks = parseImage(filepath, mime);
-  println("Generated " ++ show(countBlocks(blocks)) ++ " content blocks.");
+  println("Generated ${countBlocks(blocks)} content blocks.");
   println("");
 
   -- Build result
@@ -412,7 +412,7 @@ func parseAudioDocument(filepath: string, ext: string, doSummarize: bool) -> () 
   let mime = audioMimeType(ext);
   println("Transcribing audio via AI...");
   let blocks = parseAudio(filepath, mime);
-  println("Generated " ++ show(countBlocks(blocks)) ++ " content blocks.");
+  println("Generated ${countBlocks(blocks)} content blocks.");
   println("");
 
   -- Build result
@@ -460,7 +460,7 @@ func parseVideoDocument(filepath: string, ext: string, doSummarize: bool) -> () 
   let mime = videoMimeType(ext);
   println("Analyzing video via AI...");
   let blocks = parseVideo(filepath, mime);
-  println("Generated " ++ show(countBlocks(blocks)) ++ " content blocks.");
+  println("Generated ${countBlocks(blocks)} content blocks.");
   println("");
 
   -- Build result
@@ -507,7 +507,7 @@ pure func videoMimeType(ext: string) -> string =
 func parseTextDocument(filepath: string) -> () ! {IO, FS} {
   println("--- Parsing Text ---");
   let content = readFile(filepath);
-  println("Content (" ++ show(length(content)) ++ " chars):");
+  println("Content (${length(content)} chars):");
   println(content);
   println("=== DocParse Complete ===")
 }
@@ -529,9 +529,7 @@ func writeOutputs(doc: ParsedDocument, result: ExtractionResult, doSummarize: bo
     println("");
     println("--- AI Summary ---");
     let summary = call(
-      "Summarize this document concisely. Include key points, data from any tables, " ++
-      "and descriptions of any images. Output plain text, not markdown.\n\n" ++
-      markdown
+      "Summarize this document concisely. Include key points, data from any tables, and descriptions of any images. Output plain text, not markdown.\n\n${markdown}"
     );
     println(summary);
     println("");
