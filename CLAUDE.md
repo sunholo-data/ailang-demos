@@ -185,10 +185,12 @@ Browser demos should load AILANG modules via `ailangLoadModule()` and use `ailan
 
 | Command | Symlink | Script | Purpose |
 |---------|---------|--------|---------|
-| `docparse` | `~/.local/bin/docparse` | `docparse/docparse` | Document parsing |
+| `docparse` | `~/.local/bin/docparse` | [sunholo/ailang-parse](https://github.com/sunholo-data/ailang-parse) `bin/docparse` | Document parsing (production CLI — 15 formats, generate, `--prove`, `--eval`) |
 | `ambient` | `~/.local/bin/ambient` | `streaming/ambient_assistant/ambient` | Ambient voice assistant |
 | `speak` | `~/.local/bin/speak` | `streaming/gemini_live/speak` | Text to speech |
 | `linkedin` | `~/.local/bin/linkedin` | `linkedin/linkedin` | LinkedIn marketing |
+
+**Note:** `docparse` lives in the separate [sunholo/ailang-parse](https://github.com/sunholo-data/ailang-parse) repo; the `demos/docparse/` tree here is a WASM browser showcase that uses a subset of the same module names. Don't duplicate parser work here — contribute upstream.
 
 Install: `ln -s $(pwd)/streaming/gemini_live/speak ~/.local/bin/speak`
 Install: `ln -s $(pwd)/linkedin/linkedin ~/.local/bin/linkedin`

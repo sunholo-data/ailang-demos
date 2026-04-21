@@ -2,62 +2,39 @@
 
 Universal document parsing in AILANG. Extracts structured content from DOCX, PPTX, XLSX, PDF, and image files into JSON and markdown, with optional AI for image descriptions and document summarization. Office formats use deterministic XML parsing; PDFs and images use AI multimodal extraction.
 
+> **This is a showcase demo.** For production use, install the public CLI: **[sunholo/ailang-parse](https://github.com/sunholo-data/ailang-parse)** — 15 formats (adds ODT/ODP/ODS, HTML, Markdown, CSV, EPUB, EML, MBOX, TEX), document *generation*, Z3 contract verification (`--prove`), evaluation harness (`--eval`), and batch mode. The modules in this directory are a subset kept for the WASM browser demo.
+
 ## Quick Start
+
+Install the production CLI once (see [ailang-parse](https://github.com/sunholo-data/ailang-parse)), then:
 
 ```bash
 # Parse any Office document
-docparse/docparse report.docx
-docparse/docparse presentation.pptx
-docparse/docparse spreadsheet.xlsx
+docparse report.docx
+docparse presentation.pptx
+docparse spreadsheet.xlsx
 
 # PDF and images (AI auto-enabled)
-docparse/docparse document.pdf
-docparse/docparse photo.png
+docparse document.pdf
+docparse photo.png
 
 # With AI image descriptions (Office formats)
-docparse/docparse presentation.pptx --describe
+docparse presentation.pptx --describe
 
 # With AI document summary (any format)
-docparse/docparse report.docx --summarize
+docparse report.docx --summarize
 
 # Dev commands
-docparse/docparse --check       # Type-check all 10 modules
-docparse/docparse --test        # Run all inline tests
-docparse/docparse --help        # Full usage info
+docparse --check       # Type-check all modules
+docparse --test        # Run all inline tests
+docparse --help        # Full usage info
 ```
 
-The `docparse` CLI wrapper handles capabilities, AI model selection, and the `GOOGLE_API_KEY` workaround automatically. PDF/image formats auto-enable AI; Office formats use deterministic parsing by default.
+PDF/image formats auto-enable AI; Office formats use deterministic parsing by default.
 
-### Install globally
+### Browser demo
 
-Symlink the CLI wrapper to a directory on your `PATH` so `docparse` works from anywhere:
-
-```bash
-ln -s "$(pwd)/docparse/docparse" /usr/local/bin/docparse
-```
-
-Then from any directory:
-
-```bash
-docparse ~/Documents/report.docx
-docparse /path/to/slides.pptx --describe
-```
-
-The script resolves paths relative to the project root automatically, so AILANG modules are always found regardless of your working directory.
-
-<details>
-<summary>Direct ailang invocation (without wrapper)</summary>
-
-```bash
-# Office formats (from project root)
-ailang run --entry main --caps IO,FS,Env docparse/main.ail report.docx
-
-# With AI
-GOOGLE_API_KEY="" ailang run --entry main --caps IO,FS,Env,AI \
-  --ai gemini-3-flash-preview docparse/main.ail presentation.pptx describe
-```
-
-</details>
+The WASM browser demo at [docparse.html](../docparse.html) runs the same parsers client-side via AILANG WASM — drag-and-drop a DOCX/PPTX/XLSX and see structured output with track changes and comments rendered. Served via `scripts/serve.sh` from the repo root.
 
 ### Output Files
 
@@ -102,7 +79,7 @@ The markdown output combines text, tables (as markdown tables), image descriptio
 ### Example: Summarizing a presentation
 
 ```bash
-$ docparse/docparse presentation.pptx --summarize
+$ docparse presentation.pptx --summarize
 
 --- AI Summary ---
 The presentation covers LLMs, an architectural diagram, and data tables.
@@ -116,7 +93,7 @@ Summary written to docparse/data/output_summary.txt
 ### Example: PDF extraction via AI
 
 ```bash
-$ docparse/docparse booking.pdf
+$ docparse booking.pdf
 
 --- Parsing PDF (AI) ---
 Extracting metadata via AI...
@@ -135,7 +112,7 @@ The PDF content is sent as a multimodal request (same pattern as invoice_process
 ### Example: Markdown output for downstream AI
 
 ```bash
-$ docparse/docparse data.xlsx
+$ docparse data.xlsx
 $ cat docparse/data/output.md
 
 **Author:** Anton Antic
@@ -197,7 +174,7 @@ Track changes are extracted inline from `word/document.xml` as `change` blocks. 
 In markdown output, insertions render as **bold** and deletions as ~~strikethrough~~, with author/date attribution. In the browser, changes are color-coded: green (insert), red (delete), blue (move-to), orange (move-from).
 
 ```bash
-docparse/docparse track_changes_move.docx
+docparse track_changes_move.docx
 ```
 
 ### Comments (Browser only)
@@ -206,8 +183,8 @@ Comments are parsed from `word/comments.xml` and interleaved at the paragraph th
 
 ```bash
 # Test files with track changes and comments
-docparse/docparse docparse/data/test_files/track_changes_move.docx
-docparse/docparse docparse/data/test_files/comments.docx
+docparse docparse/data/test_files/track_changes_move.docx
+docparse docparse/data/test_files/comments.docx
 ```
 
 ## Output Format
@@ -263,7 +240,7 @@ Renders blocks as clean markdown: headings, paragraphs, markdown tables, lists, 
 DocParse uses Vertex AI via Application Default Credentials. The `docparse` CLI wrapper handles the `GOOGLE_API_KEY` workaround automatically. Use `--ai MODEL` to override the default model:
 
 ```bash
-docparse/docparse report.docx --describe --ai claude-haiku-4-5
+docparse report.docx --describe --ai claude-haiku-4-5
 ```
 
 AI usage is bounded by capability budgets (`AI @limit=20`), so costs are predictable.
@@ -271,8 +248,8 @@ AI usage is bounded by capability budgets (`AI @limit=20`), so costs are predict
 ## Running Tests
 
 ```bash
-docparse/docparse --test        # Run all inline tests (41 tests)
-docparse/docparse --check       # Type-check all 10 modules
+docparse --test        # Run all inline tests (41 tests)
+docparse --check       # Type-check all 10 modules
 ```
 
 ### Real-World Test Files

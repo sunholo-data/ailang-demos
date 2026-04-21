@@ -379,22 +379,27 @@
 
   <!-- CLI -->
   <div class="section">
-    <div class="section-title">CLI Tool</div>
-    <p class="section-desc">DocParse is also available as a command-line tool for batch processing and integration into pipelines.</p>
+    <div class="section-title">CLI Tool — <a href="https://github.com/sunholo-data/ailang-parse" target="_blank" rel="noopener">sunholo/ailang-parse</a></div>
+    <p class="section-desc">The production CLI ships in the <a href="https://github.com/sunholo-data/ailang-parse" target="_blank" rel="noopener">ailang-parse</a> repo — 15 formats (adds ODT/ODP/ODS, HTML, Markdown, CSV, EPUB, EML, MBOX, TEX), document generation (<code>--generate</code>), Z3 contract verification (<code>--prove</code>), batch mode, and an eval harness. This browser demo runs a subset of the same modules client-side.</p>
 
-    <div class="cli-block"><code><span class="comment"># Install (symlink to PATH)</span>
-<span class="cmd">ln</span> <span class="flag">-s</span> <span class="string">$(pwd)/docparse/docparse</span> ~/.local/bin/docparse
+    <div class="cli-block"><code><span class="comment"># Install (see ailang-parse README for full steps)</span>
+<span class="cmd">git</span> <span class="string">clone https://github.com/sunholo-data/ailang-parse</span>
+<span class="cmd">ln</span> <span class="flag">-s</span> <span class="string">$(pwd)/ailang-parse/bin/docparse</span> ~/.local/bin/docparse
 
-<span class="comment"># Parse a document (Office formats — no API key needed)</span>
+<span class="comment"># Parse any Office doc (no API key needed)</span>
 <span class="cmd">docparse</span> <span class="string">report.docx</span>
 
-<span class="comment"># Parse with AI image descriptions (needs Google Cloud ADC)</span>
-<span class="cmd">docparse</span> <span class="string">presentation.pptx</span> <span class="flag">describe</span>
+<span class="comment"># Batch mode — compile once, parse many (10x faster)</span>
+<span class="cmd">docparse</span> <span class="string">~/inbox/</span>
 
-<span class="comment"># Parse a PDF (uses Gemini multimodal)</span>
+<span class="comment"># With AI image descriptions</span>
+<span class="cmd">docparse</span> <span class="string">presentation.pptx</span> <span class="flag">--describe</span>
+
+<span class="comment"># PDF/image (auto-enables Gemini multimodal)</span>
 <span class="cmd">docparse</span> <span class="string">invoice.pdf</span>
 
-<span class="comment"># Output: JSON to stdout, structured blocks</span></code></div>
+<span class="comment"># Z3 contract verification</span>
+<span class="cmd">docparse</span> <span class="flag">--prove</span></code></div>
   </div>
 
   <!-- Coming Soon -->
@@ -425,6 +430,9 @@
       The AI-First Programming Language &mdash; <a href="https://ailang.sunholo.com">ailang.sunholo.com</a>
       <span class="footer-sep"></span>
       <a href="https://www.sunholo.com/">sunholo.com</a>
+    </div>
+    <div class="footer-line" style="margin-top: 8px;">
+      Powered by <a href="https://github.com/sunholo-data/ailang-parse" target="_blank" rel="noopener">sunholo/ailang-parse</a>
     </div>
   </footer>
 </div>
