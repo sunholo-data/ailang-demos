@@ -20,18 +20,18 @@ import std/stream (connect, transmit, onEvent, runEventLoop, disconnect,
 import std/io (println)
 import std/json (encode, decode, jo, kv, js, jb, ja, jnum,
                  get, has, asString, asBool, getString, getObject, getArray, getBool)
-import std/string (length, concat)
+import std/string (length, concat as strConcat)
 import std/list (concat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/math (intToFloat)
 
 -- Package imports
-import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
-import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
-import sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import pkg/sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
                                          buildToolResponse as pkgBuildToolResponse, buildToolResponseScheduled as pkgBuildToolResponseScheduled)
-import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
+import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration
@@ -44,7 +44,7 @@ export pure func defaultModel() -> string = "models/gemini-2.5-flash-native-audi
 export pure func defaultVoice() -> string = pkgDefaultVoice()
 
 export pure func coPresenterInstruction() -> string =
-  concat([
+  strConcat([
     "You are AILANG, a silent co-presenter AI assistant embedded in a live presentation. ",
     "CRITICAL BEHAVIOR RULES: ",
     "1. You are ALWAYS listening to the presenter's speech. ",

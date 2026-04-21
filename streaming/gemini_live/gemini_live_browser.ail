@@ -19,13 +19,13 @@ import std/math (intToFloat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 
--- Package imports (no pkg/ prefix — WASM registers modules by their internal declaration name)
-import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
-import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
-import sunholo/gemini_live/messages (buildSetup as pkgBuildSetup, buildSetupWithFeatures as pkgBuildSetupWithFeatures,
+-- Package imports (pkg/ prefix — matches CLI resolver and WASM loader module keys)
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import pkg/sunholo/gemini_live/messages (buildSetup as pkgBuildSetup, buildSetupWithFeatures as pkgBuildSetupWithFeatures,
                                          buildSetupWithTools as pkgBuildSetupWithTools, buildTextMessage as pkgBuildTextMessage,
                                          buildAudioChunk as pkgBuildAudioChunk, buildToolResponse as pkgBuildToolResponse)
-import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
+import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration (re-exported from package)

@@ -27,11 +27,11 @@ import std/result (Ok, Err)
 import std/math (intToFloat)
 
 -- Package imports (no pkg/ prefix — WASM registers modules by their internal declaration name)
-import sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
-import sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
-import sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
+import pkg/sunholo/gemini_live/voices (defaultBrowserModel, defaultVoice as pkgDefaultVoice, voiceCatalog as pkgVoiceCatalog)
+import pkg/sunholo/gemini_live/endpoints (aiStudioUrl as pkgAiStudioUrl)
+import pkg/sunholo/gemini_live/messages (buildTextMessage as pkgBuildTextMessage, buildAudioChunk as pkgBuildAudioChunk,
                                          buildToolResponse as pkgBuildToolResponse, buildToolResponseScheduled as pkgBuildToolResponseScheduled)
-import sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
+import pkg/sunholo/gemini_live/parsers (parseMessage as pkgParseMessage)
 
 -- ══════════════════════════════════════════════════════
 -- Configuration (from package)
