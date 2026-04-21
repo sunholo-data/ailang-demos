@@ -63,6 +63,11 @@ Edits to source files are reflected immediately (refresh browser). The script as
 ## Quick Commands
 
 ```bash
+# Type-check EVERY demo entry point (runs in CI too)
+scripts/check_demos.sh              # pass/fail table
+scripts/check_demos.sh --verbose    # show ailang output for failures
+scripts/check_demos.sh --only streaming  # filter by path substring
+
 # Type-check ALL streaming demos
 for f in streaming/*/main.ail streaming/test_sse.ail; do
   echo -n "$f: " && ailang check "$f" 2>&1 | tail -1

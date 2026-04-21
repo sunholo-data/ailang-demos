@@ -39,3 +39,4 @@ chmod +x ~/.claude/hooks/waiting_alert_*.sh ~/.claude/hooks/session_end_speak.sh
 ## Other Scripts
 
 - `serve.sh` — Local dev server for browser demos
+- `check_demos.sh` — Type-check every demo entry point with `ailang check`. Runs in CI. Use `--verbose` to see failure details or `--only <substring>` to filter.
