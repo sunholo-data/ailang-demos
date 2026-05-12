@@ -1,0 +1,100 @@
+-- Tests for the pure functions in the LinkedIn services that we want to
+-- preserve across the package extraction. Run via linkedin/tests/run.sh —
+-- a top-level grep checks for any FAIL line.
+--
+-- Why a single ailang entry with explicit prints rather than inline `tests`?
+-- Because the AILANG test harness has a known bug where inline `tests [...]`
+-- on functions that call imported stdlib silently fails with "cannot apply
+-- non-function value: nil". This pattern sidesteps it.
+
+module linkedin/tests/test_pure
+
+import std/io (println)
+import std/string (length)
+import linkedin/services/linkedin_posts (linkedinEscapeLittleText)
+import linkedin/services/linkedin_comments (linkedinDerivePersona)
+
+-- A single assertion. Prints "PASS: …" or "FAIL: …".
+func assertEq(name: string, got: string, want: string) -> () ! {IO} {
+  if got == want then println("PASS: ${name}")
+  else println("FAIL: ${name} — got '${got}', want '${want}'")
+}
+
+func assertBool(name: string, got: bool, want: bool) -> () ! {IO} {
+  if got == want then println("PASS: ${name}")
+  else println("FAIL: ${name} — got a different bool than expected")
+}
+
+export func main() -> () ! {IO} {
+  println("── escape: LinkedIn Little Text Format ──");
+
+  -- Plain text passes through unchanged.
+  assertEq("escape/plain",
+           linkedinEscapeLittleText("hello world"),
+           "hello world");
+
+  -- Empty stays empty.
+  assertEq("escape/empty",
+           linkedinEscapeLittleText(""),
+           "");
+
+  -- Hashtags are intentionally NOT escaped (LinkedIn renders #foo as a tag).
+  assertEq("escape/hashtag-untouched",
+           linkedinEscapeLittleText("#AILANG #AI"),
+           "#AILANG #AI");
+
+  -- Parentheses are escaped — this is what truncated post 00-meta v1.
+  assertEq("escape/parens",
+           linkedinEscapeLittleText("open(close)"),
+           "open\\(close\\)");
+
+  -- The "Net @limit=1" idiom we use a lot in post bodies.
+  assertEq("escape/at-symbol",
+           linkedinEscapeLittleText("Net @limit=1"),
+           "Net \\@limit=1");
+
+  -- Brackets, pipe, asterisk, underscore, tilde — all syntactic in LTF.
+  assertEq("escape/all-specials",
+           linkedinEscapeLittleText("[a]|b*c_d~e"),
+           "\\[a\\]\\|b\\*c\\_d\\~e");
+
+  -- Angle brackets too.
+  assertEq("escape/angle",
+           linkedinEscapeLittleText("<tag>"),
+           "\\<tag\\>");
+
+  -- Backslash must be escaped first to avoid double-encoding the others.
+  assertEq("escape/backslash-first",
+           linkedinEscapeLittleText("a\\b"),
+           "a\\\\b");
+
+  println("");
+  println("── persona: deterministic pseudonyms from URNs ──");
+
+  -- Known fixtures: locked outputs from the current implementation. Changing
+  -- these requires a deliberate decision (e.g. switching hash function).
+  let pTest = linkedinDerivePersona("urn:li:person:test");
+  assertEq("persona/test-initials",  pTest.initials,   "OP");
+  assertEq("persona/test-seed",      pTest.avatarSeed, "c04298");
+
+  let pDiff = linkedinDerivePersona("urn:li:person:different");
+  assertEq("persona/different-initials", pDiff.initials,   "PU");
+  assertEq("persona/different-seed",     pDiff.avatarSeed, "0a5dfa");
+
+  let pEmpty = linkedinDerivePersona("");
+  assertEq("persona/empty-initials", pEmpty.initials,   "TU");
+  assertEq("persona/empty-seed",     pEmpty.avatarSeed, "c44298");
+
+  -- Determinism: hashing the same URN twice must yield the same persona.
+  let p1 = linkedinDerivePersona("urn:li:person:repeat");
+  let p2 = linkedinDerivePersona("urn:li:person:repeat");
+  assertBool("persona/deterministic-initials", p1.initials == p2.initials, true);
+  assertBool("persona/deterministic-seed",     p1.avatarSeed == p2.avatarSeed, true);
+
+  -- Shape guarantees: 2 letters, 6 hex chars (the page renderer relies on this).
+  assertBool("persona/initials-len-2",   length(p1.initials)   == 2,  true);
+  assertBool("persona/avatarSeed-len-6", length(p1.avatarSeed) == 6,  true);
+
+  println("");
+  println("── done ──")
+}

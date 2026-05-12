@@ -32,7 +32,7 @@ func linkedinHeaders(token: string) -> [{name: string, value: string}] = [
 -- are syntactic (mentions, hashtags, entities) and must be backslash-escaped
 -- to appear as literal text. Order matters: `\` must be replaced first to
 -- avoid double-escaping our own backslashes.
-func linkedinEscapeLittleText(s: string) -> string {
+export func linkedinEscapeLittleText(s: string) -> string {
   let s1 = replace(s, "\\", "\\\\");
   let s2 = replace(s1, "(", "\\(");
   let s3 = replace(s2, ")", "\\)");
