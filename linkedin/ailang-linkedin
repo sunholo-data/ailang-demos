@@ -325,21 +325,26 @@ do_refresh() {
   fi
 
   local WF="LinkedIn Comments — Hourly Refresh"
+  # `gh workflow run` doesn't return the new run's ID. Snapshot the
+  # current top run ID *before* triggering, then poll until a different
+  # one shows up at the top of the list. Robust to clock skew and to
+  # GitHub's slight delay registering the new run.
+  local before_id
+  before_id="$(gh run list --workflow "$WF" --repo "$repo" --limit 1 \
+    --json databaseId -q '.[0].databaseId' 2>/dev/null)"
+
   echo "→ Triggering '$WF' on $repo …"
   gh workflow run "$WF" --repo "$repo" --ref main >/dev/null
 
-  # gh doesn't return the new run's ID directly. Poll the list until we
-  # see a queued/in_progress run with createdAt > now, then watch it.
-  local since
-  since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local run_id=""
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
     sleep 1
-    run_id="$(gh run list --workflow "$WF" --repo "$repo" --limit 5 \
-      --json databaseId,status,createdAt -q \
-      ".[] | select(.createdAt >= \"$since\") | .databaseId" 2>/dev/null \
-      | head -1)"
-    [ -n "$run_id" ] && break
+    run_id="$(gh run list --workflow "$WF" --repo "$repo" --limit 1 \
+      --json databaseId -q '.[0].databaseId' 2>/dev/null)"
+    if [ -n "$run_id" ] && [ "$run_id" != "$before_id" ]; then
+      break
+    fi
+    run_id=""
   done
 
   if [ -z "$run_id" ]; then
