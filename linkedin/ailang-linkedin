@@ -43,6 +43,8 @@ Commands:
   status                          Auth status + summary
   setup                           Show LinkedIn Developer App setup guide
   auth [client_id] [secret]       Run the full OAuth2 dance (server + browser + token exchange)
+  secret-set [--repo OWNER/REPO]  Upload local credentials.json to GitHub as LINKEDIN_CREDENTIALS_JSON
+                                  so the hourly comments cron can authenticate.
 
 Options:
   --check           Type-check all modules (no API calls)
@@ -59,6 +61,10 @@ OAuth (one-time):
   ailang-linkedin auth                          # uses defaults, prompts for secret
   ailang-linkedin auth 78em1zdeyr4qu5 SECRET    # explicit args
   LINKEDIN_CLIENT_ID=... LINKEDIN_CLIENT_SECRET=... ailang-linkedin auth
+
+GitHub Actions setup:
+  ailang-linkedin secret-set                    # auto-detect repo from git remote
+  ailang-linkedin secret-set --repo owner/repo  # explicit
 EOF
 }
 
@@ -199,9 +205,88 @@ do_auth() {
     echo ""
     echo "Credentials saved to $creds_path"
     echo "Test with: ailang-linkedin status"
+    echo "Sync to GitHub Actions with: ailang-linkedin secret-set"
   else
     echo ""
     echo "Timed out waiting for OAuth callback. Re-run 'ailang-linkedin auth' to retry." >&2
+    return 1
+  fi
+}
+
+do_secret_set() {
+  local repo=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo="$2"; shift 2 ;;
+      --repo=*) repo="${1#--repo=}"; shift ;;
+      *) echo "Unknown arg: $1" >&2; return 1 ;;
+    esac
+  done
+
+  local creds="$HOME/.ailang/linkedin/credentials.json"
+  if [ ! -f "$creds" ]; then
+    echo "Error: $creds not found." >&2
+    echo "Run 'ailang-linkedin auth' first to mint credentials." >&2
+    return 1
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "Error: GitHub CLI ('gh') not installed." >&2
+    echo "Install with: brew install gh    (then: gh auth login)" >&2
+    return 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "Error: not logged in to GitHub CLI. Run: gh auth login" >&2
+    return 1
+  fi
+
+  # Auto-detect repo from git remote if not provided
+  if [ -z "$repo" ]; then
+    repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+    if [ -z "$repo" ]; then
+      echo "Error: could not detect GitHub repo from current directory." >&2
+      echo "Pass it explicitly: ailang-linkedin secret-set --repo owner/repo" >&2
+      return 1
+    fi
+  fi
+
+  # Show a summary (without leaking the access token)
+  local client_id org_urn token_len
+  if command -v jq >/dev/null 2>&1; then
+    client_id="$(jq -r '.client_id // "?"' "$creds")"
+    org_urn="$(jq -r '.org_urn // "?"' "$creds")"
+    token_len="$(jq -r '.access_token // "" | length' "$creds")"
+  else
+    client_id="(install jq for details)"; org_urn=""; token_len=""
+  fi
+
+  echo ""
+  echo "=== Sync LinkedIn credentials to GitHub Actions ==="
+  echo "Repo:      $repo"
+  echo "Secret:    LINKEDIN_CREDENTIALS_JSON"
+  echo "Source:    $creds"
+  [ -n "$client_id" ] && echo "Client ID: $client_id"
+  [ -n "$org_urn" ]   && echo "Org URN:   $org_urn"
+  [ -n "$token_len" ] && echo "Token:     ${token_len} chars"
+  echo ""
+  echo -n "Upload as repo secret? [y/N] "
+  read -r confirm
+  if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+    echo "Cancelled."
+    return 0
+  fi
+
+  if gh secret set LINKEDIN_CREDENTIALS_JSON --repo "$repo" < "$creds"; then
+    echo ""
+    echo "✓ LINKEDIN_CREDENTIALS_JSON set on $repo"
+    echo ""
+    echo "Trigger an immediate run with:"
+    echo "  gh workflow run 'LinkedIn Comments — Hourly Refresh' --repo $repo"
+    echo ""
+    echo "Re-run this command after each 'ailang-linkedin auth' to keep CI in sync."
+  else
+    echo "Error: 'gh secret set' failed." >&2
     return 1
   fi
 }
@@ -222,6 +307,12 @@ case "${1:-}" in
     shift
     do_auth "$@"
     exit 0
+    ;;
+  secret-set)
+    cd "$PROJECT_DIR"
+    shift
+    do_secret_set "$@"
+    exit $?
     ;;
   "")
     usage

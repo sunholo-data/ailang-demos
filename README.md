@@ -76,6 +76,14 @@ BigQuery integration with contract-verified SQL generation. AILANG contracts gua
 |------|-------------|
 | **GA4 Analytics** | BigQuery queries with contract-verified SQL, capability budgets, and ADC auth — run locally via CLI |
 
+### Outbound — LinkedIn
+
+AILANG publishing to its own LinkedIn company page, then reading the replies back. The CLI handles OAuth2, REST publish, and comment ingestion all in typed AILANG with capability budgets. An hourly GitHub Actions cron refreshes the comments JSON; the demo page renders them.
+
+| Demo | Live Link | Description |
+|------|-----------|-------------|
+| **LinkedIn** | [Try it](https://www.sunholo.com/ailang-demos/linkedin/) | A language that posts for itself — sees the OAuth dance, the `Net @limit=N` budgets, and the comments coming back |
+
 ### Website Builder & AILANG Cloud
 
 <p align="center">
