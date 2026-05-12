@@ -43,7 +43,8 @@ import pkg/sunholo/linkedin/posts (
 )
 import pkg/sunholo/linkedin/comments (
   linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson,
-  linkedinDerivePersona, LinkedInComment
+  linkedinSanitiseComment,
+  linkedinDerivePersona, LinkedInComment, PublicComment
 )
 
 -- State management + content loading stay in the demo: they're demo-specific
@@ -256,12 +257,12 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
 -- ── Feed JSON builder ──────────────────────────────────────────────
 -- Bundles every published post (title + body + LinkedIn URL) with its
 -- comments, ready for the website to render as a thread feed.
-func linkedinBuildFeedJson(states: [PostState], allComments: [LinkedInComment]) -> string ! {FS} {
+func linkedinBuildFeedJson(states: [PostState], allComments: [LinkedInComment]) -> string ! {Declassify, FS} {
   let entries = map(\s. linkedinBuildPostEntry(s, allComments), states);
   encode(ja(entries))
 }
 
-func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) -> Json ! {FS} {
+func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) -> Json ! {FS, Declassify} {
   -- Look up the post's content. If the markdown is missing (e.g. someone
   -- deleted it but the state still references the URN), fall back to the
   -- slug as a placeholder title — the page will still render the comments.
@@ -277,10 +278,14 @@ func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) ->
 
   -- Group: keep only comments whose parentPostUrn matches this post.
   let mineRaw = filter(\c. c.parentPostUrn == state.postUrn, allComments);
+  -- IFC gate: cross the declassification boundary once, here. From this
+  -- point on the demo works with PublicComment (no <pii> label), which is
+  -- safe to serialise into the public feed JSON.
+  let mineSafe = map(\c. linkedinSanitiseComment(c), mineRaw);
   -- Split top-level comments from replies. The package returns a flat list;
   -- we thread it for the website (one level deep — LinkedIn's UI cap).
-  let topLevel = filter(\c. length(c.parentCommentUrn) == 0, mineRaw);
-  let allReplies = filter(\c. length(c.parentCommentUrn) > 0, mineRaw);
+  let topLevel = filter(\c. length(c.parentCommentUrn) == 0, mineSafe);
+  let allReplies = filter(\c. length(c.parentCommentUrn) > 0, mineSafe);
   let withReplies = map(\c. linkedinThreadComment(c, allReplies), topLevel);
 
   jo([
@@ -294,24 +299,22 @@ func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) ->
   ])
 }
 
--- Build a single comment's JSON with its replies nested in.
-func linkedinThreadComment(c: LinkedInComment, allReplies: [LinkedInComment]) -> Json {
-  let p = linkedinDerivePersona(c.authorName);
+-- Build a single sanitised comment's JSON with its replies nested in.
+-- Takes PublicComment values exclusively — no raw LinkedInComment can leak
+-- in here, because the only path is through linkedinSanitiseComment.
+func linkedinThreadComment(c: PublicComment, allReplies: [PublicComment]) -> Json {
   let mine = filter(\r. r.parentCommentUrn == c.commentUrn, allReplies);
-  let replies = map(\r. {
-    let rp = linkedinDerivePersona(r.authorName);
-    jo([
-      kv("text", js(r.text)),
-      kv("createdAt", js(r.createdAt)),
-      kv("initials", js(rp.initials)),
-      kv("avatarSeed", js(rp.avatarSeed))
-    ])
-  }, mine);
+  let replies = map(\r. jo([
+    kv("text", js(r.text)),
+    kv("createdAt", js(r.createdAt)),
+    kv("initials", js(r.initials)),
+    kv("avatarSeed", js(r.avatarSeed))
+  ]), mine);
   jo([
     kv("text", js(c.text)),
     kv("createdAt", js(c.createdAt)),
-    kv("initials", js(p.initials)),
-    kv("avatarSeed", js(p.avatarSeed)),
+    kv("initials", js(c.initials)),
+    kv("avatarSeed", js(c.avatarSeed)),
     kv("replies", ja(replies))
   ])
 }
@@ -348,8 +351,14 @@ func linkedinFindUrnForSlug(slug: string, states: [PostState]) -> string =
     s :: rest => if s.slug == slug then s.postUrn else linkedinFindUrnForSlug(slug, rest)
   }
 
-func linkedinOutputComments(comments: [LinkedInComment], jsonMode: bool) -> () ! {IO} {
-  if jsonMode then println(linkedinCommentsToJson(comments))
+func linkedinOutputComments(comments: [LinkedInComment], jsonMode: bool) -> () ! {IO, Declassify} {
+  if jsonMode then {
+    -- Cross the declassification gate before publishing. The package's
+    -- linkedinCommentsToJson refuses to accept PII-labelled LinkedInComment
+    -- values; we must convert through linkedinSanitiseComment first.
+    let public = map(\c. linkedinSanitiseComment(c), comments);
+    println(linkedinCommentsToJson(public))
+  }
   else {
     let count = listLength(comments);
     println("Found ${count} comments:");
