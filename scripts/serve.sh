@@ -32,10 +32,29 @@ echo "Assembling site in $SITE ..."
 rm -rf "$SITE"
 mkdir -p "$SITE"
 
-# Hub page + assets
-cp "$REPO_ROOT/site/index.html" "$SITE/"
+# Hub page + assets — copy every top-level site/*.html
+for html in "$REPO_ROOT"/site/*.html; do
+  [ -f "$html" ] && cp "$html" "$SITE/"
+done
 for svg in "$REPO_ROOT"/site/*.svg; do
   [ -f "$svg" ] && cp "$svg" "$SITE/"
+done
+
+# site/linkedin/ — copy (not symlink) so we can layer in comments.json without
+# polluting the source tree. Re-run scripts/serve.sh to pick up edits.
+if [ -d "$REPO_ROOT/site/linkedin" ]; then
+  mkdir -p "$SITE/linkedin"
+  cp -R "$REPO_ROOT/site/linkedin/." "$SITE/linkedin/"
+  # Overlay the latest comments JSON if it exists
+  [ -f "$REPO_ROOT/linkedin/data/comments.json" ] && \
+    cp "$REPO_ROOT/linkedin/data/comments.json" "$SITE/linkedin/comments.json"
+fi
+
+# Any other site/*/ sub-pages — symlink for live editing
+for sub in "$REPO_ROOT"/site/*/; do
+  name="$(basename "$sub")"
+  case "$name" in thumbnails|shared|linkedin) continue ;; esac
+  ln -sfn "$sub" "$SITE/$name"
 done
 
 # Thumbnails for hub page cards

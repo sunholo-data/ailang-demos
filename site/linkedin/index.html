@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG · LinkedIn — A Language That Posts For Itself</title>
+<link rel="icon" type="image/svg+xml" href="../ailang-logo.svg">
+<meta name="description" content="LinkedIn posts written, type-checked, and published by AILANG — a programming language with opinions. See the loop, read the code, watch comments come back.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/design-system.css">
+<style>
+  /* Page-specific */
+  .loop-diagram {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    max-width: 900px;
+    margin: 32px auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .loop-step {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 12px;
+    text-align: center;
+    position: relative;
+  }
+  .loop-step .step-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .loop-step .step-name { font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+  .loop-step .step-detail { color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+  .loop-step .step-status {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .step-status--live { background: var(--success-bg); color: var(--success); }
+  .step-status--wip  { background: var(--warning-bg); color: var(--warning); }
+
+  .post-list {
+    display: grid;
+    gap: 10px;
+    max-width: 760px;
+    margin: 24px auto;
+  }
+  .post-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+  }
+  .post-row .post-day { font-family: var(--font-mono); font-weight: 700; color: var(--primary); }
+  .post-row .post-title { color: var(--text-primary); }
+  .post-row .post-state {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .state--scheduled { background: var(--border); color: var(--text-secondary); }
+  .state--live { background: var(--success-bg); color: var(--success); }
+
+  .comments-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 24px;
+    max-width: 760px;
+    margin: 24px auto;
+  }
+  .comments-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 24px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .comments-empty a { color: var(--primary); text-decoration: none; font-style: normal; font-weight: 600; }
+  .comments-empty a:hover { text-decoration: underline; }
+
+  .code-block {
+    background: var(--bg-code);
+    color: #e2e8f0;
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+    max-width: 760px;
+    margin: 16px auto;
+  }
+  .code-block .c-key { color: #93c5fd; }
+  .code-block .c-cmt { color: #64748b; font-style: italic; }
+  .code-block .c-str { color: #fcd34d; }
+
+  .footer { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
+  .footer a { color: var(--primary); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <a href="../" class="nav-home" title="Back to Demo Hub"><img src="../ailang-logo.svg" alt="AILANG" class="header-logo"></a>
+  <span class="header-title"><span class="ai">AI</span>LANG</span>
+  <span class="header-sep"></span>
+  <span class="header-subtitle">LinkedIn — A Language That Posts For Itself</span>
+  <span class="header-badge">
+    <code>ailang-linkedin</code> · 6 modules
+  </span>
+</header>
+
+<div class="page">
+
+  <section class="hero">
+    <h1><span class="accent">LinkedIn</span>, published by a language</h1>
+    <p class="subtitle">Posts written, type-checked, and published by AILANG &mdash; with the comments coming back in.</p>
+    <div class="hero-tags">
+      <span class="tag tag--contracts">contracts</span>
+      <span class="tag tag--budgets">budgets</span>
+      <span class="tag tag--effects">effects</span>
+    </div>
+    <p style="max-width: 680px; margin: 20px auto 0; font-size: 14px; color: var(--text-secondary); line-height: 1.7;">
+      Every post on the
+      <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener" style="color: var(--primary);">Sunholo company page</a>
+      comes through the <code>ailang-linkedin</code> CLI: OAuth2 token exchange, JSON-encoded REST POST, capability-bounded network access. The comments come back in the same way &mdash; pulled by code, surfaced on this page.
+    </p>
+  </section>
+
+  <!-- The Loop -->
+  <div class="section">
+    <h2 style="text-align: center;">The loop</h2>
+    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto;">
+      Compose, sign, publish, listen, reflect. Every step runs as typed AILANG code with capability budgets.
+    </p>
+
+    <div class="loop-diagram">
+      <div class="loop-step">
+        <div class="step-num">1</div>
+        <div class="step-name">Compose</div>
+        <div class="step-detail"><code>marketing/&lt;slug&gt;/post.md</code></div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">2</div>
+        <div class="step-name">Authenticate</div>
+        <div class="step-detail">OAuth2 via <code>ailang serve-api</code></div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">3</div>
+        <div class="step-name">Publish</div>
+        <div class="step-detail"><code>POST /rest/posts</code> · <code>Net @limit=1</code></div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">4</div>
+        <div class="step-name">Listen</div>
+        <div class="step-detail"><code>GET /rest/socialActions</code> · <code>Net @limit=20</code></div>
+      </div>
+      <div class="loop-step">
+        <div class="step-num">5</div>
+        <div class="step-name">Reflect</div>
+        <div class="step-detail">Comments surface here</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comments -->
+  <div class="section">
+    <h2 style="text-align: center;">Comments</h2>
+    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto;">
+      Pulled from LinkedIn. The freshest ones might take a little while to land — check back.
+    </p>
+    <div class="comments-card">
+      <div id="comments-list">
+        <div class="comments-empty">
+          Nothing here yet.
+          <br><br>
+          <span style="font-size: 12px;">
+            Be the first &mdash;
+            <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener">leave a comment on the latest post</a>
+            and come back later to find yourself.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What's coming -->
+  <div class="section">
+    <h2 style="text-align: center;">What you&rsquo;ll see</h2>
+    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto 24px;">
+      Glimpses of what AILANG can do, posted from AILANG. The order, cadence, and form are part of the demo.
+    </p>
+
+    <div class="post-list" id="post-list">
+      <div class="post-row" style="grid-template-columns: 1fr;">
+        <span class="post-title">Documents that parse themselves &mdash; in your browser, no server.</span>
+      </div>
+      <div class="post-row" style="grid-template-columns: 1fr;">
+        <span class="post-title">An always-listening voice assistant that only speaks when addressed.</span>
+      </div>
+      <div class="post-row" style="grid-template-columns: 1fr;">
+        <span class="post-title">AI-written code that the compiler can prove won&rsquo;t escape its bounds.</span>
+      </div>
+      <div class="post-row" style="grid-template-columns: 1fr;">
+        <span class="post-title">WebAssembly demos where the language and the page share one runtime.</span>
+      </div>
+      <div class="post-row" style="grid-template-columns: 1fr;">
+        <span class="post-title">Contracts, budgets, and effects &mdash; not as policy, as mathematics.</span>
+      </div>
+      <div class="post-row" style="grid-template-columns: 1fr; color: var(--text-muted); font-style: italic;">
+        <span class="post-title">&hellip; and more, in the order AILANG decides.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- The code -->
+  <div class="section">
+    <h2 style="text-align: center;">The code</h2>
+    <p style="text-align: center; color: var(--text-secondary);">Six AILANG modules. One CLI wrapper. Everything in <a href="https://github.com/sunholo-data/demos/tree/main/linkedin" target="_blank" rel="noopener" style="color: var(--primary);">sunholo-data/demos / linkedin</a>.</p>
+
+    <div class="code-block"><span class="c-cmt">-- linkedin/services/linkedin_posts.ail:32</span>
+<span class="c-key">export func</span> linkedinCreatePost(token: <span class="c-key">string</span>, orgUrn: <span class="c-key">string</span>, text: <span class="c-key">string</span>)
+  -&gt; Result[PostResult, <span class="c-key">string</span>] ! {Net @limit=1}
+<span class="c-key">requires</span> { length(text) &gt; 0 &amp;&amp; length(text) &lt;= 3000 }
+{
+  <span class="c-key">let</span> url = <span class="c-str">"https://api.linkedin.com/rest/posts"</span>;
+  <span class="c-key">let</span> body = encode(jo([
+    kv(<span class="c-str">"author"</span>, js(orgUrn)),
+    kv(<span class="c-str">"commentary"</span>, js(text)),
+    kv(<span class="c-str">"visibility"</span>, js(<span class="c-str">"PUBLIC"</span>)),
+    ...
+  ]));
+  <span class="c-key">match</span> httpRequest(<span class="c-str">"POST"</span>, url, linkedinHeaders(token), body) { ... }
+}</div>
+
+    <p style="text-align: center; color: var(--text-muted); font-size: 12px; max-width: 640px; margin: 0 auto;">
+      The <code>requires</code> clause &mdash; "text length between 1 and 3000" &mdash; is checked by the compiler. The <code>Net @limit=1</code> means this function can make at most one network call, ever. Both are mathematical, not advisory.
+    </p>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-brand" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 12px;">
+      <img src="../ailang-logo.svg" alt="AILANG" width="22" height="22" style="border-radius: 3px;">
+      <span><span class="ai">AI</span>LANG</span>
+    </div>
+    <div>
+      The AI-First Programming Language &mdash; <a href="https://github.com/sunholo-data/ailang">github.com/sunholo-data/ailang</a>
+    </div>
+    <div style="margin-top: 6px;">
+      <a href="../">← All demos</a>
+      &nbsp;·&nbsp;
+      <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener">Sunholo on LinkedIn</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Fetch the static comments JSON (refreshed server-side) and render into #comments-list.
+  // No LinkedIn API call from the browser. Empty state shown if the file isn't present.
+  (function tryRenderComments() {
+    fetch('comments.json', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        const list = document.getElementById('comments-list');
+        if (!list) return;
+        list.innerHTML = data.map(c => `
+          <div style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+              ${escapeHtml(c.authorName || 'unknown')}
+            </div>
+            <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
+              ${escapeHtml(c.text || '')}
+            </div>
+            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px; font-family: var(--font-mono);">
+              ${escapeHtml(c.createdAt || '')} · post ${escapeHtml((c.parentPostUrn || '').split(':').pop())}
+            </div>
+          </div>
+        `).join('');
+      })
+      .catch(() => { /* silently keep empty state */ });
+  })();
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+</script>
+
+</body>
+</html>

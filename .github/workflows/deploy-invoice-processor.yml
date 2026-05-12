@@ -13,6 +13,7 @@ on:
       - 'co-presenter/**'
       - 'site/**'
       - 'website_builder/**'
+      - 'linkedin/data/comments.json'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -304,6 +305,16 @@ jobs:
           cp site/*.svg _site/
           mkdir -p _site/shared
           cp site/shared/design-system.css _site/shared/
+
+          # LinkedIn demo page — copied as a real directory so we can layer in
+          # the latest comments.json (refreshed hourly by linkedin-comments.yml).
+          if [ -d site/linkedin ]; then
+            mkdir -p _site/linkedin
+            cp -R site/linkedin/. _site/linkedin/
+            if [ -f linkedin/data/comments.json ]; then
+              cp linkedin/data/comments.json _site/linkedin/comments.json
+            fi
+          fi
 
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/

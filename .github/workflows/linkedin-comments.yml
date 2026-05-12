@@ -1,0 +1,126 @@
+name: LinkedIn Comments — Hourly Refresh
+
+# Fetches comments from every published LinkedIn post via the ailang-linkedin
+# CLI and commits the JSON dump to linkedin/data/comments.json. The deploy
+# workflow re-renders the /linkedin/ page when this file changes.
+#
+# Secrets required:
+#   LINKEDIN_CREDENTIALS_JSON  — full contents of ~/.ailang/linkedin/credentials.json
+#                                (access_token, refresh_token, client_id, client_secret, org_urn)
+#
+# When the access token expires (~60 days), this workflow will start failing.
+# To refresh: run `ailang-linkedin auth` locally, then update the
+# LINKEDIN_CREDENTIALS_JSON secret with the new credentials.json contents.
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # hourly, on the hour, UTC
+  workflow_dispatch:       # manual trigger
+
+permissions:
+  contents: write          # commit comments.json
+  actions: write           # trigger the deploy workflow
+
+concurrency:
+  group: linkedin-comments
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Use the default GITHUB_TOKEN; we explicitly trigger the deploy
+          # workflow at the end so we don't need a PAT to chain workflows.
+          fetch-depth: 1
+
+      - name: Install AILANG CLI
+        run: |
+          set -euo pipefail
+          RELEASE_TAG=$(curl -sfL -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/sunholo-data/ailang/releases/latest \
+            | jq -r '.tag_name')
+          echo "Installing AILANG ${RELEASE_TAG}"
+          curl -sfL --retry 3 --retry-delay 5 \
+            -o ailang-cli.tar.gz \
+            "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/linux.x64.ailang.tar.gz"
+          mkdir -p .ailang-cli && tar -xzf ailang-cli.tar.gz -C .ailang-cli
+          AILANG_BIN=$(find .ailang-cli -type f -name ailang | head -1)
+          if [ -z "$AILANG_BIN" ]; then
+            echo "::error::ailang binary not found in tarball"
+            tar -tzf ailang-cli.tar.gz
+            exit 1
+          fi
+          sudo install -m 0755 "$AILANG_BIN" /usr/local/bin/ailang
+          ailang --version
+
+      - name: Restore LinkedIn credentials
+        env:
+          CREDS_JSON: ${{ secrets.LINKEDIN_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CREDS_JSON:-}" ]; then
+            echo "::error::Secret LINKEDIN_CREDENTIALS_JSON is not set."
+            echo "Run 'ailang-linkedin auth' locally, then add the contents of"
+            echo "~/.ailang/linkedin/credentials.json as a repo secret named LINKEDIN_CREDENTIALS_JSON."
+            exit 1
+          fi
+          mkdir -p "$HOME/.ailang/linkedin"
+          printf '%s' "$CREDS_JSON" > "$HOME/.ailang/linkedin/credentials.json"
+          chmod 600 "$HOME/.ailang/linkedin/credentials.json"
+          # Validate it's JSON without leaking the token to logs
+          jq -e '.access_token | length > 0' "$HOME/.ailang/linkedin/credentials.json" >/dev/null \
+            || { echo "::error::Credentials JSON is malformed or missing access_token"; exit 1; }
+          echo "Credentials restored."
+
+      - name: Fetch comments
+        id: fetch
+        run: |
+          set -euo pipefail
+          mkdir -p linkedin/data
+          # Capture stdout (JSON) and stderr (diagnostics) separately so we can
+          # tell apart a successful empty pull from a 401/network failure.
+          if ! linkedin/ailang-linkedin comments --json > linkedin/data/comments.json.new 2> /tmp/comments.err; then
+            echo "::error::ailang-linkedin comments --json failed:"
+            cat /tmp/comments.err >&2
+            # Likely token expired — surface that explicitly
+            if grep -qi "401\|unauthor\|token\|expired" /tmp/comments.err; then
+              echo "::error::LinkedIn token appears expired. Run 'ailang-linkedin auth' locally and update LINKEDIN_CREDENTIALS_JSON."
+            fi
+            exit 1
+          fi
+          # Sanity check: must be valid JSON
+          jq -e 'type == "array"' linkedin/data/comments.json.new >/dev/null \
+            || { echo "::error::Output is not a JSON array"; cat linkedin/data/comments.json.new; exit 1; }
+          count=$(jq 'length' linkedin/data/comments.json.new)
+          echo "Fetched $count comment(s)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          mv linkedin/data/comments.json.new linkedin/data/comments.json
+
+      - name: Commit & push if changed
+        id: commit
+        run: |
+          set -euo pipefail
+          if git diff --quiet --exit-code linkedin/data/comments.json; then
+            echo "No changes to comments.json."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name  "ailang-linkedin-bot"
+          git config user.email "noreply@sunholo.com"
+          git add linkedin/data/comments.json
+          # ${{ steps.fetch.outputs.count }} is the freshly-fetched count
+          git commit -m "linkedin: refresh comments (${{ steps.fetch.outputs.count }} total)" \
+            -m "Auto-generated by linkedin-comments.yml at $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger site redeploy
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy-invoice-processor.yml --ref "${GITHUB_REF_NAME}"
+          echo "Triggered deploy workflow."
