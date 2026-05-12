@@ -14,6 +14,8 @@ on:
       - 'site/**'
       - 'website_builder/**'
       - 'linkedin/data/comments.json'
+      - 'ailang.toml'
+      - 'ailang.lock'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -257,7 +259,9 @@ jobs:
           mkdir -p invoice_processor_wasm/ailang/streaming/ambient_assistant
           cp streaming/ambient_assistant/ambient_browser.ail \
             invoice_processor_wasm/ailang/streaming/ambient_assistant/
-          # Co-Presenter module
+          # Co-Presenter module — clean dangling symlink (dev environment uses
+          # absolute symlink that's invalid in CI), then copy the real file.
+          rm -rf invoice_processor_wasm/ailang/co_presenter
           mkdir -p invoice_processor_wasm/ailang/co_presenter
           cp co-presenter/co_presenter.ail \
             invoice_processor_wasm/ailang/co_presenter/
