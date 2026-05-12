@@ -46,13 +46,17 @@ jobs:
         run: npm test
 
       - name: Install AILANG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           RELEASE_JSON=$(curl -sfL \
             -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/sunholo-data/ailang/releases/latest)
           RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
           curl -sfL --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -o ailang-linux.tar.gz \
             "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/linux.x64.ailang.tar.gz"
           tar -xzf ailang-linux.tar.gz
@@ -78,6 +82,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download AILANG WASM tarball
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           WASM_DIR="wasm"
@@ -86,6 +92,7 @@ jobs:
           echo "::group::Fetching latest AILANG release info"
           RELEASE_JSON=$(curl -sfL \
             -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/sunholo-data/ailang/releases/latest)
           RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
           echo "Latest release: $RELEASE_TAG"
@@ -93,6 +100,7 @@ jobs:
 
           echo "::group::Downloading ailang-wasm.tar.gz"
           curl -sfL --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -o ailang-wasm.tar.gz \
             "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/ailang-wasm.tar.gz"
           echo "Tarball size: $(stat --printf='%s' ailang-wasm.tar.gz) bytes"
@@ -199,14 +207,19 @@ jobs:
           echo "Copied $(find invoice_processor_wasm/ailang/verify_demo -name '*.ail' | wc -l) verify_demo modules"
 
       - name: Install ailang CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           # Reuse the same release tag the WASM tarball came from
-          RELEASE_TAG=$(curl -sfL -H "Accept: application/vnd.github+json" \
+          RELEASE_TAG=$(curl -sfL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/sunholo-data/ailang/releases/latest \
             | jq -r '.tag_name')
           echo "Installing ailang ${RELEASE_TAG}"
           curl -sfL --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -o ailang-cli.tar.gz \
             "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/linux.x64.ailang.tar.gz"
           mkdir -p .ailang-cli && tar -xzf ailang-cli.tar.gz -C .ailang-cli
