@@ -103,10 +103,29 @@ jobs:
           jq -e 'type == "array"' linkedin/data/comments.json.new >/dev/null \
             || { echo "::error::Output is not a JSON array"; cat linkedin/data/comments.json.new; exit 1; }
           posts=$(jq 'length' linkedin/data/comments.json.new)
-          count=$(jq '[.[] | (.comments | length)] | add // 0' linkedin/data/comments.json.new)
+          new_count=$(jq '[.[] | (.comments | length)] | add // 0' linkedin/data/comments.json.new)
+
+          # Don't wipe a populated page on a transient fetch. If the new
+          # result has 0 comments but we ALREADY have some committed,
+          # treat as transient (LinkedIn rate limit, partial outage,
+          # etc.) and keep the existing file. Stale comments beat blank
+          # comments on a public page.
+          old_count=0
+          if [ -f linkedin/data/comments.json ]; then
+            old_count=$(jq '[.[] | (.comments | length)] | add // 0' linkedin/data/comments.json 2>/dev/null || echo 0)
+          fi
+
+          if [ "$new_count" -eq 0 ] && [ "$old_count" -gt 0 ]; then
+            echo "::warning::Fetch returned 0 comments but $old_count are already stored — keeping existing comments.json (likely transient)."
+            rm -f linkedin/data/comments.json.new
+            count=$old_count
+          else
+            mv linkedin/data/comments.json.new linkedin/data/comments.json
+            count=$new_count
+          fi
+
           echo "Fetched $count comment(s) across $posts post(s)"
           echo "count=$count" >> "$GITHUB_OUTPUT"
-          mv linkedin/data/comments.json.new linkedin/data/comments.json
 
       - name: Commit & push if changed
         id: commit
