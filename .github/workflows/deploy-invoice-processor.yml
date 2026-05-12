@@ -57,6 +57,11 @@ jobs:
           sudo mv ailang /usr/local/bin/ailang
           ailang version
 
+      - name: Vendor AILANG package dependencies
+        # Demos that import `pkg/sunholo/...` (streaming, ecommerce, co-presenter)
+        # can't type-check until `ailang lock` resolves the package manifest.
+        run: ailang lock
+
       - name: Type-check all demo entry points
         run: scripts/check_demos.sh
 
