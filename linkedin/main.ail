@@ -177,7 +177,12 @@ func linkedinDoPublish(post: MarketingPost) -> () ! {IO, FS, Net, Env} {
           match linkedinCreatePost(token, orgUrn, post.body) {
             Ok(result) => {
               println("Published! URN: ${result.postUrn}");
-              linkedinSaveState(post.slug, result.postUrn, "now")
+              linkedinSaveState(post.slug, result.postUrn, "now");
+              println("");
+              println("→ Commit and push so the hourly comments cron picks it up:");
+              println("    git add linkedin/data/state.json");
+              println("    git commit -m 'linkedin: publish ${post.slug}'");
+              println("    git push")
             },
             Err(e) => println("Error publishing: ${e}")
           }
