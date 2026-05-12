@@ -43,7 +43,8 @@ import linkedin/services/linkedin_posts (
   linkedinCreatePost, linkedinSaveState, linkedinLoadState, linkedinIsPublished
 )
 import linkedin/services/linkedin_comments (
-  linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson
+  linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson,
+  linkedinDerivePersona
 )
 import linkedin/services/linkedin_content_loader (
   linkedinLoadPost, linkedinLoadAllPosts
@@ -223,7 +224,15 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
     match linkedinGetToken() {
       Ok(token) => {
         let comments = linkedinGetAllComments(token, states);
-        linkedinOutputComments(comments, jsonMode)
+        if jsonMode then {
+          -- The website consumes the richer "feed" shape: an array of posts,
+          -- each with its own metadata (slug, title, body, linkedinUrl, ...)
+          -- and a nested comments[] array. This lets the page render the
+          -- whole conversation without hard-coding any post.
+          println(linkedinBuildFeedJson(states, comments))
+        } else {
+          linkedinOutputComments(comments, false)
+        }
       },
       Err(e) => {
         if jsonMode then println("[]")
@@ -231,6 +240,51 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
       }
     }
   }
+}
+
+-- ── Feed JSON builder ──────────────────────────────────────────────
+-- Bundles every published post (title + body + LinkedIn URL) with its
+-- comments, ready for the website to render as a thread feed.
+func linkedinBuildFeedJson(states: [PostState], allComments: [LinkedInComment]) -> string ! {FS} {
+  let entries = map(\s. linkedinBuildPostEntry(s, allComments), states);
+  encode(ja(entries))
+}
+
+func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) -> Json ! {FS} {
+  -- Look up the post's content. If the markdown is missing (e.g. someone
+  -- deleted it but the state still references the URN), fall back to the
+  -- slug as a placeholder title — the page will still render the comments.
+  let loaded = linkedinLoadPost(state.slug);
+  let postTitle = match loaded {
+    Ok(p) => p.title,
+    Err(_) => state.slug
+  };
+  let postBody = match loaded {
+    Ok(p) => p.body,
+    Err(_) => ""
+  };
+
+  -- Group: keep only comments whose parentPostUrn matches this post.
+  let mineRaw = filter(\c. c.parentPostUrn == state.postUrn, allComments);
+  let mine = map(\c. {
+    let p = linkedinDerivePersona(c.authorName);
+    jo([
+      kv("text", js(c.text)),
+      kv("createdAt", js(c.createdAt)),
+      kv("initials", js(p.initials)),
+      kv("avatarSeed", js(p.avatarSeed))
+    ])
+  }, mineRaw);
+
+  jo([
+    kv("slug", js(state.slug)),
+    kv("urn", js(state.postUrn)),
+    kv("title", js(postTitle)),
+    kv("publishedAt", js(state.publishedAt)),
+    kv("linkedinUrl", js("https://www.linkedin.com/feed/update/${state.postUrn}/")),
+    kv("body", js(postBody)),
+    kv("comments", ja(mine))
+  ])
 }
 
 func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Net, Env} {

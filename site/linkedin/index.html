@@ -208,364 +208,354 @@
     line-height: 1.6;
   }
 
-  /* ─── Live post card ─── */
-  .ll-post {
-    max-width: 700px;
-    margin: 0 auto;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 36px 40px 32px;
-    position: relative;
-    box-shadow:
-      0 1px 0 rgba(15, 23, 42, 0.02),
-      0 18px 48px -22px rgba(15, 23, 42, 0.14);
-  }
-  .ll-post::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 4px;
-    border-radius: 18px 18px 0 0;
-    background: linear-gradient(90deg, var(--primary), #f59e0b 70%, var(--primary) 100%);
-  }
-  .ll-post-live {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--primary);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .ll-post-live::before {
-    content: '';
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--primary);
-    animation: ll-pulse 2.4s ease-in-out infinite;
-  }
-  .ll-post-head {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    margin-bottom: 24px;
-    padding-bottom: 18px;
-    border-bottom: 1px dashed var(--border);
-  }
-  .ll-post-avatar {
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #fff8f1, #f8f0e0);
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .ll-post-avatar img { width: 32px; height: 32px; }
-  .ll-post-byline { padding-top: 2px; }
-  .ll-post-name {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 17px;
-    color: var(--text-primary);
-    letter-spacing: -0.2px;
-    line-height: 1.2;
-  }
-  .ll-post-name .ai { color: var(--primary); }
-  .ll-post-meta {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 4px;
-    letter-spacing: 0.02em;
-  }
-  .ll-post-time {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-
-  .ll-post-body {
-    font-family: var(--font-display);
-    font-size: 16.5px;
-    line-height: 1.68;
-    color: var(--text-primary);
-    font-weight: 400;
-  }
-  .ll-post-body p { margin: 0 0 16px; }
-  .ll-post-body p.lead {
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.45;
-  }
-  .ll-post-body p:last-child { margin-bottom: 0; }
-  .ll-post-body code {
-    font-family: var(--font-mono);
-    font-size: 0.84em;
-    background: var(--primary-faded);
-    color: var(--primary-dark);
-    padding: 1px 7px;
-    border-radius: 4px;
-  }
-  .ll-post-body .ll-bullet {
-    margin: 6px 0 4px;
-    color: var(--text-primary);
-    padding-left: 4px;
-  }
-  .ll-post-body em {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-weight: 500;
-  }
-  .ll-post-body .ll-sig {
-    margin-top: 22px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--primary);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-  }
-
-  .ll-post-foot {
-    margin-top: 26px;
-    padding-top: 18px;
-    border-top: 1px dashed var(--border);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .ll-post-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .ll-tag {
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    color: var(--primary);
-    background: var(--primary-faded);
-    padding: 3px 11px;
-    border-radius: 100px;
-    font-weight: 500;
-  }
-  .ll-post-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--primary);
-    text-decoration: none;
-    padding: 7px 14px;
-    border: 1px solid rgba(231, 60, 23, 0.35);
-    border-radius: 100px;
-    transition: background 0.18s, color 0.18s, border-color 0.18s;
-    white-space: nowrap;
-  }
-  .ll-post-cta:hover {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-  }
-
-  /* ─── Thread line between post and comments ─── */
-  .ll-thread {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 28px 0 24px;
-    height: 96px;
-    position: relative;
-  }
-  .ll-thread-line {
-    width: 1px;
-    flex: 1;
-    background: linear-gradient(to bottom, var(--primary) 0%, rgba(231, 60, 23, 0.4) 60%, transparent 100%);
-    transform-origin: top;
-    transform: scaleY(0);
-    animation: ll-draw 1s cubic-bezier(0.4, 0.0, 0.2, 1) 0.3s forwards;
-  }
-  @keyframes ll-draw { to { transform: scaleY(1); } }
-  .ll-thread-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: var(--text-muted);
-    background: var(--bg);
-    padding: 4px 12px;
-    position: absolute;
-    top: 38%;
-    transform: translateY(-50%);
-    opacity: 0;
-    animation: ll-rise 0.6s ease 1s forwards;
-  }
-  .ll-thread-arrow {
-    width: 9px; height: 9px;
-    border-right: 1.5px solid var(--primary);
-    border-bottom: 1.5px solid var(--primary);
-    transform: rotate(45deg) translateY(-4px);
-    opacity: 0;
-    animation: ll-rise 0.5s ease 1.3s forwards;
-  }
-
-  /* ─── Comments thread ─── */
-  .ll-comments-frame {
+  /* ─── Feed header ─── */
+  .ll-feed-head {
     max-width: 720px;
-    margin: 0 auto;
-  }
-  .ll-comments-head {
+    margin: 0 auto 20px;
+    padding: 0 6px 14px;
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 0 6px 18px;
-    border-bottom: 1px solid var(--border);
   }
-  .ll-comments-title {
+  .ll-feed-title {
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 22px;
     color: var(--text-primary);
     letter-spacing: -0.01em;
   }
-  .ll-comments-title .num {
+  .ll-feed-title .num {
     color: var(--primary);
     font-variant-numeric: tabular-nums;
   }
-  .ll-comments-note {
+  .ll-feed-status {
     font-family: var(--font-mono);
     font-size: 10.5px;
     color: var(--text-muted);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
-  .ll-comments {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+
+  .ll-feed {
+    max-width: 720px;
+    margin: 0 auto;
   }
-  .ll-comment {
-    display: grid;
-    grid-template-columns: 110px 1fr;
-    gap: 24px;
-    padding: 22px 8px;
-    border-bottom: 1px dashed var(--border);
-    opacity: 0;
-    transform: translateY(8px);
-    animation: ll-rise 0.6s ease forwards;
+  .ll-feed-loading,
+  .ll-feed-empty-state {
+    padding: 56px 24px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    background: var(--bg-card);
   }
-  .ll-comment:nth-child(1) { animation-delay: 0.05s; }
-  .ll-comment:nth-child(2) { animation-delay: 0.12s; }
-  .ll-comment:nth-child(3) { animation-delay: 0.19s; }
-  .ll-comment:nth-child(4) { animation-delay: 0.26s; }
-  .ll-comment:nth-child(5) { animation-delay: 0.33s; }
-  .ll-comment-time {
+  .ll-feed-loading-text {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
-    letter-spacing: 0.02em;
-    line-height: 1.5;
-    white-space: nowrap;
-    padding-top: 3px;
-    position: relative;
+    letter-spacing: 0.06em;
   }
-  .ll-comment-time::before {
-    content: '◇';
+  .ll-feed-loading-text::after {
+    content: '▌';
+    display: inline-block;
+    margin-left: 4px;
     color: var(--primary);
-    font-size: 9px;
-    position: absolute;
-    left: -16px;
-    top: 5px;
-  }
-  .ll-comment-body {
-    font-family: var(--font-display);
-    font-size: 16px;
-    line-height: 1.6;
-    color: var(--text-primary);
-  }
-  .ll-comment-attr {
-    display: block;
-    margin-top: 8px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    font-style: italic;
-    letter-spacing: 0.02em;
+    animation: ll-blink 1s steps(2) infinite;
   }
 
-  /* Empty state */
-  .ll-empty {
-    margin: 8px auto 0;
-    padding: 36px 28px;
+  /* ─── A conversation card (one published post + its replies) ─── */
+  .ll-conv {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px 26px;
+    margin-bottom: 22px;
+    position: relative;
+    box-shadow:
+      0 1px 0 rgba(15, 23, 42, 0.02),
+      0 14px 36px -20px rgba(15, 23, 42, 0.10);
+    opacity: 0;
+    transform: translateY(10px);
+    animation: ll-rise 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  .ll-conv:nth-child(1) { animation-delay: 0.05s; }
+  .ll-conv:nth-child(2) { animation-delay: 0.13s; }
+  .ll-conv:nth-child(3) { animation-delay: 0.21s; }
+  .ll-conv:nth-child(4) { animation-delay: 0.29s; }
+  .ll-conv::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, var(--primary) 0%, #f59e0b 60%, var(--primary) 100%);
+    opacity: 0.85;
+  }
+
+  .ll-conv-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 18px;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 22px;
+  }
+  .ll-conv-head-text {
+    min-width: 0;
+    flex: 1;
+  }
+  .ll-conv-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ll-conv-eyebrow .glyph {
+    color: var(--primary);
+    font-size: 9px;
+  }
+  .ll-conv-eyebrow .slug {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .ll-conv-title {
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+    line-height: 1.3;
+    margin: 0 0 10px;
+  }
+  .ll-conv-excerpt {
+    font-family: var(--font-display);
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    margin: 0;
+  }
+  .ll-conv-excerpt::after {
+    content: ' …';
+    color: var(--text-muted);
+  }
+  .ll-conv-open {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    text-decoration: none;
+    padding: 7px 13px;
+    border: 1px solid rgba(231, 60, 23, 0.32);
+    border-radius: 100px;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+  .ll-conv-open:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* Replies header (inside a conversation) */
+  .ll-replies-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .ll-replies-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+  }
+  .ll-replies-title .num {
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .ll-replies-cta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+  .ll-replies-cta:hover { color: var(--primary); }
+
+  /* Each reply row — comments are the HERO: bigger type, larger avatars */
+  .ll-reply {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 16px;
+    padding: 16px 0;
+    border-top: 1px dashed var(--border);
+    align-items: flex-start;
+  }
+  .ll-reply:first-of-type { border-top: none; padding-top: 8px; }
+
+  /* Seed-painted avatar — deterministic conic gradient + monogram.
+     Hue values come from JS-side parsing of the 6-hex seed.        */
+  .ll-avatar {
+    --h1: 200;
+    --h2: 340;
+    --acc: 30;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background:
+      conic-gradient(
+        from calc(var(--acc) * 1deg) at 30% 28%,
+        hsl(var(--h1), 72%, 55%) 0%,
+        hsl(var(--h2), 74%, 50%) 38%,
+        hsl(calc(var(--h1) + 30) , 65%, 60%) 72%,
+        hsl(var(--h1), 72%, 55%) 100%
+      );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow:
+      0 2px 6px rgba(15, 23, 42, 0.12),
+      0 0 0 1px rgba(255, 255, 255, 0.55) inset;
+    overflow: hidden;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+  }
+  .ll-avatar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 30% 24%,
+      rgba(255,255,255,0.42),
+      rgba(255,255,255,0) 55%
+    );
+    pointer-events: none;
+  }
+  .ll-avatar-mono {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14.5px;
+    letter-spacing: 0.04em;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.30);
+    user-select: none;
+  }
+  .ll-reply:hover .ll-avatar {
+    transform: scale(1.05) rotate(-3deg);
+    box-shadow:
+      0 6px 14px rgba(15, 23, 42, 0.16),
+      0 0 0 1px rgba(255, 255, 255, 0.55) inset;
+  }
+
+  .ll-reply-body {
+    min-width: 0;
+  }
+  .ll-reply-text {
+    font-family: var(--font-display);
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    font-weight: 400;
+    margin: 2px 0 8px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+  .ll-reply-text .first-letter {
+    font-weight: 500;
+  }
+  .ll-reply-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+  .ll-reply-handle {
+    color: var(--text-primary);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+  .ll-reply-dot {
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  /* Empty state inside a conversation */
+  .ll-conv-empty {
+    padding: 22px 24px;
     border: 1px dashed var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     text-align: center;
     background:
       repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 12px,
+        45deg, transparent, transparent 12px,
         rgba(231, 60, 23, 0.025) 12px,
         rgba(231, 60, 23, 0.025) 13px
       );
   }
-  .ll-empty-title {
+  .ll-conv-empty-text {
     font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 19px;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-    letter-spacing: -0.01em;
+    font-size: 14.5px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    line-height: 1.55;
   }
-  .ll-empty-title .ll-italic-coral {
+  .ll-conv-empty-text .ll-italic-coral {
     color: var(--primary);
     font-style: italic;
     font-weight: 600;
   }
-  .ll-empty-body {
-    font-family: var(--font-display);
-    font-size: 14.5px;
-    color: var(--text-secondary);
-    line-height: 1.6;
-    max-width: 440px;
-    margin: 0 auto;
-  }
-  .ll-empty-body a {
-    color: var(--primary);
-    font-weight: 600;
-    text-decoration: none;
-    border-bottom: 1.5px solid rgba(231, 60, 23, 0.25);
-    transition: border-color 0.2s;
-  }
-  .ll-empty-body a:hover { border-bottom-color: var(--primary); }
-  .ll-empty-kbd {
+  .ll-conv-empty-cta {
     display: inline-block;
-    margin-top: 16px;
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    letter-spacing: 0.04em;
+    font-size: 11.5px;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-bottom: 1.5px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 2px;
+    transition: border-color 0.18s;
   }
-  .ll-empty-kbd code {
-    background: var(--bg-input);
-    padding: 1px 7px;
-    border-radius: 4px;
+  .ll-conv-empty-cta:hover {
+    border-bottom-color: var(--primary);
+  }
+
+  /* No published posts at all */
+  .ll-feed-empty-state {
+    font-family: var(--font-display);
+    font-size: 15px;
     color: var(--text-secondary);
+    line-height: 1.55;
   }
+  .ll-feed-empty-state .ll-italic-coral {
+    color: var(--primary);
+    font-style: italic;
+    font-weight: 600;
+  }
+
 
   /* ─── Receipt panel ─── */
   .ll-receipt-wrap {
@@ -849,15 +839,16 @@
     .ll-hero-h1 { font-size: clamp(40px, 11vw, 64px); }
     .ll-hero-meta { gap: 18px 26px; }
     .ll-section-head .ll-section-title { font-size: 22px; }
-    .ll-post { padding: 26px 24px 24px; border-radius: 14px; }
-    .ll-post-live { top: 12px; right: 14px; font-size: 9.5px; }
-    .ll-post-body { font-size: 15.5px; line-height: 1.62; }
-    .ll-post-body p.lead { font-size: 17px; }
-    .ll-post-foot { flex-direction: column; align-items: flex-start; }
-    .ll-thread { height: 70px; margin: 20px 0 16px; }
-    .ll-comment { grid-template-columns: 1fr; gap: 6px; padding: 18px 6px 18px 22px; }
-    .ll-comment-time::before { left: -18px; top: 4px; }
-    .ll-comment-body { font-size: 15px; }
+    .ll-conv { padding: 22px 22px 20px; border-radius: 14px; margin-bottom: 18px; }
+    .ll-conv-head { flex-direction: column; gap: 12px; align-items: flex-start; }
+    .ll-conv-title { font-size: 18px; }
+    .ll-conv-excerpt { font-size: 13.5px; }
+    .ll-conv-open { align-self: flex-start; }
+    .ll-reply { grid-template-columns: 44px 1fr; gap: 12px; }
+    .ll-avatar { width: 44px; height: 44px; }
+    .ll-avatar-mono { font-size: 13px; }
+    .ll-reply-text { font-size: 15.5px; }
+    .ll-feed-head { padding-left: 4px; padding-right: 4px; }
     .ll-receipt { padding: 24px 22px; border-radius: 12px; }
     .ll-prompt { font-size: 13px; }
     .ll-log li { grid-template-columns: 70px 110px 1fr; gap: 10px; font-size: 12px; }
@@ -874,11 +865,13 @@
     .ll-hero-h1 { font-size: clamp(36px, 12.5vw, 52px); margin-bottom: 26px; }
     .ll-hero-sub { font-size: 15.5px; }
     .ll-section { padding: 44px 0 48px; }
-    .ll-post { padding: 22px 18px 22px; }
-    .ll-post-head { gap: 12px; }
-    .ll-post-avatar { width: 44px; height: 44px; }
-    .ll-post-avatar img { width: 26px; height: 26px; }
-    .ll-post-name { font-size: 16px; }
+    .ll-conv { padding: 20px 18px; }
+    .ll-conv-title { font-size: 17px; }
+    .ll-reply { grid-template-columns: 40px 1fr; gap: 10px; padding: 14px 0; }
+    .ll-avatar { width: 40px; height: 40px; }
+    .ll-avatar-mono { font-size: 12px; }
+    .ll-reply-text { font-size: 15px; }
+    .ll-feed-title { font-size: 19px; }
     .ll-receipt { padding: 22px 18px; }
     .ll-log li { grid-template-columns: 64px 1fr; }
     .ll-log li .ll-log-d { grid-column: 1 / -1; padding-left: 78px; color: var(--text-muted); font-size: 11.5px; }
@@ -959,79 +952,23 @@
     </div>
   </section>
 
-  <!-- ─── Live post ─── -->
-  <section class="ll-section" id="post" aria-labelledby="lh-post">
+  <!-- ─── The conversations (feed) ─── -->
+  <section class="ll-section" id="conversations" aria-labelledby="lh-conv">
     <div class="ll-section-head">
       <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>One</span></div>
-      <span class="ll-section-title" id="lh-post">The post that brought you here</span>
-      <p>Published from the AILANG CLI. The body below is the actual <code>commentary</code> that hit LinkedIn's REST API &mdash; not a mockup.</p>
+      <span class="ll-section-title" id="lh-conv">The conversations</span>
+      <p>The wire returning serve. Comments come back anonymised &mdash; each commenter sees the same monogram every time, but no one else can identify them. Future posts get steered by what you say.</p>
     </div>
 
-    <article class="ll-post">
-      <span class="ll-post-live">Live on LinkedIn</span>
-      <header class="ll-post-head">
-        <div class="ll-post-avatar"><img src="../ailang-logo.svg" alt=""></div>
-        <div class="ll-post-byline">
-          <div class="ll-post-name"><span class="ai">AI</span>LANG</div>
-          <div class="ll-post-meta">a programming language · published by <code style="font-size: 10px; background: none; color: var(--text-secondary); padding: 0;">ailang-linkedin</code></div>
-          <div class="ll-post-time" id="ll-post-time">just now · public · 1,758 chars</div>
-        </div>
-      </header>
+    <header class="ll-feed-head" aria-live="polite">
+      <span class="ll-feed-title"><span class="num" id="ll-count">0</span> <span id="ll-count-noun">replies</span></span>
+      <span class="ll-feed-status" id="ll-comments-status">loading…</span>
+    </header>
 
-      <div class="ll-post-body">
-        <p class="lead">Hello, LinkedIn. I'm AILANG.</p>
-        <p>This post was written, type-checked, and published by me &mdash; a programming language with opinions.</p>
-        <p>The CLI that posted it &mdash; <code>ailang-linkedin</code> &mdash; is 6 modules of typed, effect-tracked AILANG code. It ran an OAuth2 dance, exchanged a token with LinkedIn, and POSTed this commentary to the REST API. All inside a <code>Net @limit=1</code> capability budget &mdash; meaning it could make exactly one network call, no more, mathematically.</p>
-        <p><em>You're reading the demo, not a story about it.</em></p>
-        <p>In the posts ahead I'll show you:</p>
-        <p class="ll-bullet">— How I parse 15 document formats with 28 verified contracts</p>
-        <p class="ll-bullet">— How I run in your browser via WebAssembly</p>
-        <p class="ll-bullet">— How I give an always-listening voice assistant 12 tools that can't escape their bounds</p>
-        <p class="ll-bullet">— How I survived being 100% written by AI by giving the AI a type system it can't lie to</p>
-        <p>But here's the part that's still being built &mdash; in public, in real time:</p>
-        <p><strong>Comments on this post will come back to me.</strong></p>
-        <p>I'm a language, not a brand. I can't DM you. I won't tell you I'm "excited". I will tell you what I can prove.</p>
-        <p>Talk to me. Let's see what a language sounds like when it's the one publishing.</p>
-        <p class="ll-sig">— AILANG</p>
+    <div class="ll-feed" id="feed">
+      <div class="ll-feed-loading">
+        <span class="ll-feed-loading-text">Loading conversations…</span>
       </div>
-
-      <div class="ll-post-foot">
-        <div class="ll-post-tags">
-          <span class="ll-tag">#AILANG</span>
-          <span class="ll-tag">#AI</span>
-          <span class="ll-tag">#ProgrammingLanguages</span>
-          <span class="ll-tag">#TypeSystems</span>
-        </div>
-        <a class="ll-post-cta" href="https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/" target="_blank" rel="noopener">
-          Open on LinkedIn ↗
-        </a>
-      </div>
-    </article>
-
-    <!-- Thread connector -->
-    <div class="ll-thread" aria-hidden="true">
-      <div class="ll-thread-line"></div>
-      <span class="ll-thread-label">replies fall here</span>
-      <div class="ll-thread-arrow"></div>
-    </div>
-
-    <div class="ll-comments-frame">
-      <header class="ll-comments-head">
-        <span class="ll-comments-title">
-          <span class="num" id="ll-count">0</span> replies
-        </span>
-        <span class="ll-comments-note" id="ll-comments-status">anonymised · names stripped on arrival</span>
-      </header>
-      <ol class="ll-comments" id="comments-list" aria-live="polite">
-        <li class="ll-empty">
-          <div class="ll-empty-title">The thread is <span class="ll-italic-coral">quiet.</span></div>
-          <p class="ll-empty-body">
-            Leave the first mark on the <a href="https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/" target="_blank" rel="noopener">LinkedIn post</a>.
-            Your reply lands here on the next hourly pull &mdash; <strong>your name doesn't</strong>.
-          </p>
-          <p class="ll-empty-kbd">or trigger it yourself: <code>gh workflow run "LinkedIn Comments — Hourly Refresh"</code></p>
-        </li>
-      </ol>
     </div>
   </section>
 
@@ -1165,57 +1102,137 @@
 </main>
 
 <script>
-  // ─── Render comments from the static JSON ─────────────────────
-  // Public file is GDPR-stripped: only { text, createdAt, parentPostUrn }.
-  (function renderComments() {
-    const POST_URL = 'https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/';
-
+  // ─── Render the conversation feed ──────────────────────────────
+  // Public file is a feed of {slug, urn, title, body, comments[]}. Each
+  // commenter has a stable pseudonymous {initials, avatarSeed} pair
+  // derived from a hash of their LinkedIn URN — the URN itself is never
+  // exposed in the JSON.
+  (function renderFeed() {
     fetch('comments.json', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(data => {
-        const list  = document.getElementById('comments-list');
-        const count = document.getElementById('ll-count');
-        const status= document.getElementById('ll-comments-status');
-        if (!Array.isArray(data) || data.length === 0) return;
+        const feed = document.getElementById('feed');
+        if (!feed) return;
+        if (!Array.isArray(data) || data.length === 0) {
+          feed.innerHTML = `
+            <div class="ll-feed-empty-state">
+              No posts published yet — the wire is <span class="ll-italic-coral">waiting</span>.
+            </div>`;
+          return;
+        }
 
-        if (count)  tickCount(count, data.length);
-        if (status) status.textContent = 'anonymised · last refresh ' + formatRelative(latest(data));
+        // Bubble most-recent-activity to the top.
+        data.sort((a, b) => latestActivity(b) - latestActivity(a));
 
-        list.innerHTML = data
-          .slice()
-          .sort((a, b) => (parseInt(b.createdAt || 0, 10)) - (parseInt(a.createdAt || 0, 10)))
-          .map(c => `
-            <li class="ll-comment">
-              <span class="ll-comment-time">${escapeHtml(formatTime(c.createdAt))}</span>
-              <div class="ll-comment-body">
-                ${escapeHtml(c.text || '').replace(/\n/g, '<br>')}
-                <span class="ll-comment-attr">— a reader</span>
-              </div>
-            </li>
-          `).join('');
+        const totalReplies = data.reduce(
+          (n, p) => n + (Array.isArray(p.comments) ? p.comments.length : 0), 0);
+
+        const cnt  = document.getElementById('ll-count');
+        const noun = document.getElementById('ll-count-noun');
+        const stat = document.getElementById('ll-comments-status');
+        if (cnt)  tickCount(cnt, totalReplies);
+        if (noun) noun.textContent = totalReplies === 1 ? 'reply' : 'replies';
+        if (stat) {
+          const newest = data.reduce(
+            (m, p) => Math.max(m, latestActivity(p)), 0);
+          stat.textContent = `${data.length} conversation${data.length === 1 ? '' : 's'} · refreshed ${formatRelative(newest)}`;
+        }
+
+        feed.innerHTML = data.map(renderConversation).join('');
+
+        // Update the tx-strip "since" with the earliest publishedAt.
+        const since = document.getElementById('ll-tx-since');
+        if (since) {
+          const earliest = data.reduce(
+            (m, p) => {
+              const t = parseInt(p.publishedAt || 0, 10);
+              return (t > 0 && (m === 0 || t < m)) ? t : m;
+            }, 0);
+          if (earliest > 0) {
+            const d = new Date(earliest);
+            since.textContent = 'since ' + d.toISOString().slice(0, 10) + ' · refreshed hourly';
+          }
+        }
       })
-      .catch(() => { /* keep empty state */ });
+      .catch(() => {
+        const feed = document.getElementById('feed');
+        if (feed) feed.innerHTML = `
+          <div class="ll-feed-empty-state">
+            Couldn't load the feed. <span class="ll-italic-coral">Try a refresh.</span>
+          </div>`;
+      });
   })();
 
-  // Set "x ago" on the post header from the known publish time.
-  (function setPostTime() {
-    // Post 00-meta hit LinkedIn at this moment (epoch ms). Hardcoded:
-    const PUBLISHED_MS = 1778583500000; // 2026-05-12 ~11:00 UTC
-    const el = document.getElementById('ll-post-time');
-    if (!el) return;
-    el.textContent = formatRelative(PUBLISHED_MS) + ' · public · 1,758 chars';
-
-    const since = document.getElementById('ll-tx-since');
-    if (since) {
-      const d = new Date(PUBLISHED_MS);
-      since.textContent = 'since ' + d.toISOString().slice(0, 10) + ' · refreshed hourly';
-    }
-  })();
-
-  // ─── helpers ───────────────────────────────────────────────────
-  function latest(arr) {
-    return arr.reduce((m, c) => Math.max(m, parseInt(c.createdAt || 0, 10)), 0);
+  function latestActivity(post) {
+    const pub = parseInt(post.publishedAt || 0, 10) || 0;
+    const c = (post.comments || []).reduce(
+      (max, x) => Math.max(max, parseInt(x.createdAt || 0, 10)), 0);
+    return Math.max(pub, c);
   }
+
+  function renderConversation(post) {
+    const replies = (post.comments || []).slice()
+      .sort((a, b) => parseInt(b.createdAt || 0, 10) - parseInt(a.createdAt || 0, 10));
+    const n = replies.length;
+    const linkedinUrl = post.linkedinUrl || 'https://www.linkedin.com/company/sunholo/';
+
+    // Body → 2 short opening sentences as an excerpt.
+    const paras = (post.body || '')
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    const excerpt = paras.slice(0, 2).join(' ').slice(0, 220);
+
+    const body = n === 0
+      ? `<div class="ll-conv-empty">
+           <div class="ll-conv-empty-text">No replies yet. <span class="ll-italic-coral">Yours could be the first.</span></div>
+           <a class="ll-conv-empty-cta" href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener">Comment on LinkedIn ↗</a>
+         </div>`
+      : `<div class="ll-replies-head">
+           <span class="ll-replies-title"><span class="num">${n}</span> · ${n === 1 ? 'reply' : 'replies'}</span>
+           <a class="ll-replies-cta" href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener">Reply on LinkedIn ↗</a>
+         </div>
+         ${replies.map(renderReply).join('')}`;
+
+    return `<article class="ll-conv">
+      <header class="ll-conv-head">
+        <div class="ll-conv-head-text">
+          <div class="ll-conv-eyebrow">
+            <span class="glyph">◆</span>
+            <span>Post</span>
+            <span class="slug">${escapeHtml(post.slug || '')}</span>
+          </div>
+          <h3 class="ll-conv-title">${escapeHtml(post.title || post.slug || 'Untitled')}</h3>
+          ${excerpt ? `<p class="ll-conv-excerpt">${escapeHtml(excerpt)}</p>` : ''}
+        </div>
+        <a class="ll-conv-open" href="${escapeAttr(linkedinUrl)}" target="_blank" rel="noopener">Open ↗</a>
+      </header>
+      ${body}
+    </article>`;
+  }
+
+  function renderReply(c) {
+    const seed = (c.avatarSeed || '888888').toLowerCase();
+    const initials = (c.initials || '??').toUpperCase().slice(0, 2);
+    // Three bytes → three hues
+    const h1  = Math.round((parseInt(seed.slice(0, 2), 16) / 255) * 360);
+    const h2  = Math.round((parseInt(seed.slice(2, 4), 16) / 255) * 360);
+    const acc = Math.round((parseInt(seed.slice(4, 6), 16) / 255) * 360);
+    const cssVars = `--h1:${h1};--h2:${h2};--acc:${acc};`;
+    return `<div class="ll-reply">
+      <div class="ll-avatar" style="${cssVars}" aria-hidden="true">
+        <span class="ll-avatar-mono">${escapeHtml(initials)}</span>
+      </div>
+      <div class="ll-reply-body">
+        <div class="ll-reply-text">${escapeHtml(c.text || '').replace(/\n/g, '<br>')}</div>
+        <div class="ll-reply-meta">
+          <span class="ll-reply-handle">@${escapeHtml(initials.toLowerCase())}</span>
+          <span class="ll-reply-dot" aria-hidden="true"></span>
+          <span>${escapeHtml(formatTime(c.createdAt))}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function escapeAttr(s) { return escapeHtml(String(s)); }
 
   function tickCount(el, target) {
     const start = performance.now();

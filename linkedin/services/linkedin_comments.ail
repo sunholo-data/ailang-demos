@@ -2,10 +2,11 @@ module linkedin/services/linkedin_comments
 
 import std/net (httpRequest)
 import std/json (encode, decode, getString, getArray, getObject, getInt, jo, kv, js, ja)
-import std/string (length, trim, split, join, intToStr)
+import std/string (length, trim, split, join, intToStr, substring, charAt, charCode)
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
 import std/list (length as listLength, map, foldl)
+import std/crypto (sha256Hex)
 import linkedin/types/linkedin_types (LinkedInComment, PostState)
 
 -- LinkedIn Comments API (read-only)
@@ -135,17 +136,73 @@ func linkedinConcatComments(a: [LinkedInComment], b: [LinkedInComment]) -> [Link
 --   - actor URN (was leaked as `authorName`)
 --   - commentUrn (composite URN includes activity URN; could be resolved)
 --
--- We keep:
---   - text       — the comment content; the user wrote this publicly on
---                  LinkedIn, but we still surface it without their name
---   - createdAt  — timestamp (epoch ms as string)
---   - parentPostUrn — our own post's URN, useful for grouping; this is
---                     the org's content, not the commenter's
+-- We add two derived fields that are *stable per commenter but not
+-- reversible to identity*:
+--   - initials   — two letters (A-Z) derived from sha256(actor) bytes 0,1.
+--                  The commenter sees the same two letters every time they
+--                  reply, so they recognise themselves. Other readers see
+--                  a stranger.
+--   - avatarSeed — six hex chars from sha256(actor) bytes 2..4. The page
+--                  renders a unique gradient avatar from this seed.
+--
+-- Both come from a one-way hash; the original URN never leaves AILANG.
 export func linkedinCommentsToJson(comments: [LinkedInComment]) -> string {
-  let entries = map(\c. jo([
-    kv("text", js(c.text)),
-    kv("createdAt", js(c.createdAt)),
-    kv("parentPostUrn", js(c.parentPostUrn))
-  ]), comments);
+  let entries = map(\c. {
+    let p = linkedinDerivePersona(c.authorName);
+    jo([
+      kv("text", js(c.text)),
+      kv("createdAt", js(c.createdAt)),
+      kv("parentPostUrn", js(c.parentPostUrn)),
+      kv("initials", js(p.initials)),
+      kv("avatarSeed", js(p.avatarSeed))
+    ])
+  }, comments);
   encode(ja(entries))
 }
+
+-- ── Pseudonymous persona derivation ──────────────────────────────
+-- Compute a deterministic { initials, avatarSeed } from the actor
+-- URN. SHA-256 is one-way: identical input always yields identical
+-- output, but you cannot recover the URN from the hash.
+
+export func linkedinDerivePersona(actor: string) -> {initials: string, avatarSeed: string} {
+  let h = sha256Hex(actor);
+  -- Two letters derived from bytes 0 and 1
+  let b0 = linkedinHexByte(h, 0);
+  let b1 = linkedinHexByte(h, 2);
+  let initial1 = linkedinLetterFromIdx(b0 - (b0 / 26) * 26);
+  let initial2 = linkedinLetterFromIdx(b1 - (b1 / 26) * 26);
+  -- Six hex chars from bytes 2..4 — used as a colour seed in the browser
+  let seed = substring(h, 4, 10);
+  let persona: {initials: string, avatarSeed: string} = {
+    initials: "${initial1}${initial2}",
+    avatarSeed: seed
+  };
+  persona
+}
+
+-- Parse two consecutive hex chars (at position `pos` and `pos+1`)
+-- of a lowercase-hex string into an int 0..255.
+func linkedinHexByte(hex: string, pos: int) -> int =
+  linkedinHexVal(charAt(hex, pos)) * 16 + linkedinHexVal(charAt(hex, pos + 1))
+
+-- A single hex char (0-9, a-f) → 0..15. Other inputs map to 0.
+func linkedinHexVal(c: string) -> int {
+  let n = charCode(c);
+  if n >= 48 && n <= 57 then n - 48        -- '0'..'9'
+  else if n >= 97 && n <= 102 then n - 87  -- 'a'..'f'
+  else if n >= 65 && n <= 70 then n - 55   -- 'A'..'F'
+  else 0
+}
+
+-- 0..25 → "A".."Z" without needing charFromCode in stdlib.
+func linkedinLetterFromIdx(i: int) -> string =
+  match i {
+    0 => "A", 1 => "B", 2 => "C", 3 => "D", 4 => "E",
+    5 => "F", 6 => "G", 7 => "H", 8 => "I", 9 => "J",
+    10 => "K", 11 => "L", 12 => "M", 13 => "N", 14 => "O",
+    15 => "P", 16 => "Q", 17 => "R", 18 => "S", 19 => "T",
+    20 => "U", 21 => "V", 22 => "W", 23 => "X", 24 => "Y",
+    25 => "Z", _ => "?"
+  }
+
