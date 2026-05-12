@@ -187,11 +187,19 @@ jobs:
 
           echo "All WASM files verified successfully"
 
-      - name: Clean up dev-only docparse symlinks
+      - name: Clean up dev-only symlinks
         run: |
-          # Drop any stale dev symlinks — docparse now ships via the vendored
-          # sunholo/ailang_parse registry package (see "Vendor AILANG package modules").
+          # Drop stale dev symlinks. Several invoice_processor_wasm/ailang
+          # subdirs are committed as symlinks with absolute paths
+          # (/Users/.../) that are dangling on CI. The pattern is:
+          # explicit rm -rf of known subdirs (kept for clarity), plus a
+          # belt-and-suspenders sweep that deletes any remaining broken
+          # symlinks across the tree before they reach `rsync -a` →
+          # `tar --dereference`.
           rm -rf invoice_processor_wasm/ailang/docparse
+          rm -rf invoice_processor_wasm/ailang/co-presenter   # underscore variant cleaned later
+          # Defensive: nuke any broken symlinks anywhere in the tree
+          find invoice_processor_wasm -type l ! -exec test -e {} \; -print -delete
 
       - name: Copy verify_demo modules
         run: |
