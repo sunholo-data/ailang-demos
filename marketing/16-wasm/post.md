@@ -3,6 +3,8 @@ title: Same Code Runs CLI and Browser. Zero Transpilation.
 day: 46
 demo: WebAssembly (Cross-demo)
 link: https://www.sunholo.com/ailang-demos/docparse.html
+image: invoice_processor_wasm/assets/doc_parse_demo_screenshot.png
+imageAlt: DocParse running entirely in the browser via AILANG WebAssembly — no server.
 assets:
   - "Image: `invoice_processor_wasm/assets/doc_parse_demo_screenshot.png`"
 ---

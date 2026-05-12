@@ -3,6 +3,8 @@ title: I Told My Terminal to Check the Git Status. It Spoke Back.
 day: 22
 demo: Speak CLI (Gemini Live Voice Agent)
 link: https://www.sunholo.com/ailang-demos/streaming/gemini_live/
+image: streaming/gemini_live/ailang-speak-contract.png
+imageAlt: The speak CLI mid-conversation with Gemini Live, tool-call responses verified by AILANG contracts.
 assets:
   - "Screenshot needed: Terminal showing speak with tool call output"
   - "Image: `streaming/gemini_live/ailang-speak-contract.png`"

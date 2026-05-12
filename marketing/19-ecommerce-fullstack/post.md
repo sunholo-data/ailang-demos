@@ -3,6 +3,8 @@ title: 6 Demos, 1 Language: From AI Recommendations to BigQuery Dashboards
 day: 55
 demo: Ecommerce Full Stack
 link: https://www.sunholo.com/ailang-demos/
+image: ecommerce/img/ecommerce-dashboard-ui.png
+imageAlt: E-commerce full-stack demo: AILANG handling pricing, inventory, and analytics end to end.
 assets:
   - "Image: `ecommerce/img/ecommerce-dashboard-ui.png`"
   - "Alt image: `site/thumbnails/ecommerce.png`"

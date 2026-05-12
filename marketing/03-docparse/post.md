@@ -3,6 +3,8 @@ title: Universal Document Parsing — No Python, No Dependencies
 day: 7
 demo: DocParse
 link: https://www.sunholo.com/ailang-demos/docparse.html
+image: site/thumbnails/docparse.png
+imageAlt: DocParse demo: a Word document rendered with structured headings, tables, and colour-coded track changes.
 assets:
   - "Image: `invoice_processor_wasm/assets/doc_parse_demo_screenshot.png`"
   - "Alt image: `demo-document-intelligence.svg` (root)"

@@ -3,6 +3,8 @@ title: How Safe Is Your AI Agent?
 day: 4
 demo: Safe Agent (Contract-Verified Tool Calling)
 link: https://www.sunholo.com/ailang-demos/streaming/safe_agent/
+image: ailang-speak-contract.png
+imageAlt: AILANG Safe Agent contract diagram — calculator tools constrained by requires/ensures contracts and Net @limit budgets.
 assets:
   - "Image: `ailang-speak-contract.png` (root of repo)"
   - "Screenshot needed: Terminal showing `--verify-contracts` output with VERIFIED status"

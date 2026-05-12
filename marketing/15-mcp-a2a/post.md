@@ -3,6 +3,8 @@ title: 37 Functions → REST + MCP + A2A, Auto-Generated
 day: 43
 demo: "Ecommerce \u2014 MCP & A2A Integration"
 link: https://www.sunholo.com/ailang-demos/
+image: ecommerce/img/openapi-redoc.png
+imageAlt: OpenAPI spec for the e-commerce agent's MCP and A2A interfaces, rendered with Redoc.
 assets:
   - "Image: `ecommerce/img/openapi-redoc.png`"
   - "Alt image: `ecommerce/img/ecommerce-dashboard-ui.png`"

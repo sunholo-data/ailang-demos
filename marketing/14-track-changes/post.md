@@ -3,6 +3,8 @@ title: Parsing Word Track Changes Without python-docx
 day: 40
 demo: "DocParse \u2014 Track Changes Deep Dive"
 link: https://www.sunholo.com/ailang-demos/docparse.html
+image: invoice_processor_wasm/assets/doc_parse_demo_screenshot.png
+imageAlt: DocParse rendering a DOCX with colour-coded insertions, deletions, and authorship metadata.
 assets:
   - "Screenshot needed: DocParse browser output showing color-coded track changes"
   - "Image: `invoice_processor_wasm/assets/doc_parse_demo_screenshot.png`"

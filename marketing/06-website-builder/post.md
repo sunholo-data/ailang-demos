@@ -3,6 +3,8 @@ title: AI Builds Your Website — From Phone Photos to Live Site
 day: 16
 demo: Website Builder
 link: https://www.sunholo.com/ailang-demos/website_builder/
+image: website_builder/docs/screenshots/upload-content.png
+imageAlt: Website Builder upload step: drag-in photos and text to seed an AI-generated multi-page site.
 assets:
   - "Image: `website_builder/docs/screenshots/upload-content.png`"
   - "Alt images: `my-sites-dashboard.png`, `builder-selection.png`, `ailang-cloud-build.png`"

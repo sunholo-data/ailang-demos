@@ -3,6 +3,8 @@ title: Upload a Document. Get a Typed, Validated Schema — Automatically.
 day: 31
 demo: Document Extractor (Invoice Processor)
 link: https://www.sunholo.com/ailang-demos/extractor.html
+image: invoice_processor_wasm/assets/extraction-demo-ui.png
+imageAlt: Document Extractor UI showing schema preview alongside extracted, type-checked output.
 assets:
   - "Image: `invoice_processor_wasm/assets/extraction-demo-ui.png`"
 ---

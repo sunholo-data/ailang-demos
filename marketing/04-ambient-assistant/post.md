@@ -3,6 +3,8 @@ title: An AI That Listens But Only Speaks When Spoken To
 day: 10
 demo: Ambient Assistant
 link: https://www.sunholo.com/ailang-demos/streaming/ambient_assistant/
+image: site/thumbnails/streaming-ambient_assistant.png
+imageAlt: The Ambient Assistant browser demo with the animated orb in its always-listening state.
 assets:
   - "Image: `streaming/ambient_assistant/ambient-demo.png`"
   - "Screenshot needed: Browser demo showing the ambient orb in \"speaking\" state"
