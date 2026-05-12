@@ -277,15 +277,11 @@ func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) ->
 
   -- Group: keep only comments whose parentPostUrn matches this post.
   let mineRaw = filter(\c. c.parentPostUrn == state.postUrn, allComments);
-  let mine = map(\c. {
-    let p = linkedinDerivePersona(c.authorName);
-    jo([
-      kv("text", js(c.text)),
-      kv("createdAt", js(c.createdAt)),
-      kv("initials", js(p.initials)),
-      kv("avatarSeed", js(p.avatarSeed))
-    ])
-  }, mineRaw);
+  -- Split top-level comments from replies. The package returns a flat list;
+  -- we thread it for the website (one level deep — LinkedIn's UI cap).
+  let topLevel = filter(\c. length(c.parentCommentUrn) == 0, mineRaw);
+  let allReplies = filter(\c. length(c.parentCommentUrn) > 0, mineRaw);
+  let withReplies = map(\c. linkedinThreadComment(c, allReplies), topLevel);
 
   jo([
     kv("slug", js(state.slug)),
@@ -294,7 +290,29 @@ func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) ->
     kv("publishedAt", js(state.publishedAt)),
     kv("linkedinUrl", js("https://www.linkedin.com/feed/update/${state.postUrn}/")),
     kv("body", js(postBody)),
-    kv("comments", ja(mine))
+    kv("comments", ja(withReplies))
+  ])
+}
+
+-- Build a single comment's JSON with its replies nested in.
+func linkedinThreadComment(c: LinkedInComment, allReplies: [LinkedInComment]) -> Json {
+  let p = linkedinDerivePersona(c.authorName);
+  let mine = filter(\r. r.parentCommentUrn == c.commentUrn, allReplies);
+  let replies = map(\r. {
+    let rp = linkedinDerivePersona(r.authorName);
+    jo([
+      kv("text", js(r.text)),
+      kv("createdAt", js(r.createdAt)),
+      kv("initials", js(rp.initials)),
+      kv("avatarSeed", js(rp.avatarSeed))
+    ])
+  }, mine);
+  jo([
+    kv("text", js(c.text)),
+    kv("createdAt", js(c.createdAt)),
+    kv("initials", js(p.initials)),
+    kv("avatarSeed", js(p.avatarSeed)),
+    kv("replies", ja(replies))
   ])
 }
 

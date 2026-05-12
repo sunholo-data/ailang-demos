@@ -508,6 +508,49 @@
     background: var(--border);
   }
 
+  /* ─── Nested replies (one level deep — LinkedIn's UI cap) ─── */
+  .ll-replies-nested {
+    margin-top: 12px;
+    margin-left: 22px;
+    padding-left: 22px;
+    border-left: 1px solid var(--border);
+    position: relative;
+  }
+  .ll-replies-nested::before {
+    /* faint coral dot at the top of the connector to anchor it visually */
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: -3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+    opacity: 0.55;
+  }
+  .ll-replies-nested .ll-reply {
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .ll-replies-nested .ll-reply:first-of-type {
+    padding-top: 4px;
+  }
+  .ll-replies-nested .ll-avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .ll-replies-nested .ll-avatar-mono {
+    font-size: 11px;
+  }
+  .ll-replies-nested .ll-reply-text {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .ll-replies-nested .ll-reply-meta {
+    font-size: 10.5px;
+  }
+
   /* Empty state inside a conversation */
   .ll-conv-empty {
     padding: 22px 24px;
@@ -1130,8 +1173,14 @@
         // Bubble most-recent-activity to the top.
         data.sort((a, b) => latestActivity(b) - latestActivity(a));
 
-        const totalReplies = data.reduce(
-          (n, p) => n + (Array.isArray(p.comments) ? p.comments.length : 0), 0);
+        // Count both top-level comments and their nested replies.
+        const totalReplies = data.reduce((n, p) => {
+          const cs = Array.isArray(p.comments) ? p.comments : [];
+          return n + cs.reduce(
+            (m, c) => m + 1 + (Array.isArray(c.replies) ? c.replies.length : 0),
+            0
+          );
+        }, 0);
 
         const cnt  = document.getElementById('ll-count');
         const noun = document.getElementById('ll-count-noun');
@@ -1223,6 +1272,19 @@
     const h2  = Math.round((parseInt(seed.slice(2, 4), 16) / 255) * 360);
     const acc = Math.round((parseInt(seed.slice(4, 6), 16) / 255) * 360);
     const cssVars = `--h1:${h1};--h2:${h2};--acc:${acc};`;
+
+    // Nested replies on a top-level comment — render indented under it.
+    // Reply-to-reply is not a thing on LinkedIn, so this is one level deep.
+    const nested = Array.isArray(c.replies) && c.replies.length > 0
+      ? `<div class="ll-replies-nested">
+           ${c.replies
+              .slice()
+              .sort((a, b) => parseInt(a.createdAt || 0, 10) - parseInt(b.createdAt || 0, 10))
+              .map(renderReply)
+              .join('')}
+         </div>`
+      : '';
+
     return `<div class="ll-reply">
       <div class="ll-avatar" style="${cssVars}" aria-hidden="true">
         <span class="ll-avatar-mono">${escapeHtml(initials)}</span>
@@ -1234,6 +1296,7 @@
           <span class="ll-reply-dot" aria-hidden="true"></span>
           <span>${escapeHtml(formatTime(c.createdAt))}</span>
         </div>
+        ${nested}
       </div>
     </div>`;
   }
