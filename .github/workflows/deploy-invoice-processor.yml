@@ -46,22 +46,9 @@ jobs:
         run: npm test
 
       - name: Install AILANG
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          RELEASE_JSON=$(curl -sfL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/sunholo-data/ailang/releases/latest)
-          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          curl -sfL --retry 3 --retry-delay 5 \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -o ailang-linux.tar.gz \
-            "https://github.com/sunholo-data/ailang/releases/download/${RELEASE_TAG}/linux.x64.ailang.tar.gz"
-          tar -xzf ailang-linux.tar.gz
-          sudo mv ailang /usr/local/bin/ailang
-          ailang version
+        uses: sunholo-data/setup-ailang@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Vendor AILANG package dependencies
         # Demos that import `pkg/sunholo/...` (streaming, ecommerce, co-presenter)
