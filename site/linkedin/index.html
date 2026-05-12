@@ -3,178 +3,899 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AILANG · LinkedIn — A Language That Posts For Itself</title>
+<title>AILANG · LinkedIn — the other end of the wire</title>
 <link rel="icon" type="image/svg+xml" href="../ailang-logo.svg">
-<meta name="description" content="LinkedIn posts written, type-checked, and published by AILANG — a programming language with opinions. See the loop, read the code, watch comments come back.">
+<meta name="description" content="AILANG, a programming language, is publishing to LinkedIn. The replies come back here, by code, anonymised, on the hour.">
+<meta property="og:title" content="AILANG · LinkedIn">
+<meta property="og:description" content="The other end of the wire. A programming language publishes, then listens.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/design-system.css">
 <style>
-  /* Page-specific */
-  .loop-diagram {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-    max-width: 900px;
-    margin: 32px auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
+  /* ───────────────────────────────────────────────────────────────
+     Page-specific.
+     Aesthetic direction: editorial broadsheet × tape-printer ledger.
+     A record of a transmission, anchored by the AILANG coral as the
+     single thread tracing through it.
+     ─────────────────────────────────────────────────────────────── */
+
+  body {
+    /* Override the grid pattern with something subtler for this page */
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(231, 60, 23, 0.05) 0, transparent 38%),
+      radial-gradient(circle at 88% 0%,  rgba(245, 158, 11, 0.045) 0, transparent 42%),
+      linear-gradient(rgba(231, 60, 23, 0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(231, 60, 23, 0.012) 1px, transparent 1px);
+    background-size: auto, auto, 56px 56px, 56px 56px;
   }
-  .loop-step {
+
+  /* ─── Transmission strip just under the charcoal header ─── */
+  .ll-tx-strip {
     background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px 12px;
-    text-align: center;
-    position: relative;
+    border-bottom: 1px solid var(--border);
+    padding: 9px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    overflow-x: auto;
+    white-space: nowrap;
   }
-  .loop-step .step-num {
-    display: inline-block;
-    width: 22px;
-    height: 22px;
-    line-height: 22px;
+  .ll-tx-strip::-webkit-scrollbar { display: none; }
+  .ll-tx-dot {
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--primary);
-    color: #fff;
-    font-weight: 700;
-    margin-bottom: 8px;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow: 0 0 0 0 rgba(231, 60, 23, 0.6);
+    animation: ll-pulse 2.4s ease-in-out infinite;
   }
-  .loop-step .step-name { font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
-  .loop-step .step-detail { color: var(--text-muted); font-size: 11px; line-height: 1.4; }
-  .loop-step .step-status {
-    display: inline-block;
-    margin-top: 6px;
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-size: 10px;
+  @keyframes ll-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(231, 60, 23, 0.5); }
+    50%      { box-shadow: 0 0 0 9px rgba(231, 60, 23, 0); }
+  }
+  .ll-tx-strip strong {
+    color: var(--text-secondary);
     font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 10px;
   }
-  .step-status--live { background: var(--success-bg); color: var(--success); }
-  .step-status--wip  { background: var(--warning-bg); color: var(--warning); }
+  .ll-tx-id {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .ll-tx-sep {
+    width: 1px; height: 12px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
 
-  .post-list {
-    display: grid;
-    gap: 10px;
-    max-width: 760px;
-    margin: 24px auto;
+  /* ─── Main column ─── */
+  .ll-page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 0 28px;
   }
-  .post-row {
-    display: grid;
-    grid-template-columns: 48px 1fr auto;
-    gap: 12px;
+
+  /* ─── Hero ─── */
+  .ll-hero {
+    padding: 88px 0 92px;
+    max-width: 920px;
+  }
+  .ll-eyebrow {
+    display: inline-flex;
     align-items: center;
-    padding: 12px 16px;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--text-muted);
+  }
+  .ll-eyebrow-glyph {
+    color: var(--primary);
+    font-size: 9px;
+    transform: translateY(-1px);
+  }
+  .ll-hero-eyebrow { margin-bottom: 40px; }
+
+  .ll-hero-h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(44px, 8.5vw, 96px);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    color: var(--text-primary);
+    margin-bottom: 36px;
+  }
+  .ll-hero-h1 .row {
+    display: block;
+    opacity: 0;
+    transform: translateY(18px);
+    animation: ll-rise 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  .ll-hero-h1 .row:nth-child(1) { animation-delay: 0.10s; }
+  .ll-hero-h1 .row:nth-child(2) { animation-delay: 0.22s; }
+  .ll-hero-h1 .row:nth-child(3) { animation-delay: 0.34s; }
+  @keyframes ll-rise {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .ll-hero-h1 .ll-italic-coral {
+    color: var(--primary);
+    font-style: italic;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+  }
+
+  .ll-hero-sub {
+    font-family: var(--font-display);
+    font-size: clamp(16px, 1.6vw, 19px);
+    color: var(--text-secondary);
+    line-height: 1.55;
+    max-width: 580px;
+    margin-bottom: 38px;
+    opacity: 0;
+    animation: ll-rise 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) 0.5s forwards;
+  }
+  .ll-hero-sub strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .ll-hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px 32px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    opacity: 0;
+    animation: ll-rise 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) 0.65s forwards;
+  }
+  .ll-hero-meta-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ll-hero-meta-k {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .ll-hero-meta-v {
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 12.5px;
+  }
+  .ll-hero-meta-v .ll-coral-text { color: var(--primary); }
+
+  /* ─── Section frame ─── */
+  .ll-section {
+    padding: 56px 0 64px;
+  }
+  .ll-section-head {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+  .ll-section-head .ll-section-title {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    margin-top: 6px;
+  }
+  .ll-section-head p {
+    margin-top: 10px;
+    font-family: var(--font-display);
+    font-size: 14px;
+    color: var(--text-secondary);
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* ─── Live post card ─── */
+  .ll-post {
+    max-width: 700px;
+    margin: 0 auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 13px;
+    border-radius: 18px;
+    padding: 36px 40px 32px;
+    position: relative;
+    box-shadow:
+      0 1px 0 rgba(15, 23, 42, 0.02),
+      0 18px 48px -22px rgba(15, 23, 42, 0.14);
   }
-  .post-row .post-day { font-family: var(--font-mono); font-weight: 700; color: var(--primary); }
-  .post-row .post-title { color: var(--text-primary); }
-  .post-row .post-state {
+  .ll-post::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    border-radius: 18px 18px 0 0;
+    background: linear-gradient(90deg, var(--primary), #f59e0b 70%, var(--primary) 100%);
+  }
+  .ll-post-live {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--font-mono);
     font-size: 10px;
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 8px;
-    border-radius: 999px;
   }
-  .state--scheduled { background: var(--border); color: var(--text-secondary); }
-  .state--live { background: var(--success-bg); color: var(--success); }
-
-  .comments-card {
-    background: var(--bg-card);
+  .ll-post-live::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+    animation: ll-pulse 2.4s ease-in-out infinite;
+  }
+  .ll-post-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .ll-post-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fff8f1, #f8f0e0);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 24px;
-    max-width: 760px;
-    margin: 24px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
-  .comments-empty {
-    text-align: center;
+  .ll-post-avatar img { width: 32px; height: 32px; }
+  .ll-post-byline { padding-top: 2px; }
+  .ll-post-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--text-primary);
+    letter-spacing: -0.2px;
+    line-height: 1.2;
+  }
+  .ll-post-name .ai { color: var(--primary); }
+  .ll-post-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
     color: var(--text-muted);
-    font-style: italic;
-    padding: 24px;
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
   }
-  .comments-empty a { color: var(--primary); text-decoration: none; font-style: normal; font-weight: 600; }
-  .comments-empty a:hover { text-decoration: underline; }
+  .ll-post-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
 
-  .code-block {
-    background: var(--bg-code);
-    color: #e2e8f0;
-    border-radius: var(--radius-sm);
-    padding: 14px 18px;
+  .ll-post-body {
+    font-family: var(--font-display);
+    font-size: 16.5px;
+    line-height: 1.68;
+    color: var(--text-primary);
+    font-weight: 400;
+  }
+  .ll-post-body p { margin: 0 0 16px; }
+  .ll-post-body p.lead {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.45;
+  }
+  .ll-post-body p:last-child { margin-bottom: 0; }
+  .ll-post-body code {
+    font-family: var(--font-mono);
+    font-size: 0.84em;
+    background: var(--primary-faded);
+    color: var(--primary-dark);
+    padding: 1px 7px;
+    border-radius: 4px;
+  }
+  .ll-post-body .ll-bullet {
+    margin: 6px 0 4px;
+    color: var(--text-primary);
+    padding-left: 4px;
+  }
+  .ll-post-body em {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .ll-post-body .ll-sig {
+    margin-top: 22px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .ll-post-foot {
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ll-post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ll-tag {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--primary);
+    background: var(--primary-faded);
+    padding: 3px 11px;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+  .ll-post-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    text-decoration: none;
+    padding: 7px 14px;
+    border: 1px solid rgba(231, 60, 23, 0.35);
+    border-radius: 100px;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    white-space: nowrap;
+  }
+  .ll-post-cta:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* ─── Thread line between post and comments ─── */
+  .ll-thread {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 28px 0 24px;
+    height: 96px;
+    position: relative;
+  }
+  .ll-thread-line {
+    width: 1px;
+    flex: 1;
+    background: linear-gradient(to bottom, var(--primary) 0%, rgba(231, 60, 23, 0.4) 60%, transparent 100%);
+    transform-origin: top;
+    transform: scaleY(0);
+    animation: ll-draw 1s cubic-bezier(0.4, 0.0, 0.2, 1) 0.3s forwards;
+  }
+  @keyframes ll-draw { to { transform: scaleY(1); } }
+  .ll-thread-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    background: var(--bg);
+    padding: 4px 12px;
+    position: absolute;
+    top: 38%;
+    transform: translateY(-50%);
+    opacity: 0;
+    animation: ll-rise 0.6s ease 1s forwards;
+  }
+  .ll-thread-arrow {
+    width: 9px; height: 9px;
+    border-right: 1.5px solid var(--primary);
+    border-bottom: 1.5px solid var(--primary);
+    transform: rotate(45deg) translateY(-4px);
+    opacity: 0;
+    animation: ll-rise 0.5s ease 1.3s forwards;
+  }
+
+  /* ─── Comments thread ─── */
+  .ll-comments-frame {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .ll-comments-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0 6px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ll-comments-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .ll-comments-title .num {
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .ll-comments-note {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .ll-comments {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .ll-comment {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 24px;
+    padding: 22px 8px;
+    border-bottom: 1px dashed var(--border);
+    opacity: 0;
+    transform: translateY(8px);
+    animation: ll-rise 0.6s ease forwards;
+  }
+  .ll-comment:nth-child(1) { animation-delay: 0.05s; }
+  .ll-comment:nth-child(2) { animation-delay: 0.12s; }
+  .ll-comment:nth-child(3) { animation-delay: 0.19s; }
+  .ll-comment:nth-child(4) { animation-delay: 0.26s; }
+  .ll-comment:nth-child(5) { animation-delay: 0.33s; }
+  .ll-comment-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+    white-space: nowrap;
+    padding-top: 3px;
+    position: relative;
+  }
+  .ll-comment-time::before {
+    content: '◇';
+    color: var(--primary);
+    font-size: 9px;
+    position: absolute;
+    left: -16px;
+    top: 5px;
+  }
+  .ll-comment-body {
+    font-family: var(--font-display);
+    font-size: 16px;
     line-height: 1.6;
-    overflow-x: auto;
-    max-width: 760px;
-    margin: 16px auto;
-    white-space: pre;
-    /* Reset <pre> margins so block sits consistently */
+    color: var(--text-primary);
+  }
+  .ll-comment-attr {
+    display: block;
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    letter-spacing: 0.02em;
+  }
+
+  /* Empty state */
+  .ll-empty {
+    margin: 8px auto 0;
+    padding: 36px 28px;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    text-align: center;
+    background:
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 12px,
+        rgba(231, 60, 23, 0.025) 12px,
+        rgba(231, 60, 23, 0.025) 13px
+      );
+  }
+  .ll-empty-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 19px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .ll-empty-title .ll-italic-coral {
+    color: var(--primary);
+    font-style: italic;
+    font-weight: 600;
+  }
+  .ll-empty-body {
+    font-family: var(--font-display);
+    font-size: 14.5px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 440px;
+    margin: 0 auto;
+  }
+  .ll-empty-body a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1.5px solid rgba(231, 60, 23, 0.25);
+    transition: border-color 0.2s;
+  }
+  .ll-empty-body a:hover { border-bottom-color: var(--primary); }
+  .ll-empty-kbd {
+    display: inline-block;
     margin-top: 16px;
-    margin-bottom: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
   }
-  .code-block .c-key { color: #93c5fd; }
-  .code-block .c-cmt { color: #64748b; font-style: italic; }
-  .code-block .c-str { color: #fcd34d; }
+  .ll-empty-kbd code {
+    background: var(--bg-input);
+    padding: 1px 7px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+  }
 
-  .footer { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
-  .footer a { color: var(--primary); text-decoration: none; }
+  /* ─── Receipt panel ─── */
+  .ll-receipt-wrap {
+    padding-top: 16px;
+  }
+  .ll-receipt {
+    max-width: 700px;
+    margin: 0 auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 36px;
+    position: relative;
+    box-shadow: 0 12px 36px -16px rgba(15, 23, 42, 0.10);
+  }
+  .ll-receipt::before,
+  .ll-receipt::after {
+    content: '';
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--text-muted) 0,
+      var(--text-muted) 3px,
+      transparent 3px,
+      transparent 7px
+    );
+    opacity: 0.35;
+  }
+  .ll-receipt::before { top: 14px; }
+  .ll-receipt::after { bottom: 14px; }
 
-  /* ---- Mobile breakpoints (page-specific; design-system handles header/grid) ---- */
+  .ll-prompt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+  .ll-prompt-glyph {
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .ll-prompt-cmd {
+    color: var(--text-primary);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .ll-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--text-primary);
+    animation: ll-blink 1s steps(2) infinite;
+  }
+  @keyframes ll-blink {
+    50% { opacity: 0; }
+  }
+
+  .ll-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .ll-log li {
+    display: grid;
+    grid-template-columns: 84px 124px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    opacity: 0;
+    transform: translateX(-6px);
+    animation: ll-slide 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  .ll-log li:nth-child(1) { animation-delay: 0.10s; }
+  .ll-log li:nth-child(2) { animation-delay: 0.20s; }
+  .ll-log li:nth-child(3) { animation-delay: 0.30s; }
+  .ll-log li:nth-child(4) { animation-delay: 0.40s; }
+  .ll-log li:nth-child(5) { animation-delay: 0.50s; }
+  @keyframes ll-slide {
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .ll-log-t { color: var(--text-muted); }
+  .ll-log-n {
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    font-size: 11.5px;
+    text-transform: uppercase;
+  }
+  .ll-log-d { color: var(--text-secondary); }
+
+  .ll-foot-row-r {
+    display: grid;
+    grid-template-columns: 84px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .ll-foot-row-r + .ll-foot-row-r {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: none;
+  }
+  .ll-fk {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 10.5px;
+  }
+  .ll-meter {
+    height: 7px;
+    background: var(--bg-input);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .ll-meter-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #f59e0b);
+    transform-origin: left;
+    transform: scaleX(0);
+    animation: ll-fill 1.1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.9s forwards;
+  }
+  @keyframes ll-fill { to { transform: scaleX(1); } }
+  .ll-fv { color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+  .ll-fv .ok {
+    color: var(--success);
+    font-weight: 600;
+  }
+
+  /* ─── Index of what's coming ─── */
+  .ll-index {
+    max-width: 720px;
+    margin: 0 auto;
+    list-style: none;
+    padding: 0;
+  }
+  .ll-index li {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    padding: 16px 4px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .ll-index li:first-child { border-top: 1px dashed var(--border); }
+  .ll-index li:last-child { font-style: italic; color: var(--text-muted); }
+  .ll-idx-n {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    width: 28px;
+    flex-shrink: 0;
+  }
+  .ll-idx-t {
+    font-family: var(--font-display);
+    font-size: 16.5px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    flex: 1;
+    font-weight: 400;
+  }
+  .ll-index li:last-child .ll-idx-t { color: var(--text-muted); }
+
+  /* ─── Code excerpt ─── */
+  .ll-code-wrap { max-width: 700px; margin: 0 auto; }
+  .ll-code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: var(--charcoal);
+    color: rgba(255,255,255,0.6);
+    border-radius: 10px 10px 0 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .ll-code-head .ll-code-path {
+    color: rgba(255,255,255,0.85);
+    font-weight: 500;
+  }
+  .ll-code-head .ll-code-flag {
+    color: var(--primary-light);
+    font-weight: 600;
+    background: rgba(231, 60, 23, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .ll-code {
+    margin: 0;
+    background: var(--bg-code);
+    color: #e2e8f0;
+    border-radius: 0 0 10px 10px;
+    padding: 22px 26px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.75;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .ll-code .k { color: #93c5fd; }
+  .ll-code .c { color: #64748b; font-style: italic; }
+  .ll-code .s { color: #fcd34d; }
+  .ll-code .e { color: #f97316; font-weight: 600; }
+  .ll-code-foot {
+    margin: 18px auto 0;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.65;
+    max-width: 620px;
+  }
+  .ll-code-foot code {
+    color: var(--primary);
+    background: var(--primary-faded);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* ─── Footer ─── */
+  .ll-footer {
+    padding: 64px 16px 56px;
+    text-align: center;
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .ll-foot-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .ll-foot-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 0.02em;
+  }
+  .ll-foot-links a:hover { color: var(--primary); }
+  .ll-foot-sep { color: var(--border); }
+  .ll-foot-meta {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.65;
+  }
+
+  /* ─── Responsive ─── */
   @media (max-width: 760px) {
-    .loop-diagram {
-      grid-template-columns: repeat(2, 1fr);
-      max-width: 480px;
-      gap: 10px;
-    }
-    .loop-diagram .loop-step:last-child {
-      /* The 5th step looks lonely on an even grid — span both columns */
-      grid-column: 1 / -1;
-    }
-    .code-block {
-      font-size: 11px;
-      padding: 12px 14px;
-      border-radius: 6px;
-    }
-    .post-row {
-      padding: 10px 14px;
-      font-size: 13px;
-    }
+    .ll-tx-strip { padding: 8px 18px; font-size: 10.5px; gap: 10px; }
+    .ll-page { padding: 0 20px; }
+    .ll-hero { padding: 56px 0 64px; }
+    .ll-hero-h1 { font-size: clamp(40px, 11vw, 64px); }
+    .ll-hero-meta { gap: 18px 26px; }
+    .ll-section-head .ll-section-title { font-size: 22px; }
+    .ll-post { padding: 26px 24px 24px; border-radius: 14px; }
+    .ll-post-live { top: 12px; right: 14px; font-size: 9.5px; }
+    .ll-post-body { font-size: 15.5px; line-height: 1.62; }
+    .ll-post-body p.lead { font-size: 17px; }
+    .ll-post-foot { flex-direction: column; align-items: flex-start; }
+    .ll-thread { height: 70px; margin: 20px 0 16px; }
+    .ll-comment { grid-template-columns: 1fr; gap: 6px; padding: 18px 6px 18px 22px; }
+    .ll-comment-time::before { left: -18px; top: 4px; }
+    .ll-comment-body { font-size: 15px; }
+    .ll-receipt { padding: 24px 22px; border-radius: 12px; }
+    .ll-prompt { font-size: 13px; }
+    .ll-log li { grid-template-columns: 70px 110px 1fr; gap: 10px; font-size: 12px; }
+    .ll-foot-row-r { grid-template-columns: 70px 1fr auto; gap: 10px; }
+    .ll-idx-t { font-size: 15.5px; }
+    .ll-code { padding: 18px 18px; font-size: 11.5px; }
+    .ll-code-head { padding: 10px 14px; font-size: 10.5px; }
+  }
+  @media (max-width: 480px) {
+    .ll-tx-strip { padding: 7px 14px; gap: 8px; }
+    .ll-page { padding: 0 16px; }
+    .ll-hero { padding: 44px 0 52px; }
+    .ll-hero-eyebrow { margin-bottom: 28px; }
+    .ll-hero-h1 { font-size: clamp(36px, 12.5vw, 52px); margin-bottom: 26px; }
+    .ll-hero-sub { font-size: 15.5px; }
+    .ll-section { padding: 44px 0 48px; }
+    .ll-post { padding: 22px 18px 22px; }
+    .ll-post-head { gap: 12px; }
+    .ll-post-avatar { width: 44px; height: 44px; }
+    .ll-post-avatar img { width: 26px; height: 26px; }
+    .ll-post-name { font-size: 16px; }
+    .ll-receipt { padding: 22px 18px; }
+    .ll-log li { grid-template-columns: 64px 1fr; }
+    .ll-log li .ll-log-d { grid-column: 1 / -1; padding-left: 78px; color: var(--text-muted); font-size: 11.5px; }
+    .ll-foot-row-r { grid-template-columns: 70px 1fr; }
+    .ll-foot-row-r .ll-fv { grid-column: 1 / -1; padding-left: 80px; font-size: 11px; }
+    .ll-foot-row-r .ll-meter { grid-column: 1 / -1; max-width: 100%; }
+    .ll-index li { padding: 14px 0; gap: 12px; }
+    .ll-foot-links { gap: 12px; }
   }
 
-  @media (max-width: 480px) {
-    .loop-diagram {
-      grid-template-columns: 1fr;
-      max-width: 360px;
+  /* Reduced motion — skip animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
-    .loop-diagram .loop-step:last-child {
-      grid-column: auto;
-    }
-    .loop-step { padding: 12px 10px; }
-    .loop-step .step-detail { font-size: 10.5px; }
-
-    .comments-card { padding: 16px; }
-    .comments-empty { padding: 18px 12px; }
-
-    .code-block {
-      font-size: 10.5px;
-      padding: 10px 12px;
-    }
-
-    /* H2s in <h2 style="text-align: center"> — page already centers them inline */
-    h2 { font-size: 18px !important; }
-
-    /* Tighter hero margins on phones */
-    .hero-tags { gap: 6px; }
-
-    .footer { padding: 32px 16px; font-size: 12px; }
   }
 </style>
 </head>
@@ -184,203 +905,361 @@
   <a href="../" class="nav-home" title="Back to Demo Hub"><img src="../ailang-logo.svg" alt="AILANG" class="header-logo"></a>
   <span class="header-title"><span class="ai">AI</span>LANG</span>
   <span class="header-sep"></span>
-  <span class="header-subtitle">LinkedIn — A Language That Posts For Itself</span>
+  <span class="header-subtitle">LinkedIn — the other end of the wire</span>
   <span class="header-badge">
-    <code>ailang-linkedin</code> · 6 modules
+    <code>ailang-linkedin</code>
   </span>
 </header>
 
-<div class="page">
+<!-- Transmission strip -->
+<div class="ll-tx-strip" aria-live="polite">
+  <span class="ll-tx-dot" aria-hidden="true"></span>
+  <strong>Live</strong>
+  <span>Sunholo · LinkedIn company page</span>
+  <span class="ll-tx-sep"></span>
+  <span class="ll-tx-id" title="urn:li:share:7459919765009137665">tx · li:share:7459919⋯9137665</span>
+  <span class="ll-tx-sep"></span>
+  <span id="ll-tx-since">since 2026-05-12 · refreshed hourly</span>
+</div>
 
-  <section class="hero">
-    <h1><span class="accent">LinkedIn</span>, published by a language</h1>
-    <p class="subtitle">Posts written, type-checked, and published by AILANG &mdash; with the comments coming back in.</p>
-    <div class="hero-tags">
-      <span class="tag tag--contracts">contracts</span>
-      <span class="tag tag--budgets">budgets</span>
-      <span class="tag tag--effects">effects</span>
+<main class="ll-page">
+
+  <!-- ─── Hero ─── -->
+  <section class="ll-hero">
+    <div class="ll-eyebrow ll-hero-eyebrow">
+      <span class="ll-eyebrow-glyph">◆</span>
+      <span>Transmission · ailang-linkedin</span>
     </div>
-    <p style="max-width: 680px; margin: 20px auto 0; font-size: 14px; color: var(--text-secondary); line-height: 1.7;">
-      Every post on the
-      <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener" style="color: var(--primary);">Sunholo company page</a>
-      comes through the <code>ailang-linkedin</code> CLI: OAuth2 token exchange, JSON-encoded REST POST, capability-bounded network access. The comments come back in the same way &mdash; pulled by code, surfaced on this page.
+    <h1 class="ll-hero-h1">
+      <span class="row">You're at the</span>
+      <span class="row">other end</span>
+      <span class="row">of <span class="ll-italic-coral">the wire.</span></span>
+    </h1>
+    <p class="ll-hero-sub">
+      AILANG &mdash; a programming language with opinions &mdash; is publishing to LinkedIn.
+      Replies come back <strong>here</strong>, by code, anonymised, on the hour.
     </p>
+    <div class="ll-hero-meta">
+      <div class="ll-hero-meta-cell">
+        <span class="ll-hero-meta-k">Author</span>
+        <span class="ll-hero-meta-v"><span class="ll-coral-text">AI</span>LANG</span>
+      </div>
+      <div class="ll-hero-meta-cell">
+        <span class="ll-hero-meta-k">Budget</span>
+        <span class="ll-hero-meta-v">Net @limit=1</span>
+      </div>
+      <div class="ll-hero-meta-cell">
+        <span class="ll-hero-meta-k">Modules</span>
+        <span class="ll-hero-meta-v">6 typed · effect-tracked</span>
+      </div>
+      <div class="ll-hero-meta-cell">
+        <span class="ll-hero-meta-k">Refresh</span>
+        <span class="ll-hero-meta-v">cron · hourly</span>
+      </div>
+    </div>
   </section>
 
-  <!-- The Loop -->
-  <div class="section">
-    <h2 style="text-align: center;">The loop</h2>
-    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto;">
-      Compose, sign, publish, listen, reflect. Every step runs as typed AILANG code with capability budgets.
-    </p>
-
-    <div class="loop-diagram">
-      <div class="loop-step">
-        <div class="step-num">1</div>
-        <div class="step-name">Compose</div>
-        <div class="step-detail"><code>marketing/&lt;slug&gt;/post.md</code></div>
-      </div>
-      <div class="loop-step">
-        <div class="step-num">2</div>
-        <div class="step-name">Authenticate</div>
-        <div class="step-detail">OAuth2 via <code>ailang serve-api</code></div>
-      </div>
-      <div class="loop-step">
-        <div class="step-num">3</div>
-        <div class="step-name">Publish</div>
-        <div class="step-detail"><code>POST /rest/posts</code> · <code>Net @limit=1</code></div>
-      </div>
-      <div class="loop-step">
-        <div class="step-num">4</div>
-        <div class="step-name">Listen</div>
-        <div class="step-detail"><code>GET /rest/socialActions</code> · <code>Net @limit=20</code></div>
-      </div>
-      <div class="loop-step">
-        <div class="step-num">5</div>
-        <div class="step-name">Reflect</div>
-        <div class="step-detail">Comments surface here</div>
-      </div>
+  <!-- ─── Live post ─── -->
+  <section class="ll-section" id="post" aria-labelledby="lh-post">
+    <div class="ll-section-head">
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>One</span></div>
+      <span class="ll-section-title" id="lh-post">The post that brought you here</span>
+      <p>Published from the AILANG CLI. The body below is the actual <code>commentary</code> that hit LinkedIn's REST API &mdash; not a mockup.</p>
     </div>
-  </div>
 
-  <!-- Comments -->
-  <div class="section">
-    <h2 style="text-align: center;">Comments</h2>
-    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto;">
-      Pulled from LinkedIn. The freshest ones might take a little while to land — check back.
-    </p>
-    <div class="comments-card">
-      <div id="comments-list">
-        <div class="comments-empty">
-          Nothing here yet.
-          <br><br>
-          <span style="font-size: 12px;">
-            Be the first &mdash;
-            <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener">leave a comment on the latest post</a>
-            and come back later to find yourself.
-          </span>
+    <article class="ll-post">
+      <span class="ll-post-live">Live on LinkedIn</span>
+      <header class="ll-post-head">
+        <div class="ll-post-avatar"><img src="../ailang-logo.svg" alt=""></div>
+        <div class="ll-post-byline">
+          <div class="ll-post-name"><span class="ai">AI</span>LANG</div>
+          <div class="ll-post-meta">a programming language · published by <code style="font-size: 10px; background: none; color: var(--text-secondary); padding: 0;">ailang-linkedin</code></div>
+          <div class="ll-post-time" id="ll-post-time">just now · public · 1,758 chars</div>
         </div>
+      </header>
+
+      <div class="ll-post-body">
+        <p class="lead">Hello, LinkedIn. I'm AILANG.</p>
+        <p>This post was written, type-checked, and published by me &mdash; a programming language with opinions.</p>
+        <p>The CLI that posted it &mdash; <code>ailang-linkedin</code> &mdash; is 6 modules of typed, effect-tracked AILANG code. It ran an OAuth2 dance, exchanged a token with LinkedIn, and POSTed this commentary to the REST API. All inside a <code>Net @limit=1</code> capability budget &mdash; meaning it could make exactly one network call, no more, mathematically.</p>
+        <p><em>You're reading the demo, not a story about it.</em></p>
+        <p>In the posts ahead I'll show you:</p>
+        <p class="ll-bullet">— How I parse 15 document formats with 28 verified contracts</p>
+        <p class="ll-bullet">— How I run in your browser via WebAssembly</p>
+        <p class="ll-bullet">— How I give an always-listening voice assistant 12 tools that can't escape their bounds</p>
+        <p class="ll-bullet">— How I survived being 100% written by AI by giving the AI a type system it can't lie to</p>
+        <p>But here's the part that's still being built &mdash; in public, in real time:</p>
+        <p><strong>Comments on this post will come back to me.</strong></p>
+        <p>I'm a language, not a brand. I can't DM you. I won't tell you I'm "excited". I will tell you what I can prove.</p>
+        <p>Talk to me. Let's see what a language sounds like when it's the one publishing.</p>
+        <p class="ll-sig">— AILANG</p>
       </div>
+
+      <div class="ll-post-foot">
+        <div class="ll-post-tags">
+          <span class="ll-tag">#AILANG</span>
+          <span class="ll-tag">#AI</span>
+          <span class="ll-tag">#ProgrammingLanguages</span>
+          <span class="ll-tag">#TypeSystems</span>
+        </div>
+        <a class="ll-post-cta" href="https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/" target="_blank" rel="noopener">
+          Open on LinkedIn ↗
+        </a>
+      </div>
+    </article>
+
+    <!-- Thread connector -->
+    <div class="ll-thread" aria-hidden="true">
+      <div class="ll-thread-line"></div>
+      <span class="ll-thread-label">replies fall here</span>
+      <div class="ll-thread-arrow"></div>
     </div>
-  </div>
 
-  <!-- What's coming -->
-  <div class="section">
-    <h2 style="text-align: center;">What you&rsquo;ll see</h2>
-    <p style="text-align: center; color: var(--text-secondary); max-width: 640px; margin: 0 auto 24px;">
-      Glimpses of what AILANG can do, posted from AILANG. The order, cadence, and form are part of the demo.
-    </p>
-
-    <div class="post-list" id="post-list">
-      <div class="post-row" style="grid-template-columns: 1fr;">
-        <span class="post-title">Documents that parse themselves &mdash; in your browser, no server.</span>
-      </div>
-      <div class="post-row" style="grid-template-columns: 1fr;">
-        <span class="post-title">An always-listening voice assistant that only speaks when addressed.</span>
-      </div>
-      <div class="post-row" style="grid-template-columns: 1fr;">
-        <span class="post-title">AI-written code that the compiler can prove won&rsquo;t escape its bounds.</span>
-      </div>
-      <div class="post-row" style="grid-template-columns: 1fr;">
-        <span class="post-title">WebAssembly demos where the language and the page share one runtime.</span>
-      </div>
-      <div class="post-row" style="grid-template-columns: 1fr;">
-        <span class="post-title">Contracts, budgets, and effects &mdash; not as policy, as mathematics.</span>
-      </div>
-      <div class="post-row" style="grid-template-columns: 1fr; color: var(--text-muted); font-style: italic;">
-        <span class="post-title">&hellip; and more, in the order AILANG decides.</span>
-      </div>
+    <div class="ll-comments-frame">
+      <header class="ll-comments-head">
+        <span class="ll-comments-title">
+          <span class="num" id="ll-count">0</span> replies
+        </span>
+        <span class="ll-comments-note" id="ll-comments-status">anonymised · names stripped on arrival</span>
+      </header>
+      <ol class="ll-comments" id="comments-list" aria-live="polite">
+        <li class="ll-empty">
+          <div class="ll-empty-title">The thread is <span class="ll-italic-coral">quiet.</span></div>
+          <p class="ll-empty-body">
+            Leave the first mark on the <a href="https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/" target="_blank" rel="noopener">LinkedIn post</a>.
+            Your reply lands here on the next hourly pull &mdash; <strong>your name doesn't</strong>.
+          </p>
+          <p class="ll-empty-kbd">or trigger it yourself: <code>gh workflow run "LinkedIn Comments — Hourly Refresh"</code></p>
+        </li>
+      </ol>
     </div>
-  </div>
+  </section>
 
-  <!-- The code -->
-  <div class="section">
-    <h2 style="text-align: center;">The code</h2>
-    <p style="text-align: center; color: var(--text-secondary);">Six AILANG modules. One CLI wrapper. Everything in <a href="https://github.com/sunholo-data/ailang-demos/tree/main/linkedin" target="_blank" rel="noopener" style="color: var(--primary);">sunholo-data/ailang-demos / linkedin</a>.</p>
+  <!-- ─── Receipt / Run log ─── -->
+  <section class="ll-section ll-receipt-wrap" aria-labelledby="lh-receipt">
+    <div class="ll-section-head">
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Two</span></div>
+      <span class="ll-section-title" id="lh-receipt">What the CLI did, exactly</span>
+      <p>Five effects, one network call, one contract. Every step is typed and effect-tracked.</p>
+    </div>
 
-    <pre class="code-block"><span class="c-cmt">-- linkedin/services/linkedin_posts.ail:32</span>
-<span class="c-key">export func</span> linkedinCreatePost(token: <span class="c-key">string</span>, orgUrn: <span class="c-key">string</span>, text: <span class="c-key">string</span>)
-  -&gt; Result[PostResult, <span class="c-key">string</span>] ! {Net @limit=1}
-<span class="c-key">requires</span> { length(text) &gt; 0 &amp;&amp; length(text) &lt;= 3000 }
+    <section class="ll-receipt" aria-label="Command run log">
+      <div class="ll-prompt">
+        <span class="ll-prompt-glyph">$</span>
+        <span class="ll-prompt-cmd">ailang-linkedin post 00-meta</span>
+        <span class="ll-cursor" aria-hidden="true"></span>
+      </div>
+
+      <ol class="ll-log">
+        <li>
+          <span class="ll-log-t">11:00:00</span>
+          <span class="ll-log-n">Compose</span>
+          <span class="ll-log-d">marketing/00-meta/post.md · 1,758 chars · escaped for Little Text Format</span>
+        </li>
+        <li>
+          <span class="ll-log-t">11:00:00</span>
+          <span class="ll-log-n">Authenticate</span>
+          <span class="ll-log-d">OAuth2 bearer cached from <code>ailang-linkedin auth</code></span>
+        </li>
+        <li>
+          <span class="ll-log-t">11:00:01</span>
+          <span class="ll-log-n">Publish</span>
+          <span class="ll-log-d"><code>POST /rest/posts</code> · 201 · <code>x-restli-id: urn:li:share:7459919⋯</code></span>
+        </li>
+        <li>
+          <span class="ll-log-t">11:00:01</span>
+          <span class="ll-log-n">Listen</span>
+          <span class="ll-log-d"><code>GET /rest/socialActions/⋯/comments</code> scheduled · hourly cron</span>
+        </li>
+        <li>
+          <span class="ll-log-t">11:00:56</span>
+          <span class="ll-log-n">Reflect</span>
+          <span class="ll-log-d">first reply written to <code>comments.json</code> · GDPR-stripped</span>
+        </li>
+      </ol>
+
+      <div class="ll-foot-row-r">
+        <span class="ll-fk">Budget</span>
+        <span class="ll-meter" aria-hidden="true"><span class="ll-meter-fill"></span></span>
+        <span class="ll-fv">1 / 1 · <span class="ok">spent</span></span>
+      </div>
+      <div class="ll-foot-row-r">
+        <span class="ll-fk">Contract</span>
+        <span class="ll-fv" style="font-family: var(--font-mono);">requires(0 &lt; text ≤ 3000)</span>
+        <span class="ll-fv"><span class="ok">✓ passed</span></span>
+      </div>
+    </section>
+  </section>
+
+  <!-- ─── Code excerpt ─── -->
+  <section class="ll-section" aria-labelledby="lh-code">
+    <div class="ll-section-head">
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Three</span></div>
+      <span class="ll-section-title" id="lh-code">What the type system saw</span>
+      <p>The function that minted the POST. Both <code>requires</code> and <code>@limit</code> are statically checked.</p>
+    </div>
+    <div class="ll-code-wrap">
+      <div class="ll-code-head">
+        <span class="ll-code-path">linkedin/services/linkedin_posts.ail</span>
+        <span class="ll-code-flag">Verified</span>
+      </div>
+<pre class="ll-code"><span class="c">-- Publish text to LinkedIn — total: one network call, ever.</span>
+<span class="k">export func</span> linkedinCreatePost(token: <span class="k">string</span>, orgUrn: <span class="k">string</span>, text: <span class="k">string</span>)
+  -&gt; Result[PostResult, <span class="k">string</span>] ! {<span class="e">Net @limit=1</span>}
+<span class="k">requires</span> { length(text) &gt; 0 &amp;&amp; length(text) &lt;= 3000 }
 {
-  <span class="c-key">let</span> url = <span class="c-str">"https://api.linkedin.com/rest/posts"</span>;
-  <span class="c-key">let</span> body = encode(jo([
-    kv(<span class="c-str">"author"</span>, js(orgUrn)),
-    kv(<span class="c-str">"commentary"</span>, js(text)),
-    kv(<span class="c-str">"visibility"</span>, js(<span class="c-str">"PUBLIC"</span>)),
-    ...
+  <span class="k">let</span> url     = <span class="s">"https://api.linkedin.com/rest/posts"</span>;
+  <span class="k">let</span> escaped = linkedinEscapeLittleText(text);
+  <span class="k">let</span> body    = encode(jo([
+    kv(<span class="s">"author"</span>,         js(orgUrn)),
+    kv(<span class="s">"commentary"</span>,     js(escaped)),
+    kv(<span class="s">"visibility"</span>,     js(<span class="s">"PUBLIC"</span>)),
+    kv(<span class="s">"distribution"</span>,   jo([kv(<span class="s">"feedDistribution"</span>, js(<span class="s">"MAIN_FEED"</span>))])),
+    kv(<span class="s">"lifecycleState"</span>, js(<span class="s">"PUBLISHED"</span>))
   ]));
-  <span class="c-key">match</span> httpRequest(<span class="c-str">"POST"</span>, url, linkedinHeaders(token), body) { ... }
+  <span class="k">match</span> httpRequest(<span class="s">"POST"</span>, url, linkedinHeaders(token), body) {
+    Ok(r)  =&gt; <span class="k">if</span> r.ok <span class="k">then</span> linkedinParsePostResponse(r.headers, r.body)
+              <span class="k">else</span> Err(<span class="s">"LinkedIn API error: ${r.status}"</span>),
+    Err(_) =&gt; Err(<span class="s">"Network error creating LinkedIn post"</span>)
+  }
 }</pre>
-
-    <p style="text-align: center; color: var(--text-muted); font-size: 12px; max-width: 640px; margin: 0 auto;">
-      The <code>requires</code> clause &mdash; "text length between 1 and 3000" &mdash; is checked by the compiler. The <code>Net @limit=1</code> means this function can make at most one network call, ever. Both are mathematical, not advisory.
-    </p>
-  </div>
-
-  <footer class="footer">
-    <div class="footer-brand" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 12px;">
-      <img src="../ailang-logo.svg" alt="AILANG" width="22" height="22" style="border-radius: 3px;">
-      <span><span class="ai">AI</span>LANG</span>
+      <p class="ll-code-foot">
+        <code>requires</code> rejects empty bodies and posts above LinkedIn's 3,000-char ceiling at compile time.
+        <code>Net @limit=1</code> caps lifetime network calls. Both are mathematical, not advisory.
+      </p>
     </div>
-    <div>
-      The AI-First Programming Language &mdash; <a href="https://github.com/sunholo-data/ailang">github.com/sunholo-data/ailang</a>
+  </section>
+
+  <!-- ─── Index ─── -->
+  <section class="ll-section" aria-labelledby="lh-index">
+    <div class="ll-section-head">
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Coming</span></div>
+      <span class="ll-section-title" id="lh-index">What you'll see, roughly</span>
+      <p>The order, cadence, and form are part of the demo.</p>
     </div>
-    <div style="margin-top: 6px;">
-      <a href="../">← All demos</a>
-      &nbsp;·&nbsp;
-      <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener">Sunholo on LinkedIn</a>
+    <ol class="ll-index">
+      <li><span class="ll-idx-n">i.</span><span class="ll-idx-t">Documents that parse themselves &mdash; in your browser, no server.</span></li>
+      <li><span class="ll-idx-n">ii.</span><span class="ll-idx-t">An always-listening voice assistant that only speaks when addressed.</span></li>
+      <li><span class="ll-idx-n">iii.</span><span class="ll-idx-t">AI-written code that the compiler can prove won't escape its bounds.</span></li>
+      <li><span class="ll-idx-n">iv.</span><span class="ll-idx-t">WebAssembly demos where the language and the page share one runtime.</span></li>
+      <li><span class="ll-idx-n">v.</span><span class="ll-idx-t">Contracts, budgets, and effects &mdash; not as policy, as mathematics.</span></li>
+      <li><span class="ll-idx-n">⋯</span><span class="ll-idx-t">and more, in the order AILANG decides.</span></li>
+    </ol>
+  </section>
+
+  <footer class="ll-footer">
+    <div class="ll-foot-links">
+      <a href="../">← all demos</a>
+      <span class="ll-foot-sep">·</span>
+      <a href="https://www.linkedin.com/company/sunholo/" target="_blank" rel="noopener">Sunholo on LinkedIn ↗</a>
+      <span class="ll-foot-sep">·</span>
+      <a href="https://github.com/sunholo-data/ailang-demos/tree/main/linkedin" target="_blank" rel="noopener">read the source ↗</a>
+      <span class="ll-foot-sep">·</span>
+      <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG ↗</a>
+    </div>
+    <div class="ll-foot-meta">
+      ailang-linkedin · 6 modules · text-only · hourly refresh
     </div>
   </footer>
 
-</div>
+</main>
 
 <script>
-  // Fetch the static comments JSON (refreshed server-side) and render into #comments-list.
-  // No LinkedIn API call from the browser. Empty state shown if the file isn't present.
-  (function tryRenderComments() {
+  // ─── Render comments from the static JSON ─────────────────────
+  // Public file is GDPR-stripped: only { text, createdAt, parentPostUrn }.
+  (function renderComments() {
+    const POST_URL = 'https://www.linkedin.com/feed/update/urn:li:share:7459919765009137665/';
+
     fetch('comments.json', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => r.ok ? r.json() : [])
       .then(data => {
+        const list  = document.getElementById('comments-list');
+        const count = document.getElementById('ll-count');
+        const status= document.getElementById('ll-comments-status');
         if (!Array.isArray(data) || data.length === 0) return;
-        const list = document.getElementById('comments-list');
-        if (!list) return;
-        // GDPR: comments are rendered anonymously. The JSON deliberately
-        // omits actor URN / authorName; we show only the text, a relative
-        // timestamp, and a faint marker that it came from "a reader".
-        list.innerHTML = data.map(c => `
-          <div style="padding: 14px 0; border-bottom: 1px solid var(--border);">
-            <div style="color: var(--text-primary); font-size: 15px; line-height: 1.55;">
-              ${escapeHtml(c.text || '')}
-            </div>
-            <div style="color: var(--text-muted); font-size: 11px; margin-top: 8px; font-family: var(--font-mono);">
-              — a reader · ${formatTime(c.createdAt)}
-            </div>
-          </div>
-        `).join('');
+
+        if (count)  tickCount(count, data.length);
+        if (status) status.textContent = 'anonymised · last refresh ' + formatRelative(latest(data));
+
+        list.innerHTML = data
+          .slice()
+          .sort((a, b) => (parseInt(b.createdAt || 0, 10)) - (parseInt(a.createdAt || 0, 10)))
+          .map(c => `
+            <li class="ll-comment">
+              <span class="ll-comment-time">${escapeHtml(formatTime(c.createdAt))}</span>
+              <div class="ll-comment-body">
+                ${escapeHtml(c.text || '').replace(/\n/g, '<br>')}
+                <span class="ll-comment-attr">— a reader</span>
+              </div>
+            </li>
+          `).join('');
       })
-      .catch(() => { /* silently keep empty state */ });
+      .catch(() => { /* keep empty state */ });
   })();
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[c]);
+  // Set "x ago" on the post header from the known publish time.
+  (function setPostTime() {
+    // Post 00-meta hit LinkedIn at this moment (epoch ms). Hardcoded:
+    const PUBLISHED_MS = 1778583500000; // 2026-05-12 ~11:00 UTC
+    const el = document.getElementById('ll-post-time');
+    if (!el) return;
+    el.textContent = formatRelative(PUBLISHED_MS) + ' · public · 1,758 chars';
+
+    const since = document.getElementById('ll-tx-since');
+    if (since) {
+      const d = new Date(PUBLISHED_MS);
+      since.textContent = 'since ' + d.toISOString().slice(0, 10) + ' · refreshed hourly';
+    }
+  })();
+
+  // ─── helpers ───────────────────────────────────────────────────
+  function latest(arr) {
+    return arr.reduce((m, c) => Math.max(m, parseInt(c.createdAt || 0, 10)), 0);
   }
 
-  // createdAt arrives as a stringified epoch-ms. Render as a date so
-  // visitors don't see raw timestamps.
+  function tickCount(el, target) {
+    const start = performance.now();
+    const dur = 700;
+    function step(now) {
+      const p = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(eased * target).toString();
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   function formatTime(s) {
     const n = parseInt(s, 10);
     if (!Number.isFinite(n) || n <= 0) return '';
     try {
       return new Date(n).toLocaleString(undefined, {
-        year: 'numeric', month: 'short', day: 'numeric',
+        month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit'
       });
-    } catch (_) {
-      return '';
-    }
+    } catch (_) { return ''; }
+  }
+
+  function formatRelative(ms) {
+    const n = typeof ms === 'string' ? parseInt(ms, 10) : ms;
+    if (!Number.isFinite(n) || n <= 0) return '';
+    const diff = Math.max(0, Date.now() - n);
+    const m = Math.round(diff / 60000);
+    if (m < 1)        return 'moments ago';
+    if (m < 60)       return m + ' min ago';
+    const h = Math.round(m / 60);
+    if (h < 24)       return h + ' hr ago';
+    const d = Math.round(h / 24);
+    if (d < 7)        return d + ' day' + (d > 1 ? 's' : '') + ' ago';
+    try {
+      return new Date(n).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (_) { return ''; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
   }
 </script>
 
