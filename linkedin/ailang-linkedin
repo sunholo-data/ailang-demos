@@ -15,13 +15,13 @@ SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MAIN_AIL="linkedin/main.ail"
 
-# Module list for --check
+# Module list for --check. The LinkedIn API client (auth, posts, comments)
+# now lives in the sunholo/linkedin registry package — these are only the
+# demo-local modules.
 MODULES=(
   linkedin/types/linkedin_types.ail
-  linkedin/services/linkedin_auth.ail
+  linkedin/services/linkedin_state.ail
   linkedin/services/linkedin_content_loader.ail
-  linkedin/services/linkedin_posts.ail
-  linkedin/services/linkedin_comments.ail
   linkedin/main.ail
 )
 

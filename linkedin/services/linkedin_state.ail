@@ -1,0 +1,78 @@
+module linkedin/services/linkedin_state
+
+-- Demo-local persistence of "which slugs have been published to which URNs".
+-- Reads / writes linkedin/data/state.json relative to the repo root. Lives in
+-- the demo (not the sunholo/linkedin package) because the file path and the
+-- on-disk format are demo conventions, not part of the LinkedIn API.
+
+import std/fs (readFile, writeFile, fileExists)
+import std/json (encode, decode, getString, jo, kv, js, ja, asArray)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/list (length as listLength, map)
+import linkedin/types/linkedin_types (PostState)
+
+func linkedinStatePath() -> string = "linkedin/data/state.json"
+
+-- Append a new published post to the state file.
+export func linkedinSaveState(slug: string, postUrn: string, publishedAt: string) -> () ! {FS @limit=20} {
+  let existing = linkedinLoadState();
+  let entry: PostState = { slug: slug, postUrn: postUrn, publishedAt: publishedAt };
+  let updated = entry :: existing;
+  let json = linkedinEncodeStateList(updated);
+  writeFile(linkedinStatePath(), json)
+}
+
+func linkedinEncodeStateList(states: [PostState]) -> string {
+  let entries = map(\s. jo([
+    kv("slug", js(s.slug)),
+    kv("postUrn", js(s.postUrn)),
+    kv("publishedAt", js(s.publishedAt))
+  ]), states);
+  encode(ja(entries))
+}
+
+-- Load the full state list. Returns [] if the file doesn't exist or is malformed.
+export func linkedinLoadState() -> [PostState] ! {FS @limit=5} {
+  let path = linkedinStatePath();
+  let found = fileExists(path);
+  if found then linkedinParseStateFile(path) else []
+}
+
+func linkedinParseStateFile(path: string) -> [PostState] ! {FS} {
+  let content = readFile(path);
+  match decode(content) {
+    Ok(json) => linkedinExtractStates(json),
+    Err(_) => []
+  }
+}
+
+-- Walk the top-level JSON array and turn each element into a PostState.
+-- Malformed entries are dropped silently rather than failing the whole load.
+func linkedinExtractStates(json: Json) -> [PostState] {
+  match asArray(json) {
+    Some(elems) => map(\e. linkedinStateOfJson(e), elems),
+    None => []
+  }
+}
+
+func linkedinStateOfJson(j: Json) -> PostState {
+  let entry: PostState = {
+    slug: getOrElse(getString(j, "slug"), ""),
+    postUrn: getOrElse(getString(j, "postUrn"), ""),
+    publishedAt: getOrElse(getString(j, "publishedAt"), "")
+  };
+  entry
+}
+
+-- Lookup helper: has this slug already been published?
+export func linkedinIsPublished(slug: string) -> bool ! {FS @limit=5} {
+  let states = linkedinLoadState();
+  linkedinSlugInStates(slug, states)
+}
+
+func linkedinSlugInStates(slug: string, states: [PostState]) -> bool =
+  match states {
+    [] => false,
+    s :: rest => if s.slug == slug then true else linkedinSlugInStates(slug, rest)
+  }

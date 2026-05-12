@@ -11,8 +11,8 @@ module linkedin/tests/test_pure
 
 import std/io (println)
 import std/string (length)
-import linkedin/services/linkedin_posts (linkedinEscapeLittleText)
-import linkedin/services/linkedin_comments (linkedinDerivePersona)
+import pkg/sunholo/linkedin/posts (linkedinEscapeLittleText)
+import pkg/sunholo/linkedin/comments (linkedinDerivePersona)
 
 -- A single assertion. Prints "PASS: …" or "FAIL: …".
 func assertEq(name: string, got: string, want: string) -> () ! {IO} {

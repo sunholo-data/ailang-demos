@@ -10,6 +10,7 @@ description = "AILANG demos and integration tests"
 "sunholo/gcp_auth" = "0.8.1"
 "sunholo/logging" = "0.4.0"
 "sunholo/ailang_parse" = "0.12.1"
+"sunholo/linkedin" = "0.1.0"
 
 [effects]
 max = ["IO", "FS", "Stream", "Net", "Env", "Process", "AI"]

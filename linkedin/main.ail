@@ -33,18 +33,26 @@ import std/result (Ok, Err)
 import std/string (length, substring, find, split, join, trim, contains, startsWith)
 import std/list (length as listLength, map, filter, foldl, nth)
 
-import linkedin/types/linkedin_types (
-  LinkedInCreds, MarketingPost, PostResult, LinkedInComment, PostState
+-- LinkedIn API client comes from the sunholo/linkedin registry package.
+-- See ailang.toml dependencies.
+import pkg/sunholo/linkedin/auth (
+  linkedinGetToken, linkedinGetOrgUrn, linkedinReadCreds, LinkedInCreds
 )
-import linkedin/services/linkedin_auth (
-  linkedinGetToken, linkedinGetOrgUrn, linkedinReadCreds
+import pkg/sunholo/linkedin/posts (
+  linkedinCreatePost, PostResult
 )
-import linkedin/services/linkedin_posts (
-  linkedinCreatePost, linkedinSaveState, linkedinLoadState, linkedinIsPublished
-)
-import linkedin/services/linkedin_comments (
+import pkg/sunholo/linkedin/comments (
   linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson,
-  linkedinDerivePersona
+  linkedinDerivePersona, LinkedInComment
+)
+
+-- State management + content loading stay in the demo: they're demo-specific
+-- concerns (state.json on disk, marketing/<slug>/post.md files).
+import linkedin/types/linkedin_types (
+  MarketingPost, PostState
+)
+import linkedin/services/linkedin_state (
+  linkedinSaveState, linkedinLoadState, linkedinIsPublished
 )
 import linkedin/services/linkedin_content_loader (
   linkedinLoadPost, linkedinLoadAllPosts
@@ -223,7 +231,10 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
   else {
     match linkedinGetToken() {
       Ok(token) => {
-        let comments = linkedinGetAllComments(token, states);
+        -- The package's linkedinGetAllComments takes a flat [string] of URNs,
+        -- so we project our PostState list down before calling.
+        let urns = map(\s. s.postUrn, states);
+        let comments = linkedinGetAllComments(token, urns);
         if jsonMode then {
           -- The website consumes the richer "feed" shape: an array of posts,
           -- each with its own metadata (slug, title, body, linkedinUrl, ...)
