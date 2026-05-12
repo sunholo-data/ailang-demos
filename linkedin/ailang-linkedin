@@ -45,6 +45,8 @@ Commands:
   auth [client_id] [secret]       Run the full OAuth2 dance (server + browser + token exchange)
   secret-set [--repo OWNER/REPO]  Upload local credentials.json to GitHub as LINKEDIN_CREDENTIALS_JSON
                                   so the hourly comments cron can authenticate.
+  refresh [--repo OWNER/REPO]     Trigger the comments cron now and wait for it to finish.
+                                  Useful when you don't want to wait for the next hourly tick.
 
 Options:
   --check           Type-check all modules (no API calls)
@@ -65,6 +67,9 @@ OAuth (one-time):
 GitHub Actions setup:
   ailang-linkedin secret-set                    # auto-detect repo from git remote
   ailang-linkedin secret-set --repo owner/repo  # explicit
+
+Pull the latest comments into the website:
+  ailang-linkedin refresh                       # trigger cron + watch it run
 EOF
 }
 
@@ -295,6 +300,82 @@ do_secret_set() {
   fi
 }
 
+do_refresh() {
+  local repo=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo="$2"; shift 2 ;;
+      --repo=*) repo="${1#--repo=}"; shift ;;
+      *) echo "Unknown arg: $1" >&2; return 1 ;;
+    esac
+  done
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "Error: GitHub CLI ('gh') not installed." >&2
+    echo "Install with: brew install gh    (then: gh auth login)" >&2
+    return 1
+  fi
+
+  if [ -z "$repo" ]; then
+    repo="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+    if [ -z "$repo" ]; then
+      echo "Error: could not detect GitHub repo. Pass --repo owner/repo." >&2
+      return 1
+    fi
+  fi
+
+  local WF="LinkedIn Comments — Hourly Refresh"
+  echo "→ Triggering '$WF' on $repo …"
+  gh workflow run "$WF" --repo "$repo" --ref main >/dev/null
+
+  # gh doesn't return the new run's ID directly. Poll the list until we
+  # see a queued/in_progress run with createdAt > now, then watch it.
+  local since
+  since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local run_id=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 1
+    run_id="$(gh run list --workflow "$WF" --repo "$repo" --limit 5 \
+      --json databaseId,status,createdAt -q \
+      ".[] | select(.createdAt >= \"$since\") | .databaseId" 2>/dev/null \
+      | head -1)"
+    [ -n "$run_id" ] && break
+  done
+
+  if [ -z "$run_id" ]; then
+    echo "Could not find the new run via the API. Check the Actions tab:"
+    echo "  https://github.com/$repo/actions/workflows/linkedin-comments.yml"
+    return 1
+  fi
+
+  echo "→ Watching run $run_id"
+  gh run watch "$run_id" --repo "$repo" --exit-status 2>&1 | tail -20
+  local rc=${PIPESTATUS[0]}
+
+  echo ""
+  if [ "$rc" -eq 0 ]; then
+    # Show what happened
+    local count
+    count="$(gh run view "$run_id" --repo "$repo" --log 2>/dev/null \
+      | grep -oE 'Fetched [0-9]+ comment' | head -1 || true)"
+    [ -n "$count" ] && echo "✓ $count(s)" || echo "✓ Refresh complete."
+
+    local pushed
+    pushed="$(gh run view "$run_id" --repo "$repo" --log 2>/dev/null \
+      | grep -E 'refresh comments \([0-9]+ total\)' | head -1 || true)"
+    if [ -n "$pushed" ]; then
+      echo "✓ Committed and pushed; deploy will run automatically."
+      echo "  Live in ~3 minutes at: https://www.sunholo.com/ailang-demos/linkedin/"
+    else
+      echo "  No change since last refresh — comments.json was already up to date."
+    fi
+  else
+    echo "✗ Refresh failed. Inspect:" >&2
+    echo "  gh run view $run_id --repo $repo --log-failed" >&2
+    return 1
+  fi
+}
+
 # Parse arguments
 case "${1:-}" in
   -h|--help)
@@ -316,6 +397,12 @@ case "${1:-}" in
     cd "$PROJECT_DIR"
     shift
     do_secret_set "$@"
+    exit $?
+    ;;
+  refresh)
+    cd "$PROJECT_DIR"
+    shift
+    do_refresh "$@"
     exit $?
     ;;
   "")
