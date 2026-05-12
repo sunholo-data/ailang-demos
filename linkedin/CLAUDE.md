@@ -38,3 +38,24 @@ Env override: `LINKEDIN_ACCESS_TOKEN=xxx`
 ## Content Format
 
 Posts in `marketing/*/post.md` use YAML frontmatter (`title`, `day`, `demo`, `link`, `assets`) with body text after the closing `---`.
+
+## House style for post bodies
+
+Learned the hard way while shipping 00-meta and 01-vision — LinkedIn's "Little Text Format" only accepts a narrow subset of inline syntax. Stick to these:
+
+- **No backticks.** They render as literal `` ` `` characters. Quote technical terms instead: `"AI @limit=10"`, `"Net @limit=1"`.
+- **No `**bold**`.** No emphasis syntax of any kind survives. Carry emphasis through line breaks and word choice.
+- **No markdown bullets (`-`).** Use em-dashes at the start of a line: `— like this`. Consistent with the AILANG voice.
+- **Parens / brackets / `@` / `|` get auto-escaped** by `linkedinEscapeLittleText` — safe to use freely in prose.
+- **Hashtags pass through** — `#AILANG` at the end of the body becomes a real hashtag.
+- **Numbers stay open.** Avoid hardcoding the size of the campaign ("the next 20 posts") or the demo count ("these 10 demos") unless the number is permanent.
+
+### Standard CTA — include in every post
+
+Closer paragraph that drives readers to the LinkedIn page on the demos site, where their reply will surface:
+
+```
+Reply below; your comment surfaces, anonymously, at https://www.sunholo.com/ailang-demos/linkedin within the hour. Your sceptical eyebrow steers the next post.
+```
+
+Tweak the second sentence per post (the "what your reply steers" framing), but keep the URL + "within the hour" + "anonymously". This is what makes engaging worthwhile for the reader.
