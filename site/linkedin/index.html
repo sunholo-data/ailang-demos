@@ -345,16 +345,16 @@
         if (!Array.isArray(data) || data.length === 0) return;
         const list = document.getElementById('comments-list');
         if (!list) return;
+        // GDPR: comments are rendered anonymously. The JSON deliberately
+        // omits actor URN / authorName; we show only the text, a relative
+        // timestamp, and a faint marker that it came from "a reader".
         list.innerHTML = data.map(c => `
-          <div style="padding: 12px 0; border-bottom: 1px solid var(--border);">
-            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-              ${escapeHtml(c.authorName || 'unknown')}
-            </div>
-            <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
+          <div style="padding: 14px 0; border-bottom: 1px solid var(--border);">
+            <div style="color: var(--text-primary); font-size: 15px; line-height: 1.55;">
               ${escapeHtml(c.text || '')}
             </div>
-            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px; font-family: var(--font-mono);">
-              ${escapeHtml(c.createdAt || '')} · post ${escapeHtml((c.parentPostUrn || '').split(':').pop())}
+            <div style="color: var(--text-muted); font-size: 11px; margin-top: 8px; font-family: var(--font-mono);">
+              — a reader · ${formatTime(c.createdAt)}
             </div>
           </div>
         `).join('');
@@ -366,6 +366,21 @@
     return String(s).replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[c]);
+  }
+
+  // createdAt arrives as a stringified epoch-ms. Render as a date so
+  // visitors don't see raw timestamps.
+  function formatTime(s) {
+    const n = parseInt(s, 10);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    try {
+      return new Date(n).toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch (_) {
+      return '';
+    }
   }
 </script>
 

@@ -128,11 +128,21 @@ func linkedinConcatComments(a: [LinkedInComment], b: [LinkedInComment]) -> [Link
     x :: rest => x :: linkedinConcatComments(rest, b)
   }
 
--- Format comments as JSON for AILANG Cloud ingestion
+-- Format comments as JSON for public ingestion.
+--
+-- GDPR: the published JSON is served at a public URL (the demos site),
+-- so we deliberately strip everything that identifies the commenter:
+--   - actor URN (was leaked as `authorName`)
+--   - commentUrn (composite URN includes activity URN; could be resolved)
+--
+-- We keep:
+--   - text       — the comment content; the user wrote this publicly on
+--                  LinkedIn, but we still surface it without their name
+--   - createdAt  — timestamp (epoch ms as string)
+--   - parentPostUrn — our own post's URN, useful for grouping; this is
+--                     the org's content, not the commenter's
 export func linkedinCommentsToJson(comments: [LinkedInComment]) -> string {
   let entries = map(\c. jo([
-    kv("commentUrn", js(c.commentUrn)),
-    kv("authorName", js(c.authorName)),
     kv("text", js(c.text)),
     kv("createdAt", js(c.createdAt)),
     kv("parentPostUrn", js(c.parentPostUrn))
