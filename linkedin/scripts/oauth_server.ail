@@ -20,7 +20,7 @@ import std/net (httpRequest)
 import std/json (decode, getString, encode, jo, kv, js)
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
-import std/string (length, substring)
+import std/string (length, substring, replace, intToStr)
 
 -- Called by the callback HTML page with the authorization code
 export func exchangeCode(code: string) -> string ! {IO, FS, Net, Env} {
@@ -33,14 +33,31 @@ export func exchangeCode(code: string) -> string ! {IO, FS, Net, Env} {
   else oauthDoExchange(code, clientId, clientSecret, orgUrn)
 }
 
+-- URL-encode form values. LinkedIn's token endpoint requires client_secret in the
+-- body (not Basic auth), so values like `=`, `+`, `/`, `&`, space, and `%` must be
+-- percent-encoded. `%` must be replaced FIRST so we don't double-encode.
+func formUrlEncode(s: string) -> string {
+  let s1 = replace(s, "%", "%25");
+  let s2 = replace(s1, "+", "%2B");
+  let s3 = replace(s2, "/", "%2F");
+  let s4 = replace(s3, "=", "%3D");
+  let s5 = replace(s4, "&", "%26");
+  let s6 = replace(s5, " ", "%20");
+  s6
+}
+
 func oauthDoExchange(code: string, clientId: string, clientSecret: string, orgUrn: string) -> string ! {IO, FS, Net} {
   let url = "https://www.linkedin.com/oauth/v2/accessToken";
-  let body = "grant_type=authorization_code&code=${code}&client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=http://localhost:8080/callback";
+  let encCode = formUrlEncode(code);
+  let encId = formUrlEncode(clientId);
+  let encSecret = formUrlEncode(clientSecret);
+  let encRedirect = formUrlEncode("http://localhost:8080/callback");
+  let body = "grant_type=authorization_code&code=${encCode}&client_id=${encId}&client_secret=${encSecret}&redirect_uri=${encRedirect}";
   let headers = [
     { name: "Content-Type", value: "application/x-www-form-urlencoded" }
   ];
 
-  println("Exchanging OAuth code for tokens...");
+  println("Exchanging OAuth code for tokens (client_id=${clientId}, secret_len=${intToStr(length(clientSecret))})...");
 
   match httpRequest("POST", url, headers, body) {
     Ok(response) => {
@@ -72,7 +89,7 @@ func oauthSaveTokens(responseBody: string, clientId: string, clientSecret: strin
         writeFile(credsPath, creds);
 
         println("Credentials saved to ${credsPath}");
-        "Credentials saved! Access token: ${oauthTruncate(accessToken)} — test with: linkedin status"
+        "Credentials saved! Access token: ${oauthTruncate(accessToken)} — test with: ailang-linkedin status"
       }
     },
     Err(e) => "Error parsing response: ${e} — ${responseBody}"

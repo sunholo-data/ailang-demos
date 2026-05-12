@@ -4,14 +4,14 @@
 -- Comments are read-only — forwarded to AILANG Cloud for website content.
 --
 -- Usage:
---   linkedin list                     List all posts with status
---   linkedin post 01-vision           Publish a post
---   linkedin post --dry-run 01-vision Preview without posting
---   linkedin comments                 Fetch comments from all published posts
---   linkedin comments --json          JSON output for AILANG Cloud
---   linkedin comments 01-vision       Comments on specific post
---   linkedin status                   Auth status + summary
---   linkedin setup                    Show setup instructions
+--   ailang-linkedin list                     List all posts with status
+--   ailang-linkedin post 01-vision           Publish a post
+--   ailang-linkedin post --dry-run 01-vision Preview without posting
+--   ailang-linkedin comments                 Fetch comments from all published posts
+--   ailang-linkedin comments --json          JSON output for AILANG Cloud
+--   ailang-linkedin comments 01-vision       Comments on specific post
+--   ailang-linkedin status                   Auth status + summary
+--   ailang-linkedin setup                    Show setup instructions
 --
 -- CAPABILITY BUDGETS:
 --   IO @limit=200  - Console output
@@ -61,20 +61,20 @@ func linkedinShowUsage() -> () ! {IO} {
   println("LinkedIn Marketing CLI — AILANG Demo");
   println("");
   println("Usage:");
-  println("  linkedin list                     List all posts with status");
-  println("  linkedin post <slug>              Publish a post");
-  println("  linkedin post --dry-run <slug>    Preview without posting");
-  println("  linkedin comments                 Fetch all comments");
-  println("  linkedin comments --json          JSON output for AILANG Cloud");
-  println("  linkedin comments <slug>          Comments on specific post");
-  println("  linkedin status                   Auth status + summary");
-  println("  linkedin setup                    Show setup instructions");
+  println("  ailang-linkedin list                     List all posts with status");
+  println("  ailang-linkedin post <slug>              Publish a post");
+  println("  ailang-linkedin post --dry-run <slug>    Preview without posting");
+  println("  ailang-linkedin comments                 Fetch all comments");
+  println("  ailang-linkedin comments --json          JSON output for AILANG Cloud");
+  println("  ailang-linkedin comments <slug>          Comments on specific post");
+  println("  ailang-linkedin status                   Auth status + summary");
+  println("  ailang-linkedin setup                    Show setup instructions");
   println("");
   println("Examples:");
-  println("  linkedin list");
-  println("  linkedin post --dry-run 01-vision");
-  println("  linkedin post 01-vision");
-  println("  linkedin comments --json | ailang messages send")
+  println("  ailang-linkedin list");
+  println("  ailang-linkedin post --dry-run 01-vision");
+  println("  ailang-linkedin post 01-vision");
+  println("  ailang-linkedin comments --json | ailang messages send")
 }
 
 func linkedinDispatch(cmd: string, rest: [string]) -> () ! {IO, FS, Net, Env} {
@@ -105,7 +105,7 @@ func linkedinPrintPostList(posts: [MarketingPost]) -> () ! {IO, FS} =
   match posts {
     [] => {
       println("");
-      println("Run: linkedin post --dry-run <slug>  to preview")
+      println("Run: ailang-linkedin post --dry-run <slug>  to preview")
     },
     post :: rest => {
       let published = linkedinIsPublished(post.slug);
@@ -119,7 +119,7 @@ func linkedinPrintPostList(posts: [MarketingPost]) -> () ! {IO, FS} =
 
 func linkedinCmdPost(args: [string]) -> () ! {IO, FS, Net, Env} {
   match args {
-    [] => println("Usage: linkedin post [--dry-run] <slug>"),
+    [] => println("Usage: ailang-linkedin post [--dry-run] <slug>"),
     flag :: rest => {
       if flag == "--dry-run" then linkedinDryRun(rest)
       else linkedinPublishPost(flag)
@@ -129,7 +129,7 @@ func linkedinCmdPost(args: [string]) -> () ! {IO, FS, Net, Env} {
 
 func linkedinDryRun(args: [string]) -> () ! {IO, FS} {
   match args {
-    [] => println("Usage: linkedin post --dry-run <slug>"),
+    [] => println("Usage: ailang-linkedin post --dry-run <slug>"),
     slug :: _ => {
       match linkedinLoadPost(slug) {
         Ok(post) => {
@@ -209,7 +209,7 @@ func linkedinHasFlag(flag: string, args: [string]) -> bool =
 func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
   let states = linkedinLoadState();
   if listLength(states) == 0 then {
-    println("No published posts found. Publish posts first with: linkedin post <slug>")
+    println("No published posts found. Publish posts first with: ailang-linkedin post <slug>")
   }
   else {
     match linkedinGetToken() {
@@ -336,7 +336,7 @@ func linkedinCmdSetup() -> () ! {IO} {
   println("     \"org_urn\": \"urn:li:organization:YOUR_ORG_ID\"");
   println("   }");
   println("");
-  println("8. Test: linkedin status");
+  println("8. Test: ailang-linkedin status");
   println("");
   println("Token lifetime: ~60 days. The CLI auto-refreshes using refresh_token.")
 }

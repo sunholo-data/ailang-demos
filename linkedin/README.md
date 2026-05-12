@@ -5,19 +5,20 @@ Publish marketing content to a LinkedIn company page and read comments for AILAN
 ## Install
 
 ```bash
-ln -s $(pwd)/linkedin/linkedin ~/.local/bin/linkedin
+ln -s $(pwd)/linkedin/ailang-linkedin ~/.local/bin/ailang-linkedin
 ```
 
 ## Usage
 
 ```bash
-linkedin list                        # List all 20 posts with status
-linkedin post --dry-run 01-vision    # Preview without posting
-linkedin post 01-vision              # Publish to LinkedIn
-linkedin comments                    # Fetch comments (human-readable)
-linkedin comments --json             # JSON output for AILANG Cloud
-linkedin status                      # Auth status + summary
-linkedin setup                       # Show setup instructions
+ailang-linkedin list                        # List all 20 posts with status
+ailang-linkedin post --dry-run 01-vision    # Preview without posting
+ailang-linkedin post 01-vision              # Publish to LinkedIn
+ailang-linkedin comments                    # Fetch comments (human-readable)
+ailang-linkedin comments --json             # JSON output for AILANG Cloud
+ailang-linkedin status                      # Auth status + summary
+ailang-linkedin setup                       # Show setup instructions
+ailang-linkedin auth                        # Run the OAuth2 dance (one-time)
 ```
 
 ## Comment Flow

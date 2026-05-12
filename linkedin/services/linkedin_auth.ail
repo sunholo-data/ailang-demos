@@ -33,7 +33,7 @@ export func linkedinReadCreds() -> Result[LinkedInCreds, string] ! {Env, FS @lim
   let path = linkedinCredsPath();
   let found = fileExists(path);
   if found then linkedinParseCredsFile(path)
-  else Err("Credentials not found at: ${path}\nRun: linkedin setup")
+  else Err("Credentials not found at: ${path}\nRun: ailang-linkedin auth")
 }
 
 func linkedinParseCredsFile(path: string) -> Result[LinkedInCreds, string] ! {FS} {

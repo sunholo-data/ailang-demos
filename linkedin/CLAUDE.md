@@ -7,12 +7,13 @@ AILANG demo that publishes marketing content to a LinkedIn company page and read
 ## Quick Commands
 
 ```bash
-linkedin --check                     # Type-check all modules
-linkedin list                        # List posts with status
-linkedin post --dry-run 01-vision    # Preview
-linkedin post 01-vision              # Publish
-linkedin comments --json             # JSON for AILANG Cloud
-linkedin status                      # Auth check
+ailang-linkedin --check                     # Type-check all modules
+ailang-linkedin list                        # List posts with status
+ailang-linkedin post --dry-run 01-vision    # Preview
+ailang-linkedin post 01-vision              # Publish
+ailang-linkedin comments --json             # JSON for AILANG Cloud
+ailang-linkedin status                      # Auth check
+ailang-linkedin auth                        # OAuth2 dance (one-time)
 ```
 
 ## Setup
