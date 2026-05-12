@@ -1,6 +1,6 @@
 {
   "ailang_version": "v0.18.11-5-gba6d0732-dirty",
-  "generated_at": "2026-05-12T12:57:09.434448Z",
+  "generated_at": "2026-05-12T13:06:45.635047Z",
   "generator": "ailang lock v0.18.11-5-gba6d0732-dirty",
   "packages": [
     {
@@ -140,7 +140,7 @@
     },
     {
       "ailang": ">=0.18.0",
-      "content_hash": "sha256:46395b77a79351a07e9b37e7cd73de1046be958f7595b2a05a399bca93062600",
+      "content_hash": "sha256:2d2838f4ddb3e492d9fd76d610e6531eb8b4d931fbda7c58778fe1d35ca0d828",
       "effects": [
         "Env",
         "FS",
@@ -154,7 +154,7 @@
       "interface_hash": "sha256:6570100bffadc654f3cd403663d02730ee5bc93efba3b0484a2f9b78aef4cd1b",
       "name": "sunholo/linkedin",
       "source": "registry",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "ailang": ">=0.9.2",
