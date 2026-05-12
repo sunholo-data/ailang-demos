@@ -75,6 +75,12 @@ jobs:
             || { echo "::error::Credentials JSON is malformed or missing access_token"; exit 1; }
           echo "Credentials restored."
 
+      - name: Resolve AILANG package dependencies
+        # Demos depend on sunholo/linkedin (and others) via ailang.toml — the
+        # runner needs to fetch the package tarballs into ~/.ailang/cache/
+        # before `ailang run` can resolve `pkg/sunholo/linkedin/*` imports.
+        run: ailang lock
+
       - name: Fetch comments
         id: fetch
         run: |
