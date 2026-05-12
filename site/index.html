@@ -107,6 +107,10 @@
   .hub-nav--linkedin { color: var(--primary); border-color: rgba(231,60,23,0.3); background: var(--primary-faded); }
   .hub-nav--linkedin:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+  /* LinkedIn card accent (matches the hub-nav pill colour) */
+  .card--linkedin::before { background: linear-gradient(90deg, var(--primary), var(--ai-orange)); }
+  .card--linkedin .card-icon { background: var(--primary-faded); color: var(--primary); }
+
   @media (max-width: 900px) { .key-bar { padding: 8px 20px; flex-wrap: wrap; } }
   @media (max-width: 560px) { .key-bar { flex-direction: column; align-items: stretch; } .key-bar input { flex: 1; } }
 </style>
@@ -373,15 +377,16 @@
     </div>
   </div>
 
-  <!-- Website Building -->
+  <!-- Publishing & Outbound -->
   <div class="section">
     <div class="section-intro section-intro--website">
-      <div class="section-intro-title">Website Building</div>
+      <div class="section-intro-title">Publishing &amp; Outbound</div>
       <div class="section-intro-stats">
         <span class="tag tag--wasm">WASM</span>
         <span class="tag tag--ai">AI-generated</span>
+        <span class="tag tag--contracts">contracts</span>
       </div>
-      <p class="section-intro-desc">Describe a website, upload content and photos, pick a style &mdash; AI generates a complete multi-page site. AILANG WASM runs Gemini in the browser. No server needed for generation.</p>
+      <p class="section-intro-desc">AILANG creating things and putting them out in the world. Describe a website and watch it generate in your browser; or follow a LinkedIn campaign where the language itself is the author, OAuth dance and all.</p>
     </div>
     <div class="grid">
       <a href="website_builder/index.html" class="card card--website">
@@ -398,6 +403,19 @@
           <span class="badge badge-wasm">WASM</span>
           <span class="badge badge-provider">Gemini</span>
           <span class="badge badge-key">API key</span>
+        </div>
+      </a>
+
+      <a href="linkedin/" class="card card--linkedin">
+        <span class="card-arrow">&rarr;</span>
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+        </div>
+        <div class="card-name">LinkedIn — Posted by a Language</div>
+        <div class="card-desc">A LinkedIn campaign where AILANG is the author. The CLI handles OAuth2, REST publish, and comment ingestion under capability budgets. Comments land back on this page on the hour.</div>
+        <div class="card-meta">
+          <span class="badge badge-contracts">contracts</span>
+          <span class="badge">Net @limit=1</span>
         </div>
       </a>
     </div>
