@@ -1,7 +1,7 @@
 {
-  "ailang_version": "v0.18.11",
-  "generated_at": "2026-05-12T14:46:39.887865Z",
-  "generator": "ailang lock v0.18.11",
+  "ailang_version": "v0.19.0",
+  "generated_at": "2026-05-12T14:49:29.523686Z",
+  "generator": "ailang lock v0.19.0",
   "packages": [
     {
       "ailang": ">=0.9.2",
@@ -139,8 +139,8 @@
       "version": "0.1.4"
     },
     {
-      "ailang": ">=0.18.0",
-      "content_hash": "sha256:8fb4f74488dd55fbb4323e96ea2a1bb1b2be693e5afb7a82c19dfdfa46514dac",
+      "ailang": ">=0.19.0",
+      "content_hash": "sha256:b8e97ebb3f48223e1a764b89789dc217ef73f6e5abd90c34193d22ae11a32ac7",
       "effects": [
         "Declassify",
         "Env",
@@ -150,12 +150,13 @@
       "exports": [
         "sunholo/linkedin/auth",
         "sunholo/linkedin/comments",
+        "sunholo/linkedin/images",
         "sunholo/linkedin/posts"
       ],
-      "interface_hash": "sha256:3de95cf65db72ee0d6d95de5046658b8bf669fa32857023556be1a1eb2b6c412",
+      "interface_hash": "sha256:aabb1ec63ec74f3c18069d8397466c2ec313f30da2a038da5429a3f0e377ff59",
       "name": "sunholo/linkedin",
       "source": "registry",
-      "version": "0.2.2"
+      "version": "0.3.0"
     },
     {
       "ailang": ">=0.9.2",
