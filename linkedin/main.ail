@@ -214,7 +214,10 @@ func linkedinHasFlag(flag: string, args: [string]) -> bool =
 func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
   let states = linkedinLoadState();
   if listLength(states) == 0 then {
-    println("No published posts found. Publish posts first with: ailang-linkedin post <slug>")
+    -- --json must always emit valid JSON, even when there are no posts.
+    -- Human mode keeps the helpful hint.
+    if jsonMode then println("[]")
+    else println("No published posts found. Publish posts first with: ailang-linkedin post <slug>")
   }
   else {
     match linkedinGetToken() {
@@ -222,7 +225,10 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
         let comments = linkedinGetAllComments(token, states);
         linkedinOutputComments(comments, jsonMode)
       },
-      Err(e) => println("Auth error: ${e}")
+      Err(e) => {
+        if jsonMode then println("[]")
+        else println("Auth error: ${e}")
+      }
     }
   }
 }
@@ -231,17 +237,24 @@ func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Ne
   let states = linkedinLoadState();
   let postUrn = linkedinFindUrnForSlug(slug, states);
   if length(postUrn) == 0 then {
-    println("Post ${slug} is not published yet.")
+    if jsonMode then println("[]")
+    else println("Post ${slug} is not published yet.")
   }
   else {
     match linkedinGetToken() {
       Ok(token) => {
         match linkedinGetComments(token, postUrn) {
           Ok(comments) => linkedinOutputComments(comments, jsonMode),
-          Err(e) => println("Error: ${e}")
+          Err(e) => {
+            if jsonMode then println("[]")
+            else println("Error: ${e}")
+          }
         }
       },
-      Err(e) => println("Auth error: ${e}")
+      Err(e) => {
+        if jsonMode then println("[]")
+        else println("Auth error: ${e}")
+      }
     }
   }
 }
