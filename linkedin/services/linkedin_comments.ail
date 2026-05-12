@@ -1,10 +1,10 @@
 module linkedin/services/linkedin_comments
 
 import std/net (httpRequest)
-import std/json (encode, decode, getString, getArray, getObject, jo, kv, js, ja)
+import std/json (encode, decode, getString, getArray, getObject, getInt, jo, kv, js, ja)
+import std/string (length, trim, split, join, intToStr)
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
-import std/string (length, trim, split, join)
 import std/list (length as listLength, map, foldl)
 import linkedin/types/linkedin_types (LinkedInComment, PostState)
 
@@ -19,7 +19,7 @@ import linkedin/types/linkedin_types (LinkedInComment, PostState)
 func linkedinCommentHeaders(token: string) -> [{name: string, value: string}] = [
   { name: "Authorization", value: "Bearer ${token}" },
   { name: "X-Restli-Protocol-Version", value: "2.0.0" },
-  { name: "LinkedIn-Version", value: "202403" }
+  { name: "LinkedIn-Version", value: "202604" }
 ]
 
 -- URL-encode the post URN for the API path
@@ -71,10 +71,29 @@ func linkedinParseCommentList(elements: [Json], postUrn: string) -> [LinkedInCom
   }
 
 func linkedinParseOneComment(elem: Json, postUrn: string) -> LinkedInComment {
-  let urn = getOrElse(getString(elem, "$URN"), "");
-  let text = getOrElse(getString(elem, "message"), "");
-  let created = getOrElse(getString(elem, "created"), "");
-  let authorName = linkedinExtractCommentAuthor(elem);
+  -- LinkedIn comments come back with this shape:
+  --   { commentUrn: "urn:li:comment:(urn:li:share:...,...)",
+  --     actor:      "urn:li:person:xxx",
+  --     message:    { text: "the comment text", attributes: [...] },
+  --     created:    { actor: "...", time: 1746000000000 },
+  --     id:         "12345",
+  --     ... }
+  let urn = getOrElse(getString(elem, "commentUrn"), "");
+  let text = match getObject(elem, "message") {
+    Some(msg) => getOrElse(getString(msg, "text"), ""),
+    None => ""
+  };
+  let created = match getObject(elem, "created") {
+    Some(c) => match getInt(c, "time") {
+      Some(t) => intToStr(t),
+      None => ""
+    },
+    None => ""
+  };
+  -- Without r_member_profile we can't expand the actor URN to a name, so
+  -- we just keep the URN. The website can present it as "Member X" or
+  -- link to the LinkedIn profile.
+  let authorName = getOrElse(getString(elem, "actor"), "unknown");
   let comment: LinkedInComment = {
     commentUrn: urn,
     authorName: authorName,
@@ -83,18 +102,6 @@ func linkedinParseOneComment(elem: Json, postUrn: string) -> LinkedInComment {
     parentPostUrn: postUrn
   };
   comment
-}
-
-func linkedinExtractCommentAuthor(elem: Json) -> string {
-  match getObject(elem, "actor~") {
-    Some(actor) => {
-      let first = getOrElse(getString(actor, "firstName"), "");
-      let last = getOrElse(getString(actor, "lastName"), "");
-      if length(first) > 0 then "${first} ${last}"
-      else getOrElse(getString(elem, "actor"), "unknown")
-    },
-    None => getOrElse(getString(elem, "actor"), "unknown")
-  }
 }
 
 -- Fetch comments for all published posts

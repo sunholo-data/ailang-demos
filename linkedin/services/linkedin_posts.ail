@@ -2,7 +2,7 @@ module linkedin/services/linkedin_posts
 
 import std/net (httpRequest)
 import std/fs (readFile, writeFile, fileExists)
-import std/json (encode, decode, getString, getArray, jo, kv, js, ja)
+import std/json (encode, decode, getString, getArray, jo, kv, js, ja, asArray)
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
 import std/string (length, trim, replace, charCode, charAt)
@@ -163,29 +163,27 @@ export func linkedinLoadState() -> [PostState] ! {FS @limit=5} {
 func linkedinParseStateFile(path: string) -> [PostState] ! {FS} {
   let content = readFile(path);
   match decode(content) {
-    Ok(json) => {
-      match getArray(json, "") {
-        Some(_) => linkedinDecodeStateArray(content),
-        None => []
-      }
-    },
-    Err(_) => []
-  }
-}
-
-func linkedinDecodeStateArray(content: string) -> [PostState] {
-  -- Parse as JSON array and extract state entries
-  match decode(content) {
     Ok(json) => linkedinExtractStates(json),
     Err(_) => []
   }
 }
 
+-- Convert a top-level JSON array of {slug, postUrn, publishedAt} objects
+-- into a list of PostState records. Drops malformed entries silently.
 func linkedinExtractStates(json: Json) -> [PostState] {
-  -- The top-level value is a JSON array
-  -- We use getArray with a known wrapper approach
-  -- For now, return empty and rely on content parsing
-  []
+  match asArray(json) {
+    Some(elems) => map(\e. linkedinStateOfJson(e), elems),
+    None => []
+  }
+}
+
+func linkedinStateOfJson(j: Json) -> PostState {
+  let entry: PostState = {
+    slug: getOrElse(getString(j, "slug"), ""),
+    postUrn: getOrElse(getString(j, "postUrn"), ""),
+    publishedAt: getOrElse(getString(j, "publishedAt"), "")
+  };
+  entry
 }
 
 -- Check if a slug has been published
