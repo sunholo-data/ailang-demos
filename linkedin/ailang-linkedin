@@ -118,7 +118,11 @@ do_auth() {
     exit 1
   fi
 
-  local scope="${LINKEDIN_SCOPE:-w_organization_social r_organization_social}"
+  # Community Management API splits read/write across two scope families:
+  #   _social      — posts (publish, fetch metadata)
+  #   _social_feed — comments and reactions
+  # Both are needed for the full publish + listen loop.
+  local scope="${LINKEDIN_SCOPE:-w_organization_social r_organization_social r_organization_social_feed w_organization_social_feed}"
   local scope_encoded
   scope_encoded="$(echo "$scope" | tr ' ' '+')"
   local auth_url="https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${client_id}&redirect_uri=http://localhost:8080/callback&scope=${scope_encoded}&state=ailang"
@@ -320,8 +324,20 @@ case "${1:-}" in
     ;;
 esac
 
-# Run the AILANG CLI
-cd "$PROJECT_DIR"
-exec ailang run --entry main \
-  --caps IO,FS,Net,Env \
-  "$MAIN_AIL" "$@"
+# Run the AILANG CLI.
+# In --json modes (comments --json) we filter out AILANG's runtime
+# diagnostics ("→ Type checking…", "✓ Running…", trace headers, etc.)
+# so downstream `jq` / pipelines get pure JSON. The filter prints
+# every line from the first one starting with `[` or `{` onward.
+case " $* " in
+  *" --json "*)
+    set -o pipefail
+    ailang run --entry main --caps IO,FS,Net,Env "$MAIN_AIL" "$@" \
+      | awk '/^[\[\{]/{seen=1} seen { print }'
+    ;;
+  *)
+    exec ailang run --entry main \
+      --caps IO,FS,Net,Env \
+      "$MAIN_AIL" "$@"
+    ;;
+esac
