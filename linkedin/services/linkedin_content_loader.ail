@@ -52,12 +52,17 @@ func linkedinMakePost(slug: string, content: string, body: string) -> Result[Mar
   let title = linkedinGetFrontmatterValue(content, "title:");
   let link = linkedinGetFrontmatterValue(content, "link:");
   let hashtags = linkedinExtractHashtags(body);
+  -- New optional fields. Empty string when absent → text-only post.
+  let image = linkedinGetFrontmatterValue(content, "image:");
+  let imageAlt = linkedinGetFrontmatterValue(content, "imageAlt:");
   let post: MarketingPost = {
     slug: slug,
     title: title,
     body: body,
     link: link,
-    hashtags: hashtags
+    hashtags: hashtags,
+    image: image,
+    imageAlt: imageAlt
   };
   Ok(post)
 }

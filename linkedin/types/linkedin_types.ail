@@ -15,7 +15,12 @@ export type MarketingPost = {
   title: string,
   body: string,
   link: string,
-  hashtags: string
+  hashtags: string,
+  -- Optional image attachment. `image` is a repo-relative path; empty
+  -- string means "text-only post". `imageAlt` is required by LinkedIn
+  -- for accessibility when an image is attached.
+  image: string,
+  imageAlt: string
 }
 
 export type PostState = {

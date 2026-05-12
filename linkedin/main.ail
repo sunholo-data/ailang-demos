@@ -24,13 +24,14 @@ module linkedin/main
 -- Transitive imports (AILANG requirement: entry module must import all)
 import std/io (println, print)
 import std/env (getEnvOr, getArgs)
-import std/fs (readFile, writeFile, fileExists, listDir)
+import std/fs (readFile, readFileBytes, writeFile, fileExists, listDir)
+import std/bytes (fromBase64, length as bytesLength)
 import std/net (httpRequest)
 import std/json (encode, decode, getString, getArray, getObject,
                  jo, kv, js, ja)
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
-import std/string (length, substring, find, split, join, trim, contains, startsWith)
+import std/string (length, substring, find, split, join, trim, contains, startsWith, intToStr)
 import std/list (length as listLength, map, filter, foldl, nth)
 
 -- LinkedIn API client comes from the sunholo/linkedin registry package.
@@ -39,7 +40,10 @@ import pkg/sunholo/linkedin/auth (
   linkedinGetToken, linkedinGetOrgUrn, linkedinReadCreds, LinkedInCreds
 )
 import pkg/sunholo/linkedin/posts (
-  linkedinCreatePost, PostResult
+  linkedinCreatePost, linkedinCreateImagePost, PostResult
+)
+import pkg/sunholo/linkedin/images (
+  linkedinUploadImage
 )
 import pkg/sunholo/linkedin/comments (
   linkedinGetComments, linkedinGetAllComments, linkedinCommentsToJson,
@@ -184,24 +188,70 @@ func linkedinDoPublish(post: MarketingPost) -> () ! {IO, FS, Net, Env} {
       match linkedinGetOrgUrn() {
         Ok(orgUrn) => {
           println("Auth: OK | Org: ${orgUrn}");
-          match linkedinCreatePost(token, orgUrn, post.body) {
-            Ok(result) => {
-              println("Published! URN: ${result.postUrn}");
-              linkedinSaveState(post.slug, result.postUrn, "now");
-              println("");
-              println("→ Commit and push so the hourly comments cron picks it up:");
-              println("    git add linkedin/data/state.json");
-              println("    git commit -m 'linkedin: publish ${post.slug}'");
-              println("    git push")
-            },
-            Err(e) => println("Error publishing: ${e}")
-          }
+          -- Branch on whether the post has an attached image.
+          if length(post.image) == 0
+            then linkedinDoTextPublish(post, token, orgUrn)
+            else linkedinDoImagePublish(post, token, orgUrn)
         },
         Err(e) => println("Error: ${e}")
       }
     },
     Err(e) => println("Auth error: ${e}")
   }
+}
+
+-- Text-only post — the original publish path.
+func linkedinDoTextPublish(post: MarketingPost, token: string, orgUrn: string) -> () ! {IO, FS, Net} {
+  match linkedinCreatePost(token, orgUrn, post.body) {
+    Ok(result) => linkedinAfterPublish(post.slug, result),
+    Err(e) => println("Error publishing: ${e}")
+  }
+}
+
+-- Image-attached post — two-step: upload bytes → create post referencing image URN.
+func linkedinDoImagePublish(post: MarketingPost, token: string, orgUrn: string) -> () ! {IO, FS, Net} {
+  println("Image: ${post.image}");
+  if length(post.imageAlt) == 0 then
+    println("⚠ no imageAlt set — LinkedIn requires alt text for accessibility. Add `imageAlt: ...` to the post's frontmatter.")
+  else linkedinDoImagePublishWithAlt(post, token, orgUrn)
+}
+
+func linkedinDoImagePublishWithAlt(post: MarketingPost, token: string, orgUrn: string) -> () ! {IO, FS, Net} {
+  match readFileBytes(post.image) {
+    Err(e) => println("Error reading image ${post.image}: ${e}"),
+    Ok(b64) => {
+      match fromBase64(b64) {
+        None => println("Error: base64 decode of image bytes failed"),
+        Some(imgBytes) => linkedinDoImagePublishWithBytes(post, token, orgUrn, imgBytes)
+      }
+    }
+  }
+}
+
+func linkedinDoImagePublishWithBytes(post: MarketingPost, token: string, orgUrn: string, imgBytes: bytes) -> () ! {IO, Net} {
+  println("→ Uploading ${intToStr(bytesLength(imgBytes))} bytes to LinkedIn...");
+  match linkedinUploadImage(token, orgUrn, imgBytes) {
+    Err(e) => println("Image upload failed: ${e}"),
+    Ok(imageUrn) => {
+      println("✓ image URN: ${imageUrn}");
+      match linkedinCreateImagePost(token, orgUrn, post.body, imageUrn, post.imageAlt) {
+        Ok(result) => linkedinAfterPublish(post.slug, result),
+        Err(e) => println("Error publishing image post: ${e}")
+      }
+    }
+  }
+}
+
+-- Shared "what to print after a successful publish" — same regardless
+-- of text vs image variant.
+func linkedinAfterPublish(slug: string, result: PostResult) -> () ! {IO, FS} {
+  println("Published! URN: ${result.postUrn}");
+  linkedinSaveState(slug, result.postUrn, "now");
+  println("");
+  println("→ Commit and push so the hourly comments cron picks it up:");
+  println("    git add linkedin/data/state.json");
+  println("    git commit -m 'linkedin: publish ${slug}'");
+  println("    git push")
 }
 
 -- === comments command ===
