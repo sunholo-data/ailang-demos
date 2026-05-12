@@ -3,8 +3,8 @@ title: 7 GA4 Analytics Queries, Zero Python, Predictable Cost
 day: 25
 demo: "Ecommerce \u2014 BigQuery Analytics"
 link: https://www.sunholo.com/ailang-demos/
-image: ecommerce/img/ecommerce-dashboard-ui.png
-imageAlt: E-commerce analytics dashboard powered by AILANG-orchestrated BigQuery queries.
+image: marketing/_assets/ga4-snapshot.png
+imageAlt: GA4 analytics dashboard — the kind of report AILANG produces with deterministic SQL generation under a Net @limit=20 budget.
 assets:
   - "Image: `ecommerce/img/ecommerce-dashboard-ui.png`"
 ---

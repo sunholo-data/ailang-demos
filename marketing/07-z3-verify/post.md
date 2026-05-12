@@ -3,6 +3,8 @@ title: The Compiler Found 4 Bugs the AI Couldn't See
 day: 19
 demo: Z3 Static Verification
 link: https://www.sunholo.com/ailang-demos/verify.html
+image: marketing/_assets/demo-contract-verified.png
+imageAlt: AILANG contract diagram — code flowing through a Z3 verification shield with a proof tree.
 assets:
   - "Image: `demo-contract-verified.svg` (root)"
   - "Screenshot needed: Z3 verification output showing VERIFIED + VIOLATION results"

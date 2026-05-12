@@ -3,6 +3,8 @@ title: What Happens When AI Writes All the Code?
 day: 58
 demo: Vision / Wrap-up
 link: https://www.sunholo.com/ailang-demos/
+image: marketing/_assets/vision-hero.png
+imageAlt: AILANG vision: a language with type-checked effects, capability budgets, and contracts that AI can't lie its way past.
 assets:
   - "Image: `vision-stack.svg` or `vision-hero.svg` (root)"
 ---

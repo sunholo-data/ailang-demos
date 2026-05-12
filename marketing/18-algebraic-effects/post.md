@@ -3,6 +3,8 @@ title: Side Effects as Types — Why Your AI Agent Needs This
 day: 52
 demo: Algebraic Effects (Cross-demo concept)
 link: https://www.sunholo.com/ailang-demos/
+image: marketing/_assets/vision-stack.png
+imageAlt: AILANG vision stack — effects, capability budgets, contracts, and Z3 verification as first-class language features.
 assets:
   - "Image: Code block screenshot showing effect annotations"
   - "Alt image: `vision-stack.svg` (root)"

@@ -3,6 +3,8 @@ title: The Best Documentation Is Code That Won't Compile If It's Wrong
 day: 28
 demo: Cross-demo concept (Contracts as Documentation)
 link: https://www.sunholo.com/ailang-demos/
+image: marketing/_assets/demo-contract-verified.png
+imageAlt: Contract verification: requires and ensures clauses give mathematical guarantees, not advisory hints.
 assets:
   - "Image: `demo-contract-verified.svg` (root) or `ailang-speak-contract.png`"
 ---

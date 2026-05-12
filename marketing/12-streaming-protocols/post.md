@@ -3,6 +3,8 @@ title: SSE, WebSocket Bidi, Proactive Audio — One Abstraction
 day: 34
 demo: Streaming Protocols (Cross-demo)
 link: https://www.sunholo.com/ailang-demos/streaming/
+image: marketing/_assets/demo-streaming-voice.png
+imageAlt: Bidirectional streaming with provably safe AI agents — voice waveforms wired through AILANG effects.
 assets:
   - "Image: `demo-streaming-voice.svg` (root)"
 ---
