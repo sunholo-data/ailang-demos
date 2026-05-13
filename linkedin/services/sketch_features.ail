@@ -12,7 +12,7 @@ module linkedin/services/sketch_features
 -- real AILANG primitive a reader could adopt — no aspirational
 -- features, no judgement calls about things AILANG doesn't cover.
 
-import linkedin/types/sketch_types (FeatureCard, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/types/sketch_types (FeatureCard, Topic, Privacy, Portable, AgentReady)
 
 -- Card constructor helper
 func mkCard(feature: string, rationale: string, code: string) -> FeatureCard = {
@@ -20,49 +20,6 @@ func mkCard(feature: string, rationale: string, code: string) -> FeatureCard = {
   rationale: rationale,
   code: code
 }
-
--- Compliance & audit — contracts, traces, capability declarations, IFC labels.
-export func sketchComplianceCards() -> [FeatureCard] = [
-  mkCard(
-    "Contracts as documented limitations",
-    "Article 13 of the EU AI Act requires documented limitations. AILANG contracts are those limitations, enforced at compile time and verified by Z3.",
-    "func decideLoan(applicant: Applicant) -> Decision\n  requires { applicant.age >= 18, applicant.income > 0 }\n  ensures  { result.score >= 0, result.score <= 100 }"
-  ),
-  mkCard(
-    "OpenTelemetry traces as audit trail",
-    "Every effectful call emits an OTLP span. Action-layer audit replaces \"the model said it didn't do X\" with a span tree you can subpoena.",
-    "-- One env var enables traces to Cloud Trace / Honeycomb / Grafana\n--   OTEL_EXPORTER_OTLP_ENDPOINT=https://...\n-- Every Net, FS, AI call appears in the trace, automatically."
-  ),
-  mkCard(
-    "Capability declarations as scope of authority",
-    "The CLI flag --caps grants scope. The function signature declares what's allowed. Anything outside the intersection is a refusal, not a request.",
-    "ailang run --caps Net,FS --caps-budget Net=10 \\\n  decide_loan.ail \\\n  -- function with ! {Net @limit=10, FS} runs;\n  -- a function trying to also use DB is rejected."
-  ),
-  mkCard(
-    "IFC labels as data-category documentation",
-    "Mark inputs as string<pii>. The compiler tracks where labelled data flows. Crossing into a public context requires an explicit Declassify effect.",
-    "func summariseApplicant(a: Applicant) -> string\n  ! {AI, Declassify}\n  -- the Declassify effect is visible on every caller up the chain"
-  )
-]
-
--- AI spend you can predict — capability budgets, prompt caching, cheap routing, arbitrage.
-export func sketchBudgetCards() -> [FeatureCard] = [
-  mkCard(
-    "Capability budgets in the type",
-    "A budget is part of the function signature. The runtime counts. A retry storm that goes over budget is a crash, not a silent five-figure invoice.",
-    "func answerQuery(q: string) -> string\n  ! {AI @limit=3, Net @limit=2}\n  -- three AI calls, two network calls. Anything more is a runtime refusal."
-  ),
-  mkCard(
-    "Cross-provider prompt caching",
-    "One cacheHint marker maps to whichever caching primitive each provider exposes. The cost meter drops by the provider's native discount. The code doesn't change when you switch.",
-    "let system = cacheHint(longInstructions);\n-- Anthropic emits cache_control;\n-- Google promotes to CachedContent;\n-- OpenAI applies its implicit-threshold path."
-  ),
-  mkCard(
-    "Eval-driven cheap-model routing",
-    "Run your tasks against every provider; the eval harness shows which model gives you the best AILANG-correctness for the budget. Cheap models for cheap tasks, by evidence.",
-    "ailang eval --task classify-intent \\\n  --models gemini-2.5-flash,gpt-5.1-nano,claude-haiku-4-5 \\\n  --budget 0.01\n-- Picks the lowest-cost model that scored >=95%."
-  )
-]
 
 -- Privacy & data sovereignty — IFC labels, capability scoping, WASM-local, three-runtime.
 export func sketchPrivacyCards() -> [FeatureCard] = [
@@ -80,25 +37,6 @@ export func sketchPrivacyCards() -> [FeatureCard] = [
     "Three-runtime deploy",
     "The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.",
     "-- Browser: load AILANG WASM, run the module in the user's tab.\n-- Cloud Run: same .ail file packaged as a container.\n-- Native CLI: same .ail file, ailang run."
-  )
-]
-
--- Production-grade agents — capability boundaries, contracts + Z3, fewer-ways-wrong, eval.
-export func sketchReliableCards() -> [FeatureCard] = [
-  mkCard(
-    "Capability boundaries that contain the agent",
-    "An agent that can read the database cannot, with the same grant, drop it. The two operations live in different effect rows. A misbehaving agent cannot escape what its signature declared.",
-    "func searchOrders(q: string) -> [Order]\n  ! {Net @endpoint=\"db.read\"}\n  -- a DROP TABLE call has the wrong effect signature."
-  ),
-  mkCard(
-    "Contracts proven by Z3",
-    "Every requires/ensures clause is verified by Z3 at compile time. Bounds, invariants, refusal conditions — not advisory comments, mathematical proofs.",
-    "func discount(price: float, percent: float) -> float\n  requires { percent >= 0.0, percent <= 100.0 }\n  ensures  { result >= 0.0, result <= price }"
-  ),
-  mkCard(
-    "Fewer ways to go wrong",
-    "No loops, only pattern matching. No global state. One way to handle errors (Result). The probability distribution an LLM samples from is narrower because the language is narrower. Same prompt, same code.",
-    "match parseInput(s) {\n  Ok(value)  => process(value),\n  Err(reason) => logRefusal(reason)\n}\n-- there is no \"forgot to handle the error\" path."
   )
 ]
 
@@ -142,11 +80,7 @@ export func sketchAgentReadyCards() -> [FeatureCard] = [
 
 -- Top-level dispatch — used by the executor to pick cards.
 export func sketchCardsForTopic(t: Topic) -> [FeatureCard] = match t {
-  Compliance  => sketchComplianceCards(),
-  Budget      => sketchBudgetCards(),
   Privacy     => sketchPrivacyCards(),
-  Reliable    => sketchReliableCards(),
   Portable    => sketchPortableCards(),
-  AgentReady  => sketchAgentReadyCards(),
-  General     => sketchAgentReadyCards()
+  AgentReady  => sketchAgentReadyCards()
 }

@@ -11,7 +11,7 @@ import std/list (foldl, concat as listConcat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/json (asArray, asObject, getString, Json)
-import linkedin/types/sketch_types (SketchRequest, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/types/sketch_types (SketchRequest, Topic, Privacy, Portable, AgentReady)
 
 -- ─── URL extraction ──────────────────────────────────────────
 
@@ -110,14 +110,14 @@ func camelToKebabAt(s: string, pos: int) -> string =
 
 -- ─── Topic slug parsing ──────────────────────────────────────
 
+-- V1 topics: agent-ready, privacy, portable. Anything else
+-- (including legacy hashtags like #ailangCompliance from before
+-- the V1 cull, OR unspecified) routes to AgentReady — the most
+-- action-oriented sketch.
 export func parseTopicSlug(s: string) -> Topic =
-  if      s == "compliance"  then Compliance
-  else if s == "budget"      then Budget
-  else if s == "privacy"     then Privacy
-  else if s == "reliable"    then Reliable
+  if      s == "privacy"     then Privacy
   else if s == "portable"    then Portable
-  else if s == "agent-ready" then AgentReady
-  else General
+  else                            AgentReady
 
 -- ─── Comment → request ───────────────────────────────────────
 

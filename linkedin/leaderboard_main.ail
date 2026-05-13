@@ -14,7 +14,7 @@ import std/env (getArgs)
 import std/string (intToStr)
 import std/list (length as listLength, nth)
 import std/option (Some, None)
-import linkedin/types/sketch_types (AgentReady, Privacy, Portable, Compliance, Budget, Reliable)
+import linkedin/types/sketch_types (AgentReady, Privacy, Portable)
 import linkedin/services/sketch_leaderboard (sketchRebuildTopic, sketchRenderTopicsIndex)
 
 func argOr(args: [string], i: int, fallback: string) -> string =
@@ -30,15 +30,10 @@ export func main() -> () ! {IO, Env, FS} {
   println("Rebuilding leaderboards (generated ${generatedAt}) ...");
   println("");
 
-  -- Three topics carry leaderboards.
+  -- Three scored topics.
   let nAgent     = sketchRebuildTopic(AgentReady, generatedAt);
   let nPrivacy   = sketchRebuildTopic(Privacy,    generatedAt);
   let nPortable  = sketchRebuildTopic(Portable,   generatedAt);
-
-  -- Three are explicitly no-leaderboard (the call is logged for transparency).
-  let _ = sketchRebuildTopic(Compliance, generatedAt);
-  let _ = sketchRebuildTopic(Budget,     generatedAt);
-  let _ = sketchRebuildTopic(Reliable,   generatedAt);
 
   let total = nAgent + nPrivacy + nPortable;
 

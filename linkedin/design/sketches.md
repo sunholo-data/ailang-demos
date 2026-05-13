@@ -63,20 +63,19 @@ These come from prior memory entries and existing project rules — do not regre
 
 ## 4. Topic taxonomy
 
-Six topics, framed as **commercial concerns** rather than developer slices. Each one is a public landing page at `/linkedin/topics/<topic>/`. The taxonomy is **public** (it's the menu readers pick from) but the **upcoming-post slate is not** — preserves campaign reveal flexibility.
+Three topics, framed as **commercial concerns** rather than developer slices. Each one is a public landing page at `/linkedin/topics/<topic>/`. The taxonomy is **public** (it's the menu readers pick from) but the **upcoming-post slate is not** — preserves campaign reveal flexibility.
 
 The AILANG features sit behind each topic as the *answer*, not the front. The reader self-identifies with the concern; we map their concern to the relevant primitives.
 
 | Topic | Hashtag | Audience | One-line frame |
 |---|---|---|---|
-| Compliance & audit | `#ailangCompliance` | Security, legal, regulated industries | *"Make your AI defensible — audit-ready, EU-AI-Act-shaped from day one."* |
-| AI spend you can predict | `#ailangBudget` | CTOs, finance, anyone with a runaway-cost story | *"Stop guessing at your AI bill. Budgets in the type signature."* |
-| Privacy & data sovereignty | `#ailangPrivacy` | Enterprise data leaders, healthcare, finance, EU customers | *"Customer data labelled at the type level. Crossing the boundary is a compiler error."* |
-| Production-grade agents | `#ailangReliable` | Engineering leaders shipping agents to real users | *"AI agents you can actually put in front of real users."* |
-| Vendor independence | `#ailangPortable` | Architecture leads, AI strategy | *"Switch from Anthropic to Gemini to OpenAI without a rewrite."* |
 | Agent-ready website | `#ailangAgentReady` | Product, marketing, content | *"When agents start transacting on your behalf — and they will — make your site speak their protocols."* |
+| Privacy & data sovereignty | `#ailangPrivacy` | Enterprise data leaders, healthcare, finance, EU customers | *"Customer data labelled at the type level. Crossing the boundary is a compiler error."* |
+| Vendor independence | `#ailangPortable` | Architecture leads, AI strategy | *"Switch from Anthropic to Gemini to OpenAI without a rewrite."* |
 
-`#ailangGeneral` (or no hashtag): sketch with a general-purpose feature mix drawn from across all six banks.
+Any unrecognised hashtag (legacy `#ailangCompliance` / `#ailangBudget` / `#ailangReliable` from V0 of the taxonomy, or no hashtag at all) falls through to `#ailangAgentReady`.
+
+**Why three and not more?** Compliance, budget, and reliable-agents are all real AILANG concerns — but they can't be **honestly scored** from a single page fetch (audit trails, AI spend, and runtime agent reliability aren't visible on a marketing page). Rather than show a misleading 0/10 score or a qualitative-only sketch, V1 of the taxonomy stays narrow. Campaign post content still covers those concerns; only the per-comment sketch mechanic is scoped to topics with observable signals.
 
 **Note on hashtag format**: LinkedIn breaks hashtags at hyphens — `#ailang-agent-ready` renders as `#ailang` plus literal `-agent-ready` text. The canonical form is now camelCase (`#ailangAgentReady`); the legacy kebab form is still parsed by the detector for backward compatibility with any existing comments.
 
@@ -311,7 +310,7 @@ These topics get **sketches and feature cards** but **no leaderboard ranking** �
 
 For these topics the §1 radar still shows an axis, but the score is computed as a **domain-relevance opportunity score** rather than a readiness score — AI-classified from the detected domain ("for a fintech, compliance opportunity is high; for a personal blog, low"). The radar surfaces it; the leaderboard pages do not include it.
 
-This is signposted explicitly on the rubric page: *"Three of the six topics don't have a leaderboard because we can't honestly score them from a single page fetch. The sketch still shows you the AILANG features that would help."*
+**Update (V1 final):** rather than rendering qualitative-only sketches for topics we can't score, the V1 taxonomy was narrowed to the three scored topics (`agent-ready`, `privacy`, `portable`). Legacy hashtags fall through to `agent-ready`. The note above is preserved for the historical record of the design discussion.
 
 ### Per-sketch transparency
 

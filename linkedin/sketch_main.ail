@@ -20,17 +20,13 @@ import std/env (getArgs)
 import std/string (intToStr)
 import std/list (length as listLength, nth)
 import std/option (getOrElse)
-import linkedin/types/sketch_types (Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/types/sketch_types (Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch (sketchSite)
 
 func parseTopic(s: string) -> Topic =
-  if s == "compliance"  then Compliance
-  else if s == "budget"      then Budget
-  else if s == "privacy"     then Privacy
-  else if s == "reliable"    then Reliable
-  else if s == "portable"    then Portable
-  else if s == "agent-ready" then AgentReady
-  else General
+  if      s == "privacy"  then Privacy
+  else if s == "portable" then Portable
+  else                         AgentReady
 
 -- Get the Nth argv item or a fallback.
 func argOr(args: [string], i: int, fallback: string) -> string =

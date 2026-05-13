@@ -25,21 +25,19 @@ Inside the §3 deep-dive on each sketch you'll also see the *inverse* framed as 
 
 ---
 
-## What we score, what we don't
+## What we score
 
-**Three topics have observable signals and feed leaderboards:**
+**Three topics, all with observable signals and leaderboards:**
 
 - `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs)
 - `privacy` — third-party data flow + data residency language
 - `portable` — vendor-lock indicators
 
-**Three topics get sketches and feature cards but no leaderboards:**
+**Topics we considered and dropped (V0 → V1):**
 
-- `compliance` — auditability isn't observable from a marketing page
-- `budget` — AI spend isn't visible from a marketing page
-- `reliable` — agent reliability isn't observable from a static fetch
+Compliance & audit, AI spend, and production-grade agents were initially in the taxonomy but moved out for V1 because they can't be **honestly scored** from a single page fetch — audit trails, AI spend, and runtime agent reliability aren't visible on a marketing page. Rather than show a misleading 0/10 score or a qualitative-only sketch, V1 stays narrow. Those concerns are still real AILANG selling points — they're covered in the campaign **post content** itself, not in per-comment sketches.
 
-Those three still appear on the radar (computed as domain-opportunity scores, not signal-derived readiness). They show up on the per-sketch deep-dive when the commenter asks for them, but their leaderboard column is intentionally empty. Honesty over completeness.
+Legacy hashtags (`#ailangCompliance`, `#ailangBudget`, `#ailangReliable`) and unspecified hashtags both fall through to `#ailangAgentReady` so commenters always get a sketch.
 
 ---
 

@@ -12,31 +12,23 @@ module linkedin/services/sketch_template
 import std/fs (readFile)
 import std/string (replaceMany, intToStr, join)
 import std/list (map, concat as listConcat, length as listLength)
-import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
 
 -- ─── Topic ↔ string helpers ───────────────────────────────────
 
 export func topicSlug(t: Topic) -> string = match t {
-  Compliance => "compliance",
-  Budget     => "budget",
   Privacy    => "privacy",
-  Reliable   => "reliable",
   Portable   => "portable",
-  AgentReady => "agent-ready",
-  General    => "general"
+  AgentReady => "agent-ready"
 }
 
 -- camelCase form for the LinkedIn hashtag, which breaks at hyphens.
 -- Always paired with the literal "ailang" prefix to form "#ailangXxx".
 export func topicCamelCase(t: Topic) -> string = match t {
-  Compliance => "Compliance",
-  Budget     => "Budget",
   Privacy    => "Privacy",
-  Reliable   => "Reliable",
   Portable   => "Portable",
-  AgentReady => "AgentReady",
-  General    => "General"
+  AgentReady => "AgentReady"
 }
 
 -- ─── Per-section renderers (pure string-building) ─────────────
@@ -109,39 +101,24 @@ func renderExtractStats(e: ExtractedContent) -> string = {
 
 -- ─── Radar polygon ────────────────────────────────────────────
 
--- Six-axis polygon points string. Order around the hexagon:
--- compliance (top), privacy (top-right), agent-ready (bottom-right),
--- portable (bottom), reliable (bottom-left), budget (top-left).
+-- Three-axis (triangular) radar. Vertices positioned at:
+--   agent-ready (top):           (0, -100)
+--   privacy     (bottom-right):  (86.6, 50)
+--   portable    (bottom-left):  (-86.6, 50)
 --
--- For each topic's readiness (0-10), the point is at the corresponding
--- vertex scaled to readiness/10. Axis unit vectors (in viewBox coords):
---   compliance:   (0, -1)
---   privacy:      (0.866, -0.5)
---   agent-ready:  (0.866, 0.5)
---   portable:     (0, 1)
---   reliable:     (-0.866, 0.5)
---   budget:       (-0.866, -0.5)
--- Scaled so a score of 10 reaches the unit-100 hexagon vertex.
--- Integer arithmetic only: r = readiness * 10.
+-- For each topic's readiness (0-10), the point sits at readiness/10
+-- along the axis. Integer arithmetic only: r = readiness * 10.
 
 func axisXForTopic(t: Topic, r: int) -> int = match t {
-  Compliance => 0,
+  AgentReady => 0,
   Privacy    => (r * 866) / 100,
-  AgentReady => (r * 866) / 100,
-  Portable   => 0,
-  Reliable   => -(r * 866) / 100,
-  Budget     => -(r * 866) / 100,
-  General    => 0
+  Portable   => -(r * 866) / 100
 }
 
 func axisYForTopic(t: Topic, r: int) -> int = match t {
-  Compliance => -(r * 10),
-  Privacy    => -(r * 5),
-  AgentReady => r * 5,
-  Portable   => r * 10,
-  Reliable   => r * 5,
-  Budget     => -(r * 5),
-  General    => 0
+  AgentReady => -(r * 10),
+  Privacy    => r * 5,
+  Portable   => r * 5
 }
 
 func scoreForTopic(scores: [TopicScore], t: Topic) -> int = match scores {
@@ -154,12 +131,9 @@ func radarPointFor(scores: [TopicScore], t: Topic) -> string =
   in "${intToStr(axisXForTopic(t, r))},${intToStr(axisYForTopic(t, r))}"
 
 func renderRadarPoints(scores: [TopicScore]) -> string = join(" ", [
-  radarPointFor(scores, Compliance),
-  radarPointFor(scores, Privacy),
   radarPointFor(scores, AgentReady),
-  radarPointFor(scores, Portable),
-  radarPointFor(scores, Reliable),
-  radarPointFor(scores, Budget)
+  radarPointFor(scores, Privacy),
+  radarPointFor(scores, Portable)
 ])
 
 -- ─── Topic label ──────────────────────────────────────────────

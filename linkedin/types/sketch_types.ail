@@ -14,15 +14,17 @@ module linkedin/types/sketch_types
 -- (Compliance, Budget, Reliable) are scored as opportunity-from-
 -- domain only and have no leaderboard.
 
--- The six commercial-shape topics, plus a General fallback for
--- comments with no hashtag.
-export type Topic = Compliance
-                  | Budget
-                  | Privacy
-                  | Reliable
+-- Three commercial-shape topics, all of which have observable
+-- signals on a website and feed leaderboards. Compliance, Budget,
+-- Reliable were dropped in V1 because they can't be honestly scored
+-- from a single page fetch — the campaign covers those concerns
+-- through post content rather than per-comment sketches.
+--
+-- Legacy comments with #ailangCompliance / #ailangBudget / #ailangReliable
+-- fall through to AgentReady (see parseTopicSlug in sketch_detect.ail).
+export type Topic = Privacy
                   | Portable
                   | AgentReady
-                  | General
 
 -- One measurable thing about a fetched page that maps to an
 -- AILANG primitive. The `ailangFeature` field is the answer to

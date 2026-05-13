@@ -11,12 +11,12 @@ module linkedin/services/sketch_rubric
 -- approximated by keyword detection in V1; refined to callJson in V2.
 --
 -- Three topics carry observable signals and feed leaderboards:
--- AgentReady, Privacy, Portable. The other three (Compliance,
--- Budget, Reliable) get domain-opportunity-only scores in §4.
+-- AgentReady, Privacy, Portable. (Compliance/Budget/Reliable were
+-- dropped in V1 — see sketches.md §4.)
 
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
-import linkedin/types/sketch_types (Signal, TopicScore, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm)
 
 -- ─── Helpers ──────────────────────────────────────────────────
@@ -24,22 +24,15 @@ import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcp
 -- Topic equality via nested pattern match — AILANG ADT
 -- constructors don't auto-derive == for tag-only variants.
 export func topicEq(a: Topic, b: Topic) -> bool = match a {
-  Compliance => match b { Compliance => true, _ => false },
-  Budget     => match b { Budget     => true, _ => false },
   Privacy    => match b { Privacy    => true, _ => false },
-  Reliable   => match b { Reliable   => true, _ => false },
   Portable   => match b { Portable   => true, _ => false },
-  AgentReady => match b { AgentReady => true, _ => false },
-  General    => match b { General    => true, _ => false }
+  AgentReady => match b { AgentReady => true, _ => false }
 }
 
--- Which topics carry leaderboards (have observable signals).
-export func topicHasLeaderboard(t: Topic) -> bool = match t {
-  AgentReady => true,
-  Privacy    => true,
-  Portable   => true,
-  _          => false
-}
+-- All three current topics carry leaderboards. Kept as a function
+-- (rather than removed) so future no-leaderboard topics can be
+-- reintroduced without rewriting downstream callers.
+export func topicHasLeaderboard(t: Topic) -> bool = true
 
 -- Count occurrences of a substring in a string.
 func countOccurrences(hay: string, needle: string) -> int =
@@ -212,9 +205,8 @@ export func sketchScoreAllSignals(body: string) -> [Signal] = [
 ]
 
 -- Compute a 0-10 readiness score for a topic from its signals.
--- Topics without observable signals (Compliance, Budget, Reliable)
--- return readiness=0 — they're scored as opportunity-from-domain
--- elsewhere, not from the signal rubric.
+-- (V1: all three current topics have signals — function still defined
+--  generically so a future no-signal topic just returns readiness=0.)
 export func sketchComputeTopicScore(signals: [Signal], t: Topic) -> TopicScore
   ensures { result.readiness >= 0, result.readiness <= 10 }
 {
@@ -236,12 +228,8 @@ export func sketchComputeTopicScore(signals: [Signal], t: Topic) -> TopicScore
 }
 
 -- Produce a TopicScore for every topic from a list of signals.
--- Topics without signals get readiness=0, hasLeaderboard=false.
 export func sketchComputeAllTopicScores(signals: [Signal]) -> [TopicScore] = [
-  sketchComputeTopicScore(signals, Compliance),
-  sketchComputeTopicScore(signals, Budget),
+  sketchComputeTopicScore(signals, AgentReady),
   sketchComputeTopicScore(signals, Privacy),
-  sketchComputeTopicScore(signals, Reliable),
-  sketchComputeTopicScore(signals, Portable),
-  sketchComputeTopicScore(signals, AgentReady)
+  sketchComputeTopicScore(signals, Portable)
 ]

@@ -297,29 +297,23 @@
   <section class="sk-radar-section">
     <p class="sk-section-label">§1 · AI-readiness</p>
     <div class="sk-radar-wrap">
-      <svg class="sk-radar-svg" viewBox="-170 -125 340 250" xmlns="http://www.w3.org/2000/svg">
-        <!-- Grid rings -->
-        <polygon points="0,-100 86.6,-50 86.6,50 0,100 -86.6,50 -86.6,-50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
-        <polygon points="0,-75 65,-37.5 65,37.5 0,75 -65,37.5 -65,-37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
-        <polygon points="0,-50 43.3,-25 43.3,25 0,50 -43.3,25 -43.3,-25" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
-        <polygon points="0,-25 21.65,-12.5 21.65,12.5 0,25 -21.65,12.5 -21.65,-12.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
-        <!-- Axes -->
+      <svg class="sk-radar-svg" viewBox="-140 -125 280 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- Triangular grid rings — radii 100/75/50/25 -->
+        <polygon points="0,-100 86.6,50 -86.6,50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-75 65,37.5 -65,37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-50 43.3,25 -43.3,25" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-25 21.65,12.5 -21.65,12.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <!-- Three axes from origin to each vertex -->
         <line x1="0" y1="0" x2="0" y2="-100" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
-        <line x1="0" y1="0" x2="86.6" y2="-50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
-        <line x1="0" y1="0" x2="0" y2="100" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
-        <line x1="0" y1="0" x2="-86.6" y2="-50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
-        <!-- Data polygon (populated by renderer; placeholders here) -->
-        <polygon points="0,0 25,-15 43,25 0,100 0,0 0,0"
+        <!-- Data polygon (populated by renderer) -->
+        <polygon points="0,-50 25,15 -86,50"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
-        <!-- Axis labels — positioned outside the hexagon at radius ~108 -->
-        <text x="0" y="-110" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">compliance</text>
-        <text x="94" y="-54" text-anchor="start" dominant-baseline="middle" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">privacy</text>
-        <text x="94" y="54" text-anchor="start" dominant-baseline="middle" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">agent-ready</text>
-        <text x="0" y="116" text-anchor="middle" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">portable</text>
-        <text x="-94" y="54" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">reliable</text>
-        <text x="-94" y="-54" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">budget</text>
+        <!-- Axis labels at radius ~112 -->
+        <text x="0" y="-110" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
+        <text x="96" y="60" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
+        <text x="-96" y="60" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
         <h2>You scored <span class="sk-readiness-num">5/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across six commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
@@ -335,9 +329,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise leaders and developers seeking production-grade AI infrastructure and modular agentic architectures.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and platform provider specializing in protocol-native infrastructure. They offer consultancy, the Multivac platform for microservice-based AI agents, and AILANG, an AI-first programming language. Their focus is on building modular, testable, and production-ready systems that utilize software engineering rigor to move AI projects from prototype to deployment.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Multivac Platform</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">Document Intelligence</span></div>
+    <h2 class="sk-prom-audience">Enterprise leaders and developers seeking production-grade AI systems and architectural engineering services.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and platform provider specializing in modular, interoperable AI architectures. It offers the Multivac infrastructure for agent orchestration, AILANG for trustworthy AI-native programming, and high-accuracy document parsing tools. The firm focuses on moving AI from prototype to production using software engineering rigor and standardized communication protocols.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">AILANG Parse</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">Office XML</span></div>
     <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> images</span><span class="path path-docparse">via docparse</span></div>
   </section>
 
@@ -375,14 +369,14 @@
     <div class="sk-breakdown open" id="sk-breakdown">
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
-        <tbody><tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
-<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
-<tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
-<tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
-<tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
+<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
+<tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
+<tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
         </tbody>
       </table>
     </div>
