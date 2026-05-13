@@ -15,7 +15,10 @@ name: LinkedIn Comments — Hourly Refresh
 # Secrets required:
 #   LINKEDIN_CREDENTIALS_JSON — ~/.ailang/linkedin/credentials.json contents
 #                               (access_token, refresh_token, client_id, ...)
-#   GEMINI_API_KEY            — Google AI Studio key for sketch dispatch
+#   OPENROUTER_API_KEY        — OpenRouter key for sketch dispatch.
+#                               AILANG std/ai routes via openrouter/auto
+#                               by default — OpenRouter picks the model.
+#                               Override with SKETCH_AI_MODEL env if needed.
 #                               (optional — if missing, dispatch step skips
 #                                with a warning rather than failing the run)
 #
@@ -156,17 +159,19 @@ jobs:
         id: dispatch
         if: steps.detect.outputs.queue_count != '0'
         # Drains linkedin/data/sketch_queue.json, generating up to the daily
-        # budget number of sketches. Each requires Net + AI (Gemini via API key)
-        # + FS + Process effects. Tolerates docparse missing on the runner —
-        # sketch_extract.ail falls back to AI-only extraction in that case.
+        # budget number of sketches. Each requires Net + AI (OpenRouter via
+        # API key) + FS + Process effects. Tolerates docparse missing on
+        # the runner — sketch_extract.ail falls back to AI-only extraction.
         continue-on-error: true
         env:
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SKETCH_AI_MODEL: gemini-2.5-flash
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_X_TITLE: AILANG sketch generator
+          OPENROUTER_HTTP_REFERER: https://www.sunholo.com/ailang-demos/linkedin/
+          SKETCH_AI_MODEL: openrouter/auto
         run: |
           set -euo pipefail
-          if [ -z "${GOOGLE_API_KEY:-}" ]; then
-            echo "::warning::GEMINI_API_KEY secret not set — skipping sketch dispatch."
+          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::warning::OPENROUTER_API_KEY secret not set — skipping sketch dispatch."
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

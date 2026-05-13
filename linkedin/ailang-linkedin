@@ -452,9 +452,17 @@ case "${1:-}" in
     cd "$PROJECT_DIR"
     shift
     date_str="${1:-$(date -u +%Y-%m-%d)}"
+    # AI provider config — default to OpenRouter auto-routing so the cron
+    # path doesn't need a Google service account. To pin a different
+    # model, set SKETCH_AI_MODEL (e.g. openrouter/anthropic/claude-3.5-sonnet,
+    # gemini-2.5-flash, claude-haiku-4-5). To force Vertex AI / ADC, set
+    # SKETCH_AI_MODEL=gemini-2.5-flash and leave OPENROUTER_API_KEY unset.
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    OPENROUTER_X_TITLE="${OPENROUTER_X_TITLE:-AILANG sketch generator}" \
+    OPENROUTER_HTTP_REFERER="${OPENROUTER_HTTP_REFERER:-https://www.sunholo.com/ailang-demos/linkedin/}" \
     GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
       --caps IO,FS,Net,AI,Process,Env \
-      --ai "${SKETCH_AI_MODEL:-gemini-2.5-flash}" \
+      --ai "${SKETCH_AI_MODEL:-openrouter/auto}" \
       linkedin/sketch_dispatch_main.ail "$date_str"
     ;;
   sketch)
@@ -483,9 +491,12 @@ EOF
     else
       date_str=""
     fi
+    OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+    OPENROUTER_X_TITLE="${OPENROUTER_X_TITLE:-AILANG sketch generator}" \
+    OPENROUTER_HTTP_REFERER="${OPENROUTER_HTTP_REFERER:-https://www.sunholo.com/ailang-demos/linkedin/}" \
     GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
       --caps IO,FS,Net,AI,Process,Env \
-      --ai "${SKETCH_AI_MODEL:-gemini-2.5-flash}" \
+      --ai "${SKETCH_AI_MODEL:-openrouter/auto}" \
       linkedin/sketch_main.ail "$@" ${date_str:+"$date_str"}
     ;;
   "")
