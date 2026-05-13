@@ -94,6 +94,23 @@ jobs:
         # before `ailang run` can resolve `pkg/sunholo/linkedin/*` imports.
         run: ailang lock
 
+      - name: Install docparse (ailang-parse CLI)
+        # Sketcher uses docparse for structured HTML/PDF/Office extraction
+        # (docparse-first, AI-fallback). Without it the dispatch path still
+        # works but extractionPath stays "ai-fallback" — docparse is strictly
+        # an upgrade. v0.14.0 has the tolerant HTML5 parser that handles
+        # production websites.
+        run: |
+          set -euo pipefail
+          DOCPARSE_TAG=v0.14.0
+          git clone --branch "$DOCPARSE_TAG" --depth 1 \
+            https://github.com/sunholo-data/ailang-parse.git \
+            /tmp/ailang-parse
+          # docparse depends on registry packages too — resolve them in-place.
+          (cd /tmp/ailang-parse && ailang lock)
+          sudo ln -sf /tmp/ailang-parse/bin/docparse /usr/local/bin/docparse
+          docparse --help >/dev/null && echo "docparse $DOCPARSE_TAG installed at $(which docparse)"
+
       - name: Fetch comments
         id: fetch
         run: |
