@@ -1,9 +1,13 @@
 module linkedin/sketch_dispatch_main
 
--- CLI entry: drain the sketch queue, respecting today's budget.
+-- CLI entry: drain the sketch queue, respecting today's budget,
+-- monthly per-(domain, topic) limit, and per-commenter daily quota.
 --
 -- Argv:
 --   1. today — date string for the dispatch, default "today"
+--   2. cutoff — date string 30 days ago (inclusive lower bound
+--               on the monthly limit), default today (effectively
+--               disables the monthly check if not passed)
 
 import std/io (println)
 import std/env (getArgs)
@@ -22,8 +26,9 @@ func templatePath() -> string = "linkedin/templates/sketch.html"
 
 export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
   let args = getArgs();
-  let today = argOr(args, 0, "today");
-  let n = sketchDispatch(today, templatePath());
+  let today  = argOr(args, 0, "today");
+  let cutoff = argOr(args, 1, today);  -- default == today disables monthly check
+  let n = sketchDispatch(today, cutoff, templatePath());
   println("");
   println("dispatch summary: ${intToStr(n)} sketch(es) generated")
 }

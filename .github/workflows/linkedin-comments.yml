@@ -199,6 +199,7 @@ jobs:
           git add linkedin/data/comments.json
           [ -f linkedin/data/sketch_queue.json ] && git add linkedin/data/sketch_queue.json || true
           [ -f linkedin/data/sketch_budget.json ] && git add linkedin/data/sketch_budget.json || true
+          [ -f linkedin/data/sketch_history.json ] && git add linkedin/data/sketch_history.json || true
           [ -d site/linkedin/topics ] && git add site/linkedin/topics || true
           if git diff --staged --quiet; then
             echo "No changes to commit."

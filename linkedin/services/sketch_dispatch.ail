@@ -22,9 +22,10 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/json (decode, getString, getInt)
 import linkedin/types/sketch_types (SketchRequest, Topic)
-import linkedin/services/sketch (sketchSite)
+import linkedin/services/sketch (sketchSite, sketchRegistrableDomain)
 import linkedin/services/sketch_template (topicSlug)
 import linkedin/services/sketch_queue (sketchQueueRead, sketchQueueWrite)
+import linkedin/services/sketch_history (HistoryEntry, sketchHistoryRead, sketchHistoryWrite, sketchHistoryAppend, sketchHistoryHasDomainTopicSince, sketchHistoryCountForSeedOnDay)
 
 -- ─── Budget state ────────────────────────────────────────────
 
@@ -36,7 +37,12 @@ export type SketchBudget = {
 
 func budgetPath() -> string = "linkedin/data/sketch_budget.json"
 
-func defaultDailyMax() -> int = 10
+-- Global daily cap across all commenters. Hard ceiling on AI spend.
+func defaultDailyMax() -> int = 50
+
+-- Per-commenter daily cap. Encourages comments while preventing one
+-- person dominating the queue.
+export func perCommenterDailyMax() -> int = 20
 
 func escapeJsonString(s: string) -> string =
   replace(replace(s, "\\", "\\\\"), "\"", "\\\"")
@@ -69,58 +75,106 @@ export func sketchBudgetWrite(b: SketchBudget) -> () ! {FS} {
 
 -- ─── Dispatch one request ────────────────────────────────────
 
--- Run sketchSite for a single request. Returns true on success
--- (so far we trust sketchSite to push through its error paths).
-func dispatchOne(r: SketchRequest, generatedAt: string, templatePath: string) -> bool ! {IO, Net, FS, AI, Process} {
-  println("→ dispatch ${r.url} #${topicSlug(r.topic)} (${r.initials})");
-  let _ = sketchSite(r.url, r.topic, r.initials, r.avatarSeed, generatedAt, 0, templatePath);
-  true
+-- Per-call outcome — used by processN to decide whether to keep
+-- the entry in the queue or drop it, and what message to surface.
+type OneOutcome = {
+  ok: bool,           -- did we run the executor?
+  history: HistoryEntry  -- only meaningful when ok=true
+}
+
+-- Try to dispatch a single queue entry, consulting history.
+-- Returns ok=false if either limit was hit; the caller logs the reason.
+func dispatchOne(
+  r: SketchRequest,
+  today: string,
+  cutoff: string,
+  templatePath: string,
+  history: [HistoryEntry]
+) -> OneOutcome ! {IO, Net, FS, AI, Process} {
+  let domain = sketchRegistrableDomain(r.url);
+  let topic  = topicSlug(r.topic);
+  let entry: HistoryEntry = { avatarSeed: r.avatarSeed, domain: domain, topic: topic, dispatchedAt: today };
+  let skippedOutcome: OneOutcome = { ok: false, history: entry };
+  let okOutcome:      OneOutcome = { ok: true,  history: entry };
+  if sketchHistoryHasDomainTopicSince(history, domain, topic, cutoff) then {
+    println("  ✗ skip ${domain} #${topic} — already sketched in the last 30 days");
+    skippedOutcome
+  } else {
+    let count = sketchHistoryCountForSeedOnDay(history, r.avatarSeed, today);
+    if count >= perCommenterDailyMax() then {
+      println("  ✗ skip ${r.initials} (${r.avatarSeed}) — daily quota met (${intToStr(count)}/${intToStr(perCommenterDailyMax())}). Get in touch (mark@aitanalabs.com) if you'd like a higher allowance.");
+      skippedOutcome
+    } else {
+      println("→ dispatch ${r.url} #${topic} (${r.initials})  [today ${intToStr(count + 1)}/${intToStr(perCommenterDailyMax())} for ${r.avatarSeed}]");
+      let _ = sketchSite(r.url, r.topic, r.initials, r.avatarSeed, today, 0, templatePath);
+      okOutcome
+    }
+  }
 }
 
 -- ─── Top-level dispatch ──────────────────────────────────────
 
 -- Process the queue, dispatching up to `dailyMax - count` requests.
 -- Returns the number of dispatches actually performed.
-export func sketchDispatch(today: string, templatePath: string) -> int ! {IO, Net, FS, AI, Process} {
+-- cutoff is the inclusive lower bound on the 30-day window
+-- (e.g. for today=2026-05-13 the cutoff is "2026-04-13").
+export func sketchDispatch(today: string, cutoff: string, templatePath: string) -> int ! {IO, Net, FS, AI, Process} {
   let queue   = sketchQueueRead("linkedin/data/sketch_queue.json");
   let budget  = sketchBudgetRead(today);
+  let history = sketchHistoryRead();
   let allowed = budget.dailyMax - budget.count;
   if listLength(queue) == 0 then {
     println("dispatch: queue empty");
     0
   } else if allowed <= 0 then {
-    println("dispatch: daily budget exhausted (${intToStr(budget.count)}/${intToStr(budget.dailyMax)})");
+    println("dispatch: global daily budget exhausted (${intToStr(budget.count)}/${intToStr(budget.dailyMax)})");
     0
   } else {
-    println("dispatch: ${intToStr(listLength(queue))} queued, ${intToStr(allowed)} budget remaining");
-    let result = processN(queue, allowed, today, templatePath, []);
-    let consumed = result.consumed;
-    let leftover = result.leftover;
-    sketchQueueWrite("linkedin/data/sketch_queue.json", leftover);
-    sketchBudgetWrite({ date: today, count: budget.count + consumed, dailyMax: budget.dailyMax });
-    println("dispatch: ${intToStr(consumed)} done, ${intToStr(listLength(leftover))} remaining");
-    consumed
+    println("dispatch: ${intToStr(listLength(queue))} queued, global budget ${intToStr(allowed)} remaining, monthly cutoff ${cutoff}");
+    let result = processN(queue, allowed, today, cutoff, templatePath, history, []);
+    sketchQueueWrite("linkedin/data/sketch_queue.json", result.leftover);
+    sketchBudgetWrite({ date: today, count: budget.count + result.consumed, dailyMax: budget.dailyMax });
+    sketchHistoryWrite(result.history);
+    println("dispatch: ${intToStr(result.consumed)} done, ${intToStr(listLength(result.leftover))} still queued (skipped entries are removed)");
+    result.consumed
   }
 }
 
--- Recursive helper: drain up to `allowed` entries from the queue.
-export type DispatchOutcome = {
+-- Recursive helper outcome: consumed count, queue tail to persist,
+-- and updated history (with appends from each successful dispatch).
+type DispatchOutcome = {
   consumed: int,
-  leftover: [SketchRequest]
+  leftover: [SketchRequest],
+  history:  [HistoryEntry]
 }
 
-func processN(queue: [SketchRequest], allowed: int, today: string, templatePath: string, acc: [SketchRequest]) -> DispatchOutcome ! {IO, Net, FS, AI, Process} {
+-- Drain up to `allowed` entries from the queue, threading the
+-- history through each iteration so quota checks see appends made
+-- by earlier iterations in the same run.
+func processN(
+  queue: [SketchRequest],
+  allowed: int,
+  today: string,
+  cutoff: string,
+  templatePath: string,
+  history: [HistoryEntry],
+  acc: [SketchRequest]
+) -> DispatchOutcome ! {IO, Net, FS, AI, Process} {
   if allowed <= 0 then
-    { consumed: 0, leftover: listConcat(acc, queue) }
+    { consumed: 0, leftover: listConcat(acc, queue), history: history }
   else match queue {
-    []           => { consumed: 0, leftover: acc },
+    []           => { consumed: 0, leftover: acc, history: history },
     [r, ...rest] => {
-      let ok = dispatchOne(r, today, templatePath);
-      let tail = processN(rest, allowed - 1, today, templatePath, acc);
-      if ok then
-        { consumed: 1 + tail.consumed, leftover: tail.leftover }
-      else
-        { consumed: tail.consumed, leftover: listConcat([r], tail.leftover) }
+      let outcome = dispatchOne(r, today, cutoff, templatePath, history);
+      if outcome.ok then {
+        let newHistory = sketchHistoryAppend(history, outcome.history);
+        let tail = processN(rest, allowed - 1, today, cutoff, templatePath, newHistory, acc);
+        { consumed: 1 + tail.consumed, leftover: tail.leftover, history: tail.history }
+      } else {
+        -- Skipped (history or quota). Drop from queue silently; the
+        -- log line printed by dispatchOne already says why.
+        processN(rest, allowed, today, cutoff, templatePath, history, acc)
+      }
     }
   }
 }

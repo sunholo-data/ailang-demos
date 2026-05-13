@@ -32,6 +32,7 @@ MODULES=(
   linkedin/services/sketch_leaderboard.ail
   linkedin/services/sketch_detect.ail
   linkedin/services/sketch_queue.ail
+  linkedin/services/sketch_history.ail
   linkedin/services/sketch_dispatch.ail
   linkedin/main.ail
   linkedin/sketch_main.ail
@@ -452,6 +453,12 @@ case "${1:-}" in
     cd "$PROJECT_DIR"
     shift
     date_str="${1:-$(date -u +%Y-%m-%d)}"
+    # Compute the 30-day cutoff (today minus 30 days). BSD/macOS and
+    # GNU/Linux have different date-arithmetic flags — try both.
+    if cutoff_str=$(date -u -v -30d +%Y-%m-%d 2>/dev/null); then :
+    elif cutoff_str=$(date -u -d "30 days ago" +%Y-%m-%d 2>/dev/null); then :
+    else cutoff_str="$date_str"  # fallback: disables monthly check
+    fi
     # AI provider config — default to OpenRouter auto-routing so the cron
     # path doesn't need a Google service account. To pin a different
     # model, set SKETCH_AI_MODEL (e.g. openrouter/anthropic/claude-3.5-sonnet,
@@ -463,7 +470,7 @@ case "${1:-}" in
     GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
       --caps IO,FS,Net,AI,Process,Env \
       --ai "${SKETCH_AI_MODEL:-openrouter/auto}" \
-      linkedin/sketch_dispatch_main.ail "$date_str"
+      linkedin/sketch_dispatch_main.ail "$date_str" "$cutoff_str"
     ;;
   sketch)
     cd "$PROJECT_DIR"

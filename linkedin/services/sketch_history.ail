@@ -1,0 +1,117 @@
+module linkedin/services/sketch_history
+
+-- Persistent history of successfully-dispatched sketches.
+--
+-- Used by the dispatcher to enforce two limits:
+--   1. Monthly per-(domain, topic): a given site won't be re-scored
+--      under the same topic more than once per 30 days, regardless
+--      of who comments. Stops competitor flooding + redundant runs.
+--   2. Daily per-commenter: an avatarSeed can produce at most N
+--      sketches per UTC day (default 20). Encourages comments,
+--      prevents one person dominating cost.
+--
+-- File: linkedin/data/sketch_history.json. Append-only — entries
+-- never removed (a 30-day window means old entries become inert,
+-- not garbage to collect).
+
+import std/fs (readFile, writeFile, fileExists, mkdirAll)
+import std/string (length, intToStr, replace, join)
+import std/list (length as listLength, map, foldl, concat as listConcat, filter)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/json (decode, getString, asArray, Json)
+
+export type HistoryEntry = {
+  avatarSeed:   string,
+  domain:       string,
+  topic:        string,  -- slug form (e.g. "agent-ready")
+  dispatchedAt: string   -- ISO date "YYYY-MM-DD"
+}
+
+func historyPath() -> string = "linkedin/data/sketch_history.json"
+
+-- ─── JSON encoding ───────────────────────────────────────────
+
+func escapeJsonString(s: string) -> string =
+  replace(replace(s, "\\", "\\\\"), "\"", "\\\"")
+
+func entryToJson(e: HistoryEntry) -> string =
+  "{\"avatarSeed\":\"${escapeJsonString(e.avatarSeed)}\",\"domain\":\"${escapeJsonString(e.domain)}\",\"topic\":\"${escapeJsonString(e.topic)}\",\"dispatchedAt\":\"${escapeJsonString(e.dispatchedAt)}\"}"
+
+export func sketchHistoryToJson(entries: [HistoryEntry]) -> string =
+  "[${join(",", map(entryToJson, entries))}]"
+
+-- ─── JSON decoding ───────────────────────────────────────────
+
+func jsonToEntry(j: Json) -> Option[HistoryEntry] {
+  let seed   = getOrElse(getString(j, "avatarSeed"),   "");
+  let domain = getOrElse(getString(j, "domain"),       "");
+  let topic  = getOrElse(getString(j, "topic"),        "");
+  let when   = getOrElse(getString(j, "dispatchedAt"), "");
+  if length(seed) > 0 && length(domain) > 0 then
+    Some({
+      avatarSeed:   seed,
+      domain:       domain,
+      topic:        topic,
+      dispatchedAt: when
+    })
+  else None
+}
+
+func keepSome(xs: [Option[HistoryEntry]]) -> [HistoryEntry] = match xs {
+  []                 => [],
+  [Some(v), ...rest] => listConcat([v], keepSome(rest)),
+  [None,    ...rest] => keepSome(rest)
+}
+
+-- ─── Read / write ────────────────────────────────────────────
+
+export func sketchHistoryRead() -> [HistoryEntry] ! {FS} {
+  if fileExists(historyPath()) then
+    match decode(readFile(historyPath())) {
+      Ok(j) => match asArray(j) {
+        Some(items) => keepSome(map(jsonToEntry, items)),
+        None        => []
+      },
+      Err(_) => []
+    }
+  else []
+}
+
+export func sketchHistoryWrite(entries: [HistoryEntry]) -> () ! {FS} {
+  mkdirAll("linkedin/data");
+  writeFile(historyPath(), sketchHistoryToJson(entries))
+}
+
+export func sketchHistoryAppend(existing: [HistoryEntry], entry: HistoryEntry) -> [HistoryEntry] =
+  listConcat(existing, [entry])
+
+-- ─── Quota checks ────────────────────────────────────────────
+
+-- Has this (domain, topic) been dispatched on or after the cutoff date?
+-- cutoffDate is the inclusive lower bound — e.g. for a 30-day window
+-- today=2026-05-13 the cutoff is "2026-04-13".
+export func sketchHistoryHasDomainTopicSince(
+  history: [HistoryEntry],
+  domain: string,
+  topic: string,
+  cutoffDate: string
+) -> bool = match history {
+  []           => false,
+  [e, ...rest] =>
+    if e.domain == domain && e.topic == topic && e.dispatchedAt >= cutoffDate
+      then true
+      else sketchHistoryHasDomainTopicSince(rest, domain, topic, cutoffDate)
+}
+
+-- How many sketches has this avatarSeed produced on today's date?
+export func sketchHistoryCountForSeedOnDay(
+  history: [HistoryEntry],
+  seed: string,
+  day: string
+) -> int =
+  foldl(
+    \acc e. if e.avatarSeed == seed && e.dispatchedAt == day then acc + 1 else acc,
+    0,
+    history
+  )
