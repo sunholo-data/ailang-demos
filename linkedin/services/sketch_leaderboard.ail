@@ -60,7 +60,9 @@ func readSketchEntry(t: Topic, subdir: string) -> Option[LeaderboardEntry] ! {FS
             initials:          initials,
             avatarSeed:        seed,
             score:             score,
-            sketchUrl:         "/linkedin/topics/${topicSlug(t)}/${subdir}/",
+            -- Relative to the topic-index page (linkedin/topics/<topic>/).
+            -- This way the same path works at /, /ailang-demos/, or any prefix.
+            sketchUrl:         "${subdir}/",
             updatedAt:         updated
           })
         else None

@@ -138,7 +138,9 @@ func renderRankBlock(t: Topic, rank: int) -> string =
     "<div class=\"sk-rank-callout\">",
     "<span>Your rank on the ", topicLabel(t), " leaderboard:</span>",
     "<span class=\"rank-num\">#", intToStr(rank), "</span>",
-    "<a href=\"/linkedin/topics/", topicSlug(t), "/\">view leaderboard ↗</a>",
+    -- Relative to the sketch page (linkedin/topics/<topic>/<slug>/).
+    -- The topic page is one level up.
+    "<a href=\"../\">view leaderboard ↗</a>",
     "</div>"
   ]) else ""
 
