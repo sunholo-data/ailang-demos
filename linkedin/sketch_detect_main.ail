@@ -1,0 +1,53 @@
+module linkedin/sketch_detect_main
+
+-- CLI entry: run sketch-detection over linkedin/data/comments.json,
+-- merge new requests into linkedin/data/sketch_queue.json.
+--
+-- Idempotent — re-running the same comments.json produces no new
+-- queue entries (dedup'd by (avatarSeed, url, topic)).
+--
+-- Argv:
+--   1. requestedAt — date stamp for new entries, default "today"
+
+import std/io (println)
+import std/env (getArgs)
+import std/fs (readFile, fileExists)
+import std/string (intToStr)
+import std/list (length as listLength, nth)
+import std/option (Some, None)
+import std/result (Ok, Err)
+import std/json (decode)
+import linkedin/types/sketch_types (SketchRequest)
+import linkedin/services/sketch_detect (sketchDetectFromFeed)
+import linkedin/services/sketch_queue (sketchQueueRead, sketchQueueWrite, sketchQueueMerge)
+
+func argOr(args: [string], i: int, fallback: string) -> string =
+  match nth(args, i) {
+    Some(v) => v,
+    None    => fallback
+  }
+
+func commentsPath() -> string = "linkedin/data/comments.json"
+func queuePath()    -> string = "linkedin/data/sketch_queue.json"
+
+export func main() -> () ! {IO, Env, FS} {
+  let args = getArgs();
+  let requestedAt = argOr(args, 0, "today");
+
+  if fileExists(commentsPath()) then {
+    let feedRaw = readFile(commentsPath());
+    match decode(feedRaw) {
+      Ok(feed) => {
+        let detected = sketchDetectFromFeed(feed, requestedAt);
+        let existing = sketchQueueRead(queuePath());
+        let merged   = sketchQueueMerge(existing, detected);
+        let added    = listLength(merged) - listLength(existing);
+        sketchQueueWrite(queuePath(), merged);
+        println("detect: ${intToStr(listLength(detected))} URL+hashtag pair(s) found");
+        println("  ${intToStr(added)} new (${intToStr(listLength(merged))} total in queue)");
+        ()
+      },
+      Err(_) => println("detect: could not parse ${commentsPath()}")
+    }
+  } else println("detect: ${commentsPath()} missing — nothing to do")
+}

@@ -1,0 +1,96 @@
+module linkedin/services/sketch_queue
+
+-- Queue persistence for the sketch dispatch pipeline.
+--
+-- The queue lives at linkedin/data/sketch_queue.json. The cron's
+-- sketch-detect step appends new requests (dedup'd); the cron's
+-- sketch-dispatch step pops them and runs the executor.
+
+import std/fs (readFile, writeFile, fileExists, mkdirAll)
+import std/string (length, replace, join, intToStr)
+import std/list (map, foldl, filter, concat as listConcat)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/json (decode, asArray, getString, asObject, Json)
+import linkedin/types/sketch_types (SketchRequest, Topic)
+import linkedin/services/sketch_template (topicSlug)
+import linkedin/services/sketch_detect (parseTopicSlug)
+
+-- ─── JSON encoding ───────────────────────────────────────────
+
+func escapeJsonString(s: string) -> string =
+  replace(replace(s, "\\", "\\\\"), "\"", "\\\"")
+
+func requestToJson(r: SketchRequest) -> string =
+  "{\"url\":\"${escapeJsonString(r.url)}\",\"topic\":\"${topicSlug(r.topic)}\",\"initials\":\"${escapeJsonString(r.initials)}\",\"avatarSeed\":\"${escapeJsonString(r.avatarSeed)}\",\"requestedAt\":\"${escapeJsonString(r.requestedAt)}\"}"
+
+export func sketchQueueToJson(rs: [SketchRequest]) -> string =
+  "[${join(",", map(requestToJson, rs))}]"
+
+-- ─── JSON decoding ───────────────────────────────────────────
+
+func jsonToRequest(j: Json) -> Option[SketchRequest] {
+  let url      = getOrElse(getString(j, "url"),         "");
+  let topicS   = getOrElse(getString(j, "topic"),       "general");
+  let initials = getOrElse(getString(j, "initials"),    "AI");
+  let seed     = getOrElse(getString(j, "avatarSeed"),  "e73c17");
+  let reqAt    = getOrElse(getString(j, "requestedAt"), "");
+  if length(url) > 0 then
+    Some({
+      url:         url,
+      topic:       parseTopicSlug(topicS),
+      initials:    initials,
+      avatarSeed:  seed,
+      requestedAt: reqAt
+    })
+  else None
+}
+
+func keepSome(xs: [Option[SketchRequest]]) -> [SketchRequest] = match xs {
+  []                 => [],
+  [Some(v), ...rest] => listConcat([v], keepSome(rest)),
+  [None,    ...rest] => keepSome(rest)
+}
+
+-- Read the queue file. Returns [] on missing/malformed.
+export func sketchQueueRead(path: string) -> [SketchRequest] ! {FS} {
+  if fileExists(path) then
+    match decode(readFile(path)) {
+      Ok(j) => match asArray(j) {
+        Some(items) => keepSome(map(jsonToRequest, items)),
+        None        => []
+      },
+      Err(_) => []
+    }
+  else []
+}
+
+-- Write the queue file (creates parent dirs as needed).
+export func sketchQueueWrite(path: string, rs: [SketchRequest]) -> () ! {FS} {
+  let json = sketchQueueToJson(rs);
+  -- Ensure linkedin/data/ exists. mkdirAll is idempotent.
+  mkdirAll("linkedin/data");
+  writeFile(path, json)
+}
+
+-- ─── Dedup + merge ───────────────────────────────────────────
+
+-- Two requests are duplicates if they share (avatarSeed, url, topic).
+-- Domain-level monthly limits are a separate concern handled by the
+-- dispatch step against sketch_history.json.
+func requestKey(r: SketchRequest) -> string =
+  "${r.avatarSeed}|${r.url}|${topicSlug(r.topic)}"
+
+func hasKey(rs: [SketchRequest], key: string) -> bool = match rs {
+  []           => false,
+  [r, ...rest] => if requestKey(r) == key then true else hasKey(rest, key)
+}
+
+-- Append entries from `new` to `existing` if not already present.
+export func sketchQueueMerge(existing: [SketchRequest], new: [SketchRequest]) -> [SketchRequest] = match new {
+  []           => existing,
+  [r, ...rest] =>
+    if hasKey(existing, requestKey(r))
+      then sketchQueueMerge(existing, rest)
+      else sketchQueueMerge(listConcat(existing, [r]), rest)
+}

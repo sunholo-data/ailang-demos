@@ -1,0 +1,29 @@
+module linkedin/sketch_dispatch_main
+
+-- CLI entry: drain the sketch queue, respecting today's budget.
+--
+-- Argv:
+--   1. today — date string for the dispatch, default "today"
+
+import std/io (println)
+import std/env (getArgs)
+import std/string (intToStr)
+import std/list (nth)
+import std/option (Some, None)
+import linkedin/services/sketch_dispatch (sketchDispatch)
+
+func argOr(args: [string], i: int, fallback: string) -> string =
+  match nth(args, i) {
+    Some(v) => v,
+    None    => fallback
+  }
+
+func templatePath() -> string = "linkedin/templates/sketch.html"
+
+export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
+  let args = getArgs();
+  let today = argOr(args, 0, "today");
+  let n = sketchDispatch(today, templatePath());
+  println("");
+  println("dispatch summary: ${intToStr(n)} sketch(es) generated")
+}

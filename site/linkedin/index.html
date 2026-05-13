@@ -939,6 +939,71 @@
       transition-duration: 0.01ms !important;
     }
   }
+
+  /* ─── Topics panel ─── */
+  .ll-topics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 22px;
+  }
+  @media (max-width: 880px) { .ll-topics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .ll-topics-grid { grid-template-columns: 1fr; } }
+  .ll-topic-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 18px 14px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color .15s ease, transform .15s ease;
+    min-width: 0;
+  }
+  .ll-topic-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+  }
+  .ll-topic-card .topic-name {
+    font-family: var(--font-display, "Montserrat");
+    font-weight: 700; font-size: 17px;
+    color: var(--text-primary); line-height: 1.2;
+  }
+  .ll-topic-card .topic-name .accent { color: var(--primary); }
+  .ll-topic-card .topic-desc {
+    font-size: 13px; line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  .ll-topic-card .topic-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: auto; padding-top: 6px;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .ll-topic-card .topic-hashtag {
+    color: var(--primary); background: var(--primary-faded);
+    padding: 3px 8px; border-radius: 999px; font-weight: 600;
+  }
+  .ll-topic-card .topic-count {
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .ll-topic-card .topic-count.has-rank { color: var(--text-primary); font-weight: 600; }
+  .ll-topic-card .topic-count .num { color: var(--primary); font-weight: 700; }
+  .ll-topic-card.no-leaderboard .topic-count::before {
+    content: "○ "; color: var(--text-muted);
+  }
+  .ll-topics-trigger {
+    margin-top: 22px; padding: 14px 18px;
+    background: var(--bg-card); border: 1px dashed var(--border-active);
+    border-radius: 10px; font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-secondary); line-height: 1.55;
+  }
+  .ll-topics-trigger code {
+    background: var(--bg-input); color: var(--primary);
+    padding: 2px 6px; border-radius: 4px; font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -1001,10 +1066,55 @@
     </div>
   </section>
 
+  <!-- ─── Topics — comment hashtags that produce AILANG sketches ─── -->
+  <section class="ll-section" id="topics" aria-labelledby="lh-topics">
+    <div class="ll-section-head">
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>One</span></div>
+      <span class="ll-section-title" id="lh-topics">Pick a thread</span>
+      <p>Six commercial concerns AILANG has a position on. Comment your site's URL with the matching hashtag on any AILANG LinkedIn post, and within the hour an AILANG-generated sketch about your business lands at <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);color:var(--primary)">/linkedin/topics/&lt;topic&gt;/</code>.</p>
+    </div>
+    <div class="ll-topics-grid" id="ll-topics-grid">
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/compliance/" data-topic="compliance" data-has-leaderboard="false">
+        <span class="topic-name">AILANG <span class="accent">×</span> compliance &amp; audit</span>
+        <p class="topic-desc">Make your AI defensible — audit-ready, EU-AI-Act-shaped from day one.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-compliance</span><span class="topic-count">no leaderboard</span></div>
+      </a>
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/budget/" data-topic="budget" data-has-leaderboard="false">
+        <span class="topic-name">AILANG <span class="accent">×</span> AI spend</span>
+        <p class="topic-desc">Stop guessing at your AI bill. Budgets in the type signature.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-budget</span><span class="topic-count">no leaderboard</span></div>
+      </a>
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/privacy/" data-topic="privacy" data-has-leaderboard="true">
+        <span class="topic-name">AILANG <span class="accent">×</span> privacy</span>
+        <p class="topic-desc">Customer data labelled at the type level. Crossing the boundary is a compiler error.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-privacy</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+      </a>
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/reliable/" data-topic="reliable" data-has-leaderboard="false">
+        <span class="topic-name">AILANG <span class="accent">×</span> reliable agents</span>
+        <p class="topic-desc">AI agents you can actually put in front of real users.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-reliable</span><span class="topic-count">no leaderboard</span></div>
+      </a>
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/portable/" data-topic="portable" data-has-leaderboard="true">
+        <span class="topic-name">AILANG <span class="accent">×</span> portability</span>
+        <p class="topic-desc">Switch from Anthropic to Gemini to OpenAI without a rewrite.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-portable</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+      </a>
+      <a class="ll-topic-card" href="/ailang-demos/linkedin/topics/agent-ready/" data-topic="agent-ready" data-has-leaderboard="true">
+        <span class="topic-name">AILANG <span class="accent">×</span> agent-ready</span>
+        <p class="topic-desc">When agents start transacting on your behalf — make your site speak their protocols.</p>
+        <div class="topic-foot"><span class="topic-hashtag">#ailang-agent-ready</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+      </a>
+    </div>
+    <p class="ll-topics-trigger">
+      <strong>Trigger format:</strong> drop a comment like <code>https://acme.com #ailang-agent-ready</code> on any post above.
+      No setup, no signup. The sketch is public, pseudonymously attributed, and the rubric is open-source AILANG code <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md" style="color:var(--primary)">on GitHub</a>.
+    </p>
+  </section>
+
   <!-- ─── The conversations (feed) ─── -->
   <section class="ll-section" id="conversations" aria-labelledby="lh-conv">
     <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>One</span></div>
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Two</span></div>
       <span class="ll-section-title" id="lh-conv">The conversations</span>
       <p>The wire returning serve. Comments come back anonymised &mdash; each commenter sees the same monogram every time, but no one else can identify them. Future posts get steered by what you say.</p>
     </div>
@@ -1024,7 +1134,7 @@
   <!-- ─── Receipt / Run log ─── -->
   <section class="ll-section ll-receipt-wrap" aria-labelledby="lh-receipt">
     <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Two</span></div>
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Three</span></div>
       <span class="ll-section-title" id="lh-receipt">What the CLI did, exactly</span>
       <p>Five effects, one network call, one contract. Every step is typed and effect-tracked.</p>
     </div>
@@ -1080,7 +1190,7 @@
   <!-- ─── Code excerpt ─── -->
   <section class="ll-section" aria-labelledby="lh-code">
     <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Three</span></div>
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Four</span></div>
       <span class="ll-section-title" id="lh-code">What the type system saw</span>
       <p>The function that minted the POST. Both <code>requires</code> and <code>@limit</code> are statically checked.</p>
     </div>
@@ -1347,6 +1457,25 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[c]);
   }
+
+  /* ─── Topic-card live counts ─── */
+  // Each topic with data-has-leaderboard="true" fetches its leaderboard.json
+  // to fill in the sketch count. Topics without leaderboards stay at
+  // "no leaderboard" — no fetch.
+  document.querySelectorAll('.ll-topic-card[data-has-leaderboard="true"]').forEach(card => {
+    const topic = card.getAttribute('data-topic');
+    const countEl = card.querySelector('.topic-count');
+    fetch(`topics/${topic}/leaderboard.json`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        const n = data.totalSketches || 0;
+        const noun = n === 1 ? 'sketch' : 'sketches';
+        countEl.innerHTML = `<span class="num">${n}</span> ${noun}`;
+        if (n > 0) countEl.classList.add('has-rank');
+      })
+      .catch(() => { /* silent — topic page may not exist yet */ });
+  });
 </script>
 
 </body>

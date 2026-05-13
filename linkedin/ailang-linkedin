@@ -30,9 +30,14 @@ MODULES=(
   linkedin/services/sketch_template.ail
   linkedin/services/sketch.ail
   linkedin/services/sketch_leaderboard.ail
+  linkedin/services/sketch_detect.ail
+  linkedin/services/sketch_queue.ail
+  linkedin/services/sketch_dispatch.ail
   linkedin/main.ail
   linkedin/sketch_main.ail
   linkedin/leaderboard_main.ail
+  linkedin/sketch_detect_main.ail
+  linkedin/sketch_dispatch_main.ail
 )
 
 usage() {
@@ -61,6 +66,9 @@ Commands:
                                   (compliance|budget|privacy|reliable|portable|agent-ready|general)
   topics-rebuild [date]           Rebuild every topic's leaderboard.json + index.html.
                                   Run after `sketch` produces a new entry, or daily via cron.
+  sketch-detect [date]            Scan comments.json for URL + #ailang-<topic> pairs,
+                                  enqueue new requests in sketch_queue.json (idempotent).
+  sketch-dispatch [date]          Drain the queue, generating sketches up to today's daily budget.
 
 Options:
   --check           Type-check all modules (no API calls)
@@ -431,6 +439,23 @@ case "${1:-}" in
     GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
       --caps IO,FS,Env \
       linkedin/leaderboard_main.ail "$date_str"
+    ;;
+  sketch-detect)
+    cd "$PROJECT_DIR"
+    shift
+    date_str="${1:-$(date -u +%Y-%m-%d)}"
+    GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
+      --caps IO,FS,Env \
+      linkedin/sketch_detect_main.ail "$date_str"
+    ;;
+  sketch-dispatch)
+    cd "$PROJECT_DIR"
+    shift
+    date_str="${1:-$(date -u +%Y-%m-%d)}"
+    GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
+      --caps IO,FS,Net,AI,Process,Env \
+      --ai "${SKETCH_AI_MODEL:-gemini-2.5-flash}" \
+      linkedin/sketch_dispatch_main.ail "$date_str"
     ;;
   sketch)
     cd "$PROJECT_DIR"

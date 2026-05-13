@@ -1,0 +1,139 @@
+module linkedin/services/sketch_detect
+
+-- Walk comments.json, extract URL + #ailang-<topic> hashtag pairs,
+-- emit SketchRequest entries.
+--
+-- Idempotent at the queue layer: the caller dedups against existing
+-- queue + history files by (avatarSeed, url, topic).
+
+import std/string (length, substring, toLower, find)
+import std/list (foldl, concat as listConcat)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/json (asArray, asObject, getString, Json)
+import linkedin/types/sketch_types (SketchRequest, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+
+-- ─── URL extraction ──────────────────────────────────────────
+
+-- Return the first http(s) URL in `text`, or "" if none found.
+-- A URL ends at the first whitespace or one of < > " ' .
+export func sketchExtractUrl(text: string) -> string =
+  let lower    = toLower(text) in
+  let idxHttps = find(lower, "https://") in
+  let idxHttp  = find(lower, "http://") in
+  let startIdx = if idxHttps >= 0 then idxHttps
+                 else if idxHttp >= 0 then idxHttp
+                 else -1 in
+  if startIdx < 0 then ""
+  else substring(text, startIdx, findUrlEnd(text, startIdx))
+
+func findUrlEnd(s: string, pos: int) -> int =
+  if pos >= length(s) then pos
+  else
+    let c = substring(s, pos, pos + 1) in
+    if c == " " || c == "\t" || c == "\n" || c == "\r" ||
+       c == "<" || c == ">" || c == "\"" || c == "'" then pos
+    else findUrlEnd(s, pos + 1)
+
+-- ─── Hashtag extraction ──────────────────────────────────────
+
+-- Return the topic slug from the first "#ailang-<slug>" in text,
+-- or "" if none found.
+export func sketchExtractTopicHashtag(text: string) -> string =
+  let lower = toLower(text) in
+  let idx   = find(lower, "#ailang-") in
+  if idx < 0 then ""
+  else
+    let slugStart = idx + 8 in  -- length("#ailang-") = 8
+    substring(lower, slugStart, findSlugEnd(lower, slugStart))
+
+func findSlugEnd(s: string, pos: int) -> int =
+  if pos >= length(s) then pos
+  else
+    let c = substring(s, pos, pos + 1) in
+    if isSlugChar(c) then findSlugEnd(s, pos + 1) else pos
+
+func isSlugChar(c: string) -> bool =
+  (c >= "a" && c <= "z") || c == "-" || (c >= "0" && c <= "9")
+
+-- ─── Topic slug parsing ──────────────────────────────────────
+
+export func parseTopicSlug(s: string) -> Topic =
+  if      s == "compliance"  then Compliance
+  else if s == "budget"      then Budget
+  else if s == "privacy"     then Privacy
+  else if s == "reliable"    then Reliable
+  else if s == "portable"    then Portable
+  else if s == "agent-ready" then AgentReady
+  else General
+
+-- ─── Comment → request ───────────────────────────────────────
+
+-- Pull a SketchRequest from a Json comment node, if it contains
+-- both a URL and a recognised topic hashtag.
+export func sketchCommentToRequest(c: Json, requestedAt: string) -> Option[SketchRequest] {
+  let text     = getOrElse(getString(c, "text"),       "");
+  let initials = getOrElse(getString(c, "initials"),   "AI");
+  let seed     = getOrElse(getString(c, "avatarSeed"), "e73c17");
+  let url      = sketchExtractUrl(text);
+  let topic    = sketchExtractTopicHashtag(text);
+  if length(url) > 0 && length(topic) > 0 then
+    Some({
+      url:         url,
+      topic:       parseTopicSlug(topic),
+      initials:    initials,
+      avatarSeed:  seed,
+      requestedAt: requestedAt
+    })
+  else None
+}
+
+-- ─── Walking the comments.json shape ─────────────────────────
+
+-- Look up a key in a [{key, value}] association list (the shape
+-- std/json.asObject returns).
+func lookupField(pairs: [{key: string, value: Json}], key: string) -> Option[Json] = match pairs {
+  []             => None,
+  [kv, ...rest]  => if kv.key == key then Some(kv.value) else lookupField(rest, key)
+}
+
+-- Recursively walk one comment node + its replies.
+func walkComment(c: Json, requestedAt: string) -> [SketchRequest] {
+  let self = sketchCommentToRequest(c, requestedAt);
+  let replies = walkReplies(c, requestedAt);
+  match self {
+    Some(req) => listConcat([req], replies),
+    None      => replies
+  }
+}
+
+-- Pull the `replies` field of a comment node (if any) and recurse.
+func walkReplies(c: Json, requestedAt: string) -> [SketchRequest] = match asObject(c) {
+  Some(pairs) => match lookupField(pairs, "replies") {
+    Some(repliesJson) => match asArray(repliesJson) {
+      Some(rs) => foldl(\acc r. listConcat(acc, walkComment(r, requestedAt)), [], rs),
+      None     => []
+    },
+    None => []
+  },
+  None => []
+}
+
+-- Walk one post node, returning all SketchRequests from its
+-- top-level comments + nested replies.
+func walkPost(post: Json, requestedAt: string) -> [SketchRequest] = match asObject(post) {
+  Some(pairs) => match lookupField(pairs, "comments") {
+    Some(commentsJson) => match asArray(commentsJson) {
+      Some(cs) => foldl(\acc c. listConcat(acc, walkComment(c, requestedAt)), [], cs),
+      None     => []
+    },
+    None => []
+  },
+  None => []
+}
+
+-- Top-level entry: walk the whole comments.json feed.
+export func sketchDetectFromFeed(feedJson: Json, requestedAt: string) -> [SketchRequest] = match asArray(feedJson) {
+  Some(posts) => foldl(\acc p. listConcat(acc, walkPost(p, requestedAt)), [], posts),
+  None        => []
+}

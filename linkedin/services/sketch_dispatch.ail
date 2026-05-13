@@ -1,0 +1,126 @@
+module linkedin/services/sketch_dispatch
+
+-- Dispatch sketches from the queue, respecting a daily budget.
+--
+-- For each queued request, run sketchSite in-process. Each call's
+-- effect signature is ! {Net @limit=1, AI @limit=5, FS @limit=4,
+-- Process, Declassify}, multiplied by `maxPerRun` requests this run.
+--
+-- Successfully-processed entries are removed from the queue. Unsent
+-- entries (because the daily budget was reached) remain for the next
+-- cron tick.
+--
+-- For V1 the budget is the only gate; the monthly per-domain limit
+-- is documented in linkedin/design/sketches.md §6.6 and will land
+-- in V2 when sketch_history.json is wired in.
+
+import std/io (println)
+import std/fs (readFile, writeFile, fileExists, mkdirAll)
+import std/string (length, intToStr, replace)
+import std/list (length as listLength, foldl, concat as listConcat)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/json (decode, getString, getInt)
+import linkedin/types/sketch_types (SketchRequest, Topic)
+import linkedin/services/sketch (sketchSite)
+import linkedin/services/sketch_template (topicSlug)
+import linkedin/services/sketch_queue (sketchQueueRead, sketchQueueWrite)
+
+-- ─── Budget state ────────────────────────────────────────────
+
+export type SketchBudget = {
+  date:     string,
+  count:    int,
+  dailyMax: int
+}
+
+func budgetPath() -> string = "linkedin/data/sketch_budget.json"
+
+func defaultDailyMax() -> int = 10
+
+func escapeJsonString(s: string) -> string =
+  replace(replace(s, "\\", "\\\\"), "\"", "\\\"")
+
+func budgetToJson(b: SketchBudget) -> string =
+  "{\"date\":\"${escapeJsonString(b.date)}\",\"count\":${intToStr(b.count)},\"dailyMax\":${intToStr(b.dailyMax)}}"
+
+-- Read the budget file. If missing or for a different day, reset.
+export func sketchBudgetRead(today: string) -> SketchBudget ! {FS} {
+  if fileExists(budgetPath()) then
+    match decode(readFile(budgetPath())) {
+      Ok(j) => {
+        let savedDate = getOrElse(getString(j, "date"), "");
+        let savedCount = getOrElse(getInt(j, "count"), 0);
+        let savedMax = getOrElse(getInt(j, "dailyMax"), defaultDailyMax());
+        if savedDate == today then
+          { date: today, count: savedCount, dailyMax: savedMax }
+        else
+          { date: today, count: 0, dailyMax: savedMax }
+      },
+      Err(_) => { date: today, count: 0, dailyMax: defaultDailyMax() }
+    }
+  else { date: today, count: 0, dailyMax: defaultDailyMax() }
+}
+
+export func sketchBudgetWrite(b: SketchBudget) -> () ! {FS} {
+  mkdirAll("linkedin/data");
+  writeFile(budgetPath(), budgetToJson(b))
+}
+
+-- ─── Dispatch one request ────────────────────────────────────
+
+-- Run sketchSite for a single request. Returns true on success
+-- (so far we trust sketchSite to push through its error paths).
+func dispatchOne(r: SketchRequest, generatedAt: string, templatePath: string) -> bool ! {IO, Net, FS, AI, Process} {
+  println("→ dispatch ${r.url} #${topicSlug(r.topic)} (${r.initials})");
+  let _ = sketchSite(r.url, r.topic, r.initials, r.avatarSeed, generatedAt, 0, templatePath);
+  true
+}
+
+-- ─── Top-level dispatch ──────────────────────────────────────
+
+-- Process the queue, dispatching up to `dailyMax - count` requests.
+-- Returns the number of dispatches actually performed.
+export func sketchDispatch(today: string, templatePath: string) -> int ! {IO, Net, FS, AI, Process} {
+  let queue   = sketchQueueRead("linkedin/data/sketch_queue.json");
+  let budget  = sketchBudgetRead(today);
+  let allowed = budget.dailyMax - budget.count;
+  if listLength(queue) == 0 then {
+    println("dispatch: queue empty");
+    0
+  } else if allowed <= 0 then {
+    println("dispatch: daily budget exhausted (${intToStr(budget.count)}/${intToStr(budget.dailyMax)})");
+    0
+  } else {
+    println("dispatch: ${intToStr(listLength(queue))} queued, ${intToStr(allowed)} budget remaining");
+    let result = processN(queue, allowed, today, templatePath, []);
+    let consumed = result.consumed;
+    let leftover = result.leftover;
+    sketchQueueWrite("linkedin/data/sketch_queue.json", leftover);
+    sketchBudgetWrite({ date: today, count: budget.count + consumed, dailyMax: budget.dailyMax });
+    println("dispatch: ${intToStr(consumed)} done, ${intToStr(listLength(leftover))} remaining");
+    consumed
+  }
+}
+
+-- Recursive helper: drain up to `allowed` entries from the queue.
+export type DispatchOutcome = {
+  consumed: int,
+  leftover: [SketchRequest]
+}
+
+func processN(queue: [SketchRequest], allowed: int, today: string, templatePath: string, acc: [SketchRequest]) -> DispatchOutcome ! {IO, Net, FS, AI, Process} {
+  if allowed <= 0 then
+    { consumed: 0, leftover: listConcat(acc, queue) }
+  else match queue {
+    []           => { consumed: 0, leftover: acc },
+    [r, ...rest] => {
+      let ok = dispatchOne(r, today, templatePath);
+      let tail = processN(rest, allowed - 1, today, templatePath, acc);
+      if ok then
+        { consumed: 1 + tail.consumed, leftover: tail.leftover }
+      else
+        { consumed: tail.consumed, leftover: listConcat([r], tail.leftover) }
+    }
+  }
+}

@@ -1,16 +1,26 @@
 name: LinkedIn Comments — Hourly Refresh
 
-# Fetches comments from every published LinkedIn post via the ailang-linkedin
-# CLI and commits the JSON dump to linkedin/data/comments.json. The deploy
-# workflow re-renders the /linkedin/ page when this file changes.
+# Hourly cron: fetches LinkedIn comments and runs the sketch pipeline.
+#
+# Steps (each gated on the previous):
+#   1. Fetch comments via ailang-linkedin → linkedin/data/comments.json
+#   2. Detect "<url> #ailang-<topic>" pairs in new comments → sketch_queue.json
+#   3. Dispatch queued sketches (Net + AI + FS + Process, daily budget cap)
+#   4. Rebuild topic leaderboards + index pages
+#   5. Commit + push all changed files; trigger deploy
+#
+# Step 4 (topics-rebuild) is idempotent and runs every hour, which subsumes
+# the daily-snapshot requirement in linkedin/design/sketches.md §6.6.
 #
 # Secrets required:
-#   LINKEDIN_CREDENTIALS_JSON  — full contents of ~/.ailang/linkedin/credentials.json
-#                                (access_token, refresh_token, client_id, client_secret, org_urn)
+#   LINKEDIN_CREDENTIALS_JSON — ~/.ailang/linkedin/credentials.json contents
+#                               (access_token, refresh_token, client_id, ...)
+#   GEMINI_API_KEY            — Google AI Studio key for sketch dispatch
+#                               (optional — if missing, dispatch step skips
+#                                with a warning rather than failing the run)
 #
-# When the access token expires (~60 days), this workflow will start failing.
-# To refresh: run `ailang-linkedin auth` locally, then update the
-# LINKEDIN_CREDENTIALS_JSON secret with the new credentials.json contents.
+# When the LinkedIn access token expires (~60 days), step 1 starts failing.
+# Refresh by running `ailang-linkedin auth` locally and updating the secret.
 
 on:
   schedule:
@@ -127,23 +137,78 @@ jobs:
           echo "Fetched $count comment(s) across $posts post(s)"
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
+      - name: Detect sketch requests in new comments
+        id: detect
+        # Scans linkedin/data/comments.json for "<url> #ailang-<topic>" pairs
+        # and appends new entries to linkedin/data/sketch_queue.json.
+        # Idempotent — dedups against existing queue entries.
+        run: |
+          set -euo pipefail
+          DATE_STR=$(date -u +%Y-%m-%d)
+          ./linkedin/ailang-linkedin sketch-detect "$DATE_STR" 2>&1 | tee /tmp/detect.out
+          queue_count=0
+          if [ -f linkedin/data/sketch_queue.json ]; then
+            queue_count=$(jq 'length' linkedin/data/sketch_queue.json 2>/dev/null || echo 0)
+          fi
+          echo "queue_count=$queue_count" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch sketches (drain queue, respecting budget)
+        id: dispatch
+        if: steps.detect.outputs.queue_count != '0'
+        # Drains linkedin/data/sketch_queue.json, generating up to the daily
+        # budget number of sketches. Each requires Net + AI (Gemini via API key)
+        # + FS + Process effects. Tolerates docparse missing on the runner —
+        # sketch_extract.ail falls back to AI-only extraction in that case.
+        continue-on-error: true
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SKETCH_AI_MODEL: gemini-2.5-flash
+        run: |
+          set -euo pipefail
+          if [ -z "${GOOGLE_API_KEY:-}" ]; then
+            echo "::warning::GEMINI_API_KEY secret not set — skipping sketch dispatch."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          DATE_STR=$(date -u +%Y-%m-%d)
+          ./linkedin/ailang-linkedin sketch-dispatch "$DATE_STR" 2>&1 | tee /tmp/dispatch.out
+          generated=$(grep -oE 'dispatch summary: [0-9]+' /tmp/dispatch.out | grep -oE '[0-9]+' | head -1 || echo 0)
+          echo "generated=$generated" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild topic leaderboards + index pages
+        id: topics
+        # Reads every sketch.json under site/linkedin/topics/<topic>/,
+        # sorts, writes leaderboard.json + topic index.html.
+        # Idempotent and fast — no AI calls, just file I/O.
+        run: |
+          set -euo pipefail
+          DATE_STR=$(date -u +%Y-%m-%d)
+          ./linkedin/ailang-linkedin topics-rebuild "$DATE_STR" 2>&1 | tail -10
+
       - name: Commit & push if changed
         id: commit
         run: |
           set -euo pipefail
-          # Stage first so we detect both modifications AND new (untracked) files.
-          # `git diff --quiet` alone misses untracked paths, which is how the
-          # very first comments.json refresh slipped past without committing.
+          # Stage comments + sketch artefacts. Untracked paths must be staged
+          # explicitly — `git diff --quiet` alone misses them.
           git add linkedin/data/comments.json
-          if git diff --staged --quiet linkedin/data/comments.json; then
-            echo "No changes to comments.json."
+          [ -f linkedin/data/sketch_queue.json ] && git add linkedin/data/sketch_queue.json || true
+          [ -f linkedin/data/sketch_budget.json ] && git add linkedin/data/sketch_budget.json || true
+          [ -d site/linkedin/topics ] && git add site/linkedin/topics || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name  "ailang-linkedin-bot"
           git config user.email "noreply@sunholo.com"
-          # Already staged at the top of this step.
-          git commit -m "linkedin: refresh comments (${{ steps.fetch.outputs.count }} total)" \
+          GEN="${{ steps.dispatch.outputs.generated || '0' }}"
+          if [ "$GEN" -gt 0 ]; then
+            HEADLINE="linkedin: refresh comments (${{ steps.fetch.outputs.count }} total) + ${GEN} new sketch(es)"
+          else
+            HEADLINE="linkedin: refresh comments (${{ steps.fetch.outputs.count }} total)"
+          fi
+          git commit -m "$HEADLINE" \
             -m "Auto-generated by linkedin-comments.yml at $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
