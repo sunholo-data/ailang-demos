@@ -37,15 +37,43 @@ func findUrlEnd(s: string, pos: int) -> int =
 
 -- ─── Hashtag extraction ──────────────────────────────────────
 
--- Return the topic slug from the first "#ailang-<slug>" in text,
+-- Return the topic slug from the first "#ailang*" hashtag in text,
 -- or "" if none found.
+--
+-- Two formats supported:
+--   #ailangAgentReady  (camelCase — canonical for LinkedIn, which
+--                       breaks hashtags at hyphens)
+--   #ailang-agent-ready (legacy kebab-case — kept working so older
+--                        comments still resolve)
+--
+-- Both yield the same lowercase-kebab slug "agent-ready" downstream.
 export func sketchExtractTopicHashtag(text: string) -> string =
-  let lower = toLower(text) in
-  let idx   = find(lower, "#ailang-") in
+  -- Search for the prefix case-sensitively against the original text
+  -- so we can distinguish between camelCase and kebab forms.
+  let idx = findPrefix(text, "#ailang") in
   if idx < 0 then ""
   else
-    let slugStart = idx + 8 in  -- length("#ailang-") = 8
-    substring(lower, slugStart, findSlugEnd(lower, slugStart))
+    let cursor = idx + 7 in  -- length("#ailang") = 7
+    if cursor >= length(text) then ""
+    else
+      let c = substring(text, cursor, cursor + 1) in
+      if c == "-" then
+        -- Legacy kebab: #ailang-<slug>
+        let slugStart = cursor + 1 in
+        let lower = toLower(text) in
+        substring(lower, slugStart, findSlugEnd(lower, slugStart))
+      else if isUpperChar(c) then
+        -- camelCase: #ailangXxx — convert to kebab-case.
+        let camelEnd = findCamelEnd(text, cursor) in
+        let camel = substring(text, cursor, camelEnd) in
+        camelToKebab(camel)
+      else ""
+
+-- Case-insensitive prefix search (#ailang / #AILANG / #Ailang all match).
+func findPrefix(hay: string, needle: string) -> int =
+  let h = toLower(hay) in
+  let n = toLower(needle) in
+  find(h, n)
 
 func findSlugEnd(s: string, pos: int) -> int =
   if pos >= length(s) then pos
@@ -55,6 +83,30 @@ func findSlugEnd(s: string, pos: int) -> int =
 
 func isSlugChar(c: string) -> bool =
   (c >= "a" && c <= "z") || c == "-" || (c >= "0" && c <= "9")
+
+-- Walk forward through alphanumeric characters (both cases).
+func findCamelEnd(s: string, pos: int) -> int =
+  if pos >= length(s) then pos
+  else
+    let c = substring(s, pos, pos + 1) in
+    if isAlpha(c) || (c >= "0" && c <= "9") then findCamelEnd(s, pos + 1) else pos
+
+func isAlpha(c: string) -> bool =
+  (c >= "a" && c <= "z") || (c >= "A" && c <= "Z")
+
+func isUpperChar(c: string) -> bool = c >= "A" && c <= "Z"
+
+-- Convert camelCase to lowercase-hyphen-separated.
+-- "AgentReady" -> "agent-ready"; "MCP" -> "m-c-p" (degenerate but valid).
+func camelToKebab(s: string) -> string = toLower(camelToKebabAt(s, 0))
+
+func camelToKebabAt(s: string, pos: int) -> string =
+  if pos >= length(s) then ""
+  else
+    let c = substring(s, pos, pos + 1) in
+    let rest = camelToKebabAt(s, pos + 1) in
+    if pos > 0 && isUpperChar(c) then "-${c}${rest}"
+    else "${c}${rest}"
 
 -- ─── Topic slug parsing ──────────────────────────────────────
 

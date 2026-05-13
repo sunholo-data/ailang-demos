@@ -23,7 +23,7 @@ import std/result (Ok, Err)
 import std/json (decode, getString, getInt)
 import linkedin/types/sketch_types (LeaderboardEntry, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
 import linkedin/services/sketch_rubric (topicHasLeaderboard)
-import linkedin/services/sketch_template (topicSlug)
+import linkedin/services/sketch_template (topicSlug, topicCamelCase)
 
 -- ─── Constants ────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ func renderEntryRow(e: LeaderboardEntry) -> string =
 func renderLeaderboardSection(t: Topic, entries: [LeaderboardEntry], generatedAt: string) -> string =
   let rowsHtml = join("\n", map(renderEntryRow, entries)) in
   let intro = if listLength(entries) == 0 then
-    "<div class=\"tx-empty\"><strong>No sketches yet for this topic.</strong>Comment a URL with <code>#ailang-${topicSlug(t)}</code> on any AILANG LinkedIn post to be the first.</div>"
+    "<div class=\"tx-empty\"><strong>No sketches yet for this topic.</strong>Comment a URL with <code>#ailang${topicCamelCase(t)}</code> on any AILANG LinkedIn post to be the first.</div>"
   else
     "<div class=\"tx-leaderboard\">${rowsHtml}</div>" in
   join("", [
@@ -218,7 +218,7 @@ func renderNoLeaderboardSection(t: Topic) -> string =
     "<strong>This topic doesn't have a leaderboard.</strong> ",
     "We can't honestly score ", topicSlug(t),
     " from a single page fetch — auditability, AI spend, and agent reliability aren't visible on a marketing page. ",
-    "Sketches commented under <code>#ailang-", topicSlug(t), "</code> still get rendered with feature cards and a guarantee panel, but without a rank.",
+    "Sketches commented under <code>#ailang", topicCamelCase(t), "</code> still get rendered with feature cards and a guarantee panel, but without a rank.",
     "</div>",
     "</section>"
   ])
@@ -259,6 +259,7 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
     ("{{TOPIC_SLUG}}",               topicSlug(t)),
+    ("{{TOPIC_CAMEL}}",              topicCamelCase(t)),
     ("{{TOPIC_DESCRIPTION}}",        topicDescription(t)),
     ("{{TOPIC_DESCRIPTION_META}}",   topicDescriptionMeta(t)),
     ("{{LEADERBOARD_SECTION_HTML}}", section)

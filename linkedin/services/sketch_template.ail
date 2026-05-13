@@ -27,6 +27,18 @@ export func topicSlug(t: Topic) -> string = match t {
   General    => "general"
 }
 
+-- camelCase form for the LinkedIn hashtag, which breaks at hyphens.
+-- Always paired with the literal "ailang" prefix to form "#ailangXxx".
+export func topicCamelCase(t: Topic) -> string = match t {
+  Compliance => "Compliance",
+  Budget     => "Budget",
+  Privacy    => "Privacy",
+  Reliable   => "Reliable",
+  Portable   => "Portable",
+  AgentReady => "AgentReady",
+  General    => "General"
+}
+
 -- ─── Per-section renderers (pure string-building) ─────────────
 
 func renderChipHtml(text: string) -> string =

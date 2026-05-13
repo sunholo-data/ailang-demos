@@ -42,9 +42,9 @@ These come from prior memory entries and existing project rules — do not regre
 4. Picks a topic card matching what they care about (security, observability,
    AI engineering, platform/DevX, language design, use cases).
 5. Card shows the trigger phrase, e.g.:
-     "Comment your URL with #ailang-security on the latest AILANG post."
+     "Comment your URL with #ailangSecurity on the latest AILANG post."
 6. Reader goes back to LinkedIn, posts a comment:
-     "https://acme.com #ailang-security"
+     "https://acme.com #ailangSecurity"
 7. Within an hour, the existing comments cron fetches the comment.
 8. New detector step parses URL + hashtag from the comment text.
 9. AILANG Cloud executor runs:
@@ -69,14 +69,16 @@ The AILANG features sit behind each topic as the *answer*, not the front. The re
 
 | Topic | Hashtag | Audience | One-line frame |
 |---|---|---|---|
-| Compliance & audit | `#ailang-compliance` | Security, legal, regulated industries | *"Make your AI defensible — audit-ready, EU-AI-Act-shaped from day one."* |
-| AI spend you can predict | `#ailang-budget` | CTOs, finance, anyone with a runaway-cost story | *"Stop guessing at your AI bill. Budgets in the type signature."* |
-| Privacy & data sovereignty | `#ailang-privacy` | Enterprise data leaders, healthcare, finance, EU customers | *"Customer data labelled at the type level. Crossing the boundary is a compiler error."* |
-| Production-grade agents | `#ailang-reliable` | Engineering leaders shipping agents to real users | *"AI agents you can actually put in front of real users."* |
-| Vendor independence | `#ailang-portable` | Architecture leads, AI strategy | *"Switch from Anthropic to Gemini to OpenAI without a rewrite."* |
-| Agent-ready website | `#ailang-agent-ready` | Product, marketing, content | *"When agents start transacting on your behalf — and they will — make your site speak their protocols."* |
+| Compliance & audit | `#ailangCompliance` | Security, legal, regulated industries | *"Make your AI defensible — audit-ready, EU-AI-Act-shaped from day one."* |
+| AI spend you can predict | `#ailangBudget` | CTOs, finance, anyone with a runaway-cost story | *"Stop guessing at your AI bill. Budgets in the type signature."* |
+| Privacy & data sovereignty | `#ailangPrivacy` | Enterprise data leaders, healthcare, finance, EU customers | *"Customer data labelled at the type level. Crossing the boundary is a compiler error."* |
+| Production-grade agents | `#ailangReliable` | Engineering leaders shipping agents to real users | *"AI agents you can actually put in front of real users."* |
+| Vendor independence | `#ailangPortable` | Architecture leads, AI strategy | *"Switch from Anthropic to Gemini to OpenAI without a rewrite."* |
+| Agent-ready website | `#ailangAgentReady` | Product, marketing, content | *"When agents start transacting on your behalf — and they will — make your site speak their protocols."* |
 
-`#ailang-general` (or no hashtag): sketch with a general-purpose feature mix drawn from across all six banks.
+`#ailangGeneral` (or no hashtag): sketch with a general-purpose feature mix drawn from across all six banks.
+
+**Note on hashtag format**: LinkedIn breaks hashtags at hyphens — `#ailang-agent-ready` renders as `#ailang` plus literal `-agent-ready` text. The canonical form is now camelCase (`#ailangAgentReady`); the legacy kebab form is still parsed by the detector for backward compatibility with any existing comments.
 
 Multi-label permitted: a comment with two hashtags produces two sketches at two URLs.
 
@@ -107,7 +109,7 @@ A single HTML page rendered from a template at `linkedin/templates/sketch.html`.
 - Three feature cards, picked from the topic-keyed bank (see §7)
 - Each card: feature name + one-sentence rationale tailored to their domain + ~10 lines of AILANG showing the shape
 - Leads with explicit reference to the radar position: *"Your privacy readiness scored 4/10. AILANG opportunity is therefore 6/10. Here's where it would land first."*
-- Example for an ecommerce site under `#ailang-privacy`:
+- Example for an ecommerce site under `#ailangPrivacy`:
   - IFC labels: `string<pii>` on customer email + `! {Declassify}` on the receipt formatter
   - Capability scoping: `Net @limit=1` on the payment gateway call
   - Three-runtime deploy: same module runs in the browser (WASM), on Cloud Run, and natively
@@ -514,7 +516,7 @@ Each step is independently shippable and reversible.
 
 V1 ships when:
 
-- A new comment with `<url> #ailang-agent-ready` on any AILANG LinkedIn post produces a public sketch within one hour
+- A new comment with `<url> #ailangAgentReady` on any AILANG LinkedIn post produces a public sketch within one hour
 - The sketch page renders the AILANG function signature it ran under, with plain-English translations
 - The sketch page shows a six-axis AI-readiness radar with a score per topic
 - The sketch page shows the commenter's rank on the relevant topic leaderboard (where applicable)
