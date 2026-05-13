@@ -1,6 +1,13 @@
-name: LinkedIn Comments — Hourly Refresh
+name: LinkedIn Comments — 3-Hourly Refresh
 
-# Hourly cron: fetches LinkedIn comments and runs the sketch pipeline.
+# Cron runs every 3 hours: fetches LinkedIn comments and runs the sketch pipeline.
+#
+# Frequency lowered from hourly to 3-hourly to stay under LinkedIn's
+# per-member daily quota for socialActions/comments-GET_ALL (100/day per
+# user token, confirmed in Developer Portal Analytics). Hourly × 2 posts
+# = 48/day baseline left almost no headroom for manual `refresh` testing.
+# 3-hourly × 2 posts = 16/day baseline, comfortable buffer for both
+# automation and ad-hoc retries.
 #
 # Steps (each gated on the previous):
 #   1. Fetch comments via ailang-linkedin → linkedin/data/comments.json
@@ -27,7 +34,7 @@ name: LinkedIn Comments — Hourly Refresh
 
 on:
   schedule:
-    - cron: '0 * * * *'   # hourly, on the hour, UTC
+    - cron: '0 */3 * * *'   # every 3 hours on the hour, UTC
   workflow_dispatch:       # manual trigger
 
 permissions:
@@ -146,7 +153,34 @@ jobs:
           fi
 
           if [ "$new_count" -eq 0 ] && [ "$old_count" -gt 0 ]; then
-            echo "::warning::Fetch returned 0 comments but $old_count are already stored — keeping existing comments.json (likely transient)."
+            # Differentiate rate-limit (429) from other transient causes
+            # with one direct probe against the comments endpoint. The
+            # probe counts as ~1 API call so we only run it on the bad
+            # path where we're already troubleshooting.
+            first_urn=$(jq -r '.[0].urn // empty' linkedin/data/comments.json 2>/dev/null)
+            probe_status=""
+            if [ -n "$first_urn" ]; then
+              urn_enc=$(printf '%s' "$first_urn" | jq -sRr @uri)
+              token=$(jq -r '.access_token' "$HOME/.ailang/linkedin/credentials.json")
+              probe_status=$(curl -sS -o /dev/null -w "%{http_code}" \
+                "https://api.linkedin.com/v2/socialActions/${urn_enc}/comments" \
+                -H "Authorization: Bearer ${token}" \
+                -H "X-Restli-Protocol-Version: 2.0.0" 2>/dev/null || echo "000")
+            fi
+            case "$probe_status" in
+              429)
+                echo "::warning::LinkedIn rate-limited (HTTP 429) — daily socialActions/comments-GET_ALL quota reached for this member token (default 100/day). Resets at midnight UTC. Preserving cached $old_count comments. See https://www.linkedin.com/developers/apps → Analytics for current usage."
+                ;;
+              401|403)
+                echo "::error::LinkedIn auth failed (HTTP $probe_status) — token may be expired. Run 'ailang-linkedin auth' locally and update LINKEDIN_CREDENTIALS_JSON."
+                ;;
+              200)
+                echo "::warning::Fetch returned 0 comments but API probe was 200 — likely a transient empty result. Preserving cached $old_count."
+                ;;
+              *)
+                echo "::warning::Fetch returned 0 comments (probe status: $probe_status). Preserving cached $old_count — likely transient."
+                ;;
+            esac
             rm -f linkedin/data/comments.json.new
             count=$old_count
           else
