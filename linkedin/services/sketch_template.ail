@@ -166,6 +166,41 @@ func renderRadarPoints(scores: [TopicScore]) -> string = join(" ", [
 
 export func topicLabel(t: Topic) -> string = topicSlug(t)
 
+-- ─── Topic-conditional content blocks ─────────────────────────
+
+-- For each conditional section, two flavours: scored (leaderboard
+-- topics) and qualitative (compliance/budget/reliable — these can't
+-- honestly be measured from a single page fetch).
+
+-- §1 — headline + radar caption
+export func renderScoreHeadline(t: Topic, score: int) -> string =
+  if topicHasLeaderboard(t) then join("", [
+    "<h2>You scored <span class=\"sk-readiness-num\">", intToStr(score), "/10</span> on ", topicLabel(t), ".</h2>",
+    "<p>The radar shows AILANG-readiness across six commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>"
+  ]) else join("", [
+    "<h2>", topicLabel(t), " isn't scored from a single page fetch.</h2>",
+    "<p>Audit trails, AI spend control, and runtime agent reliability aren't visible on a marketing page. The cards below show where AILANG would help — chosen on what we see, not graded.</p>"
+  ])
+
+-- §1 — "Why this score" callout. Empty for non-leaderboard topics.
+export func renderWhyBlock(t: Topic, whySignalsHtml: string, score: int) -> string =
+  if topicHasLeaderboard(t) then join("", [
+    "<div class=\"sk-why\">",
+    "<strong>Why ", topicLabel(t), " scored ", intToStr(score), "/10</strong>",
+    "<ul>", whySignalsHtml, "</ul>",
+    "<p style=\"margin: 10px 0 0;\"><a href=\"#sk-breakdown\">Full breakdown ↓</a> · <a href=\"https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md\">View rubric ↗</a></p>",
+    "</div>"
+  ]) else ""
+
+-- §3 — pretext sentence above the AILANG-feature cards.
+export func renderScorePretext(t: Topic, score: int) -> string =
+  if topicHasLeaderboard(t) then join("", [
+    "<p class=\"sk-score-pretext\">You scored <strong>", intToStr(score), "/10</strong> on ", topicLabel(t),
+    ". AILANG opportunity is therefore <strong>", intToStr(10 - score), "/10</strong>. Here's where it would land first.</p>"
+  ]) else join("", [
+    "<p class=\"sk-score-pretext\">", topicLabel(t), " isn't scored from a single page fetch — see §1 for why. The cards below are the AILANG features that would help your kind of business.</p>"
+  ])
+
 -- ─── Rank block (optional) ────────────────────────────────────
 
 func renderRankBlock(t: Topic, rank: int) -> string =
@@ -206,24 +241,28 @@ export func sketchRenderHtml(
   let radarPoints     = renderRadarPoints(scores);
   let rankBlockHtml   = renderRankBlock(topic, rank);
 
+  let ogSummary = if topicHasLeaderboard(topic)
+                  then "AI-readiness ${intToStr(topicReadiness)}/10"
+                  else "qualitative AILANG fit (this topic isn't scored from a single page fetch)";
   replaceMany(template, [
-    ("{{DOMAIN}}",             sketch.registrableDomain),
-    ("{{TOPIC_LABEL}}",        topicLabel(topic)),
-    ("{{TOPIC_SLUG}}",         topicSlug(topic)),
-    ("{{TOPIC_SCORE}}",        intToStr(topicReadiness)),
-    ("{{TOPIC_OPPORTUNITY}}",  intToStr(topicOpp)),
-    ("{{INITIALS}}",           sketch.initials),
-    ("{{AVATAR_ANGLE}}",       intToStr(avatarAngle)),
-    ("{{GENERATED_AT}}",       sketch.generatedAt),
-    ("{{RADAR_POINTS}}",       radarPoints),
-    ("{{RANK_BLOCK_HTML}}",    rankBlockHtml),
-    ("{{WHY_SIGNALS_HTML}}",   whySignalsHtml),
-    ("{{NARRATIVE_HEADLINE}}", extracted.audience),
-    ("{{NARRATIVE_BODY}}",     extracted.narrative),
-    ("{{CHIPS_HTML}}",         chipsHtml),
-    ("{{EXTRACT_STATS_HTML}}", renderExtractStats(extracted)),
-    ("{{CARDS_HTML}}",         cardsHtml),
-    ("{{SIGNALS_HTML}}",       signalsHtml)
+    ("{{DOMAIN}}",              sketch.registrableDomain),
+    ("{{TOPIC_LABEL}}",         topicLabel(topic)),
+    ("{{TOPIC_SLUG}}",          topicSlug(topic)),
+    ("{{INITIALS}}",            sketch.initials),
+    ("{{AVATAR_ANGLE}}",        intToStr(avatarAngle)),
+    ("{{GENERATED_AT}}",        sketch.generatedAt),
+    ("{{RADAR_POINTS}}",        radarPoints),
+    ("{{RANK_BLOCK_HTML}}",     rankBlockHtml),
+    ("{{SCORE_HEADLINE_HTML}}", renderScoreHeadline(topic, topicReadiness)),
+    ("{{WHY_BLOCK_HTML}}",      renderWhyBlock(topic, whySignalsHtml, topicReadiness)),
+    ("{{SCORE_PRETEXT_HTML}}",  renderScorePretext(topic, topicReadiness)),
+    ("{{NARRATIVE_HEADLINE}}",  extracted.audience),
+    ("{{NARRATIVE_BODY}}",      extracted.narrative),
+    ("{{CHIPS_HTML}}",          chipsHtml),
+    ("{{EXTRACT_STATS_HTML}}",  renderExtractStats(extracted)),
+    ("{{CARDS_HTML}}",          cardsHtml),
+    ("{{SIGNALS_HTML}}",        signalsHtml),
+    ("{{OG_SUMMARY}}",          ogSummary)
   ])
 }
 

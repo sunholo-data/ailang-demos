@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
 <meta name="description" content="An AILANG sketch of {{DOMAIN}} — what an AI sees, where AILANG fits.">
 <meta property="og:title" content="AILANG × {{DOMAIN}}">
-<meta property="og:description" content="{{TOPIC_LABEL}} sketch · AI-readiness {{TOPIC_SCORE}}/10.">
+<meta property="og:description" content="{{TOPIC_LABEL}} sketch for {{DOMAIN}} — {{OG_SUMMARY}}.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -322,17 +322,11 @@
         <text x="-94" y="-54" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono" font-size="10" fill="var(--text-secondary)">budget</text>
       </svg>
       <div class="sk-radar-text">
-        <h2>You scored <span class="sk-readiness-num">{{TOPIC_SCORE}}/10</span> on {{TOPIC_LABEL}}.</h2>
-        <p>The radar shows AILANG-readiness across six commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
+        {{SCORE_HEADLINE_HTML}}
         {{RANK_BLOCK_HTML}}
       </div>
     </div>
-    <!-- Why this score? — at-a-glance summary of the top contributing signals -->
-    <div class="sk-why">
-      <strong>Why {{TOPIC_LABEL}} scored {{TOPIC_SCORE}}/10</strong>
-      <ul>{{WHY_SIGNALS_HTML}}</ul>
-      <p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p>
-    </div>
+    {{WHY_BLOCK_HTML}}
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
@@ -347,7 +341,7 @@
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext">You scored <strong>{{TOPIC_SCORE}}/10</strong> on {{TOPIC_LABEL}}. AILANG opportunity is therefore <strong>{{TOPIC_OPPORTUNITY}}/10</strong>. Here's where it would land first.</p>
+    {{SCORE_PRETEXT_HTML}}
     <div class="sk-cards">{{CARDS_HTML}}</div>
   </section>
 
