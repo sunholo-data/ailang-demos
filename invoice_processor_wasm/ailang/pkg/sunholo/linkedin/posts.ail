@@ -1,0 +1,188 @@
+module sunholo/linkedin/posts
+
+-- LinkedIn Posts API client.
+--
+-- Pure API surface: this module knows how to escape post text for LinkedIn's
+-- "Little Text Format", build a properly-headered REST request, hit
+--   POST https://api.linkedin.com/rest/posts
+-- and parse the resulting URN out of the `x-restli-id` response header.
+--
+-- It deliberately does NOT manage state (which posts have been published,
+-- the state.json file, etc.) — that's a consumer-side concern. See README.
+
+import std/net (httpRequest)
+import std/json (encode, decode, getString, jo, kv, js)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length, trim, replace, charCode, charAt)
+
+-- Result of publishing a post via linkedinCreatePost.
+export type PostResult = {
+  postUrn: string,
+  slug: string,
+  publishedAt: string
+}
+
+-- LinkedIn API version header. Bump as LinkedIn deprecates older versions.
+-- Consumers can override per call by building their own headers, but this is
+-- the default the package ships with.
+export func linkedinApiVersion() -> string = "202604"
+
+-- Standard headers for LinkedIn REST calls.
+export func linkedinHeaders(token: string) -> [{name: string, value: string}] = [
+  { name: "Authorization", value: "Bearer ${token}" },
+  { name: "Content-Type", value: "application/json" },
+  { name: "X-Restli-Protocol-Version", value: "2.0.0" },
+  { name: "LinkedIn-Version", value: linkedinApiVersion() }
+]
+
+-- LinkedIn's commentary field uses "Little Text Format". These characters
+-- are syntactic (mentions, hashtags, entities) and must be backslash-escaped
+-- to appear as literal text. Order matters: `\` must be replaced first to
+-- avoid double-escaping our own backslashes.
+--
+-- Hashtags (#) are intentionally NOT escaped — LinkedIn renders `#foo` as
+-- a clickable tag, which is usually what authors want.
+export func linkedinEscapeLittleText(s: string) -> string {
+  let s1  = replace(s,   "\\", "\\\\");
+  let s2  = replace(s1,  "(",  "\\(");
+  let s3  = replace(s2,  ")",  "\\)");
+  let s4  = replace(s3,  "[",  "\\[");
+  let s5  = replace(s4,  "]",  "\\]");
+  let s6  = replace(s5,  "{",  "\\{");
+  let s7  = replace(s6,  "}",  "\\}");
+  let s8  = replace(s7,  "<",  "\\<");
+  let s9  = replace(s8,  ">",  "\\>");
+  let s10 = replace(s9,  "@",  "\\@");
+  let s11 = replace(s10, "|",  "\\|");
+  let s12 = replace(s11, "*",  "\\*");
+  let s13 = replace(s12, "_",  "\\_");
+  let s14 = replace(s13, "~",  "\\~");
+  s14
+}
+
+-- Create a post on a company page.
+--
+--   token   — OAuth2 access token with `w_organization_social` scope
+--   orgUrn  — `urn:li:organization:<id>`
+--   text    — the post body. Will be auto-escaped for Little Text Format.
+--             requires { 0 < length(text) <= 3000 } per LinkedIn's limit
+--
+-- Returns the post URN extracted from the `x-restli-id` response header.
+export func linkedinCreatePost(token: string, orgUrn: string, text: string)
+  -> Result[PostResult, string]
+  ! {Net @limit=1}
+requires { length(text) > 0 && length(text) <= 3000 }
+{
+  let url = "https://api.linkedin.com/rest/posts";
+  let escaped = linkedinEscapeLittleText(text);
+  let body = encode(jo([
+    kv("author", js(orgUrn)),
+    kv("commentary", js(escaped)),
+    kv("visibility", js("PUBLIC")),
+    kv("distribution", jo([
+      kv("feedDistribution", js("MAIN_FEED"))
+    ])),
+    kv("lifecycleState", js("PUBLISHED"))
+  ]));
+  match httpRequest("POST", url, linkedinHeaders(token), body) {
+    Ok(response) => {
+      if response.ok then linkedinParsePostResponse(response.headers, response.body)
+      else Err("LinkedIn API error (status ${response.status}): ${response.body}")
+    },
+    Err(_) => Err("Network error creating LinkedIn post")
+  }
+}
+
+-- Create a post with a single attached image. The image URN must be one
+-- returned by sunholo/linkedin/images.linkedinUploadImage — LinkedIn
+-- rejects any other URN as the post's media reference.
+--
+--   token       — OAuth2 access token (w_organization_social scope)
+--   orgUrn      — urn:li:organization:<id>
+--   text        — post body. Auto-escaped for Little Text Format.
+--   imageUrn    — urn:li:image:<id> returned by the image upload flow
+--   altText     — accessibility description for the image (≤ 300 chars
+--                 per LinkedIn's accessibility guidance)
+export func linkedinCreateImagePost(token: string, orgUrn: string, text: string, imageUrn: string, altText: string)
+  -> Result[PostResult, string]
+  ! {Net @limit=1}
+requires { length(text) > 0 && length(text) <= 3000 }
+{
+  let url = "https://api.linkedin.com/rest/posts";
+  let escaped = linkedinEscapeLittleText(text);
+  let body = encode(jo([
+    kv("author", js(orgUrn)),
+    kv("commentary", js(escaped)),
+    kv("visibility", js("PUBLIC")),
+    kv("distribution", jo([
+      kv("feedDistribution", js("MAIN_FEED"))
+    ])),
+    kv("content", jo([
+      kv("media", jo([
+        kv("id", js(imageUrn)),
+        kv("altText", js(altText))
+      ]))
+    ])),
+    kv("lifecycleState", js("PUBLISHED"))
+  ]));
+  match httpRequest("POST", url, linkedinHeaders(token), body) {
+    Ok(response) => {
+      if response.ok then linkedinParsePostResponse(response.headers, response.body)
+      else Err("LinkedIn API error (status ${response.status}): ${response.body}")
+    },
+    Err(_) => Err("Network error creating LinkedIn image post")
+  }
+}
+
+func linkedinParsePostResponse(headers: [{name: string, value: string}], body: string) -> Result[PostResult, string] {
+  -- LinkedIn POST /rest/posts returns 201 with the URN in the `x-restli-id`
+  -- response header. The body is empty on success.
+  let headerUrn = linkedinFindHeader(headers, "x-restli-id");
+  let postUrn = if length(headerUrn) > 0 then headerUrn
+                else if length(trim(body)) > 0 then linkedinExtractUrn(body)
+                else "pending";
+  let result: PostResult = {
+    postUrn: postUrn,
+    slug: "",
+    publishedAt: ""
+  };
+  Ok(result)
+}
+
+-- Case-insensitive header lookup. HTTP header names aren't case-sensitive
+-- and LinkedIn has sent both `X-RestLi-Id` and `x-restli-id` historically.
+export func linkedinFindHeader(headers: [{name: string, value: string}], target: string) -> string =
+  match headers {
+    [] => "",
+    h :: rest => if linkedinHeaderMatches(h.name, target) then h.value
+                 else linkedinFindHeader(rest, target)
+  }
+
+func linkedinHeaderMatches(a: string, b: string) -> bool {
+  let la = length(a);
+  let lb = length(b);
+  if la != lb then false
+  else asciiEqualsIgnoreCase(a, b, 0, la)
+}
+
+func asciiEqualsIgnoreCase(a: string, b: string, i: int, n: int) -> bool =
+  if i >= n then true
+  else {
+    let ca = lowerByteAt(a, i);
+    let cb = lowerByteAt(b, i);
+    if ca == cb then asciiEqualsIgnoreCase(a, b, i + 1, n)
+    else false
+  }
+
+func lowerByteAt(s: string, i: int) -> int {
+  let c = charCode(charAt(s, i));
+  if c >= 65 && c <= 90 then c + 32 else c
+}
+
+func linkedinExtractUrn(body: string) -> string {
+  match decode(body) {
+    Ok(json) => getOrElse(getString(json, "id"), "unknown"),
+    Err(_) => "created"
+  }
+}

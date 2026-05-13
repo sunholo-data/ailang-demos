@@ -1,0 +1,115 @@
+module sunholo/linkedin/images
+
+-- LinkedIn Images API client.
+--
+-- Two-step upload for posts with attached images:
+--
+--   1. POST /rest/images?action=initializeUpload
+--      → returns { uploadUrl, image: "urn:li:image:..." }
+--
+--   2. PUT <uploadUrl> with raw image bytes (no auth header — the URL is
+--      pre-signed). The image URN can then be attached to a post via
+--      sunholo/linkedin/posts.linkedinCreateImagePost.
+--
+-- linkedinUploadImage is the convenience wrapper for the two-step flow.
+
+import std/net (httpRequest, httpRequestBytes)
+import std/json (encode, decode, getString, getObject, jo, kv, js)
+import std/string (length)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+
+-- Result of step 1: an opaque upload URL + the image URN that future
+-- posts will reference.
+export type ImageUpload = {
+  uploadUrl: string,
+  imageUrn: string
+}
+
+-- Step 1: ask LinkedIn for an upload URL. The returned URN is what
+-- linkedinCreateImagePost expects as `imageUrn`.
+export func linkedinInitializeImageUpload(token: string, orgUrn: string)
+  -> Result[ImageUpload, string]
+  ! {Net @limit=1}
+{
+  let url = "https://api.linkedin.com/rest/images?action=initializeUpload";
+  let body = encode(jo([
+    kv("initializeUploadRequest", jo([
+      kv("owner", js(orgUrn))
+    ]))
+  ]));
+  let headers = [
+    { name: "Authorization", value: "Bearer ${token}" },
+    { name: "Content-Type", value: "application/json" },
+    { name: "X-Restli-Protocol-Version", value: "2.0.0" },
+    { name: "LinkedIn-Version", value: "202604" }
+  ];
+  match httpRequest("POST", url, headers, body) {
+    Ok(resp) => {
+      if resp.ok then linkedinParseUploadInit(resp.body)
+      else Err("initializeUpload status ${resp.status}: ${resp.body}")
+    },
+    Err(_) => Err("Network error during initializeUpload")
+  }
+}
+
+func linkedinParseUploadInit(body: string) -> Result[ImageUpload, string] {
+  match decode(body) {
+    Ok(json) => {
+      match getObject(json, "value") {
+        Some(value) => {
+          let u = getOrElse(getString(value, "uploadUrl"), "");
+          let i = getOrElse(getString(value, "image"), "");
+          if length(u) == 0 then Err("No uploadUrl in initializeUpload response")
+          else if length(i) == 0 then Err("No image URN in initializeUpload response")
+          else {
+            let r: ImageUpload = { uploadUrl: u, imageUrn: i };
+            Ok(r)
+          }
+        },
+        None => Err("No 'value' object in initializeUpload response")
+      }
+    },
+    Err(e) => Err("Failed to parse initializeUpload response: ${e}")
+  }
+}
+
+-- Step 2: PUT the raw image bytes to the pre-signed upload URL. The
+-- URL carries its own short-lived authentication signature; we do
+-- NOT add Authorization headers here.
+export func linkedinUploadImageBytes(uploadUrl: string, imageBytes: bytes)
+  -> Result[(), string]
+  ! {Net @limit=1}
+{
+  -- httpRequestBytes (AILANG ≥ 0.19.0) sends raw bytes with
+  -- Content-Type defaulting to application/octet-stream and an
+  -- explicit Content-Length (no chunked encoding, which LinkedIn
+  -- requires for this endpoint).
+  match httpRequestBytes("PUT", uploadUrl, [], imageBytes) {
+    Ok(resp) => {
+      if resp.ok then Ok(())
+      else Err("image upload status ${resp.status}: ${resp.body}")
+    },
+    Err(_) => Err("Network error during image upload")
+  }
+}
+
+-- Convenience: do both steps in one call. Returns the image URN ready
+-- to be passed to linkedinCreateImagePost.
+--
+-- Note: the caller is responsible for reading + base64-decoding the
+-- image bytes (via std/fs.readFileBytes + std/bytes.fromBase64).
+export func linkedinUploadImage(token: string, orgUrn: string, imageBytes: bytes)
+  -> Result[string, string]
+  ! {Net @limit=2}
+{
+  match linkedinInitializeImageUpload(token, orgUrn) {
+    Err(e) => Err(e),
+    Ok(init) => {
+      match linkedinUploadImageBytes(init.uploadUrl, imageBytes) {
+        Err(e) => Err(e),
+        Ok(_) => Ok(init.imageUrn)
+      }
+    }
+  }
+}

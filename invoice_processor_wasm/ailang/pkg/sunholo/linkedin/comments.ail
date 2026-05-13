@@ -1,0 +1,532 @@
+module sunholo/linkedin/comments
+
+-- LinkedIn Comments API client (read-only).
+--
+-- Fetches comments via `GET /rest/socialActions/{urn}/comments`. Requires
+-- the `r_organization_social_feed` scope on the OAuth2 token (part of the
+-- Community Management API).
+--
+-- Also provides:
+--   - linkedinCommentsToJson — serialises comments for public consumption
+--     with personal identifiers stripped (GDPR), and adds deterministic
+--     pseudonymous {initials, avatarSeed} fields derived from a one-way
+--     hash of the actor URN.
+--   - linkedinDerivePersona — the persona derivation function exposed
+--     so consumers can build alternative output formats while keeping
+--     the same stable monogram per commenter.
+
+import std/net (httpRequest)
+import std/json (encode, decode, getString, getArray, getObject, getInt, jo, kv, js, ja)
+import std/string (length, split, join, intToStr, substring, charAt, charCode, replace)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/list (length as listLength, map, foldl)
+import std/crypto (sha256Hex)
+
+-- A comment on a LinkedIn post (read-only), as it comes off the wire.
+--
+-- IFC labels:
+--   text: string<pii>            — may contain commenter-typed names,
+--                                  @-mentions that LinkedIn already
+--                                  resolved to display names, and any
+--                                  other personal content the commenter
+--                                  chose to share.
+--   authorName: string<pii>      — the actor URN. Stable identifier;
+--                                  treat as PII.
+--
+-- These labels are *open*: any caller that takes a `LinkedInComment` sees
+-- the labels propagate through field accesses. To publish anything derived
+-- from a comment, route it through `linkedinSanitiseComment` (the only
+-- declassification gate in the package).
+--
+-- parentCommentUrn is empty ("") for top-level comments and set to the
+-- parent comment's URN for nested replies. Consumers wanting a tree
+-- structure can group on this field.
+export type LinkedInComment = {
+  commentUrn: string,
+  authorName: string<pii>,
+  text: string<pii>,
+  createdAt: string,
+  parentPostUrn: string,
+  parentCommentUrn: string
+}
+
+-- A comment that's been sanitised for public consumption. Strictly
+-- additive over LinkedInComment: text is redacted, the actor URN is
+-- replaced by the pseudonymous persona derived via sha256.
+--
+-- No fields carry IFC labels — this record is safe to serialise to any
+-- public sink (the demos website, an RSS feed, etc.). The only way to
+-- produce one is via `linkedinSanitiseComment ! {Declassify}`, which
+-- forces the caller to explicitly cross the declassification boundary.
+export type PublicComment = {
+  commentUrn: string,
+  text: string,
+  createdAt: string,
+  parentPostUrn: string,
+  parentCommentUrn: string,
+  initials: string,
+  avatarSeed: string
+}
+
+-- Headers for read-only comments calls. Note: the version must match the
+-- version the rest of the integration uses; we hard-code rather than
+-- import linkedinApiVersion from `posts.ail` to keep modules independent.
+func linkedinCommentHeaders(token: string) -> [{name: string, value: string}] = [
+  { name: "Authorization", value: "Bearer ${token}" },
+  { name: "X-Restli-Protocol-Version", value: "2.0.0" },
+  { name: "LinkedIn-Version", value: "202604" }
+]
+
+-- LinkedIn requires URL-encoded URNs in the path. Simple URNs need only
+-- `:` → `%3A`, but COMPOSITE URNs (comment URNs like
+-- `urn:li:comment:(urn:li:activity:..., ...)`) also have parens and a
+-- comma that LinkedIn's path parser rejects if not escaped. Encode all
+-- four reserved chars defensively.
+func linkedinEncodeUrn(urn: string) -> string {
+  let s1 = replace(urn, ":", "%3A");
+  let s2 = replace(s1, "(", "%28");
+  let s3 = replace(s2, ")", "%29");
+  let s4 = replace(s3, ",", "%2C");
+  s4
+}
+
+-- Fetch comments for a single post URN.
+export func linkedinGetComments(token: string, postUrn: string) -> Result[[LinkedInComment], string] ! {Net @limit=1} {
+  let encodedUrn = linkedinEncodeUrn(postUrn);
+  let url = "https://api.linkedin.com/rest/socialActions/${encodedUrn}/comments";
+  match httpRequest("GET", url, linkedinCommentHeaders(token), "") {
+    Ok(response) => {
+      if response.ok then linkedinParseCommentsResponse(response.body, postUrn)
+      else Err("Comments API error (status ${response.status}): ${response.body}")
+    },
+    Err(_) => Err("Network error fetching comments for ${postUrn}")
+  }
+}
+
+func linkedinParseCommentsResponse(body: string, postUrn: string) -> Result[[LinkedInComment], string] {
+  match decode(body) {
+    Ok(json) => {
+      match getArray(json, "elements") {
+        Some(elements) => Ok(linkedinParseCommentList(elements, postUrn)),
+        None => Ok([])
+      }
+    },
+    Err(e) => Err("Failed to parse comments: ${e}")
+  }
+}
+
+func linkedinParseCommentList(elements: [Json], postUrn: string) -> [LinkedInComment] =
+  match elements {
+    [] => [],
+    elem :: rest => {
+      let comment = linkedinParseOneComment(elem, postUrn);
+      comment :: linkedinParseCommentList(rest, postUrn)
+    }
+  }
+
+func linkedinParseOneComment(elem: Json, postUrn: string) -> LinkedInComment {
+  -- LinkedIn comments come back shaped like:
+  --   { commentUrn:    "urn:li:comment:(...)",
+  --     actor:         "urn:li:person:xxx",
+  --     message:       { text: "...", attributes: [...] },
+  --     created:       { actor: "...", time: 1746000000000 },
+  --     parentComment: "urn:li:comment:(...)"  -- only on nested replies
+  --     id:            "12345",
+  --     ... }
+  let urn = getOrElse(getString(elem, "commentUrn"), "");
+  let text = match getObject(elem, "message") {
+    Some(msg) => linkedinRedactedText(msg),
+    None => ""
+  };
+  let created = match getObject(elem, "created") {
+    Some(c) => match getInt(c, "time") {
+      Some(t) => intToStr(t),
+      None => ""
+    },
+    None => ""
+  };
+  -- Without r_member_profile we can't expand the actor URN to a name.
+  -- Consumers should derive a pseudonym via linkedinDerivePersona rather
+  -- than rendering this URN directly (it's still a personal identifier).
+  let authorName = getOrElse(getString(elem, "actor"), "unknown");
+  -- `parentComment` is present only on nested replies. Top-level comments
+  -- get an empty string, which the caller can use to detect threading depth.
+  let parentComment = getOrElse(getString(elem, "parentComment"), "");
+  let comment: LinkedInComment = {
+    commentUrn: urn,
+    authorName: authorName,
+    text: text,
+    createdAt: created,
+    parentPostUrn: postUrn,
+    parentCommentUrn: parentComment
+  };
+  comment
+}
+
+-- Fetch replies to a specific comment.
+--
+-- LinkedIn nests comments one level deep: a comment on a post can have
+-- replies. To see them, hit `/socialActions/<commentUrn>/comments`.
+-- (Reply-to-replies aren't a thing in LinkedIn's UI; this is the leaf.)
+export func linkedinGetCommentReplies(token: string, commentUrn: string)
+  -> Result[[LinkedInComment], string]
+  ! {Net @limit=1}
+{
+  let encoded = linkedinEncodeUrn(commentUrn);
+  let url = "https://api.linkedin.com/rest/socialActions/${encoded}/comments";
+  match httpRequest("GET", url, linkedinCommentHeaders(token), "") {
+    Ok(response) => {
+      if response.ok then linkedinParseRepliesResponse(response.body, commentUrn)
+      else Err("Comment replies API error (status ${response.status}): ${response.body}")
+    },
+    Err(_) => Err("Network error fetching replies for ${commentUrn}")
+  }
+}
+
+-- Reply parsing differs from top-level parsing only in that the comments
+-- come back with their `parentComment` field set; otherwise identical shape.
+func linkedinParseRepliesResponse(body: string, parentCommentUrn: string) -> Result[[LinkedInComment], string] {
+  match decode(body) {
+    Ok(json) => {
+      match getArray(json, "elements") {
+        Some(elements) => Ok(linkedinParseReplyList(elements, parentCommentUrn)),
+        None => Ok([])
+      }
+    },
+    Err(e) => Err("Failed to parse replies: ${e}")
+  }
+}
+
+-- Each reply belongs to a known parent (we asked for replies to that one).
+-- LinkedIn's response usually includes `parentComment` per element, but we
+-- defensively fill it in case any element is missing the field.
+func linkedinParseReplyList(elements: [Json], parentCommentUrn: string) -> [LinkedInComment] =
+  match elements {
+    [] => [],
+    elem :: rest => {
+      let r = linkedinParseOneReply(elem, parentCommentUrn);
+      r :: linkedinParseReplyList(rest, parentCommentUrn)
+    }
+  }
+
+func linkedinParseOneReply(elem: Json, parentCommentUrn: string) -> LinkedInComment {
+  -- `object` on a reply points at the parent activity URN (post); we use
+  -- that for parentPostUrn. parentCommentUrn is enforced to the URN we
+  -- asked replies for (LinkedIn's `parentComment` field may be elided).
+  let urn = getOrElse(getString(elem, "commentUrn"), "");
+  let text = match getObject(elem, "message") {
+    Some(msg) => linkedinRedactedText(msg),
+    None => ""
+  };
+  let created = match getObject(elem, "created") {
+    Some(c) => match getInt(c, "time") {
+      Some(t) => intToStr(t),
+      None => ""
+    },
+    None => ""
+  };
+  let authorName = getOrElse(getString(elem, "actor"), "unknown");
+  let postUrn = getOrElse(getString(elem, "object"), "");
+  let comment: LinkedInComment = {
+    commentUrn: urn,
+    authorName: authorName,
+    text: text,
+    createdAt: created,
+    parentPostUrn: postUrn,
+    parentCommentUrn: parentCommentUrn
+  };
+  comment
+}
+
+-- Fetch comments AND their replies for every URN in the list.
+--
+-- Two phases per post:
+--   1. GET top-level comments (1 call)
+--   2. For each top-level comment, GET its replies (N calls)
+--
+-- Returns a single flat list. Each comment carries parentPostUrn (the post
+-- it belongs to) and parentCommentUrn (the comment it replies to, or "" for
+-- a top-level comment). Consumers can either keep it flat or group by
+-- parentCommentUrn for a threaded display.
+--
+-- Net @limit=50 supports ~25 posts with 1 reply each, or 5 posts with ~9
+-- replies each. Bump per the active campaign's shape.
+export func linkedinGetAllComments(token: string, urns: [string]) -> [LinkedInComment] ! {Net @limit=50} {
+  linkedinFetchCommentsLoop(token, urns)
+}
+
+func linkedinFetchCommentsLoop(token: string, urns: [string]) -> [LinkedInComment] ! {Net} =
+  match urns {
+    [] => [],
+    u :: rest => {
+      let topLevel = match linkedinGetComments(token, u) {
+        Ok(cs) => cs,
+        Err(_) => []
+      };
+      -- For each top-level comment, also fetch its replies.
+      let replies = linkedinFetchRepliesForList(token, topLevel);
+      let combined = linkedinConcatComments(topLevel, replies);
+      let others = linkedinFetchCommentsLoop(token, rest);
+      linkedinConcatComments(combined, others)
+    }
+  }
+
+func linkedinFetchRepliesForList(token: string, comments: [LinkedInComment]) -> [LinkedInComment] ! {Net} =
+  match comments {
+    [] => [],
+    c :: rest => {
+      let raw = match linkedinGetCommentReplies(token, c.commentUrn) {
+        Ok(rs) => rs,
+        Err(_) => []
+      };
+      -- LinkedIn returns nested replies with `object` set to the parent
+      -- ACTIVITY urn (`urn:li:activity:...`), not the SHARE urn that
+      -- callers track in their state. Rewrite each reply's parentPostUrn
+      -- to match the parent comment's, so consumers can group on it.
+      let mine = map(\r. linkedinRewireReplyParent(r, c.parentPostUrn), raw);
+      let others = linkedinFetchRepliesForList(token, rest);
+      linkedinConcatComments(mine, others)
+    }
+  }
+
+func linkedinRewireReplyParent(r: LinkedInComment, parentPostUrn: string) -> LinkedInComment {
+  let fixed: LinkedInComment = {
+    commentUrn: r.commentUrn,
+    authorName: r.authorName,
+    text: r.text,
+    createdAt: r.createdAt,
+    parentPostUrn: parentPostUrn,
+    parentCommentUrn: r.parentCommentUrn
+  };
+  fixed
+}
+
+func linkedinConcatComments(a: [LinkedInComment], b: [LinkedInComment]) -> [LinkedInComment] =
+  match a {
+    [] => b,
+    x :: rest => x :: linkedinConcatComments(rest, b)
+  }
+
+-- ── Declassification gate ──────────────────────────────────────────
+--
+-- Convert a wire-level LinkedInComment (PII-tainted) into a PublicComment
+-- safe for serialisation. This is the *only* function in the package that
+-- carries the `! {Declassify}` effect — any time you grep the codebase for
+-- declassification, you should find exactly this site.
+--
+-- What happens inside:
+--   1. The actor URN is hashed into a stable, irreversible {initials,
+--      avatarSeed} pair via linkedinDerivePersona. The URN itself never
+--      makes it into the output record.
+--   2. The comment text is unchanged here — @-mention redaction happens
+--      at parse time (linkedinParseOneComment / linkedinParseOneReply
+--      call linkedinRedactedText, which already strips structured tags).
+--      Free-text names that the commenter typed themselves are out of
+--      scope; the caller accepts that risk by invoking this function.
+--   3. commentUrn is dropped entirely — it's a stable identifier we don't
+--      need on the public side.
+export func linkedinSanitiseComment(c: LinkedInComment) -> PublicComment
+  ! {Declassify}
+{
+  let p = linkedinDerivePersona(c.authorName);
+  -- commentUrn is preserved (LinkedIn-public, not PII) so consumers can
+  -- thread replies under their parent. It's intentionally NOT emitted by
+  -- linkedinCommentsToJson — consumers wanting it on the wire can build
+  -- their own serialiser.
+  let pub: PublicComment = {
+    commentUrn: c.commentUrn,
+    text: c.text,
+    createdAt: c.createdAt,
+    parentPostUrn: c.parentPostUrn,
+    parentCommentUrn: c.parentCommentUrn,
+    initials: p.initials,
+    avatarSeed: p.avatarSeed
+  };
+  pub
+}
+
+-- Serialise a list of PUBLIC (already-sanitised) comments as a JSON array.
+--
+-- The {not pii} refinement is implicit in the PublicComment type — that
+-- record carries no IFC labels by construction. A caller cannot pass a
+-- raw `[LinkedInComment]` here; they must first route every element
+-- through `linkedinSanitiseComment`. This makes leaking PII into the
+-- published JSON a type error rather than a discipline.
+export func linkedinCommentsToJson(comments: [PublicComment]) -> string {
+  let entries = map(\c. jo([
+    kv("text", js(c.text)),
+    kv("createdAt", js(c.createdAt)),
+    kv("parentPostUrn", js(c.parentPostUrn)),
+    -- parentCommentUrn lets the website reconstruct a reply tree.
+    -- For top-level comments this is the empty string.
+    kv("parentCommentUrn", js(c.parentCommentUrn)),
+    kv("initials", js(c.initials)),
+    kv("avatarSeed", js(c.avatarSeed))
+  ]), comments);
+  encode(ja(entries))
+}
+
+-- Extract the message text from a LinkedIn comment object, redacting
+-- person mentions in place. When someone tags a colleague (the `@…`
+-- popover in LinkedIn's UI), the API returns the resolved name in the
+-- text PLUS a structured `attributes` entry that tells us where each
+-- mention is. We walk the attributes and replace each person mention
+-- with `@<initials>` derived from the mentioned person's URN, so the
+-- public comments.json doesn't leak names of people who were tagged
+-- (separate from the comment author).
+--
+-- Organization mentions are left unchanged — orgs aren't PII in the
+-- same way personal names are, and they're already public on LinkedIn.
+func linkedinRedactedText(msg: Json) -> string {
+  let raw = getOrElse(getString(msg, "text"), "");
+  match getArray(msg, "attributes") {
+    Some(attrs) => linkedinApplyRedactions(raw, attrs),
+    None => raw
+  }
+}
+
+-- Apply redactions in REVERSE order of `start` so earlier indices don't
+-- shift as we replace later ones. We also drop attributes that don't have
+-- a `value.person.person` URN (organisations, hashtag entities, etc.).
+--
+-- Two-pass algorithm:
+--   Pass 1 — STRUCTURED: walk the LinkedIn-provided attributes and replace
+--            each tagged substring with @<initials>. Catches `@Mark Edmondson`.
+--   Pass 2 — FREE-TEXT NAME SWEEP: for each tagged person, also replace any
+--            other occurrence of their full name (or its space-separated
+--            parts ≥3 chars) elsewhere in the same comment. Catches the
+--            "Hi Tomasz" pattern where the commenter tags someone and then
+--            uses their first name again in prose.
+--
+-- Trade-off on Pass 2: short common names that happen to appear as English
+-- words ("Mark this date") may be over-redacted. Privacy-first; the rare
+-- false positive is acceptable.
+func linkedinApplyRedactions(text: string, attrs: [Json]) -> string {
+  let personAttrs = foldl(\acc a. {
+    match getObject(a, "value") {
+      Some(v) => match getObject(v, "person") {
+        Some(p) => match getString(p, "person") {
+          Some(personUrn) => {
+            let s = match getInt(a, "start") { Some(n) => n, None => -1 };
+            let l = match getInt(a, "length") { Some(n) => n, None => 0 };
+            if s >= 0 && l > 0 then { start: s, len: l, urn: personUrn } :: acc
+            else acc
+          },
+          None => acc
+        },
+        None => acc
+      },
+      None => acc
+    }
+  }, [], attrs);
+
+  -- Extract each tagged name BEFORE we start mutating the text, since
+  -- the structured pass will replace those substrings.
+  let withNames = map(\a. linkedinExtractName(text, a), personAttrs);
+
+  -- Pass 1: structured-attribute redaction (right-to-left to keep offsets stable).
+  let sorted = linkedinSortByStartDesc(personAttrs);
+  let afterPass1 = foldl(\t a. linkedinReplaceMention(t, a.start, a.len, a.urn), text, sorted);
+
+  -- Pass 2: literal sweep of remaining occurrences of each tagged name
+  -- (and its name-parts ≥3 chars).
+  foldl(\acc a. linkedinSweepName(acc, a.name, a.urn), afterPass1, withNames)
+}
+
+-- Pull the tagged-name substring out of the original text, defensively
+-- clamping if LinkedIn's UTF-16 offsets would run past the buffer.
+func linkedinExtractName(text: string, a: {start: int, len: int, urn: string}) -> {name: string, urn: string} {
+  let textLen = length(text);
+  let safeEnd = if a.start + a.len > textLen then textLen else a.start + a.len;
+  let name = if a.start >= 0 && a.start < textLen
+             then substring(text, a.start, safeEnd)
+             else "";
+  let r: {name: string, urn: string} = { name: name, urn: a.urn };
+  r
+}
+
+-- Replace every literal occurrence of `name` (and each space-separated
+-- piece of length ≥3) with @<initials>. Skips empty input. Threshold of
+-- 3 keeps prepositions / articles ("of", "to", "is", "a", "an") from
+-- being scooped up by accident.
+func linkedinSweepName(text: string, name: string, urn: string) -> string {
+  if length(name) == 0 then text
+  else {
+    let p = linkedinDerivePersona(urn);
+    let replacement = "@${p.initials}";
+    let afterFull = replace(text, name, replacement);
+    let parts = split(name, " ");
+    foldl(\s part. if length(part) >= 3 then replace(s, part, replacement) else s, afterFull, parts)
+  }
+}
+
+-- Bubble-sort by start descending — list is tiny (≤ a handful of mentions
+-- per comment in practice). Keep it simple.
+func linkedinSortByStartDesc(xs: [{start: int, len: int, urn: string}]) -> [{start: int, len: int, urn: string}] =
+  match xs {
+    [] => [],
+    x :: rest => {
+      let sortedRest = linkedinSortByStartDesc(rest);
+      linkedinInsertDesc(x, sortedRest)
+    }
+  }
+
+func linkedinInsertDesc(x: {start: int, len: int, urn: string}, xs: [{start: int, len: int, urn: string}]) -> [{start: int, len: int, urn: string}] =
+  match xs {
+    [] => [x],
+    y :: rest => if x.start >= y.start then x :: (y :: rest)
+                 else y :: linkedinInsertDesc(x, rest)
+  }
+
+func linkedinReplaceMention(text: string, start: int, len: int, urn: string) -> string {
+  let textLen = length(text);
+  let safeEnd = if start + len > textLen then textLen else start + len;
+  let before = substring(text, 0, start);
+  let after = substring(text, safeEnd, textLen);
+  let persona = linkedinDerivePersona(urn);
+  let replacement = "@${persona.initials}";
+  "${before}${replacement}${after}"
+}
+
+-- Compute a deterministic { initials, avatarSeed } pair from any string.
+-- SHA-256 is one-way: identical input → identical persona, but you can't
+-- recover the URN from the hash. Same commenter on different posts always
+-- gets the same monogram + colour seed.
+export func linkedinDerivePersona(actor: string) -> {initials: string, avatarSeed: string} {
+  let h = sha256Hex(actor);
+  let b0 = linkedinHexByte(h, 0);
+  let b1 = linkedinHexByte(h, 2);
+  let initial1 = linkedinLetterFromIdx(b0 - (b0 / 26) * 26);
+  let initial2 = linkedinLetterFromIdx(b1 - (b1 / 26) * 26);
+  let seed = substring(h, 4, 10);
+  let persona: {initials: string, avatarSeed: string} = {
+    initials: "${initial1}${initial2}",
+    avatarSeed: seed
+  };
+  persona
+}
+
+-- Parse two consecutive hex chars (positions `pos` and `pos+1`) into 0..255.
+func linkedinHexByte(hex: string, pos: int) -> int =
+  linkedinHexVal(charAt(hex, pos)) * 16 + linkedinHexVal(charAt(hex, pos + 1))
+
+-- A single hex char (0-9, a-f, A-F) → 0..15. Other inputs map to 0.
+func linkedinHexVal(c: string) -> int {
+  let n = charCode(c);
+  if n >= 48 && n <= 57 then n - 48        -- '0'..'9'
+  else if n >= 97 && n <= 102 then n - 87  -- 'a'..'f'
+  else if n >= 65 && n <= 70 then n - 55   -- 'A'..'F'
+  else 0
+}
+
+-- 0..25 → "A".."Z" without needing charFromCode in stdlib.
+func linkedinLetterFromIdx(i: int) -> string =
+  match i {
+    0 => "A", 1 => "B", 2 => "C", 3 => "D", 4 => "E",
+    5 => "F", 6 => "G", 7 => "H", 8 => "I", 9 => "J",
+    10 => "K", 11 => "L", 12 => "M", 13 => "N", 14 => "O",
+    15 => "P", 16 => "Q", 17 => "R", 18 => "S", 19 => "T",
+    20 => "U", 21 => "V", 22 => "W", 23 => "X", 24 => "Y",
+    25 => "Z", _ => "?"
+  }

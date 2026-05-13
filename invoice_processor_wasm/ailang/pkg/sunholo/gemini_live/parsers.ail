@@ -13,60 +13,6 @@ import std/string (length)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 
--- Check for model turn (audio/text parts from the model).
-export pure func checkModelTurn(sc: Json) -> string =
-  match getObject(sc, "modelTurn") {
-    Some(mt) => match get(mt, "parts") {
-      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
-      None => encode(jo([kv("type", js("unknown"))]))
-    },
-    None => encode(jo([kv("type", js("unknown"))]))
-  }
-
--- Check for output transcription, then fall through to model turn.
-export pure func checkOutputTranscript(sc: Json) -> string {
-  if has(sc, "outputTranscription") then {
-    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
-    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
-    if length(txt) > 0
-    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
-    else checkModelTurn(sc)
-  }
-  else checkModelTurn(sc)
-}
-
--- Check for transcriptions, then model turn audio/text parts.
-pure func parseContentParts(sc: Json) -> string {
-  if has(sc, "inputTranscription") then {
-    let it = getOrElse(get(sc, "inputTranscription"), jo([]));
-    let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
-    if length(txt) > 0
-    then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
-    else checkOutputTranscript(sc)
-  }
-  else checkOutputTranscript(sc)
-}
-
--- Extract tool call information from a server message.
-export pure func parseToolCall(json: Json) -> string {
-  let tc = getOrElse(get(json, "toolCall"), jo([]));
-  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
-  encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
-}
-
--- Parse serverContent into a simplified event.
--- Checks: interrupted → turnComplete → transcriptions → modelTurn.
-export pure func parseServerContent(json: Json) -> string {
-  let sc = getOrElse(get(json, "serverContent"), jo([]));
-  match getBool(sc, "interrupted") {
-    Some(true) => encode(jo([kv("type", js("interrupted"))])),
-    _ => match getBool(sc, "turnComplete") {
-      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
-      _ => parseContentParts(sc)
-    }
-  }
-}
-
 -- Parse a raw server message JSON string into a simplified event JSON string.
 -- Returns JSON with "type" field: "setup", "toolCall", "interrupted",
 -- "turnComplete", "inputTranscript", "outputTranscript", "modelTurn",
@@ -89,3 +35,57 @@ export pure func parseMessage(jsonStr: string) -> string {
     }
   }
 }
+
+-- Extract tool call information from a server message.
+export pure func parseToolCall(json: Json) -> string {
+  let tc = getOrElse(get(json, "toolCall"), jo([]));
+  let calls = getOrElse(get(tc, "functionCalls"), ja([]));
+  encode(jo([kv("type", js("toolCall")), kv("calls", calls)]))
+}
+
+-- Parse serverContent into a simplified event.
+-- Checks: interrupted → turnComplete → transcriptions → modelTurn.
+export pure func parseServerContent(json: Json) -> string {
+  let sc = getOrElse(get(json, "serverContent"), jo([]));
+  match getBool(sc, "interrupted") {
+    Some(true) => encode(jo([kv("type", js("interrupted"))])),
+    _ => match getBool(sc, "turnComplete") {
+      Some(true) => encode(jo([kv("type", js("turnComplete"))])),
+      _ => parseContentParts(sc)
+    }
+  }
+}
+
+-- Check for transcriptions, then model turn audio/text parts.
+pure func parseContentParts(sc: Json) -> string {
+  if has(sc, "inputTranscription") then {
+    let it = getOrElse(get(sc, "inputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(it, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("inputTranscript")), kv("text", js(txt))]))
+    else checkOutputTranscript(sc)
+  }
+  else checkOutputTranscript(sc)
+}
+
+-- Check for output transcription, then fall through to model turn.
+export pure func checkOutputTranscript(sc: Json) -> string {
+  if has(sc, "outputTranscription") then {
+    let ot = getOrElse(get(sc, "outputTranscription"), jo([]));
+    let txt = getOrElse(asString(getOrElse(get(ot, "text"), js(""))), "");
+    if length(txt) > 0
+    then encode(jo([kv("type", js("outputTranscript")), kv("text", js(txt))]))
+    else checkModelTurn(sc)
+  }
+  else checkModelTurn(sc)
+}
+
+-- Check for model turn (audio/text parts from the model).
+export pure func checkModelTurn(sc: Json) -> string =
+  match getObject(sc, "modelTurn") {
+    Some(mt) => match get(mt, "parts") {
+      Some(parts) => encode(jo([kv("type", js("modelTurn")), kv("parts", parts)])),
+      None => encode(jo([kv("type", js("unknown"))]))
+    },
+    None => encode(jo([kv("type", js("unknown"))]))
+  }

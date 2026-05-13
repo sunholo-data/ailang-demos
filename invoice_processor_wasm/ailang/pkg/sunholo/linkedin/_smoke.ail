@@ -1,0 +1,87 @@
+-- Boot smoke test for sunholo/linkedin.
+--
+-- The registry's pre-publish smoke gate runs this with --ai-stub and a
+-- broad capability set, and looks for a final line starting with "OK:"
+-- to consider the package healthy. All assertions are offline — no
+-- network, no real LinkedIn token needed.
+--
+-- What we exercise:
+--   - linkedinEscapeLittleText: every character in LinkedIn's syntax
+--     plus the "hashtag passes through" invariant.
+--   - linkedinDerivePersona: determinism + output-shape contract
+--     (2-char monogram, 6-char hex seed).
+--
+-- We deliberately don't exercise the API-touching paths
+-- (linkedinCreatePost, linkedinGetComments, linkedinUploadImage) here —
+-- those require a real OAuth2 token and are covered by the consuming
+-- demo's integration test.
+
+module _smoke
+
+import std/io (println)
+import std/string (length, intToStr)
+import sunholo/linkedin/posts (linkedinEscapeLittleText)
+import sunholo/linkedin/comments (linkedinDerivePersona)
+
+func check(name: string, got: string, want: string) -> int ! {IO} {
+  if got == want then {
+    println("  ✓ ${name}");
+    1
+  } else {
+    println("  ✗ ${name} — got '${got}', want '${want}'");
+    0
+  }
+}
+
+func checkInt(name: string, got: int, want: int) -> int ! {IO} {
+  if got == want then {
+    println("  ✓ ${name}");
+    1
+  } else {
+    println("  ✗ ${name} — got ${intToStr(got)}, want ${intToStr(want)}");
+    0
+  }
+}
+
+export func main() -> () ! {IO} {
+  println("sunholo/linkedin smoke test");
+  println("");
+  println("escape: LinkedIn Little Text Format");
+  let e1 = check("plain text passes through",
+                 linkedinEscapeLittleText("hello world"),
+                 "hello world");
+  let e2 = check("empty stays empty",
+                 linkedinEscapeLittleText(""),
+                 "");
+  let e3 = check("hashtag NOT escaped",
+                 linkedinEscapeLittleText("#AILANG"),
+                 "#AILANG");
+  let e4 = check("parens escaped",
+                 linkedinEscapeLittleText("(test)"),
+                 "\\(test\\)");
+  let e5 = check("at-symbol escaped",
+                 linkedinEscapeLittleText("Net @limit=1"),
+                 "Net \\@limit=1");
+  let e6 = check("backslash escaped first",
+                 linkedinEscapeLittleText("a\\b"),
+                 "a\\\\b");
+
+  println("");
+  println("persona: deterministic SHA-256 pseudonym derivation");
+  let p1 = linkedinDerivePersona("urn:li:person:test");
+  let pp1 = check("known fixture initials",  p1.initials,   "OP");
+  let pp2 = check("known fixture seed",      p1.avatarSeed, "c04298");
+
+  let p2 = linkedinDerivePersona("urn:li:person:test");
+  let pp3 = check("determinism: initials",   p2.initials,   p1.initials);
+  let pp4 = check("determinism: seed",       p2.avatarSeed, p1.avatarSeed);
+
+  let pp5 = checkInt("initials is 2 chars",   length(p1.initials),   2);
+  let pp6 = checkInt("avatarSeed is 6 chars", length(p1.avatarSeed), 6);
+
+  let total = e1 + e2 + e3 + e4 + e5 + e6 + pp1 + pp2 + pp3 + pp4 + pp5 + pp6;
+  let expected = 12;
+  println("");
+  if total == expected then println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")
+  else println("FAIL: ${intToStr(total)}/${intToStr(expected)} assertions passed")
+}

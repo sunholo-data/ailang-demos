@@ -1,0 +1,134 @@
+module sunholo/linkedin/auth
+
+-- LinkedIn OAuth2 authentication.
+--
+-- Looks for credentials in (in order):
+--   1. $LINKEDIN_ACCESS_TOKEN  — env override for one-off / CI use
+--   2. ~/.ailang/linkedin/credentials.json — written by the OAuth dance
+--
+-- If only a refresh_token is present, exchanges it for a fresh access_token.
+
+import std/fs (readFile, fileExists)
+import std/net (httpRequest)
+import std/json (decode, getString)
+import std/option (Some, None, getOrElse, isSome)
+import std/result (Ok, Err)
+import std/string (length)
+import std/env (getEnvOr)
+
+-- Credentials minted by `ailang-linkedin auth` (or any compatible OAuth2
+-- exchange) and conventionally stored at ~/.ailang/linkedin/credentials.json.
+export type LinkedInCreds = {
+  accessToken: string,
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string,
+  orgUrn: string
+}
+
+-- Path to credentials file. Convention: $HOME/.ailang/linkedin/credentials.json
+func linkedinCredsPath() -> string ! {Env} {
+  let home = getEnvOr("HOME", "/tmp");
+  "${home}/.ailang/linkedin/credentials.json"
+}
+
+-- Read and parse the credentials file.
+export func linkedinReadCreds() -> Result[LinkedInCreds, string] ! {Env, FS @limit=5} {
+  let path = linkedinCredsPath();
+  let found = fileExists(path);
+  if found then linkedinParseCredsFile(path)
+  else Err("Credentials not found at: ${path}\nRun: ailang-linkedin auth")
+}
+
+func linkedinParseCredsFile(path: string) -> Result[LinkedInCreds, string] ! {FS} {
+  let content = readFile(path);
+  match decode(content) {
+    Ok(json) => linkedinExtractCreds(json),
+    Err(e) => Err("Failed to parse credentials: ${e}")
+  }
+}
+
+func linkedinExtractCreds(json: Json) -> Result[LinkedInCreds, string] {
+  let at = getOrElse(getString(json, "access_token"), "");
+  let rt = getOrElse(getString(json, "refresh_token"), "");
+  let ci = getOrElse(getString(json, "client_id"), "");
+  let cs = getOrElse(getString(json, "client_secret"), "");
+  let ou = getOrElse(getString(json, "org_urn"), "");
+  linkedinValidateCreds(at, rt, ci, cs, ou)
+}
+
+func linkedinValidateCreds(at: string, rt: string, ci: string, cs: string, ou: string) -> Result[LinkedInCreds, string] {
+  if length(ci) == 0 then Err("Missing client_id in credentials")
+  else if length(cs) == 0 then Err("Missing client_secret in credentials")
+  else if length(ou) == 0 then Err("Missing org_urn in credentials")
+  else linkedinMakeCreds(at, rt, ci, cs, ou)
+}
+
+func linkedinMakeCreds(at: string, rt: string, ci: string, cs: string, ou: string) -> Result[LinkedInCreds, string] {
+  let creds: LinkedInCreds = {
+    accessToken: at,
+    refreshToken: rt,
+    clientId: ci,
+    clientSecret: cs,
+    orgUrn: ou
+  };
+  Ok(creds)
+}
+
+-- Get a usable access token. Tries the env override first, then the
+-- credentials file (refreshing via refresh_token if access_token is empty).
+export func linkedinGetToken() -> Result[string, string] ! {Env, FS @limit=5, Net @limit=1} {
+  let envToken = getEnvOr("LINKEDIN_ACCESS_TOKEN", "");
+  if length(envToken) > 0 then Ok(envToken)
+  else linkedinTokenFromCreds()
+}
+
+func linkedinTokenFromCreds() -> Result[string, string] ! {Env, FS @limit=5, Net @limit=1} {
+  match linkedinReadCreds() {
+    Ok(creds) => {
+      if length(creds.accessToken) > 0 then Ok(creds.accessToken)
+      else if length(creds.refreshToken) > 0 then linkedinRefreshToken(creds)
+      else Err("No access_token or refresh_token in credentials")
+    },
+    Err(e) => Err(e)
+  }
+}
+
+-- Exchange a refresh token for a fresh access token.
+func linkedinRefreshToken(creds: LinkedInCreds) -> Result[string, string] ! {Net} {
+  let url = "https://www.linkedin.com/oauth/v2/accessToken";
+  let body = "grant_type=refresh_token&refresh_token=${creds.refreshToken}&client_id=${creds.clientId}&client_secret=${creds.clientSecret}";
+  let headers = [
+    { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+  ];
+  match httpRequest("POST", url, headers, body) {
+    Ok(response) => {
+      if response.ok then linkedinParseTokenResponse(response.body)
+      else Err("OAuth refresh failed (status ${response.status}): ${response.body}")
+    },
+    Err(_) => Err("Network error during OAuth token refresh")
+  }
+}
+
+func linkedinParseTokenResponse(body: string) -> Result[string, string] {
+  match decode(body) {
+    Ok(json) => {
+      let tokenOpt = getString(json, "access_token");
+      if isSome(tokenOpt) then Ok(getOrElse(tokenOpt, ""))
+      else Err("No access_token in OAuth response")
+    },
+    Err(e) => Err("Failed to parse OAuth response: ${e}")
+  }
+}
+
+-- Get the org URN out of the credentials file. Used by callers that need to
+-- know which company page to publish to.
+export func linkedinGetOrgUrn() -> Result[string, string] ! {Env, FS @limit=5} {
+  match linkedinReadCreds() {
+    Ok(creds) => {
+      if length(creds.orgUrn) > 0 then Ok(creds.orgUrn)
+      else Err("No org_urn in credentials file")
+    },
+    Err(e) => Err(e)
+  }
+}
