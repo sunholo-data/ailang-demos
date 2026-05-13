@@ -17,7 +17,7 @@ module linkedin/services/sketch_leaderboard
 import std/io (println)
 import std/fs (listDir, isDir, fileExists, readFile, writeFile, mkdirAll)
 import std/string (length, intToStr, replace, join, replaceMany, substring)
-import std/list (length as listLength, map, sortBy, concat as listConcat)
+import std/list (length as listLength, map, filter, sortBy, concat as listConcat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/json (decode, getString, getInt)
@@ -88,6 +88,30 @@ export func sketchListEntries(t: Topic) -> [LeaderboardEntry] ! {FS} {
     flattenSomes(entries)
   } else []
 }
+
+-- ─── Dedup by domain ──────────────────────────────────────────
+
+-- An entry x is "better" than y if it should win when both share a
+-- domain. Tiebreaks: newer updatedAt wins; if equal, lower avatarSeed
+-- wins (stable + deterministic, so reruns don't flip-flop the table).
+func entryBetter(x: LeaderboardEntry, y: LeaderboardEntry) -> bool =
+  if x.updatedAt > y.updatedAt then true
+  else if x.updatedAt < y.updatedAt then false
+  else x.avatarSeed < y.avatarSeed
+
+-- True if no other entry for the same domain dominates this one.
+func isBestForDomain(e: LeaderboardEntry, all: [LeaderboardEntry]) -> bool = match all {
+  []           => true,
+  [x, ...rest] =>
+    if x.registrableDomain == e.registrableDomain && entryBetter(x, e)
+      then false
+      else isBestForDomain(e, rest)
+}
+
+-- Keep one entry per registrableDomain — the "best" by (updatedAt, avatarSeed).
+-- This is the design-doc-promised "same domain ranked once, latest wins".
+func dedupByDomain(entries: [LeaderboardEntry]) -> [LeaderboardEntry] =
+  filter(\e. isBestForDomain(e, entries), entries)
 
 -- ─── Sorting + ranking ────────────────────────────────────────
 
@@ -231,7 +255,8 @@ func renderNoLeaderboardSection(t: Topic) -> string =
 export func sketchRebuildTopic(t: Topic, generatedAt: string) -> int ! {FS, IO} {
   if topicHasLeaderboard(t) then {
     let entries = sketchListEntries(t);
-    let sorted = sortBy(cmpEntries, entries);
+    let deduped = dedupByDomain(entries);
+    let sorted = sortBy(cmpEntries, deduped);
     let ranked = assignRanks(sorted, sketchPublicRankCap());
     let json = entriesToJson(ranked, t, generatedAt);
     let path = sketchLeaderboardPath(t);
