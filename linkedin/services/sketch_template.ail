@@ -11,7 +11,7 @@ module linkedin/services/sketch_template
 
 import std/fs (readFile)
 import std/string (replaceMany, intToStr, join)
-import std/list (map, concat as listConcat)
+import std/list (map, concat as listConcat, length as listLength)
 import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
 
@@ -83,6 +83,29 @@ func renderWhyLi(s: Signal) -> string =
 
 func renderWhyHtml(signals: [Signal]) -> string =
   join("\n", map(renderWhyLi, signals))
+
+-- §2 extraction stats — surfaces docparse output below the chips.
+-- Shows totals + a small list of top headings if extracted.
+func renderHeadingPill(h: string) -> string =
+  "<span class=\"sk-chip\" title=\"extracted heading\">${h}</span>"
+
+func renderExtractStats(e: ExtractedContent) -> string = {
+  let pathLabel = if e.extractionPath == "docparse" then "via docparse"
+                  else if e.extractionPath == "ai-fallback" then "via AI extraction"
+                  else "polite refuse";
+  let pathClass = if e.extractionPath == "docparse" then "path path-docparse" else "path";
+  let headingsHtml = if listLength(e.topHeadings) == 0 then ""
+                     else "<div style=\"margin-top:18px;\"><p class=\"sk-section-label\" style=\"margin-bottom:10px;\">structure found</p><div class=\"sk-chips\">${join(" ", map(renderHeadingPill, e.topHeadings))}</div></div>";
+  let statsLine = join("", [
+    "<div class=\"sk-extract-stats\">",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.headingCount), "</span> headings</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.tableCount), "</span> tables</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.imageCount), "</span> images</span>",
+    "<span class=\"", pathClass, "\">", pathLabel, "</span>",
+    "</div>"
+  ]);
+  "${headingsHtml}${statsLine}"
+}
 
 -- ─── Radar polygon ────────────────────────────────────────────
 
@@ -184,22 +207,23 @@ export func sketchRenderHtml(
   let rankBlockHtml   = renderRankBlock(topic, rank);
 
   replaceMany(template, [
-    ("{{DOMAIN}}",            sketch.registrableDomain),
-    ("{{TOPIC_LABEL}}",       topicLabel(topic)),
-    ("{{TOPIC_SLUG}}",        topicSlug(topic)),
-    ("{{TOPIC_SCORE}}",       intToStr(topicReadiness)),
-    ("{{TOPIC_OPPORTUNITY}}", intToStr(topicOpp)),
-    ("{{INITIALS}}",          sketch.initials),
-    ("{{AVATAR_ANGLE}}",      intToStr(avatarAngle)),
-    ("{{GENERATED_AT}}",      sketch.generatedAt),
-    ("{{RADAR_POINTS}}",      radarPoints),
-    ("{{RANK_BLOCK_HTML}}",   rankBlockHtml),
-    ("{{WHY_SIGNALS_HTML}}",  whySignalsHtml),
+    ("{{DOMAIN}}",             sketch.registrableDomain),
+    ("{{TOPIC_LABEL}}",        topicLabel(topic)),
+    ("{{TOPIC_SLUG}}",         topicSlug(topic)),
+    ("{{TOPIC_SCORE}}",        intToStr(topicReadiness)),
+    ("{{TOPIC_OPPORTUNITY}}",  intToStr(topicOpp)),
+    ("{{INITIALS}}",           sketch.initials),
+    ("{{AVATAR_ANGLE}}",       intToStr(avatarAngle)),
+    ("{{GENERATED_AT}}",       sketch.generatedAt),
+    ("{{RADAR_POINTS}}",       radarPoints),
+    ("{{RANK_BLOCK_HTML}}",    rankBlockHtml),
+    ("{{WHY_SIGNALS_HTML}}",   whySignalsHtml),
     ("{{NARRATIVE_HEADLINE}}", extracted.audience),
-    ("{{NARRATIVE_BODY}}",    extracted.narrative),
-    ("{{CHIPS_HTML}}",        chipsHtml),
-    ("{{CARDS_HTML}}",        cardsHtml),
-    ("{{SIGNALS_HTML}}",      signalsHtml)
+    ("{{NARRATIVE_BODY}}",     extracted.narrative),
+    ("{{CHIPS_HTML}}",         chipsHtml),
+    ("{{EXTRACT_STATS_HTML}}", renderExtractStats(extracted)),
+    ("{{CARDS_HTML}}",         cardsHtml),
+    ("{{SIGNALS_HTML}}",       signalsHtml)
   ])
 }
 

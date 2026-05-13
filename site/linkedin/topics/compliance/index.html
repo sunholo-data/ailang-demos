@@ -120,6 +120,38 @@
   }
   .tx-no-leaderboard strong { color: var(--text-primary); }
 
+  /* Rubric inline (replaces footer link) */
+  .tx-rubric { padding: 30px 0; border-top: 1px dashed var(--border); }
+  .tx-rubric h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0 0 8px; color: var(--text-primary); }
+  .tx-rubric p.lede { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 22px; max-width: 640px; }
+  .tx-rubric p.lede strong { color: var(--text-primary); }
+  .tx-signal {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 12px;
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  }
+  @media (max-width: 560px) { .tx-signal { grid-template-columns: 1fr; } }
+  .tx-signal .name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .tx-signal .points {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+    letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .tx-signal .points .num { color: var(--primary); font-weight: 700; }
+  .tx-signal .how {
+    grid-column: 1 / -1; margin: 6px 0 8px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .tx-signal .maps {
+    grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--border);
+    font-size: 12px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .tx-signal .maps strong { color: var(--primary); font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 8px; }
+  .tx-rubric .no-rubric {
+    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 18px 22px; color: var(--text-secondary); line-height: 1.55;
+  }
+  .tx-rubric .no-rubric strong { color: var(--text-primary); }
+
   .tx-footer {
     padding: 30px 0 60px; border-top: 1px dashed var(--border);
     color: var(--text-secondary); font-size: 14px;
@@ -152,8 +184,10 @@
 
   <section class="tx-section"><h2>Gallery</h2><div class="tx-no-leaderboard"><strong>This topic doesn't have a leaderboard.</strong> We can't honestly score compliance from a single page fetch — auditability, AI spend, and agent reliability aren't visible on a marketing page. Sketches commented under <code>#ailangCompliance</code> still get rendered with feature cards and a guarantee panel, but without a rank.</div></section>
 
+  <section class="tx-rubric"><h2>What we measure</h2><div class="no-rubric"><strong>This topic has no scored signals.</strong> We can't honestly measure compliance & audit from a single page fetch — it's about runtime behaviour, audit trails, and cost surfaces that aren't visible on a marketing page. Sketches under <code>#ailangCompliance</code> still get rendered with the AILANG feature cards relevant to the topic; they just don't compete on a leaderboard.</div></section>
+
   <footer class="tx-footer">
-    <p>Every score on this page is computed by <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">an open-source AILANG rubric</a>. Nothing is hidden.</p>
+    <p>The rubric above is the <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">full open-source AILANG source</a> — every signal extractor is contract-verified. Pull requests welcome.</p>
     <div class="links">
       <a href="../">← All topics</a>
       <a href="../../">← LinkedIn demo</a>

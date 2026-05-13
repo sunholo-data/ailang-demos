@@ -20,13 +20,13 @@ module linkedin/services/sketch_extract
 import std/io (println)
 import std/fs (writeFile, readFile, fileExists)
 import std/string (length, substring, intToStr)
-import std/list (length as listLength)
+import std/list (length as listLength, map, foldl, concat as listConcat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/process (exec)
 import std/net (httpRequest, HttpResponse, NetError)
 import std/ai (callJson)
-import std/json (decode, getString, getStringArrayOrEmpty)
+import std/json (decode, getString, getStringArrayOrEmpty, getInt, asArray, asString, get, getOr, jn, ja, Json)
 import linkedin/types/sketch_types (ExtractedContent)
 
 -- ─── Constants ────────────────────────────────────────────────
@@ -34,7 +34,9 @@ import linkedin/types/sketch_types (ExtractedContent)
 func tmpHtmlPath() -> string = "/tmp/ailang-sketch-input.html"
 func tmpOutDir()  -> string = "/tmp/ailang-sketch-out"
 func tmpMdPath()  -> string = "/tmp/ailang-sketch-out/ailang-sketch-input.html.md"
+func tmpJsonPath() -> string = "/tmp/ailang-sketch-out/ailang-sketch-input.html.json"
 func maxClassifyChars() -> int = 8000
+func maxTopHeadings()   -> int = 6
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -59,6 +61,84 @@ export func sketchFetch(url: string) -> string ! {Net} {
     Ok(resp)  => resp.body,
     Err(_)    => ""
   }
+}
+
+-- ─── docparse stats (structural info from the JSON output) ──
+
+-- A subset of docparse's per-document summary, plus the top headings
+-- we extract from blocks. Populated only when docparse succeeded.
+export type DocparseStats = {
+  headings:    int,
+  tables:      int,
+  images:      int,
+  topHeadings: [string]
+}
+
+func emptyStats() -> DocparseStats =
+  { headings: 0, tables: 0, images: 0, topHeadings: [] }
+
+-- Read /tmp/<...>.html.json (docparse's structured output) and
+-- pull (headings, tables, images, topHeadings).
+export func sketchReadDocparseStats() -> DocparseStats ! {FS} {
+  if fileExists(tmpJsonPath()) then
+    match decode(readFile(tmpJsonPath())) {
+      Ok(j)  => statsFromJson(j),
+      Err(_) => emptyStats()
+    }
+  else emptyStats()
+}
+
+func statsFromJson(top: Json) -> DocparseStats = {
+  let doc    = getOr(top, "document", jn());
+  let blocks = getOr(doc, "blocks",   ja([]));
+  -- Walk the whole tree so nested headings inside `section` blocks count.
+  -- docparse's top-level summary only counts top-level blocks, which
+  -- under-reports for sites that wrap everything in section containers.
+  let allH = match asArray(blocks) { Some(arr) => allHeadingsRec(arr), None => [] };
+  let allT = match asArray(blocks) { Some(arr) => countBlocksByTypeRec(arr, "table"), None => 0 };
+  let allI = match asArray(blocks) { Some(arr) => countBlocksByTypeRec(arr, "image"), None => 0 };
+  {
+    headings:    listLength(allH),
+    tables:      allT,
+    images:      allI,
+    topHeadings: takeN(allH, maxTopHeadings())
+  }
+}
+
+-- Recursively collect heading text from a block tree.
+func allHeadingsRec(blocks: [Json]) -> [string] =
+  foldl(\acc b. listConcat(acc, headingsInBlock(b)), [], blocks)
+
+func headingsInBlock(b: Json) -> [string] = {
+  let t = getOrElse(getString(b, "type"), "");
+  if t == "heading" then [getOrElse(getString(b, "text"), "")]
+  else if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => allHeadingsRec(children),
+      None           => []
+    }
+  else []
+}
+
+-- Recursively count blocks of a given type (walks into `section` containers).
+func countBlocksByTypeRec(blocks: [Json], targetType: string) -> int =
+  foldl(\acc b. acc + countTypeInBlock(b, targetType), 0, blocks)
+
+func countTypeInBlock(b: Json, targetType: string) -> int = {
+  let t = getOrElse(getString(b, "type"), "");
+  let selfCount = if t == targetType then 1 else 0;
+  let childCount = if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => countBlocksByTypeRec(children, targetType),
+      None           => 0
+    }
+  else 0;
+  selfCount + childCount
+}
+
+func takeN(xs: [string], n: int) -> [string] = match xs {
+  []           => [],
+  [x, ...rest] => if n <= 0 then [] else listConcat([x], takeN(rest, n - 1))
 }
 
 -- ─── docparse path ────────────────────────────────────────────
@@ -100,7 +180,8 @@ export func sketchClassify(
   text: string,
   rawBody: string,
   extractionPath: string,
-  blockCount: int
+  blockCount: int,
+  stats: DocparseStats
 ) -> ExtractedContent ! {AI} {
   let prompt = classifyPrompt(sketchTruncate(text, maxClassifyChars()));
   let raw = callJson(prompt, classifySchema());
@@ -120,7 +201,11 @@ export func sketchClassify(
         narrative:      narrative,
         extractionPath: extractionPath,
         blockCount:     blockCount,
-        rawBody:        rawBody
+        rawBody:        rawBody,
+        headingCount:   stats.headings,
+        tableCount:     stats.tables,
+        imageCount:     stats.images,
+        topHeadings:    stats.topHeadings
       }
     },
     Err(_) => {
@@ -132,7 +217,11 @@ export func sketchClassify(
       narrative:      "(extraction failed — JSON parse error)",
       extractionPath: "polite-refuse",
       blockCount:     0,
-      rawBody:        rawBody
+      rawBody:        rawBody,
+      headingCount:   0,
+      tableCount:     0,
+      imageCount:     0,
+      topHeadings:    []
     }
   }
 }
@@ -154,13 +243,17 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
       narrative:      "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
       extractionPath: "polite-refuse",
       blockCount:     0,
-      rawBody:        html
+      rawBody:        html,
+      headingCount:   0,
+      tableCount:     0,
+      imageCount:     0,
+      topHeadings:    []
     }
   } else {
     -- Try docparse, fall back to raw HTML.
     match sketchTryDocparse(html) {
-      Some(md) => sketchClassify(url, md, html, "docparse", 1),
-      None     => sketchClassify(url, html, html, "ai-fallback", 0)
+      Some(md) => sketchClassify(url, md, html, "docparse", 1, sketchReadDocparseStats()),
+      None     => sketchClassify(url, html, html, "ai-fallback", 0, emptyStats())
     }
   }
 }

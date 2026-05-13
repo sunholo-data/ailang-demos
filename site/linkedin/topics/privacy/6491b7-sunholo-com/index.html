@@ -123,18 +123,51 @@
   .sk-why li.na::before { content: "○ "; color: var(--text-muted); font-weight: 700; }
   .sk-why a { color: var(--primary); text-decoration: none; font-family: var(--font-mono); font-size: 12px; }
 
-  /* ─── §2 What an AI sees ─── */
+  /* ─── §2 What an AI sees (promoted prominence) ─── */
   .sk-section { padding: 30px 0; border-top: 1px dashed var(--border); }
   .sk-section h2 {
     font-family: var(--font-display); font-weight: 700; font-size: 22px;
     margin: 0 0 18px; color: var(--text-primary);
   }
-  .sk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+  /* The §2 block gets a card treatment + the AI-read becomes a pull quote. */
+  .sk-section.sk-prom {
+    border-top: none;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 32px; margin: 32px 0 16px;
+  }
+  .sk-prom .sk-section-label { margin-bottom: 16px; }
+  .sk-prom h2.sk-prom-audience {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(22px, 3vw, 30px); line-height: 1.2;
+    margin: 0 0 22px; color: var(--text-primary); letter-spacing: -0.01em;
+  }
+  .sk-prom blockquote.sk-prom-narrative {
+    border-left: 3px solid var(--primary);
+    padding: 6px 0 6px 22px; margin: 0 0 22px;
+    font-size: 17px; line-height: 1.7;
+    color: var(--text-primary); font-style: italic;
+  }
+  .sk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; }
   .sk-chip {
     font-family: var(--font-mono); font-size: 12px;
     background: var(--bg-input); color: var(--text-secondary);
     padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
   }
+  /* Extraction stats line at bottom of §2 (filled by step 4) */
+  .sk-extract-stats {
+    margin-top: 22px; padding-top: 16px; border-top: 1px dashed var(--border);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .sk-extract-stats .stat { color: var(--text-secondary); }
+  .sk-extract-stats .stat .num { color: var(--primary); font-weight: 600; }
+  .sk-extract-stats .path {
+    margin-left: auto;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--bg-input);
+  }
+  .sk-extract-stats .path.path-docparse { background: var(--primary-faded); color: var(--primary); }
   .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
 
   /* ─── §3 AILANG × your business ─── */
@@ -304,14 +337,13 @@
     </div>
   </section>
 
-  <!-- ─── §2 What an AI sees ─── -->
-  <section class="sk-section">
+  <!-- ─── §2 What an AI sees (promoted) ─── -->
+  <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2>Enterprise organizations and developers seeking to build production-grade AI systems and agentic architectures.</h2>
-    <div class="sk-chips">
-      <span class="sk-chip">AILANG</span> <span class="sk-chip">Multivac</span> <span class="sk-chip">Agentic AI</span> <span class="sk-chip">MCP Protocol</span> <span class="sk-chip">A2A Protocol</span> <span class="sk-chip">Document Intelligence</span>
-    </div>
-    <p class="sk-narrative">Sunholo provides AI engineering and solution architecture services centered on building durable enterprise systems. They offer Multivac, a protocol-native AI platform, and AILANG, an AI-first programming language designed for deterministic code execution. Their focus is on bridging the gap between experimental AI prototypes and production-ready architectures using rigorous software engineering principles.</p>
+    <h2 class="sk-prom-audience">Enterprise leaders and developers seeking production-grade AI architecture and modular orchestration tools.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo provides enterprise AI engineering services and infrastructure through its Multivac platform. It focuses on modular, protocol-native systems that prevent vendor lock-in and ensure scalability. The suite includes AILANG, a verified programming language for AI agents, and specialized tools for document parsing and contract-verified tool calling.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">Document Intelligence</span></div>
+    <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> images</span><span class="path path-docparse">via docparse</span></div>
   </section>
 
   <!-- ─── §3 AILANG × your business ─── -->

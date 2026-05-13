@@ -22,8 +22,10 @@ import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/json (decode, getString, getInt)
 import linkedin/types/sketch_types (LeaderboardEntry, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
-import linkedin/services/sketch_rubric (topicHasLeaderboard)
+import linkedin/services/sketch_rubric (topicHasLeaderboard, topicEq)
+import linkedin/services/sketch_rubric_signals (sketchAllSignalDefs)
 import linkedin/services/sketch_template (topicSlug, topicCamelCase)
+import linkedin/types/sketch_types (Signal)
 
 -- ─── Constants ────────────────────────────────────────────────
 
@@ -275,19 +277,120 @@ export func sketchRebuildTopic(t: Topic, generatedAt: string) -> int ! {FS, IO} 
   }
 }
 
+-- ─── Inline rubric section (per topic) ──────────────────────
+
+func renderSignalCard(s: Signal) -> string = join("", [
+  "<div class=\"tx-signal\">",
+  "<div class=\"name\">", s.name, "</div>",
+  "<div class=\"points\"><span class=\"num\">", intToStr(s.maxPoints), "</span> pts</div>",
+  "<div class=\"how\">", s.description, "</div>",
+  "<div class=\"maps\"><strong>maps to</strong>", s.ailangFeature, "</div>",
+  "</div>"
+])
+
+-- Returns the signals scored under a given topic, filtered from the
+-- canonical registry. Each topic owns exactly the signals tagged to it.
+func signalsForTopic(t: Topic) -> [Signal] =
+  filter(\s. topicEq(s.topic, t), sketchAllSignalDefs())
+
+func renderRubricSection(t: Topic) -> string {
+  if topicHasLeaderboard(t) then {
+    let signals = signalsForTopic(t);
+    let signalCards = join("\n", map(renderSignalCard, signals));
+    join("", [
+      "<section class=\"tx-rubric\">",
+      "<h2>What we measure</h2>",
+      "<p class=\"lede\">Every score on this page is computed by <strong>contract-verified AILANG code</strong>. The signals below — and only these signals — feed the rank. Each one maps to an AILANG primitive a reader could adopt. No llms.txt, no robots.txt, no JSON-LD: AILANG doesn't have a position on those.</p>",
+      signalCards,
+      "</section>"
+    ])
+  } else {
+    join("", [
+      "<section class=\"tx-rubric\">",
+      "<h2>What we measure</h2>",
+      "<div class=\"no-rubric\">",
+      "<strong>This topic has no scored signals.</strong> ",
+      "We can't honestly measure ", topicHumanName(t),
+      " from a single page fetch — it's about runtime behaviour, audit trails, and cost surfaces that aren't visible on a marketing page. ",
+      "Sketches under <code>#ailang", topicCamelCase(t), "</code> still get rendered with the AILANG feature cards relevant to the topic; they just don't compete on a leaderboard.",
+      "</div>",
+      "</section>"
+    ])
+  }
+}
+
+-- ─── Topics-index page (the all-topics gallery) ──────────────
+
+-- Hashtag chip for a topic card.
+func topicHashtag(t: Topic) -> string = "#ailang${topicCamelCase(t)}"
+
+-- Short hyphenated label for the card header.
+func topicHumanName(t: Topic) -> string = match t {
+  Compliance => "compliance & audit",
+  Budget     => "AI spend",
+  Privacy    => "privacy",
+  Reliable   => "reliable agents",
+  Portable   => "portability",
+  AgentReady => "agent-ready",
+  General    => "general"
+}
+
+func renderTopicCard(t: Topic) -> string ! {FS} {
+  let lbPath = sketchLeaderboardPath(t);
+  let count = if fileExists(lbPath) then
+    match decode(readFile(lbPath)) {
+      Ok(j) => getOrElse(getInt(j, "totalSketches"), 0),
+      Err(_) => 0
+    }
+  else 0;
+  let countCell = if topicHasLeaderboard(t) then
+    "<span class=\"count\"><span class=\"num\">${intToStr(count)}</span> sketch${if count == 1 then "" else "es"}</span>"
+  else
+    "<span class=\"no-rank\">no leaderboard</span>";
+  join("", [
+    "<a class=\"ti-card\" href=\"", topicSlug(t), "/\">",
+    "<div class=\"top\">",
+    "<h2>AILANG <span class=\"accent\">×</span> ", topicHumanName(t), "</h2>",
+    "<span class=\"hashtag\">", topicHashtag(t), "</span>",
+    "</div>",
+    "<p class=\"desc\">", topicDescription(t), "</p>",
+    "<div class=\"meta\">", countCell, "</div>",
+    "</a>"
+  ])
+}
+
+-- Render the all-topics gallery page at site/linkedin/topics/index.html.
+export func sketchRenderTopicsIndex() -> () ! {FS} {
+  let template = readFile("linkedin/templates/topics_index.html");
+  let cardsHtml = join("\n", [
+    renderTopicCard(Compliance),
+    renderTopicCard(Budget),
+    renderTopicCard(Privacy),
+    renderTopicCard(Reliable),
+    renderTopicCard(Portable),
+    renderTopicCard(AgentReady)
+  ]);
+  let html = replaceMany(template, [("{{TOPIC_CARDS_HTML}}", cardsHtml)]);
+  mkdirAll(sketchTopicsDir());
+  writeFile("${sketchTopicsDir()}/index.html", html);
+  ()
+}
+
 -- Render the topic landing page at site/linkedin/topics/<topic>/index.html.
 export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generatedAt: string) -> () ! {FS} {
   let template = readFile("linkedin/templates/topic_index.html");
   let section = if topicHasLeaderboard(t)
                 then renderLeaderboardSection(t, entries, generatedAt)
                 else renderNoLeaderboardSection(t);
+  let rubric = renderRubricSection(t);
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
     ("{{TOPIC_SLUG}}",               topicSlug(t)),
     ("{{TOPIC_CAMEL}}",              topicCamelCase(t)),
     ("{{TOPIC_DESCRIPTION}}",        topicDescription(t)),
     ("{{TOPIC_DESCRIPTION_META}}",   topicDescriptionMeta(t)),
-    ("{{LEADERBOARD_SECTION_HTML}}", section)
+    ("{{LEADERBOARD_SECTION_HTML}}", section),
+    ("{{RUBRIC_SECTION_HTML}}",      rubric)
   ]);
   mkdirAll(sketchTopicDir(t));
   writeFile("${sketchTopicDir(t)}/index.html", html);

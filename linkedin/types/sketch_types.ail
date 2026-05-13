@@ -72,7 +72,15 @@ export type ExtractedContent = {
   -- The raw fetched body, kept so the rubric scorers (which detect
   -- protocol references in HTML) and the executor share one fetch.
   -- May be empty when extractionPath == "polite-refuse".
-  rawBody: string
+  rawBody: string,
+  -- Structural stats from docparse's typed Block ADT. All zero when
+  -- the AI-fallback or polite-refuse paths ran.
+  headingCount: int,
+  tableCount:   int,
+  imageCount:   int,
+  -- A few top headings extracted from the page (level-1 / level-2),
+  -- capped at 6 entries by the extractor.
+  topHeadings:  [string]
 }
 
 -- A complete sketch ready for rendering to HTML.

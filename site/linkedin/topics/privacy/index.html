@@ -120,6 +120,38 @@
   }
   .tx-no-leaderboard strong { color: var(--text-primary); }
 
+  /* Rubric inline (replaces footer link) */
+  .tx-rubric { padding: 30px 0; border-top: 1px dashed var(--border); }
+  .tx-rubric h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0 0 8px; color: var(--text-primary); }
+  .tx-rubric p.lede { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 22px; max-width: 640px; }
+  .tx-rubric p.lede strong { color: var(--text-primary); }
+  .tx-signal {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 12px;
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  }
+  @media (max-width: 560px) { .tx-signal { grid-template-columns: 1fr; } }
+  .tx-signal .name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .tx-signal .points {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+    letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .tx-signal .points .num { color: var(--primary); font-weight: 700; }
+  .tx-signal .how {
+    grid-column: 1 / -1; margin: 6px 0 8px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .tx-signal .maps {
+    grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--border);
+    font-size: 12px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .tx-signal .maps strong { color: var(--primary); font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 8px; }
+  .tx-rubric .no-rubric {
+    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 18px 22px; color: var(--text-secondary); line-height: 1.55;
+  }
+  .tx-rubric .no-rubric strong { color: var(--text-primary); }
+
   .tx-footer {
     padding: 30px 0 60px; border-top: 1px dashed var(--border);
     color: var(--text-secondary); font-size: 14px;
@@ -152,8 +184,12 @@
 
   <section class="tx-section"><h2>Leaderboard</h2><p class="updated">refreshed daily · last update 2026-05-13 · 1 sketches</p><div class="tx-leaderboard"><div class="tx-row"><span class="rank">#1</span><span class="avatar" style="background: conic-gradient(from 140deg, var(--primary), var(--ai-orange), var(--primary));"></span><div class="domain"><span class="initials">MO</span>sunholo.com</div><div class="score">3/10</div><div class="col-link"><a href="6491b7-sunholo-com/">view sketch ↗</a></div><div class="col-updated">2026-05-13</div></div></div></section>
 
+  <section class="tx-rubric"><h2>What we measure</h2><p class="lede">Every score on this page is computed by <strong>contract-verified AILANG code</strong>. The signals below — and only these signals — feed the rank. Each one maps to an AILANG primitive a reader could adopt. No llms.txt, no robots.txt, no JSON-LD: AILANG doesn't have a position on those.</p><div class="tx-signal"><div class="name">Named LLM provider mentioned</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.</div><div class="maps"><strong>maps to</strong>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</div></div>
+<div class="tx-signal"><div class="name">Third-party domains restrained</div><div class="points"><span class="num">2</span> pts</div><div class="how">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</div><div class="maps"><strong>maps to</strong>Capability scoping — each Net call declares its endpoint in the effect row</div></div>
+<div class="tx-signal"><div class="name">Data residency / on-prem language</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</div><div class="maps"><strong>maps to</strong>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</div></div></section>
+
   <footer class="tx-footer">
-    <p>Every score on this page is computed by <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">an open-source AILANG rubric</a>. Nothing is hidden.</p>
+    <p>The rubric above is the <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">full open-source AILANG source</a> — every signal extractor is contract-verified. Pull requests welcome.</p>
     <div class="links">
       <a href="../">← All topics</a>
       <a href="../../">← LinkedIn demo</a>
