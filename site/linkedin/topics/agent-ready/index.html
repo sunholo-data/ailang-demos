@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<!--
+  AILANG topic-index page — one per topic at /linkedin/topics/<topic>/index.html.
+  Rendered by linkedin/services/sketch_leaderboard.ail from leaderboard.json.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent-ready — AILANG sketches</title>
+<link rel="icon" type="image/svg+xml" href="/ailang-logo.svg">
+<meta name="description" content="Sketches scoring agent-readiness — A2A, OpenAPI, MCP, contract-verified tool calls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/design-system.css">
+<style>
+  body {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 6%, rgba(231, 60, 23, 0.045) 0, transparent 36%),
+      radial-gradient(circle at 88% 4%, rgba(245, 158, 11, 0.035) 0, transparent 40%);
+    font-family: var(--font-display, "Montserrat"), system-ui, sans-serif;
+  }
+  .tx-shell { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+  .tx-top {
+    padding: 32px 0 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .tx-top a.back {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); text-decoration: none;
+    border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px;
+    transition: all .15s ease;
+  }
+  .tx-top a.back:hover { color: var(--primary); border-color: var(--primary); }
+  .tx-logo { display: flex; align-items: center; gap: 10px; }
+  .tx-logo img { width: 28px; height: 28px; }
+  .tx-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+
+  .tx-hero {
+    padding: 30px 0 36px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .tx-hero .label {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px;
+  }
+  .tx-hero h1 {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(32px, 5vw, 48px); line-height: 1.1; letter-spacing: -0.02em;
+    margin: 0 0 16px; color: var(--text-primary);
+  }
+  .tx-hero h1 .accent { color: var(--primary); }
+  .tx-hero p.desc { color: var(--text-secondary); font-size: 17px; line-height: 1.55; margin: 0 0 24px; max-width: 720px; }
+  .tx-trigger {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-primary);
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  .tx-trigger .pill {
+    background: var(--primary); color: white;
+    padding: 3px 10px; border-radius: 999px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+  }
+  .tx-trigger code {
+    background: var(--bg-input); padding: 4px 8px; border-radius: 4px;
+    color: var(--primary); font-weight: 600;
+  }
+
+  .tx-section { padding: 36px 0; border-top: 1px dashed var(--border); }
+  .tx-section h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 8px; color: var(--text-primary);
+  }
+  .tx-section p.updated {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+    letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 20px;
+  }
+
+  /* Leaderboard table */
+  .tx-leaderboard {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .tx-row {
+    display: grid;
+    grid-template-columns: 60px 36px 1fr 80px 100px 110px;
+    align-items: center; gap: 16px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 18px;
+  }
+  @media (max-width: 720px) {
+    .tx-row { grid-template-columns: 50px 32px 1fr 60px; }
+    .tx-row .col-link, .tx-row .col-updated { display: none; }
+  }
+  .tx-row .rank {
+    font-family: var(--font-display); font-weight: 800; font-size: 22px;
+    color: var(--primary); letter-spacing: -0.02em;
+  }
+  .tx-row .rank.unranked { color: var(--text-muted); font-size: 16px; }
+  .tx-row .avatar { width: 32px; height: 32px; border-radius: 50%; }
+  .tx-row .domain { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); }
+  .tx-row .domain .initials { color: var(--text-muted); margin-right: 8px; font-size: 12px; }
+  .tx-row .score { font-family: var(--font-mono); font-size: 14px; color: var(--primary); font-weight: 700; }
+  .tx-row .col-link a { font-family: var(--font-mono); font-size: 12px; color: var(--primary); text-decoration: none; }
+  .tx-row .col-updated { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  .tx-empty {
+    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 32px; text-align: center; color: var(--text-secondary);
+  }
+  .tx-empty strong { color: var(--text-primary); display: block; margin-bottom: 8px; }
+
+  .tx-no-leaderboard {
+    background: var(--ai-orange-bg); border-left: 3px solid var(--ai-orange);
+    border-radius: 0 8px 8px 0; padding: 18px 22px; color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .tx-no-leaderboard strong { color: var(--text-primary); }
+
+  .tx-footer {
+    padding: 30px 0 60px; border-top: 1px dashed var(--border);
+    color: var(--text-secondary); font-size: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .tx-footer a { color: var(--primary); text-decoration: none; }
+  .tx-footer .links { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="tx-shell">
+
+  <header class="tx-top">
+    <div class="tx-logo">
+      <img src="/ailang-logo.svg" alt="AILANG">
+      <span>AILANG · topics</span>
+    </div>
+    <a class="back" href="/linkedin/">← LinkedIn demo</a>
+  </header>
+
+  <section class="tx-hero">
+    <p class="label">§ topic</p>
+    <h1>AILANG <span class="accent">×</span> agent-ready</h1>
+    <p class="desc">When agents start transacting on your behalf — and they will — make your site speak their protocols. ailang serve-api takes typed AILANG functions and exposes them as REST + MCP + A2A + OpenAPI 3.1 in one command. Your catalogue, your pricing engine, your customer-facing API: contract-verified, agent-discoverable, no glue code.</p>
+    <div class="tx-trigger">
+      <span class="pill">trigger</span>
+      <span>Comment your URL with <code>#ailang-agent-ready</code> on any AILANG LinkedIn post.</span>
+    </div>
+  </section>
+
+  <section class="tx-section"><h2>Leaderboard</h2><p class="updated">refreshed daily · last update 2026-05-13 · 1 sketches</p><div class="tx-leaderboard"><div class="tx-row"><span class="rank">#1</span><span class="avatar" style="background: conic-gradient(from 270deg, var(--primary), var(--ai-orange), var(--primary));"></span><div class="domain"><span class="initials">KP</span>sunholo.com</div><div class="score">5/10</div><div class="col-link"><a href="/linkedin/topics/agent-ready/c04298-sunholo-com/">view sketch ↗</a></div><div class="col-updated">2026-05-13</div></div></div></section>
+
+  <footer class="tx-footer">
+    <p>Every score on this page is computed by <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">an open-source AILANG rubric</a>. Nothing is hidden.</p>
+    <div class="links">
+      <a href="/linkedin/topics/">← All topics</a>
+      <a href="/linkedin/">← LinkedIn demo</a>
+      <a href="/">← AILANG demos hub</a>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

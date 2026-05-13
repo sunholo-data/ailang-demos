@@ -1,0 +1,112 @@
+module linkedin/types/sketch_types
+
+-- Types for the LinkedIn sketch generator. See design doc at
+-- linkedin/design/sketches.md for the full architecture.
+--
+-- A "sketch" is a public HTML page generated when a reader comments
+-- on a LinkedIn post with a URL + topic hashtag. It contains an
+-- AI-readiness radar across six topics, an extracted summary of the
+-- site, three topic-keyed AILANG feature cards, and a guarantee
+-- panel showing the executor's effect signature.
+--
+-- Three topics (AgentReady, Privacy, Portable) have observable
+-- signals on a website and support leaderboards. The other three
+-- (Compliance, Budget, Reliable) are scored as opportunity-from-
+-- domain only and have no leaderboard.
+
+-- The six commercial-shape topics, plus a General fallback for
+-- comments with no hashtag.
+export type Topic = Compliance
+                  | Budget
+                  | Privacy
+                  | Reliable
+                  | Portable
+                  | AgentReady
+                  | General
+
+-- One measurable thing about a fetched page that maps to an
+-- AILANG primitive. The `ailangFeature` field is the answer to
+-- "if this signal is missing, what AILANG feature would supply it".
+export type Signal = {
+  name: string,
+  description: string,
+  topic: Topic,
+  points: int,
+  maxPoints: int,
+  detected: bool,
+  ailangFeature: string
+}
+
+-- Per-topic readiness score, clamped 0-10.
+-- opportunity = 10 - readiness (the inverse polarity surfaced
+-- inside section 3 of the rendered sketch).
+-- hasLeaderboard is false for Compliance, Budget, Reliable.
+export type TopicScore = {
+  topic: Topic,
+  readiness: int,
+  opportunity: int,
+  signals: [Signal],
+  hasLeaderboard: bool
+}
+
+-- A single feature card in the AILANG-x-business section.
+export type FeatureCard = {
+  feature: string,
+  rationale: string,
+  code: string
+}
+
+-- Output of the docparse-first / AI-fallback extraction pipeline.
+-- extractionPath records which branch ran ("docparse", "ai-fallback",
+-- or "polite-refuse"). blockCount is the number of structured blocks
+-- docparse produced (0 if the AI fallback ran).
+export type ExtractedContent = {
+  url: string,
+  domain: string,
+  audience: string,
+  jobs: [string],
+  entities: [string],
+  narrative: string,
+  extractionPath: string,
+  blockCount: int,
+  -- The raw fetched body, kept so the rubric scorers (which detect
+  -- protocol references in HTML) and the executor share one fetch.
+  -- May be empty when extractionPath == "polite-refuse".
+  rawBody: string
+}
+
+-- A complete sketch ready for rendering to HTML.
+export type Sketch = {
+  url: string,
+  registrableDomain: string,
+  topic: Topic,
+  initials: string,
+  avatarSeed: string,
+  generatedAt: string,
+  extracted: ExtractedContent,
+  scores: [TopicScore],
+  featureCards: [FeatureCard]
+}
+
+-- A queue entry awaiting sketch generation. Idempotent on
+-- (avatarSeed, url, topic).
+export type SketchRequest = {
+  url: string,
+  topic: Topic,
+  initials: string,
+  avatarSeed: string,
+  requestedAt: string
+}
+
+-- A row on a per-topic leaderboard.
+-- rank = 0 means "in the gallery, not ranked publicly" (positions
+-- below top 10). rank >= 1 is the public ranking.
+export type LeaderboardEntry = {
+  rank: int,
+  registrableDomain: string,
+  initials: string,
+  avatarSeed: string,
+  score: int,
+  sketchUrl: string,
+  updatedAt: string
+}

@@ -1,0 +1,204 @@
+module linkedin/services/sketch_template
+
+-- Renderer for the sketch HTML page.
+--
+-- Strategy: read linkedin/templates/sketch.html as a string, build
+-- each repeated section as a sub-string in AILANG, then do one
+-- replaceMany over the template with every {{PLACEHOLDER}} -> value
+-- substitution. No mini template-engine needed.
+--
+-- Effects: ! {FS} — reads the template file. Pure otherwise.
+
+import std/fs (readFile)
+import std/string (replaceMany, intToStr, join)
+import std/list (map, concat as listConcat)
+import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
+
+-- ─── Topic ↔ string helpers ───────────────────────────────────
+
+export func topicSlug(t: Topic) -> string = match t {
+  Compliance => "compliance",
+  Budget     => "budget",
+  Privacy    => "privacy",
+  Reliable   => "reliable",
+  Portable   => "portable",
+  AgentReady => "agent-ready",
+  General    => "general"
+}
+
+-- ─── Per-section renderers (pure string-building) ─────────────
+
+func renderChipHtml(text: string) -> string =
+  "<span class=\"sk-chip\">${text}</span>"
+
+func renderChipsHtml(chips: [string]) -> string =
+  join(" ", map(renderChipHtml, chips))
+
+func renderCardHtml(c: FeatureCard) -> string = join("", [
+  "<article class=\"sk-card\">",
+  "<h3>", c.feature, "</h3>",
+  "<p class=\"rationale\">", c.rationale, "</p>",
+  "<pre>", c.code, "</pre>",
+  "</article>"
+])
+
+func renderCardsHtml(cards: [FeatureCard]) -> string =
+  join("\n", map(renderCardHtml, cards))
+
+func sigResultMark(s: Signal) -> string =
+  if s.detected then "✓" else if s.points > 0 then "○" else "✗"
+
+func sigResultClass(s: Signal) -> string =
+  if s.detected then "ok" else if s.points > 0 then "ok" else "no"
+
+func renderSignalRow(s: Signal) -> string = join("", [
+  "<tr>",
+  "<td>", s.name, "</td>",
+  "<td>", topicSlug(s.topic), "</td>",
+  "<td class=\"sig-", sigResultClass(s), "\">", sigResultMark(s), "</td>",
+  "<td>", intToStr(s.points), "/", intToStr(s.maxPoints), "</td>",
+  "<td>", s.ailangFeature, "</td>",
+  "</tr>"
+])
+
+func renderSignalsHtml(signals: [Signal]) -> string =
+  join("\n", map(renderSignalRow, signals))
+
+-- "Why this score" list — at-a-glance summary of the top-topic signals.
+func renderWhyLi(s: Signal) -> string =
+  "<li class=\"${sigResultClass(s)}\">${s.description}</li>"
+
+func renderWhyHtml(signals: [Signal]) -> string =
+  join("\n", map(renderWhyLi, signals))
+
+-- ─── Radar polygon ────────────────────────────────────────────
+
+-- Six-axis polygon points string. Order around the hexagon:
+-- compliance (top), privacy (top-right), agent-ready (bottom-right),
+-- portable (bottom), reliable (bottom-left), budget (top-left).
+--
+-- For each topic's readiness (0-10), the point is at the corresponding
+-- vertex scaled to readiness/10. Axis unit vectors (in viewBox coords):
+--   compliance:   (0, -1)
+--   privacy:      (0.866, -0.5)
+--   agent-ready:  (0.866, 0.5)
+--   portable:     (0, 1)
+--   reliable:     (-0.866, 0.5)
+--   budget:       (-0.866, -0.5)
+-- Scaled so a score of 10 reaches the unit-100 hexagon vertex.
+-- Integer arithmetic only: r = readiness * 10.
+
+func axisXForTopic(t: Topic, r: int) -> int = match t {
+  Compliance => 0,
+  Privacy    => (r * 866) / 100,
+  AgentReady => (r * 866) / 100,
+  Portable   => 0,
+  Reliable   => -(r * 866) / 100,
+  Budget     => -(r * 866) / 100,
+  General    => 0
+}
+
+func axisYForTopic(t: Topic, r: int) -> int = match t {
+  Compliance => -(r * 10),
+  Privacy    => -(r * 5),
+  AgentReady => r * 5,
+  Portable   => r * 10,
+  Reliable   => r * 5,
+  Budget     => -(r * 5),
+  General    => 0
+}
+
+func scoreForTopic(scores: [TopicScore], t: Topic) -> int = match scores {
+  []            => 0,
+  [s, ...rest]  => if topicEq(s.topic, t) then s.readiness else scoreForTopic(rest, t)
+}
+
+func radarPointFor(scores: [TopicScore], t: Topic) -> string =
+  let r = scoreForTopic(scores, t)
+  in "${intToStr(axisXForTopic(t, r))},${intToStr(axisYForTopic(t, r))}"
+
+func renderRadarPoints(scores: [TopicScore]) -> string = join(" ", [
+  radarPointFor(scores, Compliance),
+  radarPointFor(scores, Privacy),
+  radarPointFor(scores, AgentReady),
+  radarPointFor(scores, Portable),
+  radarPointFor(scores, Reliable),
+  radarPointFor(scores, Budget)
+])
+
+-- ─── Topic label ──────────────────────────────────────────────
+
+export func topicLabel(t: Topic) -> string = topicSlug(t)
+
+-- ─── Rank block (optional) ────────────────────────────────────
+
+func renderRankBlock(t: Topic, rank: int) -> string =
+  if topicHasLeaderboard(t) then join("", [
+    "<div class=\"sk-rank-callout\">",
+    "<span>Your rank on the ", topicLabel(t), " leaderboard:</span>",
+    "<span class=\"rank-num\">#", intToStr(rank), "</span>",
+    "<a href=\"/linkedin/topics/", topicSlug(t), "/\">view leaderboard ↗</a>",
+    "</div>"
+  ]) else ""
+
+-- ─── Top-level renderer ───────────────────────────────────────
+
+-- Render a Sketch into a complete HTML page string.
+-- The `rank` arg is the commenter's current position on the topic's
+-- leaderboard (0 if unranked or no leaderboard for this topic).
+-- The `avatarAngle` is a hash-derived integer in 0..360 for the
+-- conic-gradient avatar — caller computes it from avatarSeed.
+export func sketchRenderHtml(
+  sketch: Sketch,
+  rank: int,
+  avatarAngle: int,
+  templatePath: string
+) -> string ! {FS} {
+  let template = readFile(templatePath);
+  let scores = sketch.scores;
+  let topic = sketch.topic;
+  let extracted = sketch.extracted;
+
+  let topicReadiness  = scoreForTopic(scores, topic);
+  let topicOpp        = 10 - topicReadiness;
+  let chipsHtml       = renderChipsHtml(extracted.entities);
+  let cardsHtml       = renderCardsHtml(sketch.featureCards);
+  let signalsHtml     = renderSignalsHtml(signalsFromScores(scores));
+  let whySignalsHtml  = renderWhyHtml(whySignalsForTopic(scores, topic));
+  let radarPoints     = renderRadarPoints(scores);
+  let rankBlockHtml   = renderRankBlock(topic, rank);
+
+  replaceMany(template, [
+    ("{{DOMAIN}}",            sketch.registrableDomain),
+    ("{{TOPIC_LABEL}}",       topicLabel(topic)),
+    ("{{TOPIC_SLUG}}",        topicSlug(topic)),
+    ("{{TOPIC_SCORE}}",       intToStr(topicReadiness)),
+    ("{{TOPIC_OPPORTUNITY}}", intToStr(topicOpp)),
+    ("{{INITIALS}}",          sketch.initials),
+    ("{{AVATAR_ANGLE}}",      intToStr(avatarAngle)),
+    ("{{GENERATED_AT}}",      sketch.generatedAt),
+    ("{{RADAR_POINTS}}",      radarPoints),
+    ("{{RANK_BLOCK_HTML}}",   rankBlockHtml),
+    ("{{WHY_SIGNALS_HTML}}",  whySignalsHtml),
+    ("{{NARRATIVE_HEADLINE}}", extracted.audience),
+    ("{{NARRATIVE_BODY}}",    extracted.narrative),
+    ("{{CHIPS_HTML}}",        chipsHtml),
+    ("{{CARDS_HTML}}",        cardsHtml),
+    ("{{SIGNALS_HTML}}",      signalsHtml)
+  ])
+}
+
+-- ─── Helpers for collecting signals ───────────────────────────
+
+-- Flatten all signals across all topic scores (for the full breakdown).
+func signalsFromScores(scores: [TopicScore]) -> [Signal] = match scores {
+  []            => [],
+  [s, ...rest]  => listConcat(s.signals, signalsFromScores(rest))
+}
+
+-- Signals for the "why this score" callout — just the asked-for topic.
+func whySignalsForTopic(scores: [TopicScore], t: Topic) -> [Signal] = match scores {
+  []            => [],
+  [s, ...rest]  => if topicEq(s.topic, t) then s.signals else whySignalsForTopic(rest, t)
+}

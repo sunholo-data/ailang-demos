@@ -1,0 +1,182 @@
+module linkedin/services/sketch
+
+-- The sketch executor — the top-level entry point.
+--
+-- Takes a URL, a topic, the commenter's pseudonymous initials +
+-- avatarSeed (already derived by linkedinDerivePersona), plus a
+-- generated-at date and a rank. Returns the path of the rendered
+-- HTML page.
+--
+-- Effects: ! {Net @limit=1, AI @limit=5, FS @limit=8, Process, IO}
+-- The Declassify boundary lives at the package level (the persona
+-- derivation that produced initials+avatarSeed); this module
+-- doesn't see PII directly.
+
+import std/io (println)
+import std/fs (writeFile, mkdirAll)
+import std/string (length, substring, replace, contains, toLower, find, intToStr)
+import std/list (map)
+import linkedin/types/sketch_types (Sketch, Topic, TopicScore, FeatureCard)
+import linkedin/services/sketch_extract (sketchExtract)
+import linkedin/services/sketch_rubric (sketchScoreAllSignals, sketchComputeAllTopicScores, topicEq)
+import linkedin/services/sketch_features (sketchCardsForTopic)
+import linkedin/services/sketch_template (sketchRenderHtml, topicSlug)
+
+-- ─── URL helpers ──────────────────────────────────────────────
+
+-- Strip scheme, optional leading "www.", and the path/query/fragment.
+-- Returns the registrable host like "acme.com".
+export func sketchRegistrableDomain(url: string) -> string =
+  let stripped = stripScheme(url)
+  in let nowww = stripWww(stripped)
+  in firstSegment(nowww)
+
+func stripScheme(s: string) -> string =
+  let lower = toLower(s)
+  in if contains(lower, "https://") then substring(s, find(lower, "https://") + 8, length(s))
+     else if contains(lower, "http://") then substring(s, find(lower, "http://") + 7, length(s))
+     else s
+
+func stripWww(s: string) -> string =
+  let lower = toLower(s)
+  in if length(s) >= 4 && substring(lower, 0, 4) == "www." then substring(s, 4, length(s))
+     else s
+
+-- Return the first path-segment-free token: everything up to the first '/'.
+func firstSegment(s: string) -> string =
+  let idx = find(s, "/")
+  in if idx < 0 then s else substring(s, 0, idx)
+
+-- Slug derived from the registrable domain: "acme.com" -> "acme-com".
+export func sketchSlug(domain: string) -> string =
+  replace(domain, ".", "-")
+
+-- ─── Avatar angle from seed ───────────────────────────────────
+
+-- Map a 6-hex-char avatarSeed to an angle in [0, 359].
+-- Treats first 2 hex chars as a byte (0..255), scales to 0..359.
+export func sketchAvatarAngle(seed: string) -> int =
+  if length(seed) < 2 then 0
+  else
+    let b = hexByteOf(substring(seed, 0, 2))
+    in (b * 360) / 256
+
+func hexByteOf(hex2: string) -> int =
+  let hi = hexNibble(substring(hex2, 0, 1))
+  in let lo = hexNibble(substring(hex2, 1, 2))
+  in (hi * 16) + lo
+
+func hexNibble(c: string) -> int =
+  if c == "0" then 0
+  else if c == "1" then 1
+  else if c == "2" then 2
+  else if c == "3" then 3
+  else if c == "4" then 4
+  else if c == "5" then 5
+  else if c == "6" then 6
+  else if c == "7" then 7
+  else if c == "8" then 8
+  else if c == "9" then 9
+  else if c == "a" || c == "A" then 10
+  else if c == "b" || c == "B" then 11
+  else if c == "c" || c == "C" then 12
+  else if c == "d" || c == "D" then 13
+  else if c == "e" || c == "E" then 14
+  else if c == "f" || c == "F" then 15
+  else 0
+
+-- ─── Output path ──────────────────────────────────────────────
+
+-- The on-disk directory + index.html path for a sketch.
+-- site/linkedin/topics/<topic>/<seed>-<slug>/index.html
+export func sketchOutputDir(t: Topic, avatarSeed: string, slug: string) -> string =
+  "site/linkedin/topics/${topicSlug(t)}/${avatarSeed}-${slug}"
+
+export func sketchOutputFile(t: Topic, avatarSeed: string, slug: string) -> string =
+  "${sketchOutputDir(t, avatarSeed, slug)}/index.html"
+
+export func sketchMetadataFile(t: Topic, avatarSeed: string, slug: string) -> string =
+  "${sketchOutputDir(t, avatarSeed, slug)}/sketch.json"
+
+-- ─── Metadata JSON ────────────────────────────────────────────
+
+-- Minimal JSON-string escape for our controlled inputs (URL, topic
+-- slug, initials, avatarSeed, generatedAt, domain). Handles the two
+-- characters that would break a JSON string literal; newlines and
+-- control chars are not in our inputs.
+func escapeJsonString(s: string) -> string =
+  replace(replace(s, "\\", "\\\\"), "\"", "\\\"")
+
+-- Build the sketch metadata JSON the leaderboard reads.
+-- Hand-built to avoid pulling in the full Json ADT for one small object.
+func sketchMetadataJson(s: Sketch, topicReadiness: int, topicOpp: int) -> string =
+  let domain = escapeJsonString(s.registrableDomain) in
+  let url = escapeJsonString(s.url) in
+  let initials = escapeJsonString(s.initials) in
+  let seed = escapeJsonString(s.avatarSeed) in
+  let gen = escapeJsonString(s.generatedAt) in
+  let path = escapeJsonString(s.extracted.extractionPath) in
+  let topic = topicSlug(s.topic) in
+  "{\"url\":\"${url}\",\"registrableDomain\":\"${domain}\",\"topic\":\"${topic}\",\"initials\":\"${initials}\",\"avatarSeed\":\"${seed}\",\"generatedAt\":\"${gen}\",\"topicReadiness\":${intToStr(topicReadiness)},\"topicOpportunity\":${intToStr(topicOpp)},\"extractionPath\":\"${path}\"}"
+
+-- ─── Top-level entry ──────────────────────────────────────────
+
+-- Produce a sketch end-to-end and write it to disk.
+-- Returns the relative output path that was written.
+export func sketchSite(
+  url: string,
+  topic: Topic,
+  initials: string,
+  avatarSeed: string,
+  generatedAt: string,
+  rank: int,
+  templatePath: string
+) -> string ! {Net, FS, AI, Process, IO} {
+  println("→ Extracting ${url} ...");
+  let extracted = sketchExtract(url);
+
+  println("→ Scoring signals ...");
+  let signals = sketchScoreAllSignals(extracted.rawBody);
+  let scores  = sketchComputeAllTopicScores(signals);
+
+  println("→ Selecting feature cards ...");
+  let cards = sketchCardsForTopic(topic);
+
+  let domain = sketchRegistrableDomain(url);
+  let slug   = sketchSlug(domain);
+
+  let sketchRec: Sketch = {
+    url:               url,
+    registrableDomain: domain,
+    topic:             topic,
+    initials:          initials,
+    avatarSeed:        avatarSeed,
+    generatedAt:       generatedAt,
+    extracted:         extracted,
+    scores:            scores,
+    featureCards:      cards
+  };
+
+  println("→ Rendering HTML ...");
+  let avatarAngle = sketchAvatarAngle(avatarSeed);
+  let html = sketchRenderHtml(sketchRec, rank, avatarAngle, templatePath);
+
+  let dir = sketchOutputDir(topic, avatarSeed, slug);
+  let file = sketchOutputFile(topic, avatarSeed, slug);
+  let metaFile = sketchMetadataFile(topic, avatarSeed, slug);
+  mkdirAll(dir);
+  writeFile(file, html);
+  let topicReadiness = readinessForTopic(scores, topic);
+  let metaJson = sketchMetadataJson(sketchRec, topicReadiness, 10 - topicReadiness);
+  writeFile(metaFile, metaJson);
+  println("✓ Wrote ${file}");
+  println("✓ Wrote ${metaFile}");
+  file
+}
+
+-- Find the readiness for a given topic in a [TopicScore] list.
+-- Returns 0 if not found (defensive default).
+func readinessForTopic(scores: [TopicScore], t: Topic) -> int = match scores {
+  []           => 0,
+  [s, ...rest] => if topicEq(s.topic, t) then s.readiness else readinessForTopic(rest, t)
+}

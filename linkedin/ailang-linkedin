@@ -20,9 +20,19 @@ MAIN_AIL="linkedin/main.ail"
 # demo-local modules.
 MODULES=(
   linkedin/types/linkedin_types.ail
+  linkedin/types/sketch_types.ail
   linkedin/services/linkedin_state.ail
   linkedin/services/linkedin_content_loader.ail
+  linkedin/services/sketch_features.ail
+  linkedin/services/sketch_rubric_signals.ail
+  linkedin/services/sketch_rubric.ail
+  linkedin/services/sketch_extract.ail
+  linkedin/services/sketch_template.ail
+  linkedin/services/sketch.ail
+  linkedin/services/sketch_leaderboard.ail
   linkedin/main.ail
+  linkedin/sketch_main.ail
+  linkedin/leaderboard_main.ail
 )
 
 usage() {
@@ -47,6 +57,10 @@ Commands:
                                   so the hourly comments cron can authenticate.
   refresh [--repo OWNER/REPO]     Trigger the comments cron now and wait for it to finish.
                                   Useful when you don't want to wait for the next hourly tick.
+  sketch <url> <topic> [...]      Generate an AILANG sketch for a URL on a topic
+                                  (compliance|budget|privacy|reliable|portable|agent-ready|general)
+  topics-rebuild [date]           Rebuild every topic's leaderboard.json + index.html.
+                                  Run after `sketch` produces a new entry, or daily via cron.
 
 Options:
   --check           Type-check all modules (no API calls)
@@ -409,6 +423,45 @@ case "${1:-}" in
     shift
     do_refresh "$@"
     exit $?
+    ;;
+  topics-rebuild)
+    cd "$PROJECT_DIR"
+    shift
+    date_str="${1:-$(date -u +%Y-%m-%d)}"
+    GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
+      --caps IO,FS,Env \
+      linkedin/leaderboard_main.ail "$date_str"
+    ;;
+  sketch)
+    cd "$PROJECT_DIR"
+    shift
+    if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "" ]; then
+      cat <<'EOF'
+Generate an AILANG sketch for a website and write it to site/linkedin/topics/...
+
+Usage:
+  ailang-linkedin sketch <url> <topic> [initials] [seed] [date]
+
+Topics:
+  compliance | budget | privacy | reliable | portable | agent-ready | general
+
+Examples:
+  ailang-linkedin sketch https://acme.com agent-ready
+  ailang-linkedin sketch https://acme.com privacy KP c04298
+  ailang-linkedin sketch https://acme.com agent-ready KP c04298 2026-05-13
+EOF
+      exit 0
+    fi
+    # Default the date to today if not provided.
+    if [ $# -lt 5 ]; then
+      date_str="$(date -u +%Y-%m-%d)"
+    else
+      date_str=""
+    fi
+    GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" exec ailang run --entry main \
+      --caps IO,FS,Net,AI,Process,Env \
+      --ai "${SKETCH_AI_MODEL:-gemini-2.5-flash}" \
+      linkedin/sketch_main.ail "$@" ${date_str:+"$date_str"}
     ;;
   "")
     usage

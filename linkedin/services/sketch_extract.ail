@@ -1,0 +1,166 @@
+module linkedin/services/sketch_extract
+
+-- Sketch content-extraction pipeline.
+--
+-- Strategy: docparse-first, AI-fallback.
+--
+-- 1. Fetch the URL once (Net @limit=1).
+-- 2. Write the body to a temp file with .html extension.
+-- 3. Invoke `docparse` via std/process — produces structured JSON + markdown.
+--    The markdown output is "LLM-ready" plain text per docparse's own docs.
+-- 4. If docparse exits cleanly and produces blocks: use the markdown.
+-- 5. Otherwise: fall back to the raw HTML body (truncated).
+-- 6. Send the chosen text to callJson with a fixed schema to extract
+--    narrative, audience, primary jobs-to-be-done, and key entities.
+-- 7. Return ExtractedContent recording which path ran.
+--
+-- This is V1: fixed temp paths (no parallel sketches yet), trimmed input
+-- to ~8KB, content-classification via Gemini's structured-output mode.
+
+import std/io (println)
+import std/fs (writeFile, readFile, fileExists)
+import std/string (length, substring, intToStr)
+import std/list (length as listLength)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/process (exec)
+import std/net (httpRequest, HttpResponse, NetError)
+import std/ai (callJson)
+import std/json (decode, getString, getStringArrayOrEmpty)
+import linkedin/types/sketch_types (ExtractedContent)
+
+-- ─── Constants ────────────────────────────────────────────────
+
+func tmpHtmlPath() -> string = "/tmp/ailang-sketch-input.html"
+func tmpOutDir()  -> string = "/tmp/ailang-sketch-out"
+func tmpMdPath()  -> string = "/tmp/ailang-sketch-out/ailang-sketch-input.html.md"
+func maxClassifyChars() -> int = 8000
+
+-- ─── Helpers ──────────────────────────────────────────────────
+
+-- Truncate a string to at most `n` characters.
+func sketchTruncate(s: string, n: int) -> string =
+  if length(s) <= n then s else substring(s, 0, n)
+
+-- Build the classification schema (JSON Schema as a string).
+func classifySchema() -> string =
+  "{\"type\":\"object\",\"properties\":{\"domain\":{\"type\":\"string\"},\"audience\":{\"type\":\"string\"},\"jobs\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"entities\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"narrative\":{\"type\":\"string\"}},\"required\":[\"domain\",\"audience\",\"jobs\",\"entities\",\"narrative\"]}"
+
+-- Build the classification prompt for a given input text.
+func classifyPrompt(text: string) -> string =
+  "You are summarising a public website for a one-page \"AILANG sketch\". Read the following content and extract structured fields. Be dry, descriptive, not promotional. Reply with compact JSON (no whitespace) matching the schema.\n\nFields:\n  domain    — one of: ecommerce, content, saas, marketing, dev-tool, other\n  audience  — one sentence on who the site is for\n  jobs      — 2 to 4 primary jobs-to-be-done\n  entities  — 3 to 6 key domain terms or entities\n  narrative — one short paragraph (max 60 words) summarising the site\n\nContent:\n${text}"
+
+-- ─── Fetch ────────────────────────────────────────────────────
+
+-- Fetch a URL once. Returns the body string or "" on failure.
+-- The Net @limit=1 budget is the executor's; this just makes the one call.
+export func sketchFetch(url: string) -> string ! {Net} {
+  match httpRequest("GET", url, [], "") {
+    Ok(resp)  => resp.body,
+    Err(_)    => ""
+  }
+}
+
+-- ─── docparse path ────────────────────────────────────────────
+
+-- Try to extract via docparse. Returns Some(markdown) on success
+-- with non-trivial output, None otherwise (caller falls back to AI).
+export func sketchTryDocparse(html: string) -> Option[string] ! {FS, Process, IO} {
+  -- 1. Write the fetched HTML to a known temp file.
+  writeFile(tmpHtmlPath(), html);
+
+  -- 2. Invoke docparse with --output-dir so we control where the
+  -- markdown lands. docparse writes `<file>.html.md` alongside `.json`.
+  match exec("docparse", [tmpHtmlPath(), "--output-dir", tmpOutDir()]) {
+    Ok(out) => {
+      if out.exitCode == 0 then {
+        if fileExists(tmpMdPath()) then {
+          let md = readFile(tmpMdPath());
+          if length(md) > 100 then Some(md) else None
+        } else None
+      } else {
+        println("docparse exited ${intToStr(out.exitCode)} — falling back to AI extraction");
+        None
+      }
+    },
+    Err(_) => {
+      println("docparse not invocable — falling back to AI extraction");
+      None
+    }
+  }
+}
+
+-- ─── AI classify ──────────────────────────────────────────────
+
+-- Given a text input, call the classifier and parse the result
+-- into an ExtractedContent. Caller passes the raw fetched body
+-- so it can be threaded into the result (the rubric needs it).
+export func sketchClassify(
+  url: string,
+  text: string,
+  rawBody: string,
+  extractionPath: string,
+  blockCount: int
+) -> ExtractedContent ! {AI} {
+  let prompt = classifyPrompt(sketchTruncate(text, maxClassifyChars()));
+  let raw = callJson(prompt, classifySchema());
+  match decode(raw) {
+    Ok(json) => {
+      let domain    = getOrElse(getString(json, "domain"),    "other");
+      let audience  = getOrElse(getString(json, "audience"),  "");
+      let narrative = getOrElse(getString(json, "narrative"), "");
+      let jobs      = getStringArrayOrEmpty(json, "jobs");
+      let entities  = getStringArrayOrEmpty(json, "entities");
+      {
+        url:            url,
+        domain:         domain,
+        audience:       audience,
+        jobs:           jobs,
+        entities:       entities,
+        narrative:      narrative,
+        extractionPath: extractionPath,
+        blockCount:     blockCount,
+        rawBody:        rawBody
+      }
+    },
+    Err(_) => {
+      url:            url,
+      domain:         "other",
+      audience:       "",
+      jobs:           [],
+      entities:       [],
+      narrative:      "(extraction failed — JSON parse error)",
+      extractionPath: "polite-refuse",
+      blockCount:     0,
+      rawBody:        rawBody
+    }
+  }
+}
+
+-- ─── Top-level extract ────────────────────────────────────────
+
+-- The full pipeline: fetch → docparse-or-fallback → classify.
+-- Returns ExtractedContent recording which path ran.
+export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Process, IO} {
+  let html = sketchFetch(url);
+  if length(html) < 200 then {
+    -- Empty or tiny body — polite refuse, no AI call.
+    {
+      url:            url,
+      domain:         "other",
+      audience:       "",
+      jobs:           [],
+      entities:       [],
+      narrative:      "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
+      extractionPath: "polite-refuse",
+      blockCount:     0,
+      rawBody:        html
+    }
+  } else {
+    -- Try docparse, fall back to raw HTML.
+    match sketchTryDocparse(html) {
+      Some(md) => sketchClassify(url, md, html, "docparse", 1),
+      None     => sketchClassify(url, html, html, "ai-fallback", 0)
+    }
+  }
+}

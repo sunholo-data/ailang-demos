@@ -1,0 +1,247 @@
+module linkedin/services/sketch_rubric
+
+-- The sketch rubric — pure scoring functions for each signal,
+-- plus topic-score aggregators.
+--
+-- Hard rule (per design doc §6.5): every signal here maps to an
+-- AILANG primitive a reader could adopt. V1 detection is body-text-
+-- based only — bounded by the Net @limit=1 budget of sketchSite,
+-- so we can't probe additional endpoints. AI-classified signals
+-- (data residency language, single-vendor LLM language) are
+-- approximated by keyword detection in V1; refined to callJson in V2.
+--
+-- Three topics carry observable signals and feed leaderboards:
+-- AgentReady, Privacy, Portable. The other three (Compliance,
+-- Budget, Reliable) get domain-opportunity-only scores in §4.
+
+import std/string (contains, toLower, split)
+import std/list (length as listLength, foldl, filter)
+import linkedin/types/sketch_types (Signal, TopicScore, Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm)
+
+-- ─── Helpers ──────────────────────────────────────────────────
+
+-- Topic equality via nested pattern match — AILANG ADT
+-- constructors don't auto-derive == for tag-only variants.
+export func topicEq(a: Topic, b: Topic) -> bool = match a {
+  Compliance => match b { Compliance => true, _ => false },
+  Budget     => match b { Budget     => true, _ => false },
+  Privacy    => match b { Privacy    => true, _ => false },
+  Reliable   => match b { Reliable   => true, _ => false },
+  Portable   => match b { Portable   => true, _ => false },
+  AgentReady => match b { AgentReady => true, _ => false },
+  General    => match b { General    => true, _ => false }
+}
+
+-- Which topics carry leaderboards (have observable signals).
+export func topicHasLeaderboard(t: Topic) -> bool = match t {
+  AgentReady => true,
+  Privacy    => true,
+  Portable   => true,
+  _          => false
+}
+
+-- Count occurrences of a substring in a string.
+func countOccurrences(hay: string, needle: string) -> int =
+  listLength(split(hay, needle)) - 1
+
+-- ─── Per-signal scorers (pure, no effects) ────────────────────
+
+export func scoreAgentJson(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigAgentJson();
+  let bl = toLower(body);
+  let detected = contains(bl, "/.well-known/agent.json") || contains(bl, "agent.json\"") || contains(bl, "agent.json'");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreOpenApi(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigOpenApi();
+  let bl = toLower(body);
+  let detected = contains(bl, "openapi.json") || contains(bl, "openapi.yaml") || contains(bl, "swagger") || contains(bl, "redoc");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreMcpEndpoint(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigMcpEndpoint();
+  let bl = toLower(body);
+  let detected = contains(bl, "/mcp/") || contains(bl, "/mcp/sse") || contains(bl, "mcp-server") || contains(bl, "model context protocol");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreApiDocsLink(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigApiDocsLink();
+  let bl = toLower(body);
+  let detected = contains(bl, "api documentation") || contains(bl, "/api/docs") || contains(bl, "developers.") || contains(bl, "/docs/api") || contains(bl, "api reference");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreLlmProviderMentioned(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigLlmProviderMentioned();
+  let bl = toLower(body);
+  let detected = contains(bl, "claude") || contains(bl, "gpt-") || contains(bl, "openai") || contains(bl, "anthropic") || contains(bl, "gemini") || contains(bl, "powered by ai");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    -- Note: this is an INFORMATIONAL signal — detecting LLM use
+    -- doesn't dock the privacy score, it surfaces opportunity.
+    -- Detected = 1 point (signal present); not detected = 2 points
+    -- (no known data flow to an LLM provider visible from this page).
+    points:        if detected then 1 else def.maxPoints,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreThirdPartyDomains(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigThirdPartyDomains();
+  let bl = toLower(body);
+  -- V1 heuristic: count https:// occurrences as a proxy for external
+  -- resource count. Crude but defensible. Refined to proper URL
+  -- parsing + cross-origin counting in V2.
+  let count = countOccurrences(bl, "https://");
+  let points = if count <= 10 then 2
+               else if count <= 20 then 1
+               else 0;
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        points,
+    maxPoints:     def.maxPoints,
+    detected:      points > 0,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreDataResidencyLanguage(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigDataResidencyLanguage();
+  let bl = toLower(body);
+  let detected = contains(bl, "data residency") || contains(bl, "on-premises") || contains(bl, "on-prem") || contains(bl, "sovereign cloud") || contains(bl, "eu-hosted") || contains(bl, "data sovereignty") || contains(bl, "self-hosted");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreSingleVendorLlm(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigSingleVendorLlm();
+  let bl = toLower(body);
+  -- "powered by Claude" / "built on GPT-4" / "uses Gemini" — one
+  -- vendor named, no portability claims = low portability score.
+  let detected = contains(bl, "powered by claude") || contains(bl, "powered by gpt") || contains(bl, "powered by gemini") || contains(bl, "built on claude") || contains(bl, "built on gpt") || contains(bl, "built on gemini");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    -- Detected = 0 points (vendor-locked). Not detected = full
+    -- points (no single-vendor claim visible).
+    points:        if detected then 0 else def.maxPoints,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+-- ─── Aggregators ──────────────────────────────────────────────
+
+-- Run every scorer against the body, return all 8 Signal records.
+export func sketchScoreAllSignals(body: string) -> [Signal] = [
+  scoreAgentJson(body),
+  scoreOpenApi(body),
+  scoreMcpEndpoint(body),
+  scoreApiDocsLink(body),
+  scoreLlmProviderMentioned(body),
+  scoreThirdPartyDomains(body),
+  scoreDataResidencyLanguage(body),
+  scoreSingleVendorLlm(body)
+]
+
+-- Compute a 0-10 readiness score for a topic from its signals.
+-- Topics without observable signals (Compliance, Budget, Reliable)
+-- return readiness=0 — they're scored as opportunity-from-domain
+-- elsewhere, not from the signal rubric.
+export func sketchComputeTopicScore(signals: [Signal], t: Topic) -> TopicScore
+  ensures { result.readiness >= 0, result.readiness <= 10 }
+{
+  let topicSignals = filter(\s. topicEq(s.topic, t), signals);
+  let totalPoints = foldl(\acc s. acc + s.points, 0, topicSignals);
+  let totalMax = foldl(\acc s. acc + s.maxPoints, 0, topicSignals);
+  -- Integer division: readiness scales 0..10 linearly with totalPoints/totalMax.
+  let readinessRaw = if totalMax == 0 then 0 else (totalPoints * 10) / totalMax;
+  let readiness = if readinessRaw < 0 then 0
+                  else if readinessRaw > 10 then 10
+                  else readinessRaw;
+  {
+    topic:          t,
+    readiness:      readiness,
+    opportunity:    10 - readiness,
+    signals:        topicSignals,
+    hasLeaderboard: topicHasLeaderboard(t)
+  }
+}
+
+-- Produce a TopicScore for every topic from a list of signals.
+-- Topics without signals get readiness=0, hasLeaderboard=false.
+export func sketchComputeAllTopicScores(signals: [Signal]) -> [TopicScore] = [
+  sketchComputeTopicScore(signals, Compliance),
+  sketchComputeTopicScore(signals, Budget),
+  sketchComputeTopicScore(signals, Privacy),
+  sketchComputeTopicScore(signals, Reliable),
+  sketchComputeTopicScore(signals, Portable),
+  sketchComputeTopicScore(signals, AgentReady)
+]

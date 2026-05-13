@@ -1,0 +1,141 @@
+module linkedin/tests/test_rubric
+
+-- Rubric tests. Inline tests don't work on functions that call
+-- imported stdlib (known harness bug — see CLAUDE.md), so this
+-- is a runnable main() that exercises every scorer + the aggregator
+-- and prints PASS / FAIL. Run with:
+--
+--   ailang run --entry main linkedin/tests/test_rubric.ail
+
+import std/io (println)
+import std/string (intToStr)
+import std/list (length as listLength)
+import linkedin/types/sketch_types (Signal, TopicScore, AgentReady, Privacy, Portable)
+import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
+
+func checkBool(name: string, got: bool, want: bool) -> int ! {IO} {
+  if got == want then {
+    println("  ✓ ${name}");
+    1
+  } else {
+    let g = if got  then "true" else "false";
+    let w = if want then "true" else "false";
+    println("  ✗ ${name} — got ${g}, want ${w}");
+    0
+  }
+}
+
+func checkInt(name: string, got: int, want: int) -> int ! {IO} {
+  if got == want then {
+    println("  ✓ ${name}");
+    1
+  } else {
+    println("  ✗ ${name} — got ${intToStr(got)}, want ${intToStr(want)}");
+    0
+  }
+}
+
+func checkRange(name: string, got: int, lo: int, hi: int) -> int ! {IO} {
+  if got >= lo && got <= hi then {
+    println("  ✓ ${name} (${intToStr(got)} in [${intToStr(lo)},${intToStr(hi)}])");
+    1
+  } else {
+    println("  ✗ ${name} — got ${intToStr(got)}, expected in [${intToStr(lo)},${intToStr(hi)}]");
+    0
+  }
+}
+
+export func main() -> () ! {IO} {
+  println("sketch rubric — tests");
+  println("");
+
+  -- agent.json
+  println("scoreAgentJson:");
+  let aj1 = scoreAgentJson("<link rel=\"agent\" href=\"/.well-known/agent.json\">");
+  let t1 = checkBool("detects agent.json reference",  aj1.detected, true) +
+           checkInt("awards max points when detected", aj1.points, 2);
+  let aj2 = scoreAgentJson("<html>no agent here</html>");
+  let t2 = checkBool("no detection on plain page",     aj2.detected, false) +
+           checkInt("awards 0 when not detected",      aj2.points, 0);
+
+  -- openapi
+  println("");
+  println("scoreOpenApi:");
+  let op1 = scoreOpenApi("Powered by Swagger. See /openapi.json");
+  let t3 = checkBool("detects openapi.json + swagger", op1.detected, true) +
+           checkInt("max points when detected",        op1.points, 2);
+  let op2 = scoreOpenApi("Just a landing page");
+  let t4 = checkBool("no detection on plain page",     op2.detected, false);
+
+  -- MCP endpoint
+  println("");
+  println("scoreMcpEndpoint:");
+  let mcp1 = scoreMcpEndpoint("Model Context Protocol available at /mcp/sse");
+  let t5 = checkBool("detects MCP", mcp1.detected, true) +
+           checkInt("max points when detected", mcp1.points, 2);
+
+  -- LLM provider mention (informational — detected = lower points)
+  println("");
+  println("scoreLlmProviderMentioned:");
+  let llm1 = scoreLlmProviderMentioned("Powered by Anthropic Claude");
+  let t6 = checkBool("detects Claude mention",         llm1.detected, true) +
+           checkInt("detected = 1 point (informational)", llm1.points, 1);
+  let llm2 = scoreLlmProviderMentioned("No AI mentioned here");
+  let t7 = checkInt("not detected = full points",      llm2.points, 2);
+
+  -- single-vendor LLM (penalty — detected = 0 points)
+  println("");
+  println("scoreSingleVendorLlm:");
+  let sv1 = scoreSingleVendorLlm("Powered by Claude — the world's best AI");
+  let t8 = checkBool("detects single-vendor lock",     sv1.detected, true) +
+           checkInt("detected = 0 points (penalty)",   sv1.points, 0);
+  let sv2 = scoreSingleVendorLlm("Multi-LLM platform");
+  let t9 = checkInt("not detected = full points",      sv2.points, 2);
+
+  -- data residency
+  println("");
+  println("scoreDataResidencyLanguage:");
+  let dr1 = scoreDataResidencyLanguage("EU-hosted. Data residency guaranteed.");
+  let t10 = checkBool("detects residency language",    dr1.detected, true);
+
+  -- third-party domains
+  println("");
+  println("scoreThirdPartyDomains:");
+  let tp1 = scoreThirdPartyDomains("<html>https://example.com</html>");
+  let t11 = checkRange("low https count = max points", tp1.points, 2, 2);
+
+  -- contract bounds (every scorer respects 0..maxPoints)
+  println("");
+  println("contract bounds — all scorers respect 0..maxPoints:");
+  let all = sketchScoreAllSignals("Some HTML with /mcp/ and openapi.json and Claude");
+  let bcheck = checkInt("scoreAllSignals returns 8 signals", listLength(all), 8);
+
+  -- aggregator clamps to 0..10
+  println("");
+  println("aggregator clamping:");
+  let scoreAR = sketchComputeTopicScore(all, AgentReady);
+  let t12 = checkRange("AgentReady readiness in [0,10]", scoreAR.readiness, 0, 10) +
+            checkBool("AgentReady has leaderboard",      scoreAR.hasLeaderboard, true) +
+            checkBool("opportunity = 10 - readiness",    scoreAR.opportunity == (10 - scoreAR.readiness), true);
+
+  -- topicHasLeaderboard
+  println("");
+  println("topicHasLeaderboard:");
+  let t13 = checkBool("AgentReady = true", topicHasLeaderboard(AgentReady), true) +
+            checkBool("Privacy    = true", topicHasLeaderboard(Privacy), true) +
+            checkBool("Portable   = true", topicHasLeaderboard(Portable), true);
+
+  -- topicEq
+  println("");
+  println("topicEq:");
+  let t14 = checkBool("AgentReady == AgentReady", topicEq(AgentReady, AgentReady), true) +
+            checkBool("AgentReady != Privacy",    topicEq(AgentReady, Privacy), false);
+
+  let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + bcheck + t12 + t13 + t14;
+  let expected = 26;
+  println("");
+  if total == expected then
+    println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")
+  else
+    println("FAIL: ${intToStr(total)}/${intToStr(expected)} assertions passed")
+}

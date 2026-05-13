@@ -1,0 +1,115 @@
+module linkedin/services/sketch_rubric_signals
+
+-- Static signal registry for the sketch rubric.
+--
+-- Each function returns a "template" Signal record describing what
+-- the signal measures, which topic it scores, its max-point
+-- contribution, and the AILANG primitive it maps to. The detection
+-- logic itself lives in sketch_rubric.ail, which uses these
+-- templates and fills in `detected` + `points` from the fetched
+-- page content.
+--
+-- Hard rule (per design doc §6.5): every signal here must map to
+-- an AILANG primitive a reader could adopt. Generic AI-readiness
+-- markers (llms.txt, robots.txt, JSON-LD, etc.) are not measured.
+
+import linkedin/types/sketch_types (Signal, AgentReady, Privacy, Portable)
+
+-- ─── agent-ready signals ───────────────────────────────────────
+
+export func sigAgentJson() -> Signal = {
+  name:          "agent.json referenced",
+  description:   "Page references /.well-known/agent.json — the A2A agent card discovery endpoint.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang serve-api generates A2A agent cards automatically"
+}
+
+export func sigOpenApi() -> Signal = {
+  name:          "openapi.json referenced",
+  description:   "Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures"
+}
+
+export func sigMcpEndpoint() -> Signal = {
+  name:          "MCP endpoint referenced",
+  description:   "Page references an MCP endpoint such as /mcp/ or /mcp/sse.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang serve-api --mcp-http exposes typed functions as MCP tools"
+}
+
+export func sigApiDocsLink() -> Signal = {
+  name:          "Public API docs linked",
+  description:   "Page links to public API documentation, Swagger UI, or ReDoc.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default"
+}
+
+-- ─── privacy signals ───────────────────────────────────────────
+
+export func sigLlmProviderMentioned() -> Signal = {
+  name:          "Named LLM provider mentioned",
+  description:   "Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.",
+  topic:         Privacy,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "std/ai + IFC labels — track and declassify customer data crossing the provider boundary"
+}
+
+export func sigThirdPartyDomains() -> Signal = {
+  name:          "Third-party domains restrained",
+  description:   "Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.",
+  topic:         Privacy,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Capability scoping — each Net call declares its endpoint in the effect row"
+}
+
+export func sigDataResidencyLanguage() -> Signal = {
+  name:          "Data residency / on-prem language",
+  description:   "Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.",
+  topic:         Privacy,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI"
+}
+
+-- ─── portable signals ──────────────────────────────────────────
+
+export func sigSingleVendorLlm() -> Signal = {
+  name:          "Single-vendor LLM language",
+  description:   "Page copy that names one specific LLM provider (e.g. \"powered by Claude\") without portability claims.",
+  topic:         Portable,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting"
+}
+
+-- ─── registry — all V1 signals in one list ─────────────────────
+
+export func sketchAllSignalDefs() -> [Signal] = [
+  sigAgentJson(),
+  sigOpenApi(),
+  sigMcpEndpoint(),
+  sigApiDocsLink(),
+  sigLlmProviderMentioned(),
+  sigThirdPartyDomains(),
+  sigDataResidencyLanguage(),
+  sigSingleVendorLlm()
+]

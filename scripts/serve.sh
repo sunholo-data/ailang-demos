@@ -48,6 +48,16 @@ if [ -d "$REPO_ROOT/site/linkedin" ]; then
   # Overlay the latest comments JSON if it exists
   [ -f "$REPO_ROOT/linkedin/data/comments.json" ] && \
     cp "$REPO_ROOT/linkedin/data/comments.json" "$SITE/linkedin/comments.json"
+  # Expose the sketch template directory for visual iteration —
+  # symlinked so edits to linkedin/templates/sketch.html show on reload.
+  if [ -d "$REPO_ROOT/linkedin/templates" ]; then
+    ln -sfn "$REPO_ROOT/linkedin/templates" "$SITE/linkedin/templates"
+  fi
+  # Expose generated sketch topic galleries — symlinked so newly
+  # generated sketches appear immediately under /linkedin/topics/<topic>/.
+  if [ -d "$REPO_ROOT/site/linkedin/topics" ]; then
+    ln -sfn "$REPO_ROOT/site/linkedin/topics" "$SITE/linkedin/topics"
+  fi
 fi
 
 # Any other site/*/ sub-pages — symlink for live editing

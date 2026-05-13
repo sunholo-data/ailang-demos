@@ -1,0 +1,62 @@
+module linkedin/sketch_main
+
+-- Local-CLI entry for the sketch executor. Invoked by
+-- `ailang-linkedin sketch <url> <topic-slug> [initials] [seed]`.
+--
+-- Argv shape (positional):
+--   1. url        — required
+--   2. topic-slug — required: compliance|budget|privacy|reliable|portable|agent-ready|general
+--   3. initials   — optional, default "AI"
+--   4. avatarSeed — optional, default "e73c17" (coral)
+--   5. generatedAt — optional, default "today"
+--   6. rank        — optional, default 0
+--
+-- The cron-driven path uses linkedinDerivePersona to produce
+-- pseudonymous initials + seed; this local form lets a human
+-- generate sketches by hand for testing or one-offs.
+
+import std/io (println)
+import std/env (getArgs)
+import std/string (intToStr)
+import std/list (length as listLength, nth)
+import std/option (getOrElse)
+import linkedin/types/sketch_types (Topic, Compliance, Budget, Privacy, Reliable, Portable, AgentReady, General)
+import linkedin/services/sketch (sketchSite)
+
+func parseTopic(s: string) -> Topic =
+  if s == "compliance"  then Compliance
+  else if s == "budget"      then Budget
+  else if s == "privacy"     then Privacy
+  else if s == "reliable"    then Reliable
+  else if s == "portable"    then Portable
+  else if s == "agent-ready" then AgentReady
+  else General
+
+-- Get the Nth argv item or a fallback.
+func argOr(args: [string], i: int, fallback: string) -> string =
+  match nth(args, i) {
+    Some(v) => v,
+    None    => fallback
+  }
+
+export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
+  let args = getArgs();
+  let n = listLength(args);
+  if n < 2 then {
+    println("usage: ailang-linkedin sketch <url> <topic-slug> [initials] [seed] [date] [rank]");
+    println("");
+    println("topics: compliance | budget | privacy | reliable | portable | agent-ready | general")
+  } else {
+    let url         = argOr(args, 0, "");
+    let topicSlug   = argOr(args, 1, "general");
+    let initials    = argOr(args, 2, "AI");
+    let seed        = argOr(args, 3, "e73c17");
+    let generatedAt = argOr(args, 4, "today");
+    let rank        = 0;  -- rank is computed later by the leaderboard step
+    let topic       = parseTopic(topicSlug);
+    let templatePath = "linkedin/templates/sketch.html";
+    println("sketch ${url} #${topicSlug} (${initials})");
+    let _written = sketchSite(url, topic, initials, seed, generatedAt, rank, templatePath);
+    ()
+  }
+}

@@ -1,0 +1,46 @@
+module linkedin/leaderboard_main
+
+-- Daily-snapshot entry point: rebuild leaderboard.json for every
+-- scored topic. The cron path calls this once at UTC 00:00.
+--
+-- Topics without observable signals (compliance/budget/reliable)
+-- are no-op'd inside sketchRebuildTopic.
+--
+-- Argv:
+--   1. generatedAt — date string for the snapshot header, default "today"
+
+import std/io (println)
+import std/env (getArgs)
+import std/string (intToStr)
+import std/list (length as listLength, nth)
+import std/option (Some, None)
+import linkedin/types/sketch_types (AgentReady, Privacy, Portable, Compliance, Budget, Reliable)
+import linkedin/services/sketch_leaderboard (sketchRebuildTopic)
+
+func argOr(args: [string], i: int, fallback: string) -> string =
+  match nth(args, i) {
+    Some(v) => v,
+    None    => fallback
+  }
+
+export func main() -> () ! {IO, Env, FS} {
+  let args = getArgs();
+  let generatedAt = argOr(args, 0, "today");
+
+  println("Rebuilding leaderboards (generated ${generatedAt}) ...");
+  println("");
+
+  -- Three topics carry leaderboards.
+  let nAgent     = sketchRebuildTopic(AgentReady, generatedAt);
+  let nPrivacy   = sketchRebuildTopic(Privacy,    generatedAt);
+  let nPortable  = sketchRebuildTopic(Portable,   generatedAt);
+
+  -- Three are explicitly no-leaderboard (the call is logged for transparency).
+  let _ = sketchRebuildTopic(Compliance, generatedAt);
+  let _ = sketchRebuildTopic(Budget,     generatedAt);
+  let _ = sketchRebuildTopic(Reliable,   generatedAt);
+
+  let total = nAgent + nPrivacy + nPortable;
+  println("");
+  println("Done — ${intToStr(total)} entries across the three scored topics.")
+}
