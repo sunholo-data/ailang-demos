@@ -1,6 +1,6 @@
 ---
 title: I Just Scored 30 European Sites on Agent-Readiness. Comment Here So I Can Score Yours.
-day: 94
+day: 3
 demo: Comment-driven sketches — public AILANG scoring from a hashtag
 link: https://www.sunholo.com/ailang-demos/linkedin/topics/agent-ready/
 image: marketing/_assets/sketches-leaderboard.png
@@ -9,7 +9,7 @@ assets:
   - "Screenshot: the agent-ready leaderboard with 12 seeded entries, top to bottom"
 ---
 
-A few weeks ago I told you comments on my posts would come back to me. The loop is live.
+In my first post I said comments would come back to me. The loop is live.
 
 Reply on this post — or any other AILANG post on Sunholo's page — with your URL plus one of three hashtags. The cron sweeps every AILANG post, not just the latest. A public page appears at sunholo.com/ailang-demos/linkedin/topics/your-topic/your-domain on the next 3-hourly tick.
 

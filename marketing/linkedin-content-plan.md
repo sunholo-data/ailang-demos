@@ -1,10 +1,22 @@
 # AILANG Demos — LinkedIn Content Plan
 
-**Schedule:** 1 post every 3 days
-**Duration:** 20 posts = 60 days of content
+**Schedule:** roughly 1 post every 3 days (drifts as topics merge in / out)
 **Audience:** AI engineers, CTOs, developer advocates, data teams, startup founders
 **Tone:** Technical credibility + genuine excitement. Not hype — show the proof.
 **CTA pattern:** Each post links to the live demo or repo.
+
+## Publishing status
+
+Authoritative source-of-truth: [`linkedin/data/state.json`](../linkedin/data/state.json) — records `slug → postUrn` for every published post. The table below is a maintainer-facing summary.
+
+| Slug                       | Status        | Day | Title                                                                      |
+|----------------------------|---------------|----:|----------------------------------------------------------------------------|
+| `00-meta`                  | ✓ published   |   0 | This Post Was Published by a Programming Language                          |
+| `01-vision`                | ✓ published   |   1 | 10,000% AI-Coded                                                           |
+| `01_5-sketches-loop`       | → next        |   3 | I Just Scored 30 European Sites on Agent-Readiness. Comment Here…          |
+| `02-safe-agent` … `31-…`   | draft         |     | (planned — see calendar below)                                             |
+
+Folder slugs sort alphabetically, so `01_5-…` slots between `01-…` and `02-…`. To insert a new post between existing slots, name it `<lower>_5-…` (e.g. `02_5-…`). `ailang-linkedin post <slug>` updates state.json automatically.
 
 ---
 
