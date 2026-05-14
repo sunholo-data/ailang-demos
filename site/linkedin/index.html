@@ -821,86 +821,6 @@
   }
 
 
-  /* ─── Privacy / compiler-enforced mechanics ─── */
-  .ll-mechanic-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    max-width: 1000px;
-    margin: 0 auto;
-  }
-  .ll-mechanic-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 22px 22px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-    position: relative;
-  }
-  .ll-mechanic-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(231, 60, 23, 0.30);
-    box-shadow: 0 14px 30px -18px rgba(231, 60, 23, 0.20);
-  }
-  .ll-mechanic-card .primitive {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--primary);
-    background: var(--primary-faded);
-    padding: 4px 9px;
-    border-radius: 6px;
-    align-self: flex-start;
-    letter-spacing: 0.01em;
-    line-height: 1.4;
-  }
-  .ll-mechanic-card h3 {
-    font-family: var(--font-display);
-    font-size: 16.5px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 4px 0 0;
-    letter-spacing: -0.012em;
-    line-height: 1.3;
-  }
-  .ll-mechanic-card p {
-    font-family: var(--font-display);
-    font-size: 13.5px;
-    color: var(--text-secondary);
-    margin: 0;
-    line-height: 1.6;
-    flex-grow: 1;
-  }
-  .ll-mechanic-card .learn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 8px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--primary);
-    text-decoration: none;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    align-self: flex-start;
-    border-bottom: 1px solid rgba(231, 60, 23, 0.28);
-    padding-bottom: 1px;
-    transition: border-color 0.15s, color 0.15s;
-  }
-  .ll-mechanic-card .learn:hover {
-    border-bottom-color: var(--primary);
-  }
-  @media (max-width: 900px) {
-    .ll-mechanic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 560px) {
-    .ll-mechanic-grid { grid-template-columns: 1fr; gap: 12px; }
-    .ll-mechanic-card { padding: 18px 18px 16px; }
-  }
-
   /* ─── Receipt panel ─── */
   .ll-receipt-wrap {
     padding-top: 16px;
@@ -1473,64 +1393,10 @@
     </div>
   </section>
 
-  <!-- ─── Privacy mechanics — AILANG features that enforce safety ─── -->
-  <section class="ll-section" id="privacy" aria-labelledby="lh-privacy">
-    <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Three</span></div>
-      <span class="ll-section-title" id="lh-privacy">What the compiler enforces</span>
-      <p>Your name never reaches this page. Your URL is fetched exactly once. None of this is policy — it's the type system refusing to compile when we slip up. Each tile is a language feature, not a library.</p>
-    </div>
-    <div class="ll-mechanic-grid">
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">string&lt;pii&gt;  ⟶  ! {Declassify}</span>
-        <h3>Information-flow labels keep your LinkedIn identity private.</h3>
-        <p>The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code>. That function SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">IFC labels guide ↗</a>
-      </article>
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">! {Net, FS, AI, IO}</span>
-        <h3>Effect rows make every side effect visible in the signature.</h3>
-        <p>Each function names what it touches. The dispatcher that publishes a sketch has <code>! {Net, FS, AI, IO}</code> in its type — anything not listed there is unreachable from this code path. Reviewer attention not required.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Effects intro ↗</a>
-      </article>
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">Net @limit=1, AI @limit=50</span>
-        <h3>Capability budgets cap each run at a known number of calls.</h3>
-        <p>The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Capabilities ↗</a>
-      </article>
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">requires &#123; len(text) ≤ 3000 &#125;</span>
-        <h3>Contracts are Z3-verified, not runtime checks.</h3>
-        <p>LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/reference/implementation-status#verification-v061" target="_blank" rel="noopener">Verification ↗</a>
-      </article>
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">! {AI}</span>
-        <h3>The AI effect is typed, budgeted, and stubbable.</h3>
-        <p>The Gemini call that extracts your site is a first-class effect, not a HTTP wrapper. It carries a per-run budget, can be deterministic-stubbed in tests, and appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a>
-      </article>
-
-      <article class="ll-mechanic-card">
-        <span class="primitive">type Topic = Privacy | Portable | AgentReady</span>
-        <h3>Closed sum types make exhaustive handling a compile error.</h3>
-        <p>Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no quiet "unknown topic" fallback that could drop a sketch on the floor.</p>
-        <a class="learn" href="https://ailang.sunholo.com/docs/examples" target="_blank" rel="noopener">ADTs &amp; pattern matching ↗</a>
-      </article>
-
-    </div>
-  </section>
-
   <!-- ─── Receipt / Run log ─── -->
   <section class="ll-section ll-receipt-wrap" aria-labelledby="lh-receipt">
     <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Four</span></div>
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Three</span></div>
       <span class="ll-section-title" id="lh-receipt">What the CLI did, exactly</span>
       <p>Five effects, one network call, one contract. Every step is typed and effect-tracked.</p>
     </div>
@@ -1586,7 +1452,7 @@
   <!-- ─── Code excerpt ─── -->
   <section class="ll-section" aria-labelledby="lh-code">
     <div class="ll-section-head">
-      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Five</span></div>
+      <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>Four</span></div>
       <span class="ll-section-title" id="lh-code">What the type system saw</span>
       <p>The function that minted the POST. Both <code>requires</code> and <code>@limit</code> are statically checked.</p>
     </div>

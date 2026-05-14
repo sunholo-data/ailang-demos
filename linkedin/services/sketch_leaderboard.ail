@@ -241,6 +241,85 @@ func renderNoLeaderboardSection(t: Topic) -> string =
     "</section>"
   ])
 
+-- ─── Privacy-mechanics section (Privacy topic only) ──────────
+
+-- Six tiles explaining which AILANG features keep commenter identity,
+-- network calls, and content bounds in check. Rendered only on the
+-- Privacy topic page — the other two topics surface their own
+-- AILANG-feature framing inside each sketch's feature cards.
+func renderPrivacyMechanicsSection(t: Topic) -> string =
+  match t {
+    Privacy => privacyMechanicsHtml(),
+    _       => ""
+  }
+
+func privacyMechanicsHtml() -> string = join("", [
+  "<section class=\"tx-section tx-mechanics\">",
+  "<h2>What the compiler enforces</h2>",
+  "<p class=\"lede\">None of these are policies that hold if a reviewer remembers. Each is a language feature that refuses to compile when we slip up.</p>",
+  "<div class=\"tx-mechanic-grid\">",
+
+  privacyTileHtml(
+    "string&lt;pii&gt;  ⟶  ! {Declassify}",
+    "Information-flow labels keep your LinkedIn identity private.",
+    "The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code>. That function SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.",
+    "https://ailang.sunholo.com/docs/guides/ifc-labels",
+    "IFC labels guide ↗"
+  ),
+
+  privacyTileHtml(
+    "! {Net, FS, AI, IO}",
+    "Effect rows make every side effect visible in the signature.",
+    "Each function names what it touches. The dispatcher that publishes a sketch has <code>! {Net, FS, AI, IO}</code> in its type — anything not listed there is unreachable from this code path. Reviewer attention not required.",
+    "https://ailang.sunholo.com/docs/guides/getting-started",
+    "Effects intro ↗"
+  ),
+
+  privacyTileHtml(
+    "Net @limit=1, AI @limit=50",
+    "Capability budgets cap each run at a known number of calls.",
+    "The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.",
+    "https://ailang.sunholo.com/docs/guides/getting-started",
+    "Capabilities ↗"
+  ),
+
+  privacyTileHtml(
+    "requires { len(text) ≤ 3000 }",
+    "Contracts are Z3-verified, not runtime checks.",
+    "LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.",
+    "https://ailang.sunholo.com/docs/reference/implementation-status#verification-v061",
+    "Verification ↗"
+  ),
+
+  privacyTileHtml(
+    "! {AI}",
+    "The AI effect is typed, budgeted, and stubbable.",
+    "The Gemini call that extracts your site is a first-class effect, not a HTTP wrapper. It carries a per-run budget, can be deterministic-stubbed in tests, and appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.",
+    "https://ailang.sunholo.com/docs/guides/ai-effect",
+    "AI effect guide ↗"
+  ),
+
+  privacyTileHtml(
+    "type Topic = Privacy | Portable | AgentReady",
+    "Closed sum types make exhaustive handling a compile error.",
+    "Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no quiet \"unknown topic\" fallback that could drop a sketch on the floor.",
+    "https://ailang.sunholo.com/docs/examples",
+    "ADTs &amp; pattern matching ↗"
+  ),
+
+  "</div>",
+  "</section>"
+])
+
+func privacyTileHtml(primitive: string, title: string, body: string, href: string, linkLabel: string) -> string = join("", [
+  "<article class=\"tx-mechanic-card\">",
+  "<span class=\"primitive\">", primitive, "</span>",
+  "<h3>", title, "</h3>",
+  "<p>", body, "</p>",
+  "<a class=\"learn\" href=\"", href, "\" target=\"_blank\" rel=\"noopener\">", linkLabel, "</a>",
+  "</article>"
+])
+
 -- ─── Top-level rebuild ────────────────────────────────────────
 
 -- Rebuild the leaderboard JSON for a single topic. No-op if the
@@ -368,6 +447,7 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
                 then renderLeaderboardSection(t, entries, generatedAt)
                 else renderNoLeaderboardSection(t);
   let rubric = renderRubricSection(t);
+  let privacy = renderPrivacyMechanicsSection(t);
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
     ("{{TOPIC_SLUG}}",               topicSlug(t)),
@@ -375,6 +455,7 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
     ("{{TOPIC_DESCRIPTION}}",        topicDescription(t)),
     ("{{TOPIC_DESCRIPTION_META}}",   topicDescriptionMeta(t)),
     ("{{LEADERBOARD_SECTION_HTML}}", section),
+    ("{{PRIVACY_SECTION_HTML}}",     privacy),
     ("{{RUBRIC_SECTION_HTML}}",      rubric)
   ]);
   mkdirAll(sketchTopicDir(t));

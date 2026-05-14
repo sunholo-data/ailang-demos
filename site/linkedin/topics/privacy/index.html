@@ -152,6 +152,66 @@
   }
   .tx-rubric .no-rubric strong { color: var(--text-primary); }
 
+  /* What the compiler enforces (Privacy topic only) */
+  .tx-mechanics .lede {
+    color: var(--text-secondary); font-size: 14px; line-height: 1.6;
+    margin: 0 0 22px; max-width: 640px;
+  }
+  .tx-mechanic-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .tx-mechanic-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 20px 16px;
+    display: flex; flex-direction: column; gap: 9px;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .tx-mechanic-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(231, 60, 23, 0.30);
+    box-shadow: 0 14px 30px -18px rgba(231, 60, 23, 0.20);
+  }
+  .tx-mechanic-card .primitive {
+    font-family: var(--font-mono); font-size: 11.5px;
+    color: var(--primary);
+    background: var(--primary-faded);
+    padding: 4px 9px; border-radius: 6px;
+    align-self: flex-start; line-height: 1.4;
+  }
+  .tx-mechanic-card h3 {
+    font-family: var(--font-display); font-size: 15.5px; font-weight: 700;
+    color: var(--text-primary);
+    margin: 4px 0 0; letter-spacing: -0.012em; line-height: 1.3;
+  }
+  .tx-mechanic-card p {
+    font-family: var(--font-display); font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0; line-height: 1.6; flex-grow: 1;
+  }
+  .tx-mechanic-card .learn {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 6px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    align-self: flex-start;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.28);
+    padding-bottom: 1px;
+    transition: border-color 0.15s;
+  }
+  .tx-mechanic-card .learn:hover { border-bottom-color: var(--primary); }
+  @media (max-width: 900px) {
+    .tx-mechanic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .tx-mechanic-grid { grid-template-columns: 1fr; }
+    .tx-mechanic-card { padding: 16px 16px 14px; }
+  }
+
   .tx-footer {
     padding: 30px 0 60px; border-top: 1px dashed var(--border);
     color: var(--text-secondary); font-size: 14px;
@@ -178,7 +238,7 @@
     <p class="desc">Customer data labelled at the type level. AILANG marks PII at the field declaration; crossing into a public sink without an explicit Declassify boundary is a compiler error. Combined with capability-scoped network calls and three-runtime deploy (browser WASM / Cloud Run / native), sensitive data has nowhere to leak that the type checker can't see.</p>
     <div class="tx-trigger">
       <span class="pill">trigger</span>
-      <span>Comment your URL with <code>#ailangPrivacy</code> on any AILANG LinkedIn post.</span>
+      <span>Comment your URL with <code>#ailangPrivacy</code> on any Sunholo LinkedIn post.</span>
       <a class="li-cta" style="margin-left:auto;" href="https://www.linkedin.com/company/sunholo" target="_blank" rel="noopener">
         <svg class="li-cta-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M19 0H5C2.24 0 0 2.24 0 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5V5c0-2.76-2.24-5-5-5zM8 19H5V8h3v11zm-1.5-12.5C5.67 6.5 5 5.83 5 5s.67-1.5 1.5-1.5S8 4.17 8 5s-.67 1.5-1.5 1.5zM19 19h-3v-5.7c0-3.05-3.5-2.8-3.5 0V19h-3V8h3v1.5c1.4-2.6 6.5-2.8 6.5 2.5V19z"/>
@@ -190,6 +250,8 @@
   </section>
 
   <section class="tx-section"><h2>Leaderboard</h2><p class="updated">refreshed daily · last update 2026-05-14 · 1 sketches</p><div class="tx-leaderboard"><div class="tx-row"><span class="rank">#1</span><span class="avatar" style="background: conic-gradient(from 140deg, var(--primary), var(--ai-orange), var(--primary));"></span><div class="domain"><span class="initials">MO</span>sunholo.com</div><div class="score">3/10</div><div class="col-link"><a href="6491b7-sunholo-com/">view sketch ↗</a></div><div class="col-updated">2026-05-14</div></div></div></section>
+
+  <section class="tx-section tx-mechanics"><h2>What the compiler enforces</h2><p class="lede">None of these are policies that hold if a reviewer remembers. Each is a language feature that refuses to compile when we slip up.</p><div class="tx-mechanic-grid"><article class="tx-mechanic-card"><span class="primitive">string&lt;pii&gt;  ⟶  ! {Declassify}</span><h3>Information-flow labels keep your LinkedIn identity private.</h3><p>The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code>. That function SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">IFC labels guide ↗</a></article><article class="tx-mechanic-card"><span class="primitive">! {Net, FS, AI, IO}</span><h3>Effect rows make every side effect visible in the signature.</h3><p>Each function names what it touches. The dispatcher that publishes a sketch has <code>! {Net, FS, AI, IO}</code> in its type — anything not listed there is unreachable from this code path. Reviewer attention not required.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Effects intro ↗</a></article><article class="tx-mechanic-card"><span class="primitive">Net @limit=1, AI @limit=50</span><h3>Capability budgets cap each run at a known number of calls.</h3><p>The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Capabilities ↗</a></article><article class="tx-mechanic-card"><span class="primitive">requires { len(text) ≤ 3000 }</span><h3>Contracts are Z3-verified, not runtime checks.</h3><p>LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.</p><a class="learn" href="https://ailang.sunholo.com/docs/reference/implementation-status#verification-v061" target="_blank" rel="noopener">Verification ↗</a></article><article class="tx-mechanic-card"><span class="primitive">! {AI}</span><h3>The AI effect is typed, budgeted, and stubbable.</h3><p>The Gemini call that extracts your site is a first-class effect, not a HTTP wrapper. It carries a per-run budget, can be deterministic-stubbed in tests, and appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a></article><article class="tx-mechanic-card"><span class="primitive">type Topic = Privacy | Portable | AgentReady</span><h3>Closed sum types make exhaustive handling a compile error.</h3><p>Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no quiet "unknown topic" fallback that could drop a sketch on the floor.</p><a class="learn" href="https://ailang.sunholo.com/docs/examples" target="_blank" rel="noopener">ADTs &amp; pattern matching ↗</a></article></div></section>
 
   <section class="tx-rubric"><h2>What we measure</h2><p class="lede">Every score on this page is computed by <strong>contract-verified AILANG code</strong>. The signals below — and only these signals — feed the rank. Each one maps to an AILANG primitive a reader could adopt. No llms.txt, no robots.txt, no JSON-LD: AILANG doesn't have a position on those.</p><div class="tx-signal"><div class="name">Named LLM provider mentioned</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.</div><div class="maps"><strong>maps to</strong>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</div></div>
 <div class="tx-signal"><div class="name">Third-party domains restrained</div><div class="points"><span class="num">2</span> pts</div><div class="how">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</div><div class="maps"><strong>maps to</strong>Capability scoping — each Net call declares its endpoint in the effect row</div></div>
