@@ -217,7 +217,7 @@ func renderEntryRow(e: LeaderboardEntry) -> string =
 func renderLeaderboardSection(t: Topic, entries: [LeaderboardEntry], generatedAt: string) -> string =
   let rowsHtml = join("\n", map(renderEntryRow, entries)) in
   let intro = if listLength(entries) == 0 then
-    "<div class=\"tx-empty\"><strong>No sketches yet for this topic.</strong>Comment a URL with <code>#ailang${topicCamelCase(t)}</code> on any AILANG LinkedIn post to be the first.</div>"
+    "<div class=\"tx-empty\"><strong>No sketches yet for this topic.</strong>Comment a URL with <code>#ailang${topicCamelCase(t)}</code> on any Sunholo LinkedIn post to be the first.</div>"
   else
     "<div class=\"tx-leaderboard\">${rowsHtml}</div>" in
   join("", [
