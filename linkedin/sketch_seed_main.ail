@@ -77,7 +77,16 @@ func seeds() -> [SeedEntry] = [
   { url: "https://huggingface.co/docs/inference-providers/en/index",             topic: Portable },
   { url: "https://about.gitlab.com/install/",                                    topic: Portable },
   { url: "https://posit.co/products/open-source/rstudio/",                       topic: Portable },
-  { url: "https://docs.nextcloud.com/server/latest/admin_manual/installation/",  topic: Portable }
+  { url: "https://docs.nextcloud.com/server/latest/admin_manual/installation/",  topic: Portable },
+  -- agent-ready protocol exemplars — these implement the very signals
+  -- the rubric measures, so they should pin near the top of the board
+  -- and serve as "what a 10/10 looks like" anchors.
+  { url: "https://docs.cdp.coinbase.com/x402/welcome",                            topic: AgentReady },
+  { url: "https://ap2-protocol.org/",                                             topic: AgentReady },
+  { url: "https://docs.ag-ui.com/introduction",                                   topic: AgentReady },
+  { url: "https://www.utcp.io/",                                                  topic: AgentReady },
+  { url: "https://developers.cloudflare.com/agents/agentic-payments/",            topic: AgentReady },
+  { url: "https://blog.cloudflare.com/x402/",                                     topic: AgentReady }
 ]
 
 -- ─── Run a single seed ───────────────────────────────────────

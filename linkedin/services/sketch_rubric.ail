@@ -251,7 +251,11 @@ export func scoreX402(body: string) -> Signal
   -- "x402" is the canonical token. "402 payment required" alone matches
   -- HTTP-status reference docs without indicating adoption — require the
   -- protocol name for the signal to fire.
-  let detected = contains(bl, "x402") || contains(bl, "x402.org") || contains(bl, "payment-required header");
+  -- Also catches Cloudflare's pay-per-crawl: same HTTP 402 mechanism,
+  -- crawler-price header instead of x402's PAYMENT-REQUIRED. Cloudflare
+  -- joined the x402 Foundation, so treating them as one signal is
+  -- defensible.
+  let detected = contains(bl, "x402") || contains(bl, "x402.org") || contains(bl, "payment-required header") || contains(bl, "pay per crawl") || contains(bl, "pay-per-crawl") || contains(bl, "crawler-price") || contains(bl, "x402 foundation");
   {
     name:          def.name,
     description:   def.description,

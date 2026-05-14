@@ -130,13 +130,13 @@ export func sigAgUi() -> Signal = {
 }
 
 export func sigX402() -> Signal = {
-  name:          "x402 HTTP payment protocol",
-  description:   "Page mentions x402 — HTTP 402 Payment Required revival, signed crypto payment payloads, agent-callable paywalls. Live on Base/Solana with $600M+ annualised volume.",
+  name:          "HTTP 402 agent payments (x402 / pay-per-crawl)",
+  description:   "Page mentions x402 (Coinbase's signed crypto payment payloads) or Cloudflare's pay-per-crawl (crawler-price header for AI-crawler monetisation). Both revive HTTP 402 for agents — Cloudflare joined the x402 Foundation, so they're one umbrella signal.",
   topic:         AgentReady,
   points:        0,
   maxPoints:     1,
   detected:      false,
-  ailangFeature: "Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks."
+  ailangFeature: "Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation."
 }
 
 export func sigAP2() -> Signal = {
