@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
 <meta name="description" content="An AILANG sketch of docs.klarna.com — what an AI sees, where AILANG fits.">
 <meta property="og:title" content="AILANG × docs.klarna.com">
-<meta property="og:description" content="agent-ready sketch for docs.klarna.com — AI-readiness 2/10.">
+<meta property="og:description" content="agent-ready sketch for docs.klarna.com — AI-readiness 1/10.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -503,7 +503,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-20 0,0 -17,10"
+        <polygon points="0,-10 0,0 -17,10"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -512,11 +512,11 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">docs.klarna.com</span> scored <span class="sk-readiness-num">2/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means docs.klarna.com is already strong there; low means AILANG could meaningfully help.</p>
+        <h2><span class="sk-domain">docs.klarna.com</span> scored <span class="sk-readiness-num">1/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means docs.klarna.com is already strong there; low means AILANG could meaningfully help.</p>
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the agent-ready leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why agent-ready scored 2/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
+    <div class="sk-why"><strong>Why agent-ready scored 1/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
 <li class="no">Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.</li>
 <li class="no">Page references an MCP endpoint such as /mcp/ or /mcp/sse.</li>
 <li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li>
@@ -525,15 +525,19 @@
 <li class="no">Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.</li>
 <li class="no">Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.</li>
 <li class="no">Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.</li>
-<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li>
+<li class="no">Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.</li>
+<li class="no">Page mentions x402 — HTTP 402 Payment Required revival, signed crypto payment payloads, agent-callable paywalls. Live on Base/Solana with $600M+ annualised volume.</li>
+<li class="no">Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.</li>
+<li class="no">Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on docs.klarna.com</p>
-    <h2 class="sk-prom-audience">Developers and partners seeking to integrate Klarna's payment and conversion booster services into their platforms.</h2>
-    <blockquote class="sk-prom-narrative">This site provides API documentation for Klarna, detailing how developers and partners can integrate payment solutions, utilize conversion boosters, and access SDKs. It serves as a central resource for technical integration, offering guides and tools for implementing Klarna's services.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">API Documentation</span> <span class="sk-chip">Payments</span> <span class="sk-chip">Conversion boosters</span> <span class="sk-chip">SDK</span> <span class="sk-chip">Partner Portal</span> <span class="sk-chip">API URLs</span></div>
+    <h2 class="sk-prom-audience">Developers and businesses seeking to integrate Klarna's payment and financial services into their platforms.</h2>
+    <blockquote class="sk-prom-narrative">Klarna Docs offers API documentation for developers and businesses to integrate Klarna's payment and financial services. It covers payment solutions, conversion boosters, and partner integration, providing resources like SDKs and a partner portal to facilitate seamless e-commerce implementation.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">API Documentation</span> <span class="sk-chip">Payments</span> <span class="sk-chip">Conversion boosters</span> <span class="sk-chip">SDK</span> <span class="sk-chip">Partner Portal</span> <span class="sk-chip">Integration</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.klarna.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">5</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://docs.klarna.com/" target="_blank" rel="noopener" title="Home — https://docs.klarna.com/">Docs</a> <a class="sk-chip sk-chip-link" href="https://docs.klarna.com/payments/" target="_blank" rel="noopener" title="https://docs.klarna.com/payments/">Payments</a> <a class="sk-chip sk-chip-link" href="https://docs.klarna.com/conversion-boosters/" target="_blank" rel="noopener" title="https://docs.klarna.com/conversion-boosters/">Conversion boosters</a> <a class="sk-chip sk-chip-link" href="https://docs.klarna.com/platform-solutions/" target="_blank" rel="noopener" title="https://docs.klarna.com/platform-solutions/">Integration via partners</a> <a class="sk-chip sk-chip-link" href="https://docs.klarna.com/resources/" target="_blank" rel="noopener" title="https://docs.klarna.com/resources/">Resources</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Klarna Docs - API Documentation
 
 
@@ -579,7 +583,7 @@ Redirecting to [/api/api-urls/](/api/api-urls/)...
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext"><span class="sk-domain">docs.klarna.com</span> scored <strong>2/10</strong> on agent-ready. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
+    <p class="sk-score-pretext"><span class="sk-domain">docs.klarna.com</span> scored <strong>1/10</strong> on agent-ready. AILANG opportunity is therefore <strong>9/10</strong>. Here's where it would land first.</p>
     <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
   pricing.ail catalogue.ail
 -- POST /api/pricing/quote, MCP at /mcp/,
@@ -620,6 +624,10 @@ Redirecting to [/api/api-urls/](/api/api-urls/)...
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>x402 HTTP payment protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

@@ -251,7 +251,7 @@ A standalone AILANG package (v0.3.1) that wraps LinkedIn's REST API. Reusable fo
 | `pkg/sunholo/linkedin/images` | `linkedinUploadImage` (3-stage register + PUT + finalise) | `@limit=2` per upload |
 | `pkg/sunholo/linkedin/comments` | `socialActions/comments-GET_ALL` with the 100/user/day quota in mind | per-post `@limit=1` |
 
-> The package itself currently has **no `requires`/`ensures` contracts** — just typed effect rows and capability budgets. Contracts would be a fair add (`requires { length(text) > 0 && length(text) <= 3000 }` on `linkedinCreatePost` is the obvious one — LinkedIn's documented hard limit). [Open as upstream feedback when ready.](https://ailang.sunholo.com/docs/packages/sunholo/linkedin)
+> The package ships **2 contracts** today, both on the publishing path: `linkedinCreatePost` and `linkedinCreateImagePost` carry `requires { length(text) > 0 && length(text) <= 3000 }` — LinkedIn's documented hard limit, enforced at compile time. Auth, comments, and images modules have typed effects + budgets but no contracts yet; the [package page on the AILANG docs](https://ailang.sunholo.com/docs/packages/sunholo/linkedin) lists the full surface.
 
 ### Local — sketch pipeline + dispatch (this repo)
 

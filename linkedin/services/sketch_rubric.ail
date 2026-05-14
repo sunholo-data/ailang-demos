@@ -17,7 +17,7 @@ module linkedin/services/sketch_rubric
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
 import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
-import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigSandboxOffered, sigAuthDocumented, sigIdempotency, sigE2EE, sigComplianceCerts, sigDataMinimisation, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigSandboxOffered, sigAuthDocumented, sigIdempotency, sigAgUi, sigX402, sigAP2, sigUTCP, sigE2EE, sigComplianceCerts, sigDataMinimisation, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -224,6 +224,82 @@ export func scoreIdempotency(body: string) -> Signal
   }
 }
 
+-- ─── 2026 emerging protocols (moonshot weight, 1pt each) ───
+
+export func scoreAgUi(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigAgUi();
+  let bl = toLower(body);
+  let detected = contains(bl, "ag-ui") || contains(bl, "agent-user interaction") || contains(bl, "ag-ui-protocol") || contains(bl, "agentcore-runtime-ag-ui");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreX402(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigX402();
+  let bl = toLower(body);
+  -- "x402" is the canonical token. "402 payment required" alone matches
+  -- HTTP-status reference docs without indicating adoption — require the
+  -- protocol name for the signal to fire.
+  let detected = contains(bl, "x402") || contains(bl, "x402.org") || contains(bl, "payment-required header");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreAP2(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigAP2();
+  let bl = toLower(body);
+  -- "ap2" alone is too noisy (could be a coordinate, an API version, etc.).
+  -- Require either "ap2-protocol" / "agent payments protocol" OR
+  -- the distinctive "intent mandate"/"cart mandate" vocabulary.
+  let detected = contains(bl, "ap2-protocol") || contains(bl, "agent payments protocol") || contains(bl, "intent mandate") || contains(bl, "cart mandate") || contains(bl, "payment mandate");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreUTCP(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigUTCP();
+  let bl = toLower(body);
+  let detected = contains(bl, "utcp") || contains(bl, "universal tool calling protocol") || contains(bl, "utcpmanual");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
 export func scoreE2EE(body: string) -> Signal
   ensures { result.points >= 0, result.points <= result.maxPoints }
 {
@@ -416,7 +492,7 @@ export func scoreByoKey(body: string) -> Signal
 
 -- ─── Aggregators ──────────────────────────────────────────────
 
--- Run every scorer against the body, return all 19 Signal records.
+-- Run every scorer against the body, return all 23 Signal records.
 export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreAgentJson(body),
   scoreOpenApi(body),
@@ -428,6 +504,10 @@ export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreSandboxOffered(body),
   scoreAuthDocumented(body),
   scoreIdempotency(body),
+  scoreAgUi(body),
+  scoreX402(body),
+  scoreAP2(body),
+  scoreUTCP(body),
   scoreE2EE(body),
   scoreComplianceCerts(body),
   scoreDataMinimisation(body),

@@ -29,7 +29,7 @@ Inside the §3 deep-dive on each sketch you'll also see the *inverse* framed as 
 
 **Three topics, all with observable signals and leaderboards:**
 
-- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints, sandbox/test mode, authentication, idempotency)
+- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints, sandbox/test mode, authentication, idempotency) plus moonshot 2026 protocols (AG-UI, x402, AP2, UTCP — 1pt each)
 - `privacy` — end-to-end encryption, compliance certifications, data minimisation language, third-party data flow, data residency
 - `portable` — vendor-lock indicators, multi-provider citations, cross-runtime claims, BYO-key / model-agnostic language
 
@@ -57,6 +57,10 @@ V1 detection is **body-text-based only**. The sketch executor's effect signature
 | Sandbox / test environment offered | `agent-ready` | 2 | Body mentions "sandbox", "test mode", "test environment", or "testing environment" | `ailang --ai-stub` plus mock effect handlers — deterministic, capability-scoped fakes for any effect |
 | Authentication documented | `agent-ready` | 2 | Body mentions "OAuth2"/"oauth 2", " JWT ", "bearer token", "access token", "api key", or "client credentials" | `std/jwt` for verification, IFC labels (`string<api-key>` / `string<token>`) to keep credentials out of public sinks at the type level |
 | Idempotency keys documented | `agent-ready` | 2 | Body mentions "idempotency", "idempotent", "idempotency-key", or "idempotency key" | Pure functions are idempotent by construction; `requires`/`ensures` contracts express idempotence as a static guarantee |
+| AG-UI streaming protocol | `agent-ready` | **1** | Body mentions `ag-ui`, "agent-user interaction", `ag-ui-protocol`, or `agentcore-runtime-ag-ui` | `std/stream` + ADT pattern matching — the 16 AG-UI lifecycle event types map directly to a sum type; exhaustive matching makes a skipped event a compile error. Moonshot weight (1pt) until adoption broadens beyond AWS Bedrock + early Microsoft / Pydantic / AG2 adopters. |
+| x402 HTTP payment protocol | `agent-ready` | **1** | Body mentions `x402`, `x402.org`, or "payment-required header" | `Net @endpoint`-scoped budgets bound where payments can flow; `requires { amount <= budget }` gates the payload; IFC labels keep the signed payment key out of public sinks. Moonshot weight (1pt) — high tx volume on Base/Solana but niche to crypto-rail agent commerce. |
+| AP2 Agent Payments Protocol | `agent-ready` | **1** | Body mentions `ap2-protocol`, "agent payments protocol", "intent mandate", "cart mandate", or "payment mandate" | **Mandates are contracts.** `requires { intent.price <= mandate.maxPrice }` + `ensures { cart.total <= intent.price }` is a one-to-one translation of an Intent/Cart Mandate into AILANG, Z3-verifiable. Moonshot weight (1pt) until Google/Mastercard + 60 partners drive real adoption. |
+| UTCP tool-calling protocol | `agent-ready` | **1** | Body mentions `utcp`, "universal tool calling protocol", or `utcpmanual` | Typed function signatures + `ailang serve-api` emit equivalent metadata to a UTCPManual (name, input/output schema, native endpoint), enabling direct-call discovery without a proxy. Moonshot weight (1pt) — positioned as an MCP alternative with thinner adoption today. |
 | End-to-end encryption documented | `privacy` | 2 | Body mentions "end-to-end encryption", "E2EE", "zero-knowledge", "client-side encryption", or "sealed envelope" | IFC labels (`string<sealed>`) force decryption to flow through a typed boundary; compiler refuses to publish sealed values without explicit declassification |
 | Compliance certifications cited | `privacy` | 2 | Body mentions "SOC 2", "soc2", "ISO 27001", "GDPR", "HIPAA", or "CCPA" | `requires`/`ensures` contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared |
 | Data minimisation language | `privacy` | 2 | Body mentions "we do not sell", "no third-party", "privacy-first", "data minimization", or "purpose limitation" | Capability scoping — each `Net` call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim |
@@ -115,7 +119,7 @@ These are tracked in [`linkedin/design/sketches.md`](sketches.md) §10 (open que
 - [`linkedin/types/sketch_types.ail`](../types/sketch_types.ail) — `Signal`, `TopicScore`, `Topic` ADTs
 - [`linkedin/services/sketch_rubric_signals.ail`](../services/sketch_rubric_signals.ail) — signal manifest (one function per signal, defines metadata + AILANG primitive mapping)
 - [`linkedin/services/sketch_rubric.ail`](../services/sketch_rubric.ail) — detection logic + aggregator, contract-bounded
-- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 50 assertions covering every scorer + the aggregator + the polarity rules
+- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 58 assertions covering every scorer + the aggregator + the polarity rules
 
 Every signal has `ensures { result.points >= 0, result.points <= result.maxPoints }`. The aggregator has `ensures { result.readiness >= 0, result.readiness <= 10 }`. Both are Z3-verifiable.
 

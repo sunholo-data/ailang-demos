@@ -179,6 +179,22 @@
     color: var(--text-secondary); font-size: 14px; line-height: 1.6;
     margin: 0 0 28px; max-width: 640px;
   }
+  /* Moonshot subsection header — visually separates 2026 protocols
+     from the established six. Small monospace eyebrow + dashed rule. */
+  .tx-moonshot-head {
+    margin: 44px 0 4px;
+    padding-top: 24px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    color: var(--text-primary); letter-spacing: -0.01em;
+  }
+  .tx-moonshot-head::before {
+    content: "◇ ";
+    font-family: var(--font-mono);
+    color: var(--primary);
+    font-size: 13px;
+    margin-right: 4px;
+  }
 
   .tx-proto-list { display: flex; flex-direction: column; }
   .tx-proto-row {

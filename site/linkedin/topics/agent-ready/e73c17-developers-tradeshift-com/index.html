@@ -525,15 +525,19 @@
 <li class="no">Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.</li>
 <li class="no">Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.</li>
 <li class="no">Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.</li>
-<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li>
+<li class="no">Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.</li>
+<li class="no">Page mentions x402 — HTTP 402 Payment Required revival, signed crypto payment payloads, agent-callable paywalls. Live on Base/Solana with $600M+ annualised volume.</li>
+<li class="no">Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.</li>
+<li class="no">Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developers.tradeshift.com</p>
-    <h2 class="sk-prom-audience">Developers and partners looking to build on or integrate with the Tradeshift platform.</h2>
-    <blockquote class="sk-prom-narrative">This website serves as a developer center for the Tradeshift platform. It provides resources and documentation for developers to understand and interact with Tradeshift's APIs. The primary goal is to enable the creation of integrated applications and custom solutions within the Tradeshift ecosystem.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Tradeshift platform</span> <span class="sk-chip">APIs</span> <span class="sk-chip">Applications</span> <span class="sk-chip">Integrations</span> <span class="sk-chip">Developers</span> <span class="sk-chip">Ecosystem</span></div>
+    <h2 class="sk-prom-audience">Developers seeking to build applications and integrations with the Tradeshift platform.</h2>
+    <blockquote class="sk-prom-narrative">This site serves as the developer center for Tradeshift. It provides resources for developers to integrate with the Tradeshift platform, build custom applications, and access necessary tools and documentation for development.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Tradeshift</span> <span class="sk-chip">APIs</span> <span class="sk-chip">integrations</span> <span class="sk-chip">applications</span> <span class="sk-chip">developer documentation</span></div>
     <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">via AI extraction</span></div>
   </section>
 
@@ -600,6 +604,10 @@
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>x402 HTTP payment protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

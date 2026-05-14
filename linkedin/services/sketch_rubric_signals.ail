@@ -117,6 +117,48 @@ export func sigIdempotency() -> Signal = {
   ailangFeature: "Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee"
 }
 
+-- ─── moonshot agent-protocols (2026, low fire rate by design) ─
+
+export func sigAgUi() -> Signal = {
+  name:          "AG-UI streaming protocol",
+  description:   "Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     1,
+  detected:      false,
+  ailangFeature: "std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip."
+}
+
+export func sigX402() -> Signal = {
+  name:          "x402 HTTP payment protocol",
+  description:   "Page mentions x402 — HTTP 402 Payment Required revival, signed crypto payment payloads, agent-callable paywalls. Live on Base/Solana with $600M+ annualised volume.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     1,
+  detected:      false,
+  ailangFeature: "Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks."
+}
+
+export func sigAP2() -> Signal = {
+  name:          "AP2 Agent Payments Protocol",
+  description:   "Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     1,
+  detected:      false,
+  ailangFeature: "Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time."
+}
+
+export func sigUTCP() -> Signal = {
+  name:          "UTCP tool-calling protocol",
+  description:   "Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     1,
+  detected:      false,
+  ailangFeature: "Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server."
+}
+
 -- ─── privacy signals ───────────────────────────────────────────
 
 export func sigE2EE() -> Signal = {
@@ -224,6 +266,10 @@ export func sketchAllSignalDefs() -> [Signal] = [
   sigSandboxOffered(),
   sigAuthDocumented(),
   sigIdempotency(),
+  sigAgUi(),
+  sigX402(),
+  sigAP2(),
+  sigUTCP(),
   sigE2EE(),
   sigComplianceCerts(),
   sigDataMinimisation(),

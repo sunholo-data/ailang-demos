@@ -11,7 +11,7 @@ import std/io (println)
 import std/string (intToStr)
 import std/list (length as listLength)
 import linkedin/types/sketch_types (Signal, TopicScore, AgentReady, Privacy, Portable)
-import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreSandboxOffered, scoreAuthDocumented, scoreIdempotency, scoreE2EE, scoreComplianceCerts, scoreDataMinimisation, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
+import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreSandboxOffered, scoreAuthDocumented, scoreIdempotency, scoreAgUi, scoreX402, scoreAP2, scoreUTCP, scoreE2EE, scoreComplianceCerts, scoreDataMinimisation, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
 
 func checkBool(name: string, got: bool, want: bool) -> int ! {IO} {
   if got == want then {
@@ -155,6 +155,31 @@ export func main() -> () ! {IO} {
   let tId = checkBool("detects idempotency language",  id1.detected, true) +
             checkInt("max points when detected",       id1.points, 2);
 
+  -- 2026 emerging protocols (1pt moonshot each)
+  println("");
+  println("scoreAgUi:");
+  let ag1 = scoreAgUi("We stream agent events via AG-UI protocol.");
+  let tAg = checkBool("detects AG-UI language",        ag1.detected, true) +
+            checkInt("moonshot weight (1pt)",          ag1.points, 1);
+
+  println("");
+  println("scoreX402:");
+  let x4 = scoreX402("Pay-per-call APIs gated by x402 protocol.");
+  let tX4 = checkBool("detects x402 language",         x4.detected, true) +
+            checkInt("moonshot weight (1pt)",          x4.points, 1);
+
+  println("");
+  println("scoreAP2:");
+  let ap = scoreAP2("Sign an intent mandate to authorise the agent.");
+  let tAp = checkBool("detects AP2 mandate language",  ap.detected, true) +
+            checkInt("moonshot weight (1pt)",          ap.points, 1);
+
+  println("");
+  println("scoreUTCP:");
+  let ut = scoreUTCP("Tools described in a UTCPManual, MCP alternative.");
+  let tUt = checkBool("detects UTCP language",         ut.detected, true) +
+            checkInt("moonshot weight (1pt)",          ut.points, 1);
+
   -- new portable signals
   println("");
   println("scoreMultiProviderMentioned:");
@@ -180,7 +205,7 @@ export func main() -> () ! {IO} {
   println("");
   println("contract bounds — all scorers respect 0..maxPoints:");
   let all = sketchScoreAllSignals("Some HTML with /mcp/ and openapi.json and Claude");
-  let bcheck = checkInt("scoreAllSignals returns 19 signals", listLength(all), 19);
+  let bcheck = checkInt("scoreAllSignals returns 23 signals", listLength(all), 23);
 
   -- aggregator clamps to 0..10
   println("");
@@ -205,9 +230,10 @@ export func main() -> () ! {IO} {
 
   let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + tCc + tDm + t8 + t9 + t10 + t11
             + tWh + tWh2 + tRl + tSt + tSb + tAu + tId
+            + tAg + tX4 + tAp + tUt
             + tMp + tMp2 + tCr + tBk
             + bcheck + t12 + t13 + t14;
-  let expected = 50;
+  let expected = 58;
   println("");
   if total == expected then
     println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")

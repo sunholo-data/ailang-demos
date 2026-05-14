@@ -465,6 +465,56 @@ func agentReadyCatalogHtml() -> string = join("", [
   ),
 
   "</div>",
+
+  "<h3 class=\"tx-moonshot-head\">Moonshot protocols — emerging in 2026</h3>",
+  "<p class=\"lede\">Four next-generation agent protocols, each scored 1pt in the rubric. Pre-mass-adoption today; the AILANG primitives they map to are already shipping.</p>",
+  "<div class=\"tx-proto-list\">",
+
+  protoRow(
+    "07", "AGUI", "AG-UI streaming events",
+    "Agent-User Interaction Protocol — 16 typed lifecycle / text / tool-call / state events streamed from agent backend to frontend.",
+    "RUN_STARTED · TEXT_MESSAGE_CONTENT · TOOL_CALL_RESULT",
+    "Body mentions <code>ag-ui</code>, \"agent-user interaction\", <code>ag-ui-protocol</code>, or <code>agentcore-runtime-ag-ui</code>.",
+    1,
+    "The 16 AG-UI event types map directly to an ADT. <code>std/stream</code> handles SSE/WebSocket transport; AILANG's exhaustive pattern matching makes a skipped event a compile error. AWS Bedrock AgentCore added support in March 2026.",
+    "https://docs.ag-ui.com/introduction",
+    "AG-UI spec ↗"
+  ),
+
+  protoRow(
+    "08", "X402", "x402 HTTP-native payments",
+    "HTTP 402 Payment Required revival — agents pay APIs via signed crypto payment payloads. $600M+ annualised volume on Base/Solana.",
+    "PAYMENT-REQUIRED · PAYMENT-SIGNATURE",
+    "Body mentions <code>x402</code>, <code>x402.org</code>, or \"payment-required header\".",
+    1,
+    "<code>Net @endpoint</code>-scoped capability budgets bound where the payment payload can flow; <code>requires { amount &lt;= budget }</code> gates the signature; IFC labels keep the signing key tainted away from public sinks. Strong AILANG mapping; high volume on crypto rails today.",
+    "https://docs.cdp.coinbase.com/x402/welcome",
+    "x402 docs ↗"
+  ),
+
+  protoRow(
+    "09", "AP2", "AP2 Agent Payments Protocol",
+    "Google + Mastercard + 60 orgs — cryptographically signed Mandates (Intent + Cart) authorise agents to spend with price/timing/condition bounds.",
+    "intent mandate · cart mandate",
+    "Body mentions <code>ap2-protocol</code>, \"agent payments protocol\", \"intent mandate\", \"cart mandate\", or \"payment mandate\".",
+    1,
+    "Mandates <em>are</em> contracts. <code>requires { intent.price &lt;= mandate.maxPrice }</code> + <code>ensures { cart.total &lt;= intent.price }</code> is a one-to-one translation of AP2's Mandate semantics into AILANG. Z3 verifies the bounds at compile time, not at settlement.",
+    "https://ap2-protocol.org/specification/",
+    "AP2 spec ↗"
+  ),
+
+  protoRow(
+    "10", "UTCP", "UTCP universal tool calling",
+    "MCP alternative. Tools described in a JSON UTCPManual and called via their native protocols (HTTP, gRPC, CLI) — no proxy server.",
+    "UTCPManual.json",
+    "Body mentions <code>utcp</code>, \"universal tool calling protocol\", or <code>utcpmanual</code>.",
+    1,
+    "AILANG function signatures + <code>ailang serve-api</code> emit metadata equivalent to a UTCPManual — name, input/output schema, native endpoint — so consumers can discover and call directly without a proxy in between. Positioned vs MCP; adoption thinner today.",
+    "https://www.utcp.io/",
+    "UTCP spec ↗"
+  ),
+
+  "</div>",
   "</section>"
 ])
 
