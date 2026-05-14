@@ -12,8 +12,10 @@ ecommerce/data/aggregated_output.json
 .vscode/
 .idea/
 
-# Claude Code
-.claude/
+# Claude Code — local settings stay private; shared skills + settings ship.
+.claude/*
+!.claude/skills/
+!.claude/settings.json
 
 # OS files
 .DS_Store

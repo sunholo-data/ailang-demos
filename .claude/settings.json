@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(GENERATE=true GOOGLE_API_KEY=\"\" ailang run --entry main --caps IO,FS,AI,Env --ai gemini-2.5-flash website_builder/main.ail \"My flower arranging business\")",
+      "Bash(npx vite build)",
+      "Bash(uv run:*)",
+      "mcp__google-dev-knowledge__get_document",
+      "WebFetch(domain:www.llamaindex.ai)",
+      "Bash(ailang-linkedin refresh *)",
+      "Bash(docparse --version)",
+      "Bash(docparse /tmp/ailang-sketch-input.html --output-dir /tmp/ailang-sketch-out)",
+      "Bash(.claude/skills/rubric-audit/scripts/:*)",
+      "Skill(rubric-audit)"
+    ],
+    "additionalDirectories": [
+      "/Users/mark/.claude/skills",
+      "/Users/mark/dev/sunholo/demos/$SRC/types",
+      "/Users/mark/dev/sunholo/docparse",
+      "/Users/mark/dev/sunholo/ailang-packages/packages/gemini-live",
+      "/Users/mark/dev/sunholo/sunholo-websites/sites/default/hayle-riding-for-disabled",
+      "/Users/mark/dev/sunholo/sunholo-websites/sites/ZO8wLHpvFcNFlorlcrlNeGmnuPE3/home-page-riding-for-disabled-south-west-group-established-i-7m9sk"
+    ]
+  }
+}
