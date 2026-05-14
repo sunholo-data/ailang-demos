@@ -463,7 +463,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-20 51,30 -43,25"
+        <polygon points="0,-20 17,10 -43,25"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -485,9 +485,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developer.hashicorp.com</p>
-    <h2 class="sk-prom-audience">Developers, DevOps engineers, and cloud architects who need to define, provision, and manage cloud and on-prem infrastructure using a consistent, version-controlled workflow.</h2>
-    <blockquote class="sk-prom-narrative">Terraform is an infrastructure as code tool for defining, provisioning, and managing cloud and on-prem resources. It uses human-readable configuration files and providers to interact with APIs, enabling a consistent workflow for building, changing, and versioning infrastructure throughout its lifecycle.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as Code (IaC)</span> <span class="sk-chip">Cloud/On-prem resources</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Configuration files</span> <span class="sk-chip">Terraform Registry</span></div>
+    <h2 class="sk-prom-audience">Software developers, DevOps engineers, and infrastructure architects looking to automate and manage their cloud and on-prem infrastructure.</h2>
+    <blockquote class="sk-prom-narrative">This site introduces Terraform, an infrastructure as code tool by HashiCorp. It allows users to define, provision, and manage cloud and on-prem resources using human-readable configuration files. Terraform automates infrastructure deployment through a consistent workflow of writing, planning, and applying changes, leveraging numerous providers for various platforms and services.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as Code (IaC)</span> <span class="sk-chip">Cloud resources</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Terraform Registry</span> <span class="sk-chip">Configuration files</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on developer.hashicorp.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">10</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">12</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Intro to Terraform</span> <span class="sk-chip" title="extracted heading">What is Terraform?</span> <span class="sk-chip" title="extracted heading">How does Terraform work?</span> <span class="sk-chip" title="extracted heading">Why Terraform?</span> <span class="sk-chip" title="extracted heading">Manage any infrastructure</span> <span class="sk-chip" title="extracted heading">Track your infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Infrastructure Lifecycle Management
 
 [
@@ -898,7 +898,7 @@ Theme
     <div class="sk-breakdown open" id="sk-breakdown">
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
-        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
@@ -908,7 +908,9 @@ Theme
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
-<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
+<tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
+<tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
 <tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-ok">✓</td><td>2/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>

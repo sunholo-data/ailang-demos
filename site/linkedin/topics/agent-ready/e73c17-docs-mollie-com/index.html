@@ -463,7 +463,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-50 8,5 -43,25"
+        <polygon points="0,-50 0,0 -60,35"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -476,7 +476,7 @@
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the agent-ready leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why agent-ready scored 5/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint.</li>
+    <div class="sk-why"><strong>Why agent-ready scored 5/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
 <li class="ok">Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.</li>
 <li class="no">Page references an MCP endpoint such as /mcp/ or /mcp/sse.</li>
 <li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li>
@@ -491,9 +491,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on docs.mollie.com</p>
-    <h2 class="sk-prom-audience">Developers integrating payment processing into applications using the Mollie API.</h2>
-    <blockquote class="sk-prom-narrative">This documentation details how to create payments via the Mollie API. It outlines essential request parameters like amount, description, and redirect URLs, along with options for specifying payment methods, locales, and handling webhooks. It serves as a guide for developers integrating payment processing capabilities into their applications.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">payment</span> <span class="sk-chip">API key</span> <span class="sk-chip">webhook</span> <span class="sk-chip">payment method</span> <span class="sk-chip">issuer</span> <span class="sk-chip">redirect URL</span></div>
+    <h2 class="sk-prom-audience">Developers and technical integrators looking to implement payment processing into their applications or platforms using Mollie's API.</h2>
+    <blockquote class="sk-prom-narrative">This documentation details Mollie's API endpoint for creating payments. It outlines essential request parameters like amount, currency, description, and redirection URLs. Developers can also specify payment methods, billing/shipping addresses, and locales to customize the payment flow, ensuring proper integration for transaction processing and status updates.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Payment</span> <span class="sk-chip">API key</span> <span class="sk-chip">Webhook</span> <span class="sk-chip">Redirect URL</span> <span class="sk-chip">Payment method</span> <span class="sk-chip">Issuer</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.mollie.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">6</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">1</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="stat"><span class="num">1</span> code samples</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">27</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">9</span> headers</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">2</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">13</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">6</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Create payment</span> <span class="sk-chip" title="extracted heading">
 Access with</span> <span class="sk-chip" title="extracted heading">Show Details</span> <span class="sk-chip" title="extracted heading">
 
@@ -870,7 +870,7 @@ For PayPal payments, recurring is only possible if your connected PayPal account
     <div class="sk-breakdown open" id="sk-breakdown">
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
-        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
@@ -880,13 +880,15 @@ For PayPal payments, recurring is only possible if your connected PayPal account
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
-<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
+<tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
+<tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
 <tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
 <tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
 <tr><td>Cross-runtime / deployment portability</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change</td></tr>
-<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
+<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
         </tbody>
       </table>
     </div>

@@ -19,12 +19,12 @@ import linkedin/types/sketch_types (Signal, AgentReady, Privacy, Portable)
 
 export func sigAgentJson() -> Signal = {
   name:          "agent.json referenced",
-  description:   "Page references /.well-known/agent.json — the A2A agent card discovery endpoint.",
+  description:   "Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.",
   topic:         AgentReady,
   points:        0,
-  maxPoints:     2,
+  maxPoints:     1,
   detected:      false,
-  ailangFeature: "ailang serve-api generates A2A agent cards automatically"
+  ailangFeature: "ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter"
 }
 
 export func sigOpenApi() -> Signal = {
@@ -119,14 +119,34 @@ export func sigIdempotency() -> Signal = {
 
 -- ─── privacy signals ───────────────────────────────────────────
 
-export func sigLlmProviderMentioned() -> Signal = {
-  name:          "Named LLM provider mentioned",
-  description:   "Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.",
+export func sigE2EE() -> Signal = {
+  name:          "End-to-end encryption documented",
+  description:   "Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.",
   topic:         Privacy,
   points:        0,
   maxPoints:     2,
   detected:      false,
-  ailangFeature: "std/ai + IFC labels — track and declassify customer data crossing the provider boundary"
+  ailangFeature: "IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification"
+}
+
+export func sigComplianceCerts() -> Signal = {
+  name:          "Compliance certifications cited",
+  description:   "Page mentions SOC 2, ISO 27001, GDPR, HIPAA, or CCPA — formal commitments to data-handling practice.",
+  topic:         Privacy,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared"
+}
+
+export func sigDataMinimisation() -> Signal = {
+  name:          "Data minimisation language",
+  description:   "Page mentions \"we do not sell\", \"no third-party sharing\", \"privacy-first\", \"data minimization\", or \"purpose limitation\" — explicit constraints on data flow.",
+  topic:         Privacy,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Capability scoping — each Net call declares its endpoint in the effect row, so \"doesn't sell\" becomes a type-system-enforceable claim, not a marketing one"
 }
 
 export func sigThirdPartyDomains() -> Signal = {
@@ -204,7 +224,9 @@ export func sketchAllSignalDefs() -> [Signal] = [
   sigSandboxOffered(),
   sigAuthDocumented(),
   sigIdempotency(),
-  sigLlmProviderMentioned(),
+  sigE2EE(),
+  sigComplianceCerts(),
+  sigDataMinimisation(),
   sigThirdPartyDomains(),
   sigDataResidencyLanguage(),
   sigSingleVendorLlm(),

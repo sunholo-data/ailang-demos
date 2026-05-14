@@ -30,7 +30,7 @@ Inside the §3 deep-dive on each sketch you'll also see the *inverse* framed as 
 **Three topics, all with observable signals and leaderboards:**
 
 - `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints, sandbox/test mode, authentication, idempotency)
-- `privacy` — third-party data flow + data residency language
+- `privacy` — end-to-end encryption, compliance certifications, data minimisation language, third-party data flow, data residency
 - `portable` — vendor-lock indicators, multi-provider citations, cross-runtime claims, BYO-key / model-agnostic language
 
 **Topics we considered and dropped (V0 → V1):**
@@ -47,23 +47,25 @@ V1 detection is **body-text-based only**. The sketch executor's effect signature
 
 | Signal | Topic | Max points | What we detect | AILANG primitive it maps to |
 |---|---|---:|---|---|
-| `agent.json` referenced | `agent-ready` | 2 | Body mentions `/.well-known/agent.json` or `agent.json` (quoted) | `ailang serve-api` generates A2A agent cards automatically |
+| `agent.json` referenced | `agent-ready` | **1** | Body mentions `/.well-known/agent.json` or `agent.json` (quoted) | `ailang serve-api` generates A2A agent cards automatically — **moonshot weight (1pt)** until A2A adoption picks up |
 | `openapi.json` referenced | `agent-ready` | 2 | Body mentions `openapi.json`, `openapi.yaml`, `swagger`, or `redoc` | `ailang serve-api` generates OpenAPI 3.1 from Hindley-Milner type signatures |
 | MCP endpoint referenced | `agent-ready` | 2 | Body mentions `/mcp/`, `/mcp/sse`, `mcp-server`, or "model context protocol" | `ailang serve-api --mcp-http` exposes typed functions as MCP tools |
 | Public API docs linked | `agent-ready` | 2 | Body mentions "API documentation", "API reference", `/api/docs`, `developers.`, or `/docs/api` | `ailang serve-api` hosts Swagger + ReDoc at `/api/_meta/` by default |
 | Webhooks documented | `agent-ready` | 2 | Body mentions `webhook`, `/webhooks`, "callback url", or `callback_url` | `ailang serve-api` handles webhooks as typed handler functions with effect-tracked side effects |
 | Rate limits documented | `agent-ready` | 2 | Body mentions "rate limit", "rate-limit", "x-ratelimit", `429`, or "throttl…" | Capability budgets — `Net @limit=N` is the symmetric server-side primitive for what agents see as rate limits |
-| Streaming / SSE endpoint | `agent-ready` | 2 | Body mentions "server-sent events", `text/event-stream`, `/sse`, `EventSource`, or "streaming endpoint" | `std/stream` — `ssePost` and the `Stream` effect handle event-source endpoints with typed event types |
+| Streaming / SSE endpoint | `agent-ready` | 2 | Body mentions "server-sent events", `text/event-stream`, `/sse`, `EventSource`, "streaming endpoint", "real-time api", "websocket api", or "stream api" | `std/stream` — `ssePost` and the `Stream` effect handle event-source endpoints with typed event types |
 | Sandbox / test environment offered | `agent-ready` | 2 | Body mentions "sandbox", "test mode", "test environment", or "testing environment" | `ailang --ai-stub` plus mock effect handlers — deterministic, capability-scoped fakes for any effect |
 | Authentication documented | `agent-ready` | 2 | Body mentions "OAuth2"/"oauth 2", " JWT ", "bearer token", "access token", "api key", or "client credentials" | `std/jwt` for verification, IFC labels (`string<api-key>` / `string<token>`) to keep credentials out of public sinks at the type level |
 | Idempotency keys documented | `agent-ready` | 2 | Body mentions "idempotency", "idempotent", "idempotency-key", or "idempotency key" | Pure functions are idempotent by construction; `requires`/`ensures` contracts express idempotence as a static guarantee |
-| Named LLM provider mentioned | `privacy` | 2 (informational) | Body mentions "claude", "gpt-", "openai", "anthropic", "gemini", or "powered by ai" | `std/ai` + IFC labels — track and declassify customer data crossing the provider boundary |
+| End-to-end encryption documented | `privacy` | 2 | Body mentions "end-to-end encryption", "E2EE", "zero-knowledge", "client-side encryption", or "sealed envelope" | IFC labels (`string<sealed>`) force decryption to flow through a typed boundary; compiler refuses to publish sealed values without explicit declassification |
+| Compliance certifications cited | `privacy` | 2 | Body mentions "SOC 2", "soc2", "ISO 27001", "GDPR", "HIPAA", or "CCPA" | `requires`/`ensures` contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared |
+| Data minimisation language | `privacy` | 2 | Body mentions "we do not sell", "no third-party", "privacy-first", "data minimization", or "purpose limitation" | Capability scoping — each `Net` call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim |
 | Third-party domains restrained | `privacy` | 2 | Heuristic on `https://` occurrence count: ≤10 = 2pts, 11-20 = 1pt, >20 = 0 | Capability scoping — each `Net` call declares its endpoint in the effect row |
 | Data residency / on-prem language | `privacy` | 2 | Body mentions "data residency", "on-premises", "on-prem", "sovereign cloud", "EU-hosted", "data sovereignty", or "self-hosted" | Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI |
-| Single-vendor LLM language | `portable` | 2 (penalty) | Body mentions "powered by Claude/GPT/Gemini" or "built on Claude/GPT/Gemini" | `std/ai` multi-provider — switch vendor without rewriting |
+| Single-vendor LLM language | `portable` | 2 (penalty) | Body mentions "powered by", "built on", "{vendor}-powered", "running on", "based on", or "uses {vendor}" with claude/gpt/gemini/anthropic/openai/google ai | `std/ai` multi-provider — switch vendor without rewriting |
 | Multiple AI providers cited | `portable` | 2 | Body names two or more of: `claude`, `anthropic`, `gpt`, `openai`, `gemini`, `mistral`, `llama`, `ollama`, `openrouter` | `std/ai` — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers |
 | Cross-runtime / deployment portability | `portable` | 2 | Body mentions "self-hosted", "on-prem", "wasm", "webassembly", "deploy anywhere", "kubernetes", or "docker" | Effect handlers as runtime adapters — same `.ail` module runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change |
-| BYO key / model-agnostic | `portable` | 2 | Body mentions "bring your own key", "BYOK", "BYO key", "model-agnostic", "any LLM", or "any model" | AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side |
+| BYO key / model-agnostic | `portable` | 2 | Body mentions BYOK / "BYO key" / "bring your own key" / "bring-your-own" / "your (own) API key" / "use any provider" / "your own model" / "caller-provided" / model-agnostic / "any LLM" / "any model" | AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side |
 
 ### Polarity notes
 
@@ -113,7 +115,7 @@ These are tracked in [`linkedin/design/sketches.md`](sketches.md) §10 (open que
 - [`linkedin/types/sketch_types.ail`](../types/sketch_types.ail) — `Signal`, `TopicScore`, `Topic` ADTs
 - [`linkedin/services/sketch_rubric_signals.ail`](../services/sketch_rubric_signals.ail) — signal manifest (one function per signal, defines metadata + AILANG primitive mapping)
 - [`linkedin/services/sketch_rubric.ail`](../services/sketch_rubric.ail) — detection logic + aggregator, contract-bounded
-- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 46 assertions covering every scorer + the aggregator + the polarity rules
+- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 50 assertions covering every scorer + the aggregator + the polarity rules
 
 Every signal has `ensures { result.points >= 0, result.points <= result.maxPoints }`. The aggregator has `ensures { result.readiness >= 0, result.readiness <= 10 }`. Both are Z3-verifiable.
 

@@ -17,7 +17,7 @@ module linkedin/services/sketch_rubric
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
 import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
-import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigSandboxOffered, sigAuthDocumented, sigIdempotency, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigSandboxOffered, sigAuthDocumented, sigIdempotency, sigE2EE, sigComplianceCerts, sigDataMinimisation, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -155,7 +155,10 @@ export func scoreStreamingEndpoint(body: string) -> Signal
 {
   let def = sigStreamingEndpoint();
   let bl = toLower(body);
-  let detected = contains(bl, "server-sent events") || contains(bl, "text/event-stream") || contains(bl, "/sse") || contains(bl, "eventsource") || contains(bl, "streaming endpoint");
+  -- Broadened: many sites describe streaming agents reach for without
+  -- using the literal "SSE" / "EventSource" terms. WebSocket APIs,
+  -- "real-time" APIs, and "stream" verbs are all valid agent surfaces.
+  let detected = contains(bl, "server-sent events") || contains(bl, "text/event-stream") || contains(bl, "/sse") || contains(bl, "eventsource") || contains(bl, "streaming endpoint") || contains(bl, "real-time api") || contains(bl, "realtime api") || contains(bl, "websocket api") || contains(bl, "stream api") || contains(bl, "streaming api");
   {
     name:          def.name,
     description:   def.description,
@@ -221,21 +224,54 @@ export func scoreIdempotency(body: string) -> Signal
   }
 }
 
-export func scoreLlmProviderMentioned(body: string) -> Signal
+export func scoreE2EE(body: string) -> Signal
   ensures { result.points >= 0, result.points <= result.maxPoints }
 {
-  let def = sigLlmProviderMentioned();
+  let def = sigE2EE();
   let bl = toLower(body);
-  let detected = contains(bl, "claude") || contains(bl, "gpt-") || contains(bl, "openai") || contains(bl, "anthropic") || contains(bl, "gemini") || contains(bl, "powered by ai");
+  let detected = contains(bl, "end-to-end encryption") || contains(bl, "end to end encryption") || contains(bl, "e2ee") || contains(bl, "zero-knowledge") || contains(bl, "zero knowledge") || contains(bl, "client-side encryption") || contains(bl, "client side encryption") || contains(bl, "sealed envelope");
   {
     name:          def.name,
     description:   def.description,
     topic:         def.topic,
-    -- Note: this is an INFORMATIONAL signal — detecting LLM use
-    -- doesn't dock the privacy score, it surfaces opportunity.
-    -- Detected = 1 point (signal present); not detected = 2 points
-    -- (no known data flow to an LLM provider visible from this page).
-    points:        if detected then 1 else def.maxPoints,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreComplianceCerts(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigComplianceCerts();
+  let bl = toLower(body);
+  -- Looking for a NAMED certification. Spaces matter — "soc2" alone is
+  -- ambiguous, but "soc 2"/"soc-2"/"iso 27001"/"gdpr"/"hipaa"/"ccpa"
+  -- are unambiguous tokens.
+  let detected = contains(bl, "soc 2") || contains(bl, "soc2") || contains(bl, "soc-2") || contains(bl, "iso 27001") || contains(bl, "iso-27001") || contains(bl, "gdpr") || contains(bl, "hipaa") || contains(bl, "ccpa") || contains(bl, "iso 27018");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreDataMinimisation(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigDataMinimisation();
+  let bl = toLower(body);
+  let detected = contains(bl, "we do not sell") || contains(bl, "we don't sell") || contains(bl, "no third-party") || contains(bl, "no third party") || contains(bl, "privacy-first") || contains(bl, "privacy first") || contains(bl, "data minimization") || contains(bl, "data minimisation") || contains(bl, "purpose limitation") || contains(bl, "no data sharing");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
     maxPoints:     def.maxPoints,
     detected:      detected,
     ailangFeature: def.ailangFeature
@@ -287,9 +323,11 @@ export func scoreSingleVendorLlm(body: string) -> Signal
 {
   let def = sigSingleVendorLlm();
   let bl = toLower(body);
-  -- "powered by Claude" / "built on GPT-4" / "uses Gemini" — one
-  -- vendor named, no portability claims = low portability score.
-  let detected = contains(bl, "powered by claude") || contains(bl, "powered by gpt") || contains(bl, "powered by gemini") || contains(bl, "built on claude") || contains(bl, "built on gpt") || contains(bl, "built on gemini");
+  -- Broadened far beyond "powered by X" — real lock-in language varies:
+  -- "claude-powered", "running on anthropic", "uses gpt-4", "based on
+  -- gemini". Penalty fires when one vendor is mentioned in vendor-locked
+  -- phrasing.
+  let detected = contains(bl, "powered by claude") || contains(bl, "powered by gpt") || contains(bl, "powered by gemini") || contains(bl, "built on claude") || contains(bl, "built on gpt") || contains(bl, "built on gemini") || contains(bl, "claude-powered") || contains(bl, "gpt-powered") || contains(bl, "gemini-powered") || contains(bl, "running on anthropic") || contains(bl, "running on openai") || contains(bl, "running on google ai") || contains(bl, "based on claude") || contains(bl, "based on gpt") || contains(bl, "based on gemini") || contains(bl, "uses claude") || contains(bl, "uses gpt") || contains(bl, "uses gemini");
   {
     name:          def.name,
     description:   def.description,
@@ -362,7 +400,9 @@ export func scoreByoKey(body: string) -> Signal
 {
   let def = sigByoKey();
   let bl = toLower(body);
-  let detected = contains(bl, "bring your own key") || contains(bl, "byok") || contains(bl, "byo key") || contains(bl, "model-agnostic") || contains(bl, "model agnostic") || contains(bl, "any llm") || contains(bl, "any model");
+  -- Broadened: real BYO-key copy varies a lot — "your own API key",
+  -- "use any provider", "your own model", "caller-provided credentials".
+  let detected = contains(bl, "bring your own key") || contains(bl, "bring-your-own") || contains(bl, "byok") || contains(bl, "byo key") || contains(bl, "model-agnostic") || contains(bl, "model agnostic") || contains(bl, "any llm") || contains(bl, "any model") || contains(bl, "your own api key") || contains(bl, "your api key") || contains(bl, "use any provider") || contains(bl, "your own model") || contains(bl, "caller-provided") || contains(bl, "caller provided");
   {
     name:          def.name,
     description:   def.description,
@@ -376,7 +416,7 @@ export func scoreByoKey(body: string) -> Signal
 
 -- ─── Aggregators ──────────────────────────────────────────────
 
--- Run every scorer against the body, return all 17 Signal records.
+-- Run every scorer against the body, return all 19 Signal records.
 export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreAgentJson(body),
   scoreOpenApi(body),
@@ -388,7 +428,9 @@ export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreSandboxOffered(body),
   scoreAuthDocumented(body),
   scoreIdempotency(body),
-  scoreLlmProviderMentioned(body),
+  scoreE2EE(body),
+  scoreComplianceCerts(body),
+  scoreDataMinimisation(body),
   scoreThirdPartyDomains(body),
   scoreDataResidencyLanguage(body),
   scoreSingleVendorLlm(body),

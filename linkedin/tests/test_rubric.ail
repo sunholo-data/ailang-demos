@@ -11,7 +11,7 @@ import std/io (println)
 import std/string (intToStr)
 import std/list (length as listLength)
 import linkedin/types/sketch_types (Signal, TopicScore, AgentReady, Privacy, Portable)
-import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreSandboxOffered, scoreAuthDocumented, scoreIdempotency, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
+import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreSandboxOffered, scoreAuthDocumented, scoreIdempotency, scoreE2EE, scoreComplianceCerts, scoreDataMinimisation, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
 
 func checkBool(name: string, got: bool, want: bool) -> int ! {IO} {
   if got == want then {
@@ -53,7 +53,7 @@ export func main() -> () ! {IO} {
   println("scoreAgentJson:");
   let aj1 = scoreAgentJson("<link rel=\"agent\" href=\"/.well-known/agent.json\">");
   let t1 = checkBool("detects agent.json reference",  aj1.detected, true) +
-           checkInt("awards max points when detected", aj1.points, 2);
+           checkInt("awards 1pt when detected (moonshot weight)", aj1.points, 1);
   let aj2 = scoreAgentJson("<html>no agent here</html>");
   let t2 = checkBool("no detection on plain page",     aj2.detected, false) +
            checkInt("awards 0 when not detected",      aj2.points, 0);
@@ -74,14 +74,26 @@ export func main() -> () ! {IO} {
   let t5 = checkBool("detects MCP", mcp1.detected, true) +
            checkInt("max points when detected", mcp1.points, 2);
 
-  -- LLM provider mention (informational — detected = lower points)
+  -- new privacy signals (E2EE, compliance certs, data minimisation)
   println("");
-  println("scoreLlmProviderMentioned:");
-  let llm1 = scoreLlmProviderMentioned("Powered by Anthropic Claude");
-  let t6 = checkBool("detects Claude mention",         llm1.detected, true) +
-           checkInt("detected = 1 point (informational)", llm1.points, 1);
-  let llm2 = scoreLlmProviderMentioned("No AI mentioned here");
-  let t7 = checkInt("not detected = full points",      llm2.points, 2);
+  println("scoreE2EE:");
+  let e2e1 = scoreE2EE("We use end-to-end encryption for all messages.");
+  let t6 = checkBool("detects E2EE language",          e2e1.detected, true) +
+           checkInt("max points when detected",        e2e1.points, 2);
+  let e2e2 = scoreE2EE("A plain marketing page.");
+  let t7 = checkInt("not detected = 0 points",         e2e2.points, 0);
+
+  println("");
+  println("scoreComplianceCerts:");
+  let cc1 = scoreComplianceCerts("SOC 2 Type II and GDPR-compliant.");
+  let tCc = checkBool("detects compliance certs",      cc1.detected, true) +
+            checkInt("max points when detected",       cc1.points, 2);
+
+  println("");
+  println("scoreDataMinimisation:");
+  let dm1 = scoreDataMinimisation("We do not sell your data. Privacy-first.");
+  let tDm = checkBool("detects data-min language",     dm1.detected, true) +
+            checkInt("max points when detected",       dm1.points, 2);
 
   -- single-vendor LLM (penalty — detected = 0 points)
   println("");
@@ -168,7 +180,7 @@ export func main() -> () ! {IO} {
   println("");
   println("contract bounds — all scorers respect 0..maxPoints:");
   let all = sketchScoreAllSignals("Some HTML with /mcp/ and openapi.json and Claude");
-  let bcheck = checkInt("scoreAllSignals returns 17 signals", listLength(all), 17);
+  let bcheck = checkInt("scoreAllSignals returns 19 signals", listLength(all), 19);
 
   -- aggregator clamps to 0..10
   println("");
@@ -191,11 +203,11 @@ export func main() -> () ! {IO} {
   let t14 = checkBool("AgentReady == AgentReady", topicEq(AgentReady, AgentReady), true) +
             checkBool("AgentReady != Privacy",    topicEq(AgentReady, Privacy), false);
 
-  let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11
+  let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + tCc + tDm + t8 + t9 + t10 + t11
             + tWh + tWh2 + tRl + tSt + tSb + tAu + tId
             + tMp + tMp2 + tCr + tBk
             + bcheck + t12 + t13 + t14;
-  let expected = 46;
+  let expected = 50;
   println("");
   if total == expected then
     println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")
