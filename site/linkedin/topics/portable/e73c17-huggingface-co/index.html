@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<!--
+  AILANG sketch template — reference design.
+  Rendered by linkedin/services/sketch_template.ail.
+  For a fully-populated visual preview, see sketch-example.html.
+  For the full spec, see linkedin/design/sketches.md.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG × huggingface.co — portable sketch</title>
+<link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
+<meta name="description" content="An AILANG sketch of huggingface.co — what an AI sees, where AILANG fits.">
+<meta property="og:title" content="AILANG × huggingface.co">
+<meta property="og:description" content="portable sketch for huggingface.co — AI-readiness 5/10.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/design-system.css">
+<style>
+  :root {
+    --sketch-radar-bg: rgba(231, 60, 23, 0.04);
+    --sketch-radar-grid: rgba(49, 67, 82, 0.12);
+    --sketch-radar-axis: rgba(49, 67, 82, 0.18);
+  }
+
+  body {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 6%, rgba(231, 60, 23, 0.045) 0, transparent 36%),
+      radial-gradient(circle at 88% 4%, rgba(245, 158, 11, 0.035) 0, transparent 40%);
+    font-family: var(--font-display, "Montserrat"), system-ui, sans-serif;
+  }
+
+  /* ─── Page header (matches /linkedin/) ─── */
+  .sk-shell { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+  .sk-top {
+    padding: 32px 0 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .sk-top a.back {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); text-decoration: none;
+    border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px;
+    transition: all .15s ease;
+  }
+  .sk-top a.back:hover { color: var(--primary); border-color: var(--primary); }
+  .sk-logo { display: flex; align-items: center; gap: 10px; }
+  .sk-logo img { width: 28px; height: 28px; }
+  .sk-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+
+  /* ─── Title block ─── */
+  .sk-title {
+    padding: 20px 0 28px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .sk-title h1 {
+    font-family: var(--font-display, "Montserrat");
+    font-weight: 800; font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 12px;
+    color: var(--text-primary);
+  }
+  .sk-title h1 .times { color: var(--primary); margin: 0 8px; }
+  .sk-title .meta {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; flex-wrap: wrap; gap: 14px;
+  }
+  .sk-title .topic-tag {
+    background: var(--primary-faded); color: var(--primary);
+    padding: 3px 10px; border-radius: 999px; font-weight: 600;
+  }
+  .sk-avatar {
+    display: inline-block; width: 22px; height: 22px;
+    border-radius: 50%; vertical-align: middle; margin-right: 6px;
+    background: conic-gradient(from 324deg, var(--primary), var(--ai-orange), var(--primary));
+  }
+
+  /* ─── §1 Readiness radar (hero) ─── */
+  .sk-radar-section { padding: 36px 0; }
+  .sk-section-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 14px;
+  }
+  .sk-radar-wrap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+    align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 32px;
+  }
+  .sk-radar-svg { width: 100%; max-width: 340px; aspect-ratio: 1; margin: 0 auto; display: block; }
+  .sk-radar-text h2 {
+    margin: 0 0 10px;
+    font-size: 26px; font-weight: 700; line-height: 1.2;
+    color: var(--text-primary);
+  }
+  .sk-readiness-num {
+    color: var(--primary); font-family: var(--font-mono); font-weight: 700;
+  }
+  /* Site domain emphasis in the §1 headline + §3 pretext. */
+  .sk-domain {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.92em;
+    letter-spacing: 0.01em;
+  }
+  .sk-radar-text p { margin: 0 0 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
+  .sk-rank-callout {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--charcoal); color: #fff;
+    padding: 10px 16px; border-radius: 10px;
+    font-family: var(--font-mono); font-size: 13px;
+  }
+  .sk-rank-callout .rank-num { color: var(--ai-orange); font-weight: 700; font-size: 16px; }
+  .sk-rank-callout a { color: var(--ai-orange); text-decoration: none; }
+  /* "Why this score?" callout — visible immediately under the radar */
+  .sk-why {
+    margin-top: 18px; padding: 14px 16px;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 13px; line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .sk-why strong { color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .sk-why ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 12px; }
+  .sk-why li.ok::before { content: "✓ "; color: var(--success); font-weight: 700; }
+  .sk-why li.no::before { content: "✗ "; color: var(--text-muted); font-weight: 700; }
+  .sk-why li.na::before { content: "○ "; color: var(--text-muted); font-weight: 700; }
+  .sk-why a { color: var(--primary); text-decoration: none; font-family: var(--font-mono); font-size: 12px; }
+
+  /* ─── §2 What an AI sees (promoted prominence) ─── */
+  .sk-section { padding: 30px 0; border-top: 1px dashed var(--border); }
+  .sk-section h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 18px; color: var(--text-primary);
+  }
+  /* The §2 block gets a card treatment + the AI-read becomes a pull quote. */
+  .sk-section.sk-prom {
+    border-top: none;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 32px; margin: 32px 0 16px;
+  }
+  .sk-prom .sk-section-label { margin-bottom: 16px; }
+  .sk-prom h2.sk-prom-audience {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(22px, 3vw, 30px); line-height: 1.2;
+    margin: 0 0 22px; color: var(--text-primary); letter-spacing: -0.01em;
+  }
+  .sk-prom blockquote.sk-prom-narrative {
+    border-left: 3px solid var(--primary);
+    padding: 6px 0 6px 22px; margin: 0 0 22px;
+    font-size: 17px; line-height: 1.7;
+    color: var(--text-primary); font-style: italic;
+  }
+  .sk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; }
+  .sk-chip {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-input); color: var(--text-secondary);
+    padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
+  }
+  /* Anchor-link chips — clickable, with the AILANG accent colour. */
+  a.sk-chip-link {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary-faded);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  a.sk-chip-link::before {
+    content: "↗"; margin-right: 6px; opacity: 0.6;
+  }
+  a.sk-chip-link:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+  }
+  /* Page-skeleton chip — small coral count + section kind name. */
+  .sk-chip .sk-kind-count {
+    color: var(--primary); font-weight: 700;
+    margin-right: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Extraction stats line at bottom of §2 (filled by step 4) */
+  .sk-extract-stats {
+    margin-top: 22px; padding-top: 16px; border-top: 1px dashed var(--border);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .sk-extract-stats .stat { color: var(--text-secondary); }
+  .sk-extract-stats .stat .num { color: var(--primary); font-weight: 600; }
+  .sk-extract-stats .path {
+    margin-left: auto;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--bg-input);
+  }
+  .sk-extract-stats .path.path-docparse { background: var(--primary-faded); color: var(--primary); }
+  .sk-extract-stats .path a { color: inherit; text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 2px; }
+  .sk-extract-stats .path a:hover { opacity: 0.8; }
+  .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
+
+  /* "What AILANG Parse sees" — header above the chip rows */
+  .sk-extract-header {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border);
+  }
+  .sk-extract-header h3 {
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    margin: 0 0 6px; color: var(--text-primary);
+  }
+  .sk-extract-header p {
+    margin: 0 0 14px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .sk-extract-row { margin-top: 14px; }
+  .sk-extract-row-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 8px;
+  }
+  .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+  /* Image thumbnails — horizontal scroll strip from AILANG Parse's
+     img src URLs (v0.14.1+). Failed loads are hidden by JS. */
+  .sk-img-strip {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: flex-start;
+  }
+  .sk-img-thumb {
+    display: block; width: 96px; height: 72px;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--bg-input);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .sk-img-thumb:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+  .sk-img-thumb img {
+    width: 100%; height: 100%; object-fit: contain;
+    object-position: center; background: white;
+    display: block;
+  }
+
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
+  .sk-preview-section {
+    margin: 0 0 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .sk-preview-section .sk-preview-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .sk-preview-section .sk-preview-head .url {
+    color: var(--primary); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 60%;
+  }
+  .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
+    background: var(--bg-input);
+  }
+  .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
+    padding: 10px 20px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    border-top: 1px solid var(--border);
+    text-align: right;
+  }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
+
+  /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
+  details.sk-extract-details {
+    margin-top: 18px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0;
+  }
+  details.sk-extract-details summary {
+    cursor: pointer; user-select: none;
+    padding: 14px 18px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); letter-spacing: 0.02em;
+    list-style: none;
+    border-radius: 10px;
+  }
+  details.sk-extract-details summary::-webkit-details-marker { display: none; }
+  details.sk-extract-details summary::before {
+    content: "▸";
+    color: var(--primary); margin-right: 10px;
+    display: inline-block; transition: transform .15s ease;
+  }
+  details.sk-extract-details[open] summary::before { transform: rotate(90deg); }
+  details.sk-extract-details summary:hover { color: var(--text-primary); }
+  pre.sk-extract-md {
+    margin: 0; padding: 18px 22px 22px;
+    background: transparent;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.6; white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 480px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── §3 AILANG × your business ─── */
+  .sk-score-pretext {
+    margin: 0 0 22px; padding: 14px 18px;
+    background: var(--primary-faded); border-left: 3px solid var(--primary);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px; color: var(--text-secondary);
+  }
+  .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
+  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  .sk-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px;
+    display: flex; flex-direction: column; gap: 12px;
+    min-width: 0;
+  }
+  .sk-card pre { min-width: 0; max-width: 100%; }
+  .sk-card h3 {
+    margin: 0; font-size: 16px; font-weight: 700;
+    color: var(--primary); line-height: 1.3;
+  }
+  .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+  .sk-card pre {
+    margin: 0; padding: 14px;
+    background: var(--bg-code); color: #e2e8f0;
+    border-radius: 8px;
+    font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.5; overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ─── §4 Guarantee panel ─── */
+  .sk-guarantee {
+    background: var(--charcoal); color: #fff;
+    border-radius: 14px; padding: 32px; margin: 30px 0;
+  }
+  .sk-guarantee h2 { color: #fff; margin: 0 0 16px; }
+  .sk-guarantee .sig {
+    background: rgba(0,0,0,0.4); padding: 16px; border-radius: 8px;
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+    color: var(--ai-orange); margin: 0 0 20px;
+    overflow-x: auto; white-space: pre;
+  }
+  .sk-guarantee ul.translations {
+    list-style: none; padding: 0; margin: 0 0 20px;
+  }
+  .sk-guarantee ul.translations li {
+    padding: 8px 0 8px 22px; position: relative;
+    font-size: 14px; line-height: 1.55;
+    color: rgba(255,255,255,0.86);
+  }
+  .sk-guarantee ul.translations li::before {
+    content: "▸"; position: absolute; left: 0; top: 8px;
+    color: var(--ai-orange);
+  }
+  .sk-breakdown-toggle {
+    background: none; border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.86); padding: 8px 14px;
+    border-radius: 8px; font-family: var(--font-mono); font-size: 12px;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .sk-breakdown-toggle:hover { border-color: var(--ai-orange); color: var(--ai-orange); }
+  .sk-rubric-link {
+    margin-top: 18px; font-family: var(--font-mono); font-size: 12px;
+    color: rgba(255,255,255,0.6);
+  }
+  .sk-rubric-link a { color: var(--ai-orange); text-decoration: none; }
+
+  /* ─── Score breakdown (collapsed by default) ─── */
+  .sk-breakdown {
+    display: none; margin-top: 20px;
+    background: rgba(0,0,0,0.25); border-radius: 8px; padding: 16px;
+  }
+  .sk-breakdown.open { display: block; }
+  .sk-breakdown table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--font-mono); font-size: 12px;
+    color: rgba(255,255,255,0.86);
+  }
+  .sk-breakdown th, .sk-breakdown td {
+    text-align: left; padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sk-breakdown th { color: rgba(255,255,255,0.5); font-weight: 500; }
+  .sk-breakdown .sig-ok { color: var(--success); }
+  .sk-breakdown .sig-no { color: var(--text-muted); }
+
+  /* ─── Footer handshake ─── */
+  .sk-footer {
+    padding: 30px 0 60px; border-top: 1px dashed var(--border);
+    color: var(--text-secondary); font-size: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .sk-footer .pitch { color: var(--text-primary); font-weight: 500; }
+  .sk-footer a { color: var(--primary); text-decoration: none; }
+  .sk-footer .links {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div class="sk-shell">
+
+  <!-- ─── Header ─── -->
+  <header class="sk-top">
+    <div class="sk-logo">
+      <img src="../../../../ailang-logo.svg" alt="AILANG">
+      <span>AILANG · sketch</span>
+    </div>
+    <a class="back" href="../../">← Topics</a>
+  </header>
+
+  <!-- ─── Title ─── -->
+  <section class="sk-title">
+    <h1>AILANG<span class="times">×</span>huggingface.co</h1>
+    <div class="meta">
+      <span><span class="sk-avatar"></span>AI</span>
+      <span class="topic-tag">portable</span>
+      <span>generated 2026-05-14</span>
+    </div>
+  </section>
+
+  <!-- ─── §1 Readiness radar (hero) ─── -->
+  <section class="sk-radar-section">
+    <p class="sk-section-label">§1 · AI-readiness</p>
+    <div class="sk-radar-wrap">
+      <svg class="sk-radar-svg" viewBox="-170 -130 340 215" xmlns="http://www.w3.org/2000/svg">
+        <!-- Triangular grid rings — radii 100/75/50/25 -->
+        <polygon points="0,-100 86.6,50 -86.6,50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-75 65,37.5 -65,37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-50 43.3,25 -43.3,25" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-25 21.65,12.5 -21.65,12.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <!-- Three axes from origin to each vertex -->
+        <line x1="0" y1="0" x2="0" y2="-100" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <!-- Data polygon (populated by renderer) -->
+        <polygon points="0,-10 8,5 -43,25"
+                 fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
+        <!-- Axis labels at radius ~112. Widened viewBox accommodates the
+             full label widths ("portable", "agent-ready"). -->
+        <text x="0" y="-112" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
+        <text x="98" y="62" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
+        <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
+      </svg>
+      <div class="sk-radar-text">
+        <h2><span class="sk-domain">huggingface.co</span> scored <span class="sk-readiness-num">5/10</span> on portable.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means huggingface.co is already strong there; low means AILANG could meaningfully help.</p>
+        <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the portable leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
+      </div>
+    </div>
+    <div class="sk-why"><strong>Why portable scored 5/10</strong><ul><li class="ok">Page copy that names one specific LLM provider (e.g. "powered by Claude") without portability claims.</li>
+<li class="ok">Body mentions two or more named AI providers (Claude, GPT, Gemini, Mistral, Llama, etc.) — already vendor-multi.</li>
+<li class="no">Body mentions self-hosted, on-prem, WASM, Docker, Kubernetes, or "deploy anywhere" — runtime portability claimed.</li>
+<li class="no">Body mentions "bring your own key", "BYOK", "any LLM", or "model-agnostic" — caller controls the model.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+  </section>
+
+  <!-- ─── §2 What an AI sees (promoted) ─── -->
+  <section class="sk-section sk-prom">
+    <p class="sk-section-label">§2 · what an AI sees on huggingface.co</p>
+    <h2 class="sk-prom-audience">Developers and enterprises building AI applications who require access to diverse machine learning models and inference capabilities through a unified platform.</h2>
+    <blockquote class="sk-prom-narrative">Hugging Face's Inference Providers offer developers a unified API to access and deploy hundreds of machine learning models from various world-class providers. It enables building AI applications like chatbots and image generators, ensuring production-ready performance and mitigating vendor lock-in with diverse model access.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Inference Providers</span> <span class="sk-chip">Machine Learning Models</span> <span class="sk-chip">AI Applications</span> <span class="sk-chip">APIs</span> <span class="sk-chip">LLMs</span> <span class="sk-chip">Embeddings</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on huggingface.co</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">21</span> headings</span><span class="stat"><span class="num">5</span> images</span><span class="stat"><span class="num">11</span> lists</span><span class="stat"><span class="num">1</span> tables</span><span class="stat"><span class="num">53</span> links</span><span class="stat"><span class="num">10</span> code samples</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">3</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">21</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Inference Providers</span> <span class="sk-chip" title="extracted heading">Inference Providers</span> <span class="sk-chip" title="extracted heading">Partners</span> <span class="sk-chip" title="extracted heading">Why Choose Inference Providers?</span> <span class="sk-chip" title="extracted heading">Key Features</span> <span class="sk-chip" title="extracted heading">Getting Started</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" target="_blank" rel="noopener" title="Hugging Face's logo"><img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="Hugging Face's logo" loading="lazy"></a><a class="sk-img-thumb" href="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" target="_blank" rel="noopener" title="Hugging Face's logo"><img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="Hugging Face's logo" loading="lazy"></a><a class="sk-img-thumb" href="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/inference-providers/Inference-providers-banner-light.png" target="_blank" rel="noopener" title=""><img src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/inference-providers/Inference-providers-banner-light.png" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/inference-providers/Inference-providers-banner-dark.png" target="_blank" rel="noopener" title=""><img src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/inference-providers/Inference-providers-banner-dark.png" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn-uploads.huggingface.co/production/uploads/5f17f0a0925b9863e28ad517/9_Tgf0Tv65srhBirZQMTp.png" target="_blank" rel="noopener" title="Inference Playground thumbnail"><img src="https://cdn-uploads.huggingface.co/production/uploads/5f17f0a0925b9863e28ad517/9_Tgf0Tv65srhBirZQMTp.png" alt="Inference Playground thumbnail" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">11</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">[ Models ](/models)</span> <span class="sk-chip" title="list item">[ Datasets ](/datasets)</span> <span class="sk-chip" title="list item">[ Spaces ](/spaces)</span> <span class="sk-chip" title="list item">[ Buckets new](/storage)</span> <span class="sk-chip" title="list item">[ Docs ](/docs)</span> <span class="sk-chip" title="list item">[ Enterprise ](/enterprise)</span> <span class="sk-chip" title="list item">[Pricing](/pricing)</span> <span class="sk-chip" title="list item">[Log In](/login)</span> <span class="sk-chip" title="list item">[Sign Up](/join)</span> <span class="sk-chip" title="list item">**Text Generation**: Use Large language models with tool-calling capabilities for chatbots, content generation, and code assistance</span> <span class="sk-chip" title="list item">**Image and Video Generation**: Create custom images and videos, including support for LoRAs and style customization</span> <span class="sk-chip" title="list item">**Search & Retrieval**: State-of-the-art embeddings for semantic search, RAG systems, and recommendation engines</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">53</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://huggingface.co/" target="_blank" rel="noopener" title="https://huggingface.co/">Hugging Face</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/index" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/index">Inference Providers</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/hub-integration" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/hub-integration">Hub integration</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/security" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/security">Security</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/first-api-call" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/first-api-call">Your First API Call</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/building-first-app" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/building-first-app">Building Your First AI App</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/structured-output" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/structured-output">Structured Outputs with LLMs</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/function-calling" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/function-calling">Function Calling</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/responses-api" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/responses-api">Responses API (beta)</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/gpt-oss" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/gpt-oss">How to use OpenAI gpt-oss</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/image-editor" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/image-editor">Build an Image Editor</a> <a class="sk-chip sk-chip-link" href="https://huggingface.co/docs/inference-providers/en/guides/github-actions-code-review" target="_blank" rel="noopener" title="https://huggingface.co/docs/inference-providers/en/guides/github-actions-code-review">Automating Code Review with GitHub Actions</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Inference Providers · Hugging Face
+
+
+*Header:*
+[Image: Hugging Face's logo]
+
+Hugging Face
+
+[Hugging Face](/)
+
+- [ Models ](/models)
+- [ Datasets ](/datasets)
+- [ Spaces ](/spaces)
+- [ Buckets new](/storage)
+- [ Docs ](/docs)
+- [ Enterprise ](/enterprise)
+- [Pricing](/pricing)
+- [Log In](/login)
+- [Sign Up](/join)
+
+Inference Providers documentation
+
+Inference Providers
+
+# Inference Providers
+
+🏡 View all docsAWS Trainium &amp; InferentiaAccelerateArgillaAutoTrainBitsandbytesCLIChat UIDataset viewerDatasetsDeploying on AWSDiffusersDistilabelEvaluateGoogle CloudGoogle TPUsGradioHubHub Python LibraryHuggingface.jsInference Endpoints (dedicated)Inference ProvidersKernelsLeRobotLeaderboardsLightevalMicrosoft AzureOptimumPEFTReachy MiniSafetensorsSentence TransformersTRLTasksText Embeddings InferenceText Generation InferenceTokenizersTrackioTransformersTransformers.jsXetsmolagentstimm
+
+Search documentation
+
+main
+
+EN
+
+Get Started
+
+[Inference Providers](/docs/inference-providers/en/index)
+
+[Pricing and Billing](/docs/inference-providers/en/pricing)
+
+[Hub integration](/docs/inference-providers/en/hub-integration)
+
+[Security](/docs/inference-providers/en/security)
+
+Guides
+
+[Your First API Call](/docs/inference-providers/en/guides/first-api-call)
+
+[Building Your First AI App](/docs/inference-providers/en/guides/building-first-app)
+
+[Structured Outputs with LLMs](/docs/inference-providers/en/guides/structured-output)
+
+[Function Calling](/docs/inference-providers/en/guides/function-calling)
+
+[Responses API (beta)](/docs/inference-providers/en/guides/responses-api)
+
+[How to use OpenAI gpt-oss](/docs/inference-providers/en/guides/gpt-oss)
+
+[Build an Image Editor](/docs/inference-providers/en/guides/image-editor)
+
+[Automating Code Review with GitHub Actions](/docs/inference-providers/en/guides/github-actions-code-review)
+
+[Agentic Coding Environments with OpenEnv](/docs/inference-providers/en/guides/coding-environment)
+
+[Evaluating Models with Inspect](/docs/inference-providers/en/guides/evaluation-inspect-ai)
+
+Integrations
+
+[Overview](/docs/inference-providers/en/integrations/index)
+
+[Add Your Integration](/docs/inference-providers/en/integrations/adding-integration)
+
+[Claude Code](/docs/inference-providers/en/integrations/claude-code)
+
+[Hermes Agent](/docs/inference-providers/en/integrations/hermes-agent)
+
+[NeMo Data Designer](/docs/inference-providers/en/integrations/datadesigner)
+
+[MacWhisper](/docs/inference-providers/en/integrations/macwhisper)
+
+[OpenCode](/docs/inference-providers/en/integrations/opencode)
+
+[Pi](/docs/inference-providers/en/integrations/pi)
+
+[Vision Agents](/docs/inference-providers/en/integrations/visionagents)
+
+[VS Code with GitHub Copilot](/docs/inference-providers/en/integrations/vscode)
+
+Inference Tasks
+
+[Chat Completion](/docs/inference-providers/en/tasks/chat-completion)
+
+[Feature Extraction](/docs/inference-providers/en/tasks/feature-extraction)
+
+[Text to Image](/docs/inference-providers/en/tasks/text-to-image)
+
+[Text to Video](/docs/inference-providers/en/tasks/text-to-video)
+
+Other Tasks
+
+Providers
+
+[Cerebras](/docs/inference-providers/en/providers/cerebras)
+
+[Cohere](/docs/inference-providers/en/providers/cohere)
+
+[DeepInfra](/docs/inference-providers/en/providers/deepinfra)
+
+[Fal AI](/docs/inference-providers/en/providers/fal-ai)
+
+[Featherless AI](/docs/inference-providers/en/providers/featherless-ai)
+
+[Fireworks](/docs/inference-providers/en/providers/fireworks-ai)
+
+[Groq](/docs/inference-providers/en/providers/groq)
+
+[Hyperbolic](/docs/inference-providers/en/providers/hyperbolic)
+
+[HF Inference](/docs/inference-providers/en/providers/hf-inference)
+
+[Novita](/docs/inference-providers/en/providers/novita)
+
+[Nscale](/docs/inference-providers/en/providers/nscale)
+
+[OVHcloud AI Endpoints](/docs/inference-providers/en/providers/ovhcloud)
+
+[Public AI](/docs/inference-providers/en/providers/publicai)
+
+[Replicate](/docs/inference-providers/en/providers/replicate)
+
+[SambaNova](/docs/inference-providers/en/providers/sambanova)
+
+[Scaleway](/docs/inference-providers/en/providers/scaleway)
+
+[Together](/docs/inference-providers/en/providers/together)
+
+[WaveSpeedAI](/docs/inference-providers/en/providers/wavespeed)
+
+[Z.ai](/docs/inference-providers/en/providers/zai-org)
+
+[Hub API](/docs/inference-providers/en/hub-api)
+
+[Register as an Inference Provider](/docs/inference-providers/en/register-as-a-provider)
+
+[Image: Hugging Face's logo]
+
+Join the Hugging Face community
+
+and get access to the augmented documentation experience
+
+Collaborate on models, datasets and Spaces
+
+Faster examples with accelerated inference
+
+Switch between documentation themes
+
+[Sign Up](/join)
+
+to get started
+
+Copy page
+
+# Inference Providers
+
+[Image]
+
+[Image]
+
+Hugging Face’s Inference Providers give developers access to hundreds of machine learning models, powered by world-class inference providers. They are also integrated into our client SDKs (for JS and Python), making it easy to explore serverless inference of models on your favorite providers.
+
+## Partners
+
+Our platform integrates with leading AI infrastructure providers, giving you access to their specialized capabilities through a single, consistent API. Here’s what each partner supports:
+
+| Provider | Chat completion (LLM) | Chat completion (VLM) | Feature Extraction | Text to Image | Text to video | Speech to text |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Cerebras](./providers/cerebras) | ✅ |  |  |  |  |  |
+| [Cohere](./providers/cohere) | ✅ | ✅ |  |  |  |  |
+| [DeepInfra](./providers/deepinfra) | ✅ | ✅ |  |  |  |  |
+| [Fal AI](./providers/fal-ai) |  |  |  | ✅ | ✅ | ✅ |
+| [Featherless AI](./providers/featherless-ai) | ✅ | ✅ |  |  |  |  |
+| [Fireworks](./providers/fireworks-ai) | ✅ | ✅ |  |  |  |  |
+| [Groq](./providers/groq) | ✅ | ✅ |  |  |  |  |
+| [HF Inference](./providers/hf-inference) | ✅ | ✅ | ✅ | ✅ |  | ✅ |
+| [Hyperbolic](./providers/hyperbolic) | ✅ | ✅ |  |  |  |  |
+| [Novita](./providers/novita) | ✅ | ✅ |  |  | ✅ |  |
+| [Nscale](./providers/nscale) | ✅ | ✅ |  | ✅ |  |  |
+| [OVHcloud AI Endpoints](./providers/ovhcloud) | ✅ | ✅ |  |  |  |  |
+| [Public AI](./providers/publicai) | ✅ |  |  |  |  |  |
+| [Replicate](./providers/replicate) |  |  |  | ✅ | ✅ | ✅ |
+| [SambaNova](./providers/sambanova) | ✅ |  | ✅ |  |  |  |
+| [Scaleway](./providers/scaleway) | ✅ |  | ✅ |  |  |  |
+| [Together](./providers/together) | ✅ | ✅ |  | ✅ |  |  |
+| [WaveSpeedAI](./providers/wavespeed) |  |  |  | ✅ | ✅ |  |
+| [Z.ai](./providers/zai-org) | ✅ | ✅ |  |  |  |  |
+
+## Why Choose Inference Providers?
+
+When you build AI applications, it’s tough to manage multiple provider APIs, comparing model performance, and dealing with varying reliability. Inference Providers solves these challenges by offering:
+
+**Instant Access to Cutting-Edge Models**: Go beyond mainstream providers to access thousands of specialized models across multiple AI tasks. Whether you need the latest language models, state-of-the-art image generators, or domain-specific embeddings, you’ll find them here.
+
+**Zero Vendor Lock-in**: Unlike being tied to a single provider’s model catalog, you get access to models from Cerebras, Groq, Together AI, Replicate, and more — all through one consistent interface.
+
+**Production-Ready Performance**: Built for enterprise workloads with the reliability your applications demand.
+
+Here’s what you can build:
+
+- **Text Generation**: Use Large language models with tool-calling capabilities for chatbots, content generation, and code assistance
+- **Image and Video Generation**: Create custom images and videos, including support for LoRAs and style customization
+- **Search &amp; Retrieval**: State-of-the-art embeddings for semantic search, RAG systems, and recommendation engines
+- **Traditional ML Tasks**: Ready-to-use models for classification, NER, summarization, and speech recognition
+
+⚡ **Get Started for Free**: Inference Providers includes a generous free tier, with additional credits for [PRO users](https://hf.co/subscribe/pro) and [Team &amp; Enterprise organizations](https://huggingface.co/enterprise).
+
+## Key Features
+
+- **🎯 All-in-One API**: A single API for text generation, image generation, document embeddings, NER, summarization, image classification, and more.
+- **🔀 Multi-Provider Support**: Easily run models from top-tier providers like fal, Replicate, Sambanova, Together AI, and others.
+- **🚀 Scalable &amp; Reliable**: Built for high availability and low-latency performance in production environments.
+- **🔧 Developer-Friendly**: Simple requests, fast responses, and a consistent developer experience across Python and JavaScript clients.
+- **👷 Easy to integrate**: Drop-in replacement for the OpenAI chat completions API.
+- **💰 Cost-Effective**: No extra markup on provider rates.
+
+## Getting Started
+
+Inference Providers works with your existing development workflow. Whether you prefer Python, JavaScript, or direct HTTP calls, we provide native SDKs and OpenAI-compatible APIs to get you up and running quickly.
+
+We’ll walk through a practical example using [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b), a state-of-the-art open-weights conversational model.
+
+### Inference Playground
+
+Before diving into integration, explore models interactively with our [Inference Playground](https://huggingface.co/playground). Test different [chat completion models](http://huggingface.co/models?inference_provider=all&amp;sort=trending&amp;other=conversational) with your prompts and compare responses to find the perfect fit for your use case.
+
+[Image: Inference Playground thumbnail]
+
+[(link)](https://huggingface.co/playground)
+
+### Authentication
+
+You’ll need a Hugging Face token to authenticate your requests. Create one by visiting your [token settings](https://huggingface.co/settings/tokens/new?ownUserPermissions=inference.serverless.write&amp;tokenType=fineGrained) and generating a `fine-grained` token with `Make calls to Inference Providers` permissions.
+
+For complete token management details, see our [security tokens guide](https://huggingface.co/docs/hub/en/security-tokens).
+
+### Quick Start - LLM
+
+Let’s start with the most common use case: conversational AI using large language models. This section demonstrates how to perform chat completions using DeepSeek V3, showcasing the different ways you can integrate Inference Providers into your applications.
+
+Whether you prefer our native clients, want OpenAI compatibility, or need direct HTTP access, we’ll show you how to get up and running with just a few lines of code.
+
+#### Python
+
+Here are three ways to integrate Inference Providers into your Python applications, from high-level convenience to low-level control:
+
+huggingface_hub
+
+openai
+
+requests
+
+For convenience, the `huggingface_hub` library provides an [`InferenceClient`](https://huggingface.co/docs/huggingface_hub/guides/inference) that automatically handles provider selection and request routing.
+
+In your terminal, install the Hugging Face Hub Python client and log in:
+
+Copied
+
+pip install huggingface_hub
+hf auth login # get a read token from hf.co/settings/tokens
+
+You can now use the client with a Python interpreter.
+
+By default, our system automatically selects the fastest available provider for the specified model (equivalent to the `:fastest` policy — highest throughput in tokens per second).
+
+You can change the provider selection policy by appending a policy suffix to the model id: `:cheapest` for the most cost-efficient provider (lowest price per output token), or `:preferred` to follow your preference order in [Inference Provider settings](https://hf.co/settings/inference-providers). For example, `openai/gpt-oss-120b:cheapest`.
+
+You can also select the provider of your choice by appending the provider name to the model id (e.g. `"openai/gpt-oss-120b:sambanova"`).
+
+Copied
+
+import os
+from huggingface_hub import InferenceClient
+
+client = InferenceClient()
+
+completion = client.chat.completions.create(
+    model="openai/gpt-oss-120b",
+    messages=[
+        {
+ </pre></details>
+  </section>
+
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
+  <section class="sk-preview-section">
+    <div class="sk-preview-head">
+      <span>page preview · the URL we fetched</span>
+      <a class="url" href="https://huggingface.co/docs/inference-providers/en/index" target="_blank" rel="noopener">https://huggingface.co/docs/inference-providers/en/index ↗</a>
+    </div>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://huggingface.co/docs/inference-providers/en/index"
+         alt="Screenshot of huggingface.co"
+         loading="lazy">
+    <p class="sk-preview-fallback">
+      Couldn't render a preview for this site.
+      <a href="https://huggingface.co/docs/inference-providers/en/index" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
+    </p>
+  </section>
+
+  <!-- ─── §3 AILANG × your business ─── -->
+  <section class="sk-section">
+    <p class="sk-section-label">§3 · AILANG × your business</p>
+    <p class="sk-score-pretext"><span class="sk-domain">huggingface.co</span> scored <strong>5/10</strong> on portable. AILANG opportunity is therefore <strong>5/10</strong>. Here's where it would land first.</p>
+    <div class="sk-cards"><article class="sk-card"><h3>One std/ai, five LLM vendors</h3><p class="rationale">The same call() function runs against Anthropic, Google, OpenAI, OpenRouter, or local Ollama. Switch providers with a one-character diff, not a refactor.</p><pre>let answer = call(
+  prompt = userQuery,
+  model  = "claude-haiku-4-5"
+  -- model = "gemini-2.5-flash" — also works
+  -- model = "gpt-5.1-nano"     — also works
+);</pre></article>
+<article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
+-- same AILANG code, four different provider paths underneath.</pre></article>
+<article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
+-- the eval harness pins the exact resolved model ID.</pre></article></div>
+  </section>
+
+  <!-- ─── §4 Guarantee ─── -->
+  <section class="sk-guarantee">
+    <h2>How this page was made</h2>
+    <pre class="sig">func sketchSite(url: string&lt;pii&gt;, topic: Topic) -&gt; Sketch
+  ! {Net @limit=1, AI @limit=5, FS @limit=4, Process, Declassify}</pre>
+    <ul class="translations">
+      <li><strong>Read your site once.</strong> No second fetch, no crawl.</li>
+      <li><strong>Up to five AI calls, capped.</strong> No runaway analysis.</li>
+      <li><strong>Four file writes.</strong> The report, the topic index, the rubric breakdown, the queue ack. Nothing else touched.</li>
+      <li><strong>Process invokes docparse</strong> for structured extraction. The capability is visible in the type.</li>
+      <li><strong>Your URL crossed Declassify.</strong> No PII survives into this page.</li>
+    </ul>
+    <button class="sk-breakdown-toggle" onclick="document.getElementById('sk-breakdown').classList.toggle('open')">Toggle breakdown ▾</button>
+    <div class="sk-breakdown open" id="sk-breakdown">
+      <table>
+        <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+<tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
+<tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
+<tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
+<tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
+<tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
+<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
+<tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
+<tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
+<tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
+<tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
+<tr><td>Cross-runtime / deployment portability</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change</td></tr>
+<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sk-rubric-link">The rubric that scored this page is open-source AILANG code — every signal extractor is contract-verified. <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric →</a></p>
+  </section>
+
+  <!-- ─── Footer handshake ─── -->
+  <footer class="sk-footer">
+    <p class="pitch">Public sketch. The private version reads your full site against your data — <a href="mailto:mark@aitanalabs.com">mark@aitanalabs.com</a></p>
+    <p style="margin: 6px 0 14px;">
+      <a class="li-cta" href="https://www.linkedin.com/company/sunholo" target="_blank" rel="noopener">
+        <svg class="li-cta-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 0H5C2.24 0 0 2.24 0 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5V5c0-2.76-2.24-5-5-5zM8 19H5V8h3v11zm-1.5-12.5C5.67 6.5 5 5.83 5 5s.67-1.5 1.5-1.5S8 4.17 8 5s-.67 1.5-1.5 1.5zM19 19h-3v-5.7c0-3.05-3.5-2.8-3.5 0V19h-3V8h3v1.5c1.4-2.6 6.5-2.8 6.5 2.5V19z"/>
+        </svg>
+        Sketch another URL on LinkedIn
+        <span class="li-cta-arrow">↗</span>
+      </a>
+    </p>
+    <div class="links">
+      <a href="../">← portable topic</a>
+      <a href="../../../">← LinkedIn demo</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
+  // Hide any image thumbnail that fails to load (broken src, CORS, 404).
+  // The whole link wrapper is removed so we don't show empty boxes.
+  document.querySelectorAll('.sk-img-thumb img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      var thumb = img.closest('.sk-img-thumb');
+      if (thumb) thumb.style.display = 'none';
+    });
+  });
+
+  // Fill the rank callout from the topic's leaderboard.json. Server-render
+  // can't know the rank ahead of time — it changes whenever another sketch
+  // is added or re-scored. JS reads ../leaderboard.json (relative to this
+  // sketch dir), finds our entry by the sketch directory name, and updates
+  // #sk-rank-num. If no match (e.g. this sketch was deduped out by another
+  // entry on the same domain), the whole callout stays hidden.
+  (function () {
+    var callout = document.getElementById('sk-rank-callout');
+    if (!callout) return;
+    var segs = window.location.pathname.split('/').filter(Boolean);
+    var slug = segs[segs.length - 1];
+    if (!slug) return;
+    fetch('../leaderboard.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.entries)) return;
+        var entry = data.entries.find(function (e) {
+          return e.sketchUrl === slug + '/' || e.sketchUrl === slug;
+        });
+        if (entry && entry.rank > 0) {
+          var span = document.getElementById('sk-rank-num');
+          if (span) span.textContent = '#' + entry.rank;
+          callout.hidden = false;
+        }
+      })
+      .catch(function () { /* silent: callout stays hidden */ });
+  })();
+</script>
+
+</body>
+</html>

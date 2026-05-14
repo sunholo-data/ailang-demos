@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<!--
+  AILANG sketch template — reference design.
+  Rendered by linkedin/services/sketch_template.ail.
+  For a fully-populated visual preview, see sketch-example.html.
+  For the full spec, see linkedin/design/sketches.md.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AILANG × siteimprove.com — privacy sketch</title>
+<link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
+<meta name="description" content="An AILANG sketch of siteimprove.com — what an AI sees, where AILANG fits.">
+<meta property="og:title" content="AILANG × siteimprove.com">
+<meta property="og:description" content="privacy sketch for siteimprove.com — AI-readiness 3/10.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/design-system.css">
+<style>
+  :root {
+    --sketch-radar-bg: rgba(231, 60, 23, 0.04);
+    --sketch-radar-grid: rgba(49, 67, 82, 0.12);
+    --sketch-radar-axis: rgba(49, 67, 82, 0.18);
+  }
+
+  body {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 6%, rgba(231, 60, 23, 0.045) 0, transparent 36%),
+      radial-gradient(circle at 88% 4%, rgba(245, 158, 11, 0.035) 0, transparent 40%);
+    font-family: var(--font-display, "Montserrat"), system-ui, sans-serif;
+  }
+
+  /* ─── Page header (matches /linkedin/) ─── */
+  .sk-shell { max-width: 920px; margin: 0 auto; padding: 0 20px; }
+  .sk-top {
+    padding: 32px 0 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .sk-top a.back {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); text-decoration: none;
+    border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px;
+    transition: all .15s ease;
+  }
+  .sk-top a.back:hover { color: var(--primary); border-color: var(--primary); }
+  .sk-logo { display: flex; align-items: center; gap: 10px; }
+  .sk-logo img { width: 28px; height: 28px; }
+  .sk-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+
+  /* ─── Title block ─── */
+  .sk-title {
+    padding: 20px 0 28px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .sk-title h1 {
+    font-family: var(--font-display, "Montserrat");
+    font-weight: 800; font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 12px;
+    color: var(--text-primary);
+  }
+  .sk-title h1 .times { color: var(--primary); margin: 0 8px; }
+  .sk-title .meta {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; flex-wrap: wrap; gap: 14px;
+  }
+  .sk-title .topic-tag {
+    background: var(--primary-faded); color: var(--primary);
+    padding: 3px 10px; border-radius: 999px; font-weight: 600;
+  }
+  .sk-avatar {
+    display: inline-block; width: 22px; height: 22px;
+    border-radius: 50%; vertical-align: middle; margin-right: 6px;
+    background: conic-gradient(from 324deg, var(--primary), var(--ai-orange), var(--primary));
+  }
+
+  /* ─── §1 Readiness radar (hero) ─── */
+  .sk-radar-section { padding: 36px 0; }
+  .sk-section-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 14px;
+  }
+  .sk-radar-wrap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
+    align-items: center;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 32px;
+  }
+  .sk-radar-svg { width: 100%; max-width: 340px; aspect-ratio: 1; margin: 0 auto; display: block; }
+  .sk-radar-text h2 {
+    margin: 0 0 10px;
+    font-size: 26px; font-weight: 700; line-height: 1.2;
+    color: var(--text-primary);
+  }
+  .sk-readiness-num {
+    color: var(--primary); font-family: var(--font-mono); font-weight: 700;
+  }
+  /* Site domain emphasis in the §1 headline + §3 pretext. */
+  .sk-domain {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.92em;
+    letter-spacing: 0.01em;
+  }
+  .sk-radar-text p { margin: 0 0 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
+  .sk-rank-callout {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--charcoal); color: #fff;
+    padding: 10px 16px; border-radius: 10px;
+    font-family: var(--font-mono); font-size: 13px;
+  }
+  .sk-rank-callout .rank-num { color: var(--ai-orange); font-weight: 700; font-size: 16px; }
+  .sk-rank-callout a { color: var(--ai-orange); text-decoration: none; }
+  /* "Why this score?" callout — visible immediately under the radar */
+  .sk-why {
+    margin-top: 18px; padding: 14px 16px;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 13px; line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .sk-why strong { color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .sk-why ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 12px; }
+  .sk-why li.ok::before { content: "✓ "; color: var(--success); font-weight: 700; }
+  .sk-why li.no::before { content: "✗ "; color: var(--text-muted); font-weight: 700; }
+  .sk-why li.na::before { content: "○ "; color: var(--text-muted); font-weight: 700; }
+  .sk-why a { color: var(--primary); text-decoration: none; font-family: var(--font-mono); font-size: 12px; }
+
+  /* ─── §2 What an AI sees (promoted prominence) ─── */
+  .sk-section { padding: 30px 0; border-top: 1px dashed var(--border); }
+  .sk-section h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 18px; color: var(--text-primary);
+  }
+  /* The §2 block gets a card treatment + the AI-read becomes a pull quote. */
+  .sk-section.sk-prom {
+    border-top: none;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 32px; margin: 32px 0 16px;
+  }
+  .sk-prom .sk-section-label { margin-bottom: 16px; }
+  .sk-prom h2.sk-prom-audience {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(22px, 3vw, 30px); line-height: 1.2;
+    margin: 0 0 22px; color: var(--text-primary); letter-spacing: -0.01em;
+  }
+  .sk-prom blockquote.sk-prom-narrative {
+    border-left: 3px solid var(--primary);
+    padding: 6px 0 6px 22px; margin: 0 0 22px;
+    font-size: 17px; line-height: 1.7;
+    color: var(--text-primary); font-style: italic;
+  }
+  .sk-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; }
+  .sk-chip {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-input); color: var(--text-secondary);
+    padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
+  }
+  /* Anchor-link chips — clickable, with the AILANG accent colour. */
+  a.sk-chip-link {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary-faded);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  a.sk-chip-link::before {
+    content: "↗"; margin-right: 6px; opacity: 0.6;
+  }
+  a.sk-chip-link:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+  }
+  /* Page-skeleton chip — small coral count + section kind name. */
+  .sk-chip .sk-kind-count {
+    color: var(--primary); font-weight: 700;
+    margin-right: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Extraction stats line at bottom of §2 (filled by step 4) */
+  .sk-extract-stats {
+    margin-top: 22px; padding-top: 16px; border-top: 1px dashed var(--border);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .sk-extract-stats .stat { color: var(--text-secondary); }
+  .sk-extract-stats .stat .num { color: var(--primary); font-weight: 600; }
+  .sk-extract-stats .path {
+    margin-left: auto;
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--bg-input);
+  }
+  .sk-extract-stats .path.path-docparse { background: var(--primary-faded); color: var(--primary); }
+  .sk-extract-stats .path a { color: inherit; text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 2px; }
+  .sk-extract-stats .path a:hover { opacity: 0.8; }
+  .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
+
+  /* "What AILANG Parse sees" — header above the chip rows */
+  .sk-extract-header {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border);
+  }
+  .sk-extract-header h3 {
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    margin: 0 0 6px; color: var(--text-primary);
+  }
+  .sk-extract-header p {
+    margin: 0 0 14px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .sk-extract-row { margin-top: 14px; }
+  .sk-extract-row-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 8px;
+  }
+  .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+  /* Image thumbnails — horizontal scroll strip from AILANG Parse's
+     img src URLs (v0.14.1+). Failed loads are hidden by JS. */
+  .sk-img-strip {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: flex-start;
+  }
+  .sk-img-thumb {
+    display: block; width: 96px; height: 72px;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--bg-input);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .sk-img-thumb:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+  .sk-img-thumb img {
+    width: 100%; height: 100%; object-fit: contain;
+    object-position: center; background: white;
+    display: block;
+  }
+
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
+  .sk-preview-section {
+    margin: 0 0 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .sk-preview-section .sk-preview-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .sk-preview-section .sk-preview-head .url {
+    color: var(--primary); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 60%;
+  }
+  .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
+    background: var(--bg-input);
+  }
+  .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
+    padding: 10px 20px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    border-top: 1px solid var(--border);
+    text-align: right;
+  }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
+
+  /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
+  details.sk-extract-details {
+    margin-top: 18px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0;
+  }
+  details.sk-extract-details summary {
+    cursor: pointer; user-select: none;
+    padding: 14px 18px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); letter-spacing: 0.02em;
+    list-style: none;
+    border-radius: 10px;
+  }
+  details.sk-extract-details summary::-webkit-details-marker { display: none; }
+  details.sk-extract-details summary::before {
+    content: "▸";
+    color: var(--primary); margin-right: 10px;
+    display: inline-block; transition: transform .15s ease;
+  }
+  details.sk-extract-details[open] summary::before { transform: rotate(90deg); }
+  details.sk-extract-details summary:hover { color: var(--text-primary); }
+  pre.sk-extract-md {
+    margin: 0; padding: 18px 22px 22px;
+    background: transparent;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.6; white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 480px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── §3 AILANG × your business ─── */
+  .sk-score-pretext {
+    margin: 0 0 22px; padding: 14px 18px;
+    background: var(--primary-faded); border-left: 3px solid var(--primary);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px; color: var(--text-secondary);
+  }
+  .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
+  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  .sk-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px;
+    display: flex; flex-direction: column; gap: 12px;
+    min-width: 0;
+  }
+  .sk-card pre { min-width: 0; max-width: 100%; }
+  .sk-card h3 {
+    margin: 0; font-size: 16px; font-weight: 700;
+    color: var(--primary); line-height: 1.3;
+  }
+  .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+  .sk-card pre {
+    margin: 0; padding: 14px;
+    background: var(--bg-code); color: #e2e8f0;
+    border-radius: 8px;
+    font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.5; overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ─── §4 Guarantee panel ─── */
+  .sk-guarantee {
+    background: var(--charcoal); color: #fff;
+    border-radius: 14px; padding: 32px; margin: 30px 0;
+  }
+  .sk-guarantee h2 { color: #fff; margin: 0 0 16px; }
+  .sk-guarantee .sig {
+    background: rgba(0,0,0,0.4); padding: 16px; border-radius: 8px;
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+    color: var(--ai-orange); margin: 0 0 20px;
+    overflow-x: auto; white-space: pre;
+  }
+  .sk-guarantee ul.translations {
+    list-style: none; padding: 0; margin: 0 0 20px;
+  }
+  .sk-guarantee ul.translations li {
+    padding: 8px 0 8px 22px; position: relative;
+    font-size: 14px; line-height: 1.55;
+    color: rgba(255,255,255,0.86);
+  }
+  .sk-guarantee ul.translations li::before {
+    content: "▸"; position: absolute; left: 0; top: 8px;
+    color: var(--ai-orange);
+  }
+  .sk-breakdown-toggle {
+    background: none; border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.86); padding: 8px 14px;
+    border-radius: 8px; font-family: var(--font-mono); font-size: 12px;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .sk-breakdown-toggle:hover { border-color: var(--ai-orange); color: var(--ai-orange); }
+  .sk-rubric-link {
+    margin-top: 18px; font-family: var(--font-mono); font-size: 12px;
+    color: rgba(255,255,255,0.6);
+  }
+  .sk-rubric-link a { color: var(--ai-orange); text-decoration: none; }
+
+  /* ─── Score breakdown (collapsed by default) ─── */
+  .sk-breakdown {
+    display: none; margin-top: 20px;
+    background: rgba(0,0,0,0.25); border-radius: 8px; padding: 16px;
+  }
+  .sk-breakdown.open { display: block; }
+  .sk-breakdown table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--font-mono); font-size: 12px;
+    color: rgba(255,255,255,0.86);
+  }
+  .sk-breakdown th, .sk-breakdown td {
+    text-align: left; padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sk-breakdown th { color: rgba(255,255,255,0.5); font-weight: 500; }
+  .sk-breakdown .sig-ok { color: var(--success); }
+  .sk-breakdown .sig-no { color: var(--text-muted); }
+
+  /* ─── Footer handshake ─── */
+  .sk-footer {
+    padding: 30px 0 60px; border-top: 1px dashed var(--border);
+    color: var(--text-secondary); font-size: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .sk-footer .pitch { color: var(--text-primary); font-weight: 500; }
+  .sk-footer a { color: var(--primary); text-decoration: none; }
+  .sk-footer .links {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div class="sk-shell">
+
+  <!-- ─── Header ─── -->
+  <header class="sk-top">
+    <div class="sk-logo">
+      <img src="../../../../ailang-logo.svg" alt="AILANG">
+      <span>AILANG · sketch</span>
+    </div>
+    <a class="back" href="../../">← Topics</a>
+  </header>
+
+  <!-- ─── Title ─── -->
+  <section class="sk-title">
+    <h1>AILANG<span class="times">×</span>siteimprove.com</h1>
+    <div class="meta">
+      <span><span class="sk-avatar"></span>AI</span>
+      <span class="topic-tag">privacy</span>
+      <span>generated 2026-05-14</span>
+    </div>
+  </section>
+
+  <!-- ─── §1 Readiness radar (hero) ─── -->
+  <section class="sk-radar-section">
+    <p class="sk-section-label">§1 · AI-readiness</p>
+    <div class="sk-radar-wrap">
+      <svg class="sk-radar-svg" viewBox="-170 -130 340 215" xmlns="http://www.w3.org/2000/svg">
+        <!-- Triangular grid rings — radii 100/75/50/25 -->
+        <polygon points="0,-100 86.6,50 -86.6,50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-75 65,37.5 -65,37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-50 43.3,25 -43.3,25" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <polygon points="0,-25 21.65,12.5 -21.65,12.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
+        <!-- Three axes from origin to each vertex -->
+        <line x1="0" y1="0" x2="0" y2="-100" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
+        <!-- Data polygon (populated by renderer) -->
+        <polygon points="0,-20 25,15 -17,10"
+                 fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
+        <!-- Axis labels at radius ~112. Widened viewBox accommodates the
+             full label widths ("portable", "agent-ready"). -->
+        <text x="0" y="-112" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
+        <text x="98" y="62" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
+        <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
+      </svg>
+      <div class="sk-radar-text">
+        <h2><span class="sk-domain">siteimprove.com</span> scored <span class="sk-readiness-num">3/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means siteimprove.com is already strong there; low means AILANG could meaningfully help.</p>
+        <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the privacy leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
+      </div>
+    </div>
+    <div class="sk-why"><strong>Why privacy scored 3/10</strong><ul><li class="ok">Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.</li>
+<li class="no">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
+<li class="no">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+  </section>
+
+  <!-- ─── §2 What an AI sees (promoted) ─── -->
+  <section class="sk-section sk-prom">
+    <p class="sk-section-label">§2 · what an AI sees on siteimprove.com</p>
+    <h2 class="sk-prom-audience">Professionals across various industries responsible for managing, optimizing, and ensuring compliance of their organization's digital presence, including accessibility, marketing, content, and web operations teams.</h2>
+    <blockquote class="sk-prom-narrative">This website presents a SaaS platform designed for organizations to manage and optimize their digital presence. It offers tools for web and mobile accessibility, marketing analytics, content strategy, and search engine optimization. The platform supports various industries and professional roles in improving website performance, compliance, and overall digital experience.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Web accessibility</span> <span class="sk-chip">Marketing analytics</span> <span class="sk-chip">Content strategy</span> <span class="sk-chip">SEO</span> <span class="sk-chip">Digital presence</span> <span class="sk-chip">Brand compliance</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on siteimprove.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">1</span> headings</span><span class="stat"><span class="num">3</span> images</span><span class="stat"><span class="num">16</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">1</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Oops! We can't seem to find the page you're looking for.</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" target="_blank" rel="noopener" title=""><img src="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" target="_blank" rel="noopener" title=""><img src="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://www.siteimprove.com/496631/globalassets/media/rebrand2025/great_place_to_work_footer.jpg" target="_blank" rel="noopener" title="We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027."><img src="https://www.siteimprove.com/496631/globalassets/media/rebrand2025/great_place_to_work_footer.jpg" alt="We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027." loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Why SiteimproveWhy Siteimprove
+
+[
+Why Siteimprove 
+                                                        ](/why-siteimprove/)
+
+[
+
+Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
+[
+
+Competitive comparison](/why-siteimprove/competitor-comparison/)
+[
+
+Professional services](/why-siteimprove/professional-services/)
+[
+
+Integrations](/why-siteimprove/integrations/)
+[
+
+EAA Resource Center](/why-siteimprove/eaa-resource-center/)
+[
+
+ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
+
+Our Commitment
+
+[
+
+Accessibility pledge](/why-siteimprove/accessibility-statement/)</span> <span class="sk-chip" title="list item">[
+
+Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)</span> <span class="sk-chip" title="list item">[
+
+Competitive comparison](/why-siteimprove/competitor-comparison/)</span> <span class="sk-chip" title="list item">[
+
+Professional services](/why-siteimprove/professional-services/)</span> <span class="sk-chip" title="list item">[
+
+Integrations](/why-siteimprove/integrations/)</span> <span class="sk-chip" title="list item">[
+
+EAA Resource Center](/why-siteimprove/eaa-resource-center/)</span> <span class="sk-chip" title="list item">[
+
+ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)</span> <span class="sk-chip" title="list item">[
+
+Accessibility pledge](/why-siteimprove/accessibility-statement/)</span> <span class="sk-chip" title="list item">Siteimprove.ai PlatformSiteimprove.ai Platform
+
+[
+Accessibility 
+                                                        ](/platform/accessibility/)
+
+[
+
+Web accessibility](/platform/accessibility/web-accessibility-software/)
+[
+
+Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
+[
+Analytics 
+                                                        ](/platform/analytics/)
+
+[
+
+Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
+[
+
+Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
+[
+
+App Analytics](/platform/analytics/app-analytics/)
+[
+Content strategy 
+                                                        ](/platform/content-strategy/)
+
+[
+
+Content Strategy & Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
+[
+
+Content Optimization](/platform/content-strategy/content-optimization-software/)
+[
+
+Content Governance & Brand Compliance](/platform/content-strategy/brand-compliance-software/)
+[
+Search 
+                                                        ](/platform/seo/)
+
+[
+
+AEO Visibility](/platform/seo/aeo-visibility/)
+[
+
+Technical SEO & Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
+[
+
+SEO Analytics & Intelligence](/platform/seo/seo-analytics-tool/)
+[
+
+Website Auditing Tool](/platform/seo/website-auditing-tools/)</span> <span class="sk-chip" title="list item">[
+
+Web accessibility](/platform/accessibility/web-accessibility-software/)</span> <span class="sk-chip" title="list item">[
+
+Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)</span> <span class="sk-chip" title="list item">[
+
+Marketing Analytics](/platform/analytics/marketing-analytics-platform/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://www.siteimprove.com/demo-request/" target="_blank" rel="noopener" title="https://www.siteimprove.com/demo-request/">Request a demo</a> <a class="sk-chip sk-chip-link" href="https://my2.siteimprove.com/" target="_blank" rel="noopener" title="https://my2.siteimprove.com/">Login</a> <a class="sk-chip sk-chip-link" href="https://www.siteimprove.com/" target="_blank" rel="noopener" title="https://www.siteimprove.com/">Our front page</a> <a class="sk-chip sk-chip-link" href="https://www.greatplacetowork.com/certified-company/1271608" target="_blank" rel="noopener" title="https://www.greatplacetowork.com/certified-company/1271608">;</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># 404
+
+
+*Header:*
+[Skip to main content](#main)
+
+[.st0 {
+        fill: #202124;
+    }](/)
+
+Close menu
+
+- Why SiteimproveWhy Siteimprove
+
+[
+Why Siteimprove 
+                                                        ](/why-siteimprove/)
+
+[
+
+Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
+[
+
+Competitive comparison](/why-siteimprove/competitor-comparison/)
+[
+
+Professional services](/why-siteimprove/professional-services/)
+[
+
+Integrations](/why-siteimprove/integrations/)
+[
+
+EAA Resource Center](/why-siteimprove/eaa-resource-center/)
+[
+
+ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
+
+Our Commitment
+
+[
+
+Accessibility pledge](/why-siteimprove/accessibility-statement/)
+- [
+
+Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
+- [
+
+Competitive comparison](/why-siteimprove/competitor-comparison/)
+- [
+
+Professional services](/why-siteimprove/professional-services/)
+- [
+
+Integrations](/why-siteimprove/integrations/)
+- [
+
+EAA Resource Center](/why-siteimprove/eaa-resource-center/)
+- [
+
+ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
+- [
+
+Accessibility pledge](/why-siteimprove/accessibility-statement/)
+- Siteimprove.ai PlatformSiteimprove.ai Platform
+
+[
+Accessibility 
+                                                        ](/platform/accessibility/)
+
+[
+
+Web accessibility](/platform/accessibility/web-accessibility-software/)
+[
+
+Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
+[
+Analytics 
+                                                        ](/platform/analytics/)
+
+[
+
+Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
+[
+
+Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
+[
+
+App Analytics](/platform/analytics/app-analytics/)
+[
+Content strategy 
+                                                        ](/platform/content-strategy/)
+
+[
+
+Content Strategy &amp; Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
+[
+
+Content Optimization](/platform/content-strategy/content-optimization-software/)
+[
+
+Content Governance &amp; Brand Compliance](/platform/content-strategy/brand-compliance-software/)
+[
+Search 
+                                                        ](/platform/seo/)
+
+[
+
+AEO Visibility](/platform/seo/aeo-visibility/)
+[
+
+Technical SEO &amp; Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
+[
+
+SEO Analytics &amp; Intelligence](/platform/seo/seo-analytics-tool/)
+[
+
+Website Auditing Tool](/platform/seo/website-auditing-tools/)
+- [
+
+Web accessibility](/platform/accessibility/web-accessibility-software/)
+- [
+
+Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
+- [
+
+Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
+- [
+
+Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
+- [
+
+App Analytics](/platform/analytics/app-analytics/)
+- [
+
+Content Strategy &amp; Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
+- [
+
+Content Optimization](/platform/content-strategy/content-optimization-software/)
+- [
+
+Content Governance &amp; Brand Compliance](/platform/content-strategy/brand-compliance-software/)
+- [
+
+AEO Visibility](/platform/seo/aeo-visibility/)
+- [
+
+Technical SEO &amp; Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
+- [
+
+SEO Analytics &amp; Intelligence](/platform/seo/seo-analytics-tool/)
+- [
+
+Website Auditing Tool](/platform/seo/website-auditing-tools/)
+- SolutionsSolutions
+
+By Industry 
+
+[
+
+Finance](/industries/financial-services/)
+[
+
+Healthcare](/industries/healthcare/)
+[
+
+Higher Education](/industries/higher-education/)
+[
+
+Government](/industries/government/)
+[
+
+Manufacturing](/industries/manufacturing/)
+[
+
+Retail](/industries/retail/)
+
+By Role
+
+[
+
+Accessibility Leaders](/solutions/accessibility-leaders/)
+[
+
+Marketing Leaders ](/solutions/marketing-leaders/)
+[
+
+Content Marketers ](/solutions/content-marketers/)
+[
+
+Performance Marketers ](/solutions/performance-marketers/)
+[
+
+Development &amp; Design](/solutions/development-and-design-ux/)
+[
+
+WebOps](/solutions/webops/)
+
+Partnerships
+
+[
+
+Our Partners](/partners/)
+[
+
+Optimizely Partner Page](/optimizely-partner-page/)
+[
+
+Partner Portal](https://partners.siteimprove.com/)
+- [
+
+Finance](/industries/financial-services/)
+- [
+
+Healthcare](/industries/healthcare/)
+- [
+
+Higher Education](/industries/higher-education/)
+- [
+
+Government](/industries/government/)
+- [
+
+Manufacturing](/industries/manufacturing/)
+- [
+
+Retail](/industries/retail/)
+- [
+
+Accessibility Leaders](/solutions/accessibility-leaders/)
+- [
+
+Marketing Leaders ](/solutions/marketing-leaders/)
+- [
+
+Content Marketers ](/solutions/content-marketers/)
+- [
+
+Performance Marketers ](/solutions/performance-marketers/)
+- [
+
+Development &amp; Design](/solutions/development-and-design-ux/)
+- [
+
+WebOps](/solutions/webops/)
+- [
+
+Our Partners](/partners/)
+- [
+
+Optimizely Partner Page](/optimizely-partner-page/)
+- [
+
+Partner Portal](https://partners.siteimprove.com/)
+- [Agentic Content Intelligence
+                        ](/the-ultimate-guide-to-agentic-content-intelligence/)
+- ResourcesResources
+
+Learn
+
+[
+
+Siteimprove Toolkit](/toolkit/)
+[
+
+Compliance](/web-accessibility-compliance/)
+[
+
+Glossary](/glossary/)
+[
+
+Blog](/blog/)
+[
+
+Case studies](/case-studies/)
+[
+
+Podcast](/podcast/)
+
+Connect
+
+[
+
+Events](/events/)
+[
+
+Webinars](/on-demand-webinars/)
+[
+
+Press](/press/)
+
+Explore
+
+[
+
+Search Siteimprove.com](/search/)
+[
+Digital Insights Report 
+                                                        ](/digital-insights-report/)
+
+Curious where your site performance stands today? Get a comprehensive, fully customized report detailing both strengths and actionable opportunities to improve.
+- [
+
+Siteimprove Toolkit](/toolkit/)
+- [
+
+Compliance](/web-accessibility-compliance/)
+- [
+
+Glossary](/glossary/)
+- [
+
+Blog](/blog/)
+- [
+
+Case studies](/case-studies/)
+- [
+
+Podcast](/podcast/)
+- [
+
+Events](/events/)
+- [
+
+Webinars](/on-demand-webinars/)
+- [
+
+Press](/press/)
+- [
+
+Search Siteimprove.com](/search/)
+- Curious where your site performance stands today? Get a comprehensive, fully customized report detailing both strengths and actionable opportunities to improve.
+
+[Request a demo](/demo-request/)
+
+[Login](https://my2.siteimprove.com/)
+
+[Request a demo](/demo-request/)
+
+[Login](https://my2.siteimprove.com/)
+
+[Image]
+
+# Oops! We can't seem to find the page you're looking for.
+
+Before you go, maybe this link will take you in the right direction.
+
+[Our front page](/)
+
+[Image]
+
+*Footer:*
+Why Siteimprove
+
+- [Overview](/why-siteimprove/)
+- [Integrations](/why-siteimprove/integrations/)
+- [Services &amp; Support](/why-siteimprove/professional-services/)
+
+Company
+
+- [Leadership](/leadership/)
+- [Press](/press/)
+- [Contact](/contact/)
+
+Careers
+
+- [Life at Siteimprove](https://careers.siteimprove.com/)
+- [Culture](https://careers.siteimprove.com/our-culture/)
+- [Offices](https://careers.siteimprove.com/our-locations/)
+- [Open Roles](https://careers.siteimprove.com/open-positions/)
+
+Support
+
+- [Getting started](https://help.siteimprove.com/support/solutions/80000220153)
+- [Guides &amp; FAQs](https://help.siteimprove.com/support/solutions/80000220156)
+- [Success Plans](/success-plans/)
+- [Developer Center](https://developer.siteimprove.com/)
+- [System Status](https://status.siteimprove.com/)
+
+Platform
+
+Accessibility
+
+- [Web Accessibility](/platform/accessibility/web-accessibility-software/)
+- [Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
+
+Analytics
+
+- [Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
+- [Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
+- [App Analytics](/platform/analytics/app-analytics/)
+
+Search
+
+- [AEO Visibility](/platform/seo/aeo-visibility/)
+- [Technical SEO](/platform/seo/technical-seo-auditing-tools/)
+- [SEO Analytics](/platform/seo/seo-analytics-tool/)
+- [Website Auditing Tools](/platform/seo/website-auditing-tools/)
+
+Content Strategy
+
+- [Content Optimization](/platform/content-strategy/content-optimization-software/)
+- [Content Strategy](/platform/content-strategy/content-strategy-planning-platform/)
+- [Content Governance](/platform/content-strategy/brand-compliance-software/)
+
+Solutions
+
+By Sector
+
+- [Government](/industries/government/)
+- [Higher Education](/industries/higher-education/)
+- [Healthcare](/industries/healthcare/)
+- [Finance](/industries/financial-services/)
+- [Manufacturing](/industries/manufacturing/)
+- [Retail](/industries/retail/)
+
+By Role
+
+- [Accessibility Leaders](/solutions/accessibility-leaders/)
+- [Marketing Leaders](/solutions/marketing-leaders/)
+- [Content Marketers](/solutions/content-marketers/)
+- [Performance Marketers](/solutions/performance-marketers/)
+- [Development &amp; Design](/solutions/development-and-design-ux/)
+- [WebOps](/solutions/webops/)
+
+Partners
+
+- [Optimizely](/why-siteimprove/integrations/cms-plugin/optimizely/)
+- [Adobe](/why-siteimprove/integrations/cms-plugin/adobe-experience-manager/)
+- [Sitecore](/why-siteimprove/integrations/cms-plugin/sitecore/)
+
+Customers
+
+- [Scotiabank](/case-studies/scotiabank/)
+- [Northern Arizona Healthcare](/case-studies/northern-arizona-healthcare/)
+- [Springfield Clinic](/case-studies/springfield-clinic/)
+- [City &amp; Count of Denver](/case-studies/city-and-county-of-denver/)
+- [University of North Dakota](/case-studies/university-of-north-dakota/)
+- [Cuisinart](/case-studies/cuisinart/)
+- [Akamai Technologies](/case-studies/akamai-technologies/)
+- [Land-o-Lakes](/case-studies/land-olakes/)
+- [Vodafone](/case-studies/vodafone/)
+- [BT](/case-studies/bt-enterprise/)
+
+- [LinkedIn](https://www.linkedin.com/company/siteimprove)
+- [Twitter](https://twitter.com/siteimprove)
+- [Facebook](https://www.facebook.com/Siteimprove)
+- [Instagram](https://www.instagram.com/siteimprove/)
+- [Threads](https://www.threads.com/@siteimprove)
+- [YouTube](https://www.youtube.com/channel/UCVost3tZNte0o4V2motH2IA)
+- [Bluesky](https://bsky.app/profile/siteimprove.com)
+
+[Image: We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027.]
+
+;
+
+[;](https://www.greatplacetowork.com/certified-company/1271608)
+
+- [Privacy](/privacy/)
+- [Legal](/legal/)
+- [Accessibility Statement](/why-siteimprove/accessibility-statement/)
+
+Siteimprove is a registered trademark of Siteimprove A/S - All rights reserved. 2026
+
+Change language: English
+
+- [
+                                        Deutsch
+                                    ](/de/page-not-found/)
+
+</pre></details>
+  </section>
+
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
+  <section class="sk-preview-section">
+    <div class="sk-preview-head">
+      <span>page preview · the URL we fetched</span>
+      <a class="url" href="https://www.siteimprove.com/glossary/data-privacy/" target="_blank" rel="noopener">https://www.siteimprove.com/glossary/data-privacy/ ↗</a>
+    </div>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://www.siteimprove.com/glossary/data-privacy/"
+         alt="Screenshot of siteimprove.com"
+         loading="lazy">
+    <p class="sk-preview-fallback">
+      Couldn't render a preview for this site.
+      <a href="https://www.siteimprove.com/glossary/data-privacy/" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
+    </p>
+  </section>
+
+  <!-- ─── §3 AILANG × your business ─── -->
+  <section class="sk-section">
+    <p class="sk-section-label">§3 · AILANG × your business</p>
+    <p class="sk-score-pretext"><span class="sk-domain">siteimprove.com</span> scored <strong>3/10</strong> on privacy. AILANG opportunity is therefore <strong>7/10</strong>. Here's where it would land first.</p>
+    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
+  email:    string<pii>,
+  postcode: string<pii>,
+  signupDate: string
+}
+-- assigning customer.email to a log line is a type error.</pre></article>
+<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
+  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre></article>
+<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
+-- Cloud Run: same .ail file packaged as a container.
+-- Native CLI: same .ail file, ailang run.</pre></article></div>
+  </section>
+
+  <!-- ─── §4 Guarantee ─── -->
+  <section class="sk-guarantee">
+    <h2>How this page was made</h2>
+    <pre class="sig">func sketchSite(url: string&lt;pii&gt;, topic: Topic) -&gt; Sketch
+  ! {Net @limit=1, AI @limit=5, FS @limit=4, Process, Declassify}</pre>
+    <ul class="translations">
+      <li><strong>Read your site once.</strong> No second fetch, no crawl.</li>
+      <li><strong>Up to five AI calls, capped.</strong> No runaway analysis.</li>
+      <li><strong>Four file writes.</strong> The report, the topic index, the rubric breakdown, the queue ack. Nothing else touched.</li>
+      <li><strong>Process invokes docparse</strong> for structured extraction. The capability is visible in the type.</li>
+      <li><strong>Your URL crossed Declassify.</strong> No PII survives into this page.</li>
+    </ul>
+    <button class="sk-breakdown-toggle" onclick="document.getElementById('sk-breakdown').classList.toggle('open')">Toggle breakdown ▾</button>
+    <div class="sk-breakdown open" id="sk-breakdown">
+      <table>
+        <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+<tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
+<tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
+<tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
+<tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
+<tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
+<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
+<tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
+<tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
+<tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
+<tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
+<tr><td>Cross-runtime / deployment portability</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change</td></tr>
+<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sk-rubric-link">The rubric that scored this page is open-source AILANG code — every signal extractor is contract-verified. <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric →</a></p>
+  </section>
+
+  <!-- ─── Footer handshake ─── -->
+  <footer class="sk-footer">
+    <p class="pitch">Public sketch. The private version reads your full site against your data — <a href="mailto:mark@aitanalabs.com">mark@aitanalabs.com</a></p>
+    <p style="margin: 6px 0 14px;">
+      <a class="li-cta" href="https://www.linkedin.com/company/sunholo" target="_blank" rel="noopener">
+        <svg class="li-cta-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 0H5C2.24 0 0 2.24 0 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5V5c0-2.76-2.24-5-5-5zM8 19H5V8h3v11zm-1.5-12.5C5.67 6.5 5 5.83 5 5s.67-1.5 1.5-1.5S8 4.17 8 5s-.67 1.5-1.5 1.5zM19 19h-3v-5.7c0-3.05-3.5-2.8-3.5 0V19h-3V8h3v1.5c1.4-2.6 6.5-2.8 6.5 2.5V19z"/>
+        </svg>
+        Sketch another URL on LinkedIn
+        <span class="li-cta-arrow">↗</span>
+      </a>
+    </p>
+    <div class="links">
+      <a href="../">← privacy topic</a>
+      <a href="../../../">← LinkedIn demo</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
+  // Hide any image thumbnail that fails to load (broken src, CORS, 404).
+  // The whole link wrapper is removed so we don't show empty boxes.
+  document.querySelectorAll('.sk-img-thumb img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      var thumb = img.closest('.sk-img-thumb');
+      if (thumb) thumb.style.display = 'none';
+    });
+  });
+
+  // Fill the rank callout from the topic's leaderboard.json. Server-render
+  // can't know the rank ahead of time — it changes whenever another sketch
+  // is added or re-scored. JS reads ../leaderboard.json (relative to this
+  // sketch dir), finds our entry by the sketch directory name, and updates
+  // #sk-rank-num. If no match (e.g. this sketch was deduped out by another
+  // entry on the same domain), the whole callout stays hidden.
+  (function () {
+    var callout = document.getElementById('sk-rank-callout');
+    if (!callout) return;
+    var segs = window.location.pathname.split('/').filter(Boolean);
+    var slug = segs[segs.length - 1];
+    if (!slug) return;
+    fetch('../leaderboard.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.entries)) return;
+        var entry = data.entries.find(function (e) {
+          return e.sketchUrl === slug + '/' || e.sketchUrl === slug;
+        });
+        if (entry && entry.rank > 0) {
+          var span = document.getElementById('sk-rank-num');
+          if (span) span.textContent = '#' + entry.rank;
+          callout.hidden = false;
+        }
+      })
+      .catch(function () { /* silent: callout stays hidden */ });
+  })();
+</script>
+
+</body>
+</html>
