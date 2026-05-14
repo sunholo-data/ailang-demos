@@ -84,6 +84,30 @@
     padding: 0 28px;
   }
 
+  /* ─── Header-nav override for this page only ─── */
+  /* Shared design system uses a faded text-only nav. On the LinkedIn
+     hub we want the topic links to read as obviously-clickable pills. */
+  .header .header-nav { margin-left: auto; gap: 6px; }
+  .header .header-nav a {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 6px 12px;
+    border-radius: 999px;
+    transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease;
+  }
+  .header .header-nav a:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .header .header-badge { margin-left: 0; }
+
   /* ─── Hero ─── */
   .ll-hero {
     padding: 88px 0 92px;
@@ -1178,17 +1202,54 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    transition: border-color .15s ease, transform .15s ease;
+    transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease, background .15s ease;
     min-width: 0;
+    position: relative;
+  }
+  /* Floating arrow chip top-right marks the card as navigable. */
+  .ll-topic-card::after {
+    content: "→";
+    position: absolute;
+    top: 14px; right: 16px;
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--primary-faded);
+    color: var(--primary);
+    border-radius: 50%;
+    font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+    transition: transform .18s ease, background .18s ease, color .18s ease;
+    pointer-events: none;
   }
   .ll-topic-card:hover {
     border-color: var(--primary);
     transform: translateY(-2px);
+    box-shadow: 0 12px 28px -16px rgba(231, 60, 23, 0.28);
+    background: #fff;
   }
+  .ll-topic-card:hover::after {
+    background: var(--primary);
+    color: #fff;
+    transform: translateX(3px);
+  }
+  /* CTA strip at the bottom of each card — readers shouldn't have to
+     hover to know the card opens a leaderboard. */
+  .ll-topic-card .topic-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.28);
+    padding-bottom: 2px;
+    align-self: flex-start;
+    margin-top: 4px;
+    transition: border-color .15s ease;
+  }
+  .ll-topic-card:hover .topic-cta { border-bottom-color: var(--primary); }
   .ll-topic-card .topic-name {
     font-family: var(--font-display, "Montserrat");
     font-weight: 700; font-size: 17px;
     color: var(--text-primary); line-height: 1.2;
+    padding-right: 36px; /* leave room for the arrow */
   }
   .ll-topic-card .topic-name .accent { color: var(--primary); }
   .ll-topic-card .topic-desc {
@@ -1351,16 +1412,19 @@
         <span class="topic-name">AILANG <span class="accent">×</span> agent-ready</span>
         <p class="topic-desc">When agents start transacting on your behalf — make your site speak their protocols.</p>
         <div class="topic-foot"><span class="topic-hashtag">#ailangAgentReady</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+        <span class="topic-cta">Open leaderboard →</span>
       </a>
       <a class="ll-topic-card" href="topics/privacy/" data-topic="privacy" data-has-leaderboard="true">
         <span class="topic-name">AILANG <span class="accent">×</span> privacy</span>
         <p class="topic-desc">Customer data labelled at the type level. Crossing the boundary is a compiler error.</p>
         <div class="topic-foot"><span class="topic-hashtag">#ailangPrivacy</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+        <span class="topic-cta">Open leaderboard →</span>
       </a>
       <a class="ll-topic-card" href="topics/portable/" data-topic="portable" data-has-leaderboard="true">
         <span class="topic-name">AILANG <span class="accent">×</span> portability</span>
         <p class="topic-desc">Switch from Anthropic to Gemini to OpenAI without a rewrite.</p>
         <div class="topic-foot"><span class="topic-hashtag">#ailangPortable</span><span class="topic-count"><span class="num">0</span> sketches</span></div>
+        <span class="topic-cta">Open leaderboard →</span>
       </a>
     </div>
     <div class="ll-topics-trigger">

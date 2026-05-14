@@ -39,31 +39,47 @@
   .tx-logo img { width: 28px; height: 28px; }
   .tx-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
   /* Cross-topic navigator — sits between the logo and the back link.
-     The current topic is marked .is-active by the renderer so it looks
-     pressed-in rather than clickable. */
+     Coral-bordered pills so the links read as obviously clickable.
+     The current topic is marked .is-active so it looks pressed-in. */
   .tx-topnav {
-    display: flex; gap: 4px;
-    margin-left: 4px;
-    font-family: var(--font-mono); font-size: 12px;
+    display: flex; gap: 6px;
+    margin-left: 8px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
     flex-wrap: wrap;
   }
   .tx-topnav a {
-    color: var(--text-muted);
-    text-decoration: none;
-    padding: 6px 10px;
-    border-radius: 999px;
-    transition: color .15s, background .15s;
-  }
-  .tx-topnav a:hover { color: var(--primary); background: var(--primary-faded); }
-  .tx-topnav a.is-active {
+    display: inline-flex; align-items: center;
     color: var(--primary);
-    background: var(--primary-faded);
+    background: #fff;
+    text-decoration: none;
+    padding: 6px 12px;
+    border: 1px solid rgba(231, 60, 23, 0.32);
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    transition: color .15s, background .15s, border-color .15s, transform .12s;
+  }
+  .tx-topnav a:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+  .tx-topnav a.is-active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
     cursor: default;
-    font-weight: 600;
+    transform: none;
+  }
+  .tx-topnav a.is-active::before {
+    content: "● ";
+    font-size: 9px;
+    margin-right: 5px;
+    opacity: 0.85;
   }
   @media (max-width: 640px) {
-    .tx-topnav { font-size: 11px; gap: 2px; }
-    .tx-topnav a { padding: 5px 8px; }
+    .tx-topnav { font-size: 11px; gap: 4px; margin-left: 4px; }
+    .tx-topnav a { padding: 5px 9px; }
   }
 
   .tx-hero {
