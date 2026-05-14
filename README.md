@@ -78,11 +78,16 @@ BigQuery integration with contract-verified SQL generation. AILANG contracts gua
 
 ### Outbound — LinkedIn
 
-AILANG publishing to its own LinkedIn company page, then reading the replies back. The CLI handles OAuth2, REST publish, and comment ingestion all in typed AILANG with capability budgets. An hourly GitHub Actions cron refreshes the comments JSON; the demo page renders them.
+AILANG publishing to its own LinkedIn company page, then reading the replies back and turning them into public scored sketches. The CLI handles OAuth2 (via `std/net.urlEncodeForm`), REST publish, and comment ingestion, all in typed AILANG with capability budgets (`Net @limit=N`). A 3-hourly GitHub Actions cron sweeps every AILANG post for comments — LinkedIn caps the `socialActions/comments-GET_ALL` endpoint at 100/user/day, hence the 3h cadence.
+
+The comment-driven sketches feature is the heart of the demo: when a reader replies with `<your-url> #ailangAgentReady` (or `#ailangPrivacy` / `#ailangPortable`), the next cron tick fetches the URL, runs it through AILANG Parse + a single Gemini classification call, scores it against a contract-verified rubric (20 signals, each mapped to a real AILANG primitive — IFC labels, capability budgets, `requires`/`ensures` contracts, `std/ai`, three-runtime deploy), and publishes a public sketch at `/linkedin/topics/<topic>/<your-domain>/`. Three leaderboards rank the entries.
 
 | Demo | Live Link | Description |
 |------|-----------|-------------|
-| **LinkedIn** | [Try it](https://www.sunholo.com/ailang-demos/linkedin/) | A language that posts for itself — sees the OAuth dance, the `Net @limit=N` budgets, and the comments coming back |
+| **LinkedIn — overview** | [Try it](https://www.sunholo.com/ailang-demos/linkedin/) | The transmission strip, the live post card, the three threads, real reader comments |
+| **agent-ready leaderboard** | [Top board](https://www.sunholo.com/ailang-demos/linkedin/topics/agent-ready/) | Sites scored on A2A, OpenAPI, MCP, webhooks, rate limits, auth, idempotency |
+| **privacy leaderboard** | [Top board](https://www.sunholo.com/ailang-demos/linkedin/topics/privacy/) | Sites scored on E2EE, compliance certs, data-minimisation, residency language |
+| **portable leaderboard** | [Top board](https://www.sunholo.com/ailang-demos/linkedin/topics/portable/) | Sites scored on multi-provider AI, BYO key, cross-runtime claims |
 
 ### Website Builder & AILANG Cloud
 
