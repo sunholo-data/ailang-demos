@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -491,9 +531,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developers.mews.com</p>
-    <h2 class="sk-prom-audience">Software developers, engineers, and technical leaders interested in Mews' research and development activities, engineering practices, and open-source contributions.</h2>
-    <blockquote class="sk-prom-narrative">Mews Developers is the official platform for Mews' Research & Development department. It provides technical insights through blog posts and podcasts on software engineering, AI, and leadership. The site also highlights Mews' open-source projects and fosters community engagement around their technology.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Mews R&D</span> <span class="sk-chip">Software engineering</span> <span class="sk-chip">Artificial intelligence</span> <span class="sk-chip">Open-source software</span> <span class="sk-chip">Coding agents</span> <span class="sk-chip">Release management</span></div>
+    <h2 class="sk-prom-audience">Software developers, engineers, and R&D professionals interested in Mews' technology, open-source projects, and engineering practices.</h2>
+    <blockquote class="sk-prom-narrative">This website serves as a technical blog and resource hub for Mews' R&D and engineering division. It features articles on AI in leadership and coding, product development, and showcases their open-source projects on GitHub, including libraries in C#, Dart, and Kotlin. It aims to share insights and foster community.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">AI coding agents</span> <span class="sk-chip">Open source projects</span> <span class="sk-chip">Software engineering</span> <span class="sk-chip">R&D community</span> <span class="sk-chip">Release notes</span> <span class="sk-chip">Mews technology</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on developers.mews.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">30</span> headings</span><span class="stat"><span class="num">32</span> images</span><span class="stat"><span class="num">24</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">31</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">86</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">14</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">14</span> articles</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">55</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">30</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Mews R&D</span> <span class="sk-chip" title="extracted heading">[How I Use AI to Manage A Tribe Without Losing the Plot](https://developers.mews.com/using-ai-to-manage-a-tribe/)</span> <span class="sk-chip" title="extracted heading">[Michael Ruml](https://developers.mews.com/author/michael-ruml/)</span> <span class="sk-chip" title="extracted heading">[Who’s really writing your code? ](https://developers.mews.com/whos-really-writing-your-code/)</span> <span class="sk-chip" title="extracted heading">[Toni Esteso](https://developers.mews.com/author/toni-esteso/)</span> <span class="sk-chip" title="extracted heading">[Navigation is the real cost of AI coding agents](https://developers.mews.com/navigation-is-the-real-cost-of-ai-coding-agents/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">32</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/cropped-MEWS_2026_WORDMARK_BLACK.png" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/cropped-MEWS_2026_WORDMARK_BLACK.png" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/white-cross.svg" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/white-cross.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/white-cross.svg" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/white-cross.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/white-cross.svg" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/white-cross.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/JN_240711_Mewscon_3849-2-600x400.jpg" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/JN_240711_Mewscon_3849-2-600x400.jpg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.mews.com/wp-content/uploads/michael-ruml-150x150.jpeg" target="_blank" rel="noopener" title=""><img src="https://developers.mews.com/wp-content/uploads/michael-ruml-150x150.jpeg" alt="" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">24</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">[Leadership](https://developers.mews.com/tag/leadership/)</span> <span class="sk-chip" title="list item">[Engineering](https://developers.mews.com/tag/engineering/)</span> <span class="sk-chip" title="list item">[May 13, 2026](https://developers.mews.com/2026/05/13/)</span> <span class="sk-chip" title="list item">[Dart](https://developers.mews.com/language/dart/)</span> <span class="sk-chip" title="list item">[Kotlin](https://developers.mews.com/language/kotlin/)</span> <span class="sk-chip" title="list item">[C#](https://developers.mews.com/language/c/)</span> <span class="sk-chip" title="list item">[Contact](https://developers.mews.com/contact/)</span> <span class="sk-chip" title="list item">[Mews.com ](https://mews.com)</span> <span class="sk-chip" title="list item">[Privacy Statement](https://developers.mews.com/privacy-statement/)</span> <span class="sk-chip" title="list item">[Cookie Policy](https://developers.mews.com/cookie-policy-eu/)</span> <span class="sk-chip" title="list item">[Configure Cookies](https://developers.mews.com/cookie-policy-eu/#cmplz-manage-consent-container)</span> <span class="sk-chip" title="list item">Manage options</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">31</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://developers.mews.com" target="_blank" rel="noopener" title="https://developers.mews.com">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/using-ai-to-manage-a-tribe/" target="_blank" rel="noopener" title="https://developers.mews.com/using-ai-to-manage-a-tribe/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/author/michael-ruml/" target="_blank" rel="noopener" title="https://developers.mews.com/author/michael-ruml/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/whos-really-writing-your-code/" target="_blank" rel="noopener" title="https://developers.mews.com/whos-really-writing-your-code/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/author/toni-esteso/" target="_blank" rel="noopener" title="https://developers.mews.com/author/toni-esteso/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/2025-at-mews/" target="_blank" rel="noopener" title="https://developers.mews.com/2025-at-mews/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/author/tereza-vankova/" target="_blank" rel="noopener" title="https://developers.mews.com/author/tereza-vankova/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/navigation-is-the-real-cost-of-ai-coding-agents/" target="_blank" rel="noopener" title="https://developers.mews.com/navigation-is-the-real-cost-of-ai-coding-agents/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/author/fredrik-claesson/" target="_blank" rel="noopener" title="https://developers.mews.com/author/fredrik-claesson/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/your-release-notes-are-a-product-lever/" target="_blank" rel="noopener" title="https://developers.mews.com/your-release-notes-are-a-product-lever/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/author/stephan-delbos/" target="_blank" rel="noopener" title="https://developers.mews.com/author/stephan-delbos/">(link)</a> <a class="sk-chip sk-chip-link" href="https://developers.mews.com/blog/" target="_blank" rel="noopener" title="https://developers.mews.com/blog/">All Posts</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Mews Developers | Make it remarkable
 
 
@@ -887,15 +927,15 @@ Website by
     <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
   pricing.ail catalogue.ail
 -- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre></article>
+-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
   requires { qty > 0, qty <= 10 }
   ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre></article>
+-- the MCP server exposes this with its contract intact.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
 -- MCP client query the language directly:
 --   stdlib_search "URL encoding"
---   submit_feedback "..."</pre></article></div>
+--   submit_feedback "..."</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

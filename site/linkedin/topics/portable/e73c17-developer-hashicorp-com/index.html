@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -485,9 +525,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developer.hashicorp.com</p>
-    <h2 class="sk-prom-audience">Software developers, DevOps engineers, and infrastructure architects looking to automate and manage their cloud and on-prem infrastructure.</h2>
-    <blockquote class="sk-prom-narrative">This site introduces Terraform, an infrastructure as code tool by HashiCorp. It allows users to define, provision, and manage cloud and on-prem resources using human-readable configuration files. Terraform automates infrastructure deployment through a consistent workflow of writing, planning, and applying changes, leveraging numerous providers for various platforms and services.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as Code (IaC)</span> <span class="sk-chip">Cloud resources</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Terraform Registry</span> <span class="sk-chip">Configuration files</span></div>
+    <h2 class="sk-prom-audience">IT professionals, developers, and operations teams seeking to manage and provision cloud and on-premise infrastructure using code.</h2>
+    <blockquote class="sk-prom-narrative">Terraform is an infrastructure as code tool that allows users to define, provision, and manage cloud and on-premise resources using human-readable configuration files. It uses providers to interact with APIs, following a workflow of writing configurations, planning changes, and applying them safely and efficiently.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as code</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Configuration files</span> <span class="sk-chip">Cloud resources</span> <span class="sk-chip">Terraform Registry</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on developer.hashicorp.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">10</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">12</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Intro to Terraform</span> <span class="sk-chip" title="extracted heading">What is Terraform?</span> <span class="sk-chip" title="extracted heading">How does Terraform work?</span> <span class="sk-chip" title="extracted heading">Why Terraform?</span> <span class="sk-chip" title="extracted heading">Manage any infrastructure</span> <span class="sk-chip" title="extracted heading">Track your infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Infrastructure Lifecycle Management
 
 [
@@ -875,11 +915,11 @@ Theme
   model  = "claude-haiku-4-5"
   -- model = "gemini-2.5-flash" — also works
   -- model = "gpt-5.1-nano"     — also works
-);</pre></article>
+);</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
--- same AILANG code, four different provider paths underneath.</pre></article>
+-- same AILANG code, four different provider paths underneath.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
--- the eval harness pins the exact resolved model ID.</pre></article></div>
+-- the eval harness pins the exact resolved model ID.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

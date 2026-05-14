@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -485,10 +525,520 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on about.gitlab.com</p>
-    <h2 class="sk-prom-audience">Developers and system administrators seeking to acquire and deploy the GitLab software platform.</h2>
-    <blockquote class="sk-prom-narrative">This page facilitates the download and installation of GitLab software. It features underlying scripts primarily dedicated to managing user consent for data tracking and analytics, alongside basic styling definitions for navigation elements. The content focuses on the technical setup rather than product features.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">GitLab</span> <span class="sk-chip">Software download</span> <span class="sk-chip">Installation process</span> <span class="sk-chip">Cookie consent management</span> <span class="sk-chip">DevOps platform</span></div>
-    <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">via AI extraction</span></div>
+    <h2 class="sk-prom-audience">Organizations and technical professionals (e.g., system administrators, DevOps engineers) seeking to deploy and manage a comprehensive DevSecOps platform.</h2>
+    <blockquote class="sk-prom-narrative">GitLab offers an intelligent orchestration platform for the entire DevSecOps lifecycle, providing solutions for automation, security, and measurement. It supports various self-managed installation methods, including cloud-native options like Docker and Helm Chart, designed to meet diverse organizational needs and technical capabilities.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">GitLab</span> <span class="sk-chip">DevSecOps</span> <span class="sk-chip">CI/CD</span> <span class="sk-chip">Source Code Management</span> <span class="sk-chip">Kubernetes</span> <span class="sk-chip">Application Security Testing</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on about.gitlab.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">50</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">9</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">25</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">24</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">9</span> headers</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">3</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">10</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">50</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Install GitLab</span> <span class="sk-chip" title="extracted heading">Learn which method of installation best supports your organization’s needs.</span> <span class="sk-chip" title="extracted heading">Install Self-Managed GitLab</span> <span class="sk-chip" title="extracted heading">All in one</span> <span class="sk-chip" title="extracted heading">Install method</span> <span class="sk-chip" title="extracted heading">GitLab Environment Toolkit (GET)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Platform
+
+[
+
+Platform
+The intelligent orchestration platform for DevSecOpsExplore our Platform ](/platform/)[
+
+GitLab Duo Agent Platform
+Agentic AI for the entire software lifecycleMeet GitLab Duo ](/gitlab-duo-agent-platform/)[
+
+Why GitLab
+See the top reasons enterprises choose GitLabLearn more ](/why-gitlab/)</span> <span class="sk-chip" title="list item">Product
+
+Automation
+[ CI/CD](/solutions/continuous-integration/)
+[ GitLab Duo Agent Platform](/gitlab-duo-agent-platform/)
+[ Source Code Management](/solutions/source-code-management/)
+[ Automated Software Delivery](/solutions/delivery-automation/)
+
+Security
+[ Application Security Testing](/solutions/application-security-testing/)
+[ Software Supply Chain Security](/solutions/supply-chain/)
+[ Software Compliance](/solutions/software-compliance/)
+
+Measurement
+[ Visibility & Measurement](/solutions/visibility-measurement/)
+[ Value Stream Management](/solutions/value-stream-management/)
+[ Analytics & Insights](/solutions/analytics-and-insights/)[View all Solutions ](/solutions/)
+
+GitLab for
+[ Enterprise](/enterprise/)
+[ Small Business](/small-business/)
+[ Public Sector](/solutions/public-sector/)</span> <span class="sk-chip" title="list item">[ CI/CD](/solutions/continuous-integration/)</span> <span class="sk-chip" title="list item">[ GitLab Duo Agent Platform](/gitlab-duo-agent-platform/)</span> <span class="sk-chip" title="list item">[ Source Code Management](/solutions/source-code-management/)</span> <span class="sk-chip" title="list item">[ Automated Software Delivery](/solutions/delivery-automation/)</span> <span class="sk-chip" title="list item">[ Application Security Testing](/solutions/application-security-testing/)</span> <span class="sk-chip" title="list item">[ Software Supply Chain Security](/solutions/supply-chain/)</span> <span class="sk-chip" title="list item">[ Software Compliance](/solutions/software-compliance/)</span> <span class="sk-chip" title="list item">[ Visibility & Measurement](/solutions/visibility-measurement/)</span> <span class="sk-chip" title="list item">[ Value Stream Management](/solutions/value-stream-management/)</span> <span class="sk-chip" title="list item">[ Analytics & Insights](/solutions/analytics-and-insights/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">25</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://about.gitlab.com/gitlab-duo-agent-platform/" target="_blank" rel="noopener" title="https://about.gitlab.com/gitlab-duo-agent-platform/">GitLab Duo Agent Platform</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/solutions/code-suggestions/" target="_blank" rel="noopener" title="https://about.gitlab.com/solutions/code-suggestions/">Code Suggestions (AI)</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/solutions/continuous-integration/" target="_blank" rel="noopener" title="https://about.gitlab.com/solutions/continuous-integration/">CI/CD</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/partners/technology-partners/aws/" target="_blank" rel="noopener" title="https://about.gitlab.com/partners/technology-partners/aws/">GitLab on AWS</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/partners/technology-partners/google-cloud-platform/" target="_blank" rel="noopener" title="https://about.gitlab.com/partners/technology-partners/google-cloud-platform/">GitLab on Google Cloud</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/why-gitlab/" target="_blank" rel="noopener" title="https://about.gitlab.com/why-gitlab/">Why GitLab?</a> <a class="sk-chip sk-chip-link" href="https://gitlab.com/users/sign_in/" target="_blank" rel="noopener" title="https://gitlab.com/users/sign_in/">Sign in</a> <a class="sk-chip sk-chip-link" href="https://gitlab.com/-/trial_registrations/new?glm_source=about.gitlab.com&glm_content=default-saas-trial/" target="_blank" rel="noopener" title="https://gitlab.com/-/trial_registrations/new?glm_source=about.gitlab.com&glm_content=default-saas-trial/">Get free trial</a> <a class="sk-chip sk-chip-link" href="https://about.gitlab.com/events/transcend/virtual/" target="_blank" rel="noopener" title="https://about.gitlab.com/events/transcend/virtual/">See how agentic AI transforms software deliverySign up for GitLab Transcend on June 10</a> <a class="sk-chip sk-chip-link" href="https://gitlab.com/gitlab-org/gitlab-environment-toolkit" target="_blank" rel="noopener" title="https://gitlab.com/gitlab-org/gitlab-environment-toolkit">GitLab Environment Toolkit (GET)
+
+Recommended for customers with any number of seats. 
+ GitLab handles your infrastructure and the application install.
+Installation details</a> <a class="sk-chip sk-chip-link" href="https://docs.gitlab.com/install/docker/" target="_blank" rel="noopener" title="https://docs.gitlab.com/install/docker/">Docker
+
+Recommended for customers with 500 seats or more. 
+ Requires container skillset or cloud native skillset.
+Installation details</a> <a class="sk-chip sk-chip-link" href="https://docs.gitlab.com/install/install_methods/#helm-chart" target="_blank" rel="noopener" title="https://docs.gitlab.com/install/install_methods/#helm-chart">Helm Chart
+
+Recommended for customers with 500 seats or more. 
+ Requires containerization and Kubernetes experience.
+Installation details</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Download and install GitLab
+
+
+Close
+
+To search repositories and projects, login to
+
+[gitlab.com](https://gitlab.com/users/sign_in/)
+
+.
+
+Suggestions
+
+[GitLab Duo Agent Platform](/gitlab-duo-agent-platform/)
+
+[Code Suggestions (AI)](/solutions/code-suggestions/)
+
+[CI/CD](/solutions/continuous-integration/)
+
+[GitLab on AWS](/partners/technology-partners/aws/)
+
+[GitLab on Google Cloud](/partners/technology-partners/google-cloud-platform/)
+
+[Why GitLab?](/why-gitlab/)
+
+*Header:*
+- Platform
+
+[
+
+Platform
+The intelligent orchestration platform for DevSecOpsExplore our Platform ](/platform/)[
+
+GitLab Duo Agent Platform
+Agentic AI for the entire software lifecycleMeet GitLab Duo ](/gitlab-duo-agent-platform/)[
+
+Why GitLab
+See the top reasons enterprises choose GitLabLearn more ](/why-gitlab/)
+- Product
+
+Automation
+[ CI/CD](/solutions/continuous-integration/)
+[ GitLab Duo Agent Platform](/gitlab-duo-agent-platform/)
+[ Source Code Management](/solutions/source-code-management/)
+[ Automated Software Delivery](/solutions/delivery-automation/)
+
+Security
+[ Application Security Testing](/solutions/application-security-testing/)
+[ Software Supply Chain Security](/solutions/supply-chain/)
+[ Software Compliance](/solutions/software-compliance/)
+
+Measurement
+[ Visibility &amp; Measurement](/solutions/visibility-measurement/)
+[ Value Stream Management](/solutions/value-stream-management/)
+[ Analytics &amp; Insights](/solutions/analytics-and-insights/)[View all Solutions ](/solutions/)
+
+GitLab for
+[ Enterprise](/enterprise/)
+[ Small Business](/small-business/)
+[ Public Sector](/solutions/public-sector/)
+- [ CI/CD](/solutions/continuous-integration/)
+- [ GitLab Duo Agent Platform](/gitlab-duo-agent-platform/)
+- [ Source Code Management](/solutions/source-code-management/)
+- [ Automated Software Delivery](/solutions/delivery-automation/)
+- [ Application Security Testing](/solutions/application-security-testing/)
+- [ Software Supply Chain Security](/solutions/supply-chain/)
+- [ Software Compliance](/solutions/software-compliance/)
+- [ Visibility &amp; Measurement](/solutions/visibility-measurement/)
+- [ Value Stream Management](/solutions/value-stream-management/)
+- [ Analytics &amp; Insights](/solutions/analytics-and-insights/)
+- [ Enterprise](/enterprise/)
+- [ Small Business](/small-business/)
+- [ Public Sector](/solutions/public-sector/)
+- [Pricing](/pricing/)
+- Resources
+
+Getting started
+[ Install](/install/)
+[ Quick start guides](/get-started/)
+[ Learn](https://university.gitlab.com/)
+[ Product documentation](https://docs.gitlab.com/)
+[ Best practice videos](/getting-started-videos/)
+[ Integrations](/integrations/)
+
+Discover
+[ Customer success stories](/customers/)
+[ Blog](/blog/)
+[ The Source](/the-source/)
+[ Remote](https://handbook.gitlab.com/handbook/company/culture/all-remote/)
+
+Connect
+[ GitLab Services](/services/)
+[ Community](/community/)
+[ Forum](https://forum.gitlab.com/)
+[ Events](/events/)
+[ Partners](/partners/)[View all resources ](/resources/)
+
+[
+
+What’s new in GitLab
+Stay updated with our latest features and improvements.Read the latest ](/whats-new/)
+- [ Install](/install/)
+- [ Quick start guides](/get-started/)
+- [ Learn](https://university.gitlab.com/)
+- [ Product documentation](https://docs.gitlab.com/)
+- [ Best practice videos](/getting-started-videos/)
+- [ Integrations](/integrations/)
+- [ Customer success stories](/customers/)
+- [ Blog](/blog/)
+- [ The Source](/the-source/)
+- [ Remote](https://handbook.gitlab.com/handbook/company/culture/all-remote/)
+- [ GitLab Services](/services/)
+- [ Community](/community/)
+- [ Forum](https://forum.gitlab.com/)
+- [ Events](/events/)
+- [ Partners](/partners/)
+- Company
+
+[ About](/company/)
+[ Jobs](/jobs/)
+[ Events](/events/)
+[ Leadership](/company/team/e-group/)
+[ Team](/company/team/)
+[ Handbook](https://handbook.gitlab.com/)
+[ Investor relations](https://ir.gitlab.com/)
+[ Trust Center](/security/)
+[ AI Transparency Center](/ai-transparency-center/)
+[ Newsletter](/company/contact/#contact-forms)
+[ Press](/press/)
+- [ About](/company/)
+- [ Jobs](/jobs/)
+- [ Events](/events/)
+- [ Leadership](/company/team/e-group/)
+- [ Team](/company/team/)
+- [ Handbook](https://handbook.gitlab.com/)
+- [ Investor relations](https://ir.gitlab.com/)
+- [ Trust Center](/security/)
+- [ AI Transparency Center](/ai-transparency-center/)
+- [ Newsletter](/company/contact/#contact-forms)
+- [ Press](/press/)
+- Contact us
+
+[ Talk to sales](/sales/)
+[ Support portal](https://support.gitlab.com)
+[ Customer portal](https://customers.gitlab.com/customers/sign_in/)
+- [ Talk to sales](/sales/)
+- [ Support portal](https://support.gitlab.com)
+- [ Customer portal](https://customers.gitlab.com/customers/sign_in/)
+
+[Talk to sales](/sales/)
+
+[Get free trial](https://gitlab.com/-/trial_registrations/new?glm_source=about.gitlab.com&amp;glm_content=default-saas-trial/)
+
+[Sign in](https://gitlab.com/users/sign_in/)
+
+- [English](/install/)
+- [Deutsch](/de-de/install/)
+- [Español](/es/install/)
+- [Français](/fr-fr/install/)
+- [Italiano](/it-it/install/)
+- [日本語](/ja-jp/install/)
+- [Português](/pt-br/install/)
+
+[Get free trial](https://gitlab.com/-/trial_registrations/new?glm_source=about.gitlab.com&amp;glm_content=default-saas-trial/)
+
+*Header:*
+[See how agentic AI transforms software deliverySign up for GitLab Transcend on June 10](/events/transcend/virtual/)
+
+Jump to a section
+
+On this page
+
+[Install Self-Managed GitLab](#install-self-managed-gitlab)
+
+[All in one](#all-in-one)
+
+[Cloud Native](#cloud-native)
+
+[Linux package](#linux-package)
+
+[Large installations](#large-installations)
+
+[Other deployment methods](#other-deployment-methods)
+
+[Updates and Upgrades](#updates-and-upgrades)
+
+[Just looking to take GitLab for a spin? 
+ Get a free Self-Managed trial](https://gitlab.com/-/trials/new?glm_content=default-saas-trial&amp;glm_source=about.gitlab.com/install/)
+
+# Install GitLab
+
+## Learn which method of installation best supports your organization’s needs.
+
+[Install Self-Managed GitLab](#install-self-managed-gitlab)
+
+[Other deployment methods](#other-deployment-methods)
+
+## Install Self-Managed GitLab
+
+Choose which technology base and installation method best supports your organization’s needs.
+
+For cloud provider specific instructions: [Amazon Web Services](https://docs.gitlab.com/install/aws/), [Microsoft Azure](https://docs.gitlab.com/install/azure/), [Google Cloud Platform](https://docs.gitlab.com/install/google_cloud_platform/)
+
+## All in one
+
+### Install method
+
+#### GitLab Environment Toolkit (GET)
+
+#### 
+
+Recommended for customers with any number of seats. 
+ GitLab handles your infrastructure and the application install.
+
+Installation details
+
+[GitLab Environment Toolkit (GET)
+
+Recommended for customers with any number of seats. 
+ GitLab handles your infrastructure and the application install.
+Installation details](https://gitlab.com/gitlab-org/gitlab-environment-toolkit)
+
+## Cloud native
+
+### Install method
+
+#### Docker
+
+#### 
+
+Recommended for customers with 500 seats or more. 
+ Requires container skillset or cloud native skillset.
+
+Installation details
+
+[Docker
+
+Recommended for customers with 500 seats or more. 
+ Requires container skillset or cloud native skillset.
+Installation details](https://docs.gitlab.com/install/docker/)
+
+#### Helm Chart
+
+#### 
+
+Recommended for customers with 500 seats or more. 
+ Requires containerization and Kubernetes experience.
+
+Installation details
+
+[Helm Chart
+
+Recommended for customers with 500 seats or more. 
+ Requires containerization and Kubernetes experience.
+Installation details](https://docs.gitlab.com/install/install_methods/#helm-chart)
+
+#### GitLab Operator
+
+#### 
+
+Recommended for customers with 500 seats or more. 
+ Requires containerization and Kubernetes experience.
+
+Installation details
+
+[GitLab Operator
+
+Recommended for customers with 500 seats or more. 
+ Requires containerization and Kubernetes experience.
+Installation details](https://docs.gitlab.com/operator/installation/)
+
+## Linux package
+
+### Install method
+
+#### Linux Package
+
+#### 
+
+Recommended for customers with less than 1000 seats. 
+ Best fit for bare-metal and virtual machines.
+
+Installation details
+
+[Linux Package
+
+Recommended for customers with less than 1000 seats. 
+ Best fit for bare-metal and virtual machines.
+Installation details](https://docs.gitlab.com/install/install_methods/#linux-package)
+
+## Large installations
+
+### Install method
+
+#### Reference Architectures
+
+#### 
+
+Recommended for customers with 1000 seats or more. 
+ Requires VM skillset or cloud native skillset.
+
+Installation details
+
+[Reference Architectures
+
+Recommended for customers with 1000 seats or more. 
+ Requires VM skillset or cloud native skillset.
+Installation details](https://docs.gitlab.com/administration/reference_architectures/)
+
+## Other ways to start using GitLab
+
+Choose which method best supports your organization's needs.
+
+Not sure where to start? [Contact us](/sales/)
+
+### Plan types
+
+#### GitLab.com
+
+#### 
+
+Cloud-hosted by us. 
+ Instant setup, getting you to value quicker.
+
+Plan details
+
+[GitLab.com
+
+Cloud-hosted by us. 
+ Instant setup, getting you to value quicker.
+Plan details](/pricing/?deployment=saas)
+
+#### GitLab Self-Managed
+
+#### 
+
+An instance of GitLab managed by you. 
+ Full control of your data and infrastructure.
+
+Plan details
+
+[GitLab Self-Managed
+
+An instance of GitLab managed by you. 
+ Full control of your data and infrastructure.
+Plan details](/pricing/?deployment=self-managed)
+
+#### GitLab Dedicated
+
+#### 
+
+Single-tenant SaaS fully managed by us. 
+ Enterprise-grade security and compliance, available for 1000+ seats.
+
+Plan details
+
+[GitLab Dedicated
+
+Single-tenant SaaS fully managed by us. 
+ Enterprise-grade security and compliance, available for 1000+ seats.
+Plan details](/pricing/?deployment=dedicated)
+
+### Try GitLab for free
+
+#### GitLab.com Trial
+
+#### 
+
+We host, no technical setup required.
+
+Get free trial
+
+[GitLab.com Trial
+
+We host, no technical setup required.
+Get free trial](https://gitlab.com/-/trials/new?glm_content=default-saas-trial&amp;glm_source=about.gitlab.com/install/)
+
+#### GitLab Self-Managed Trial
+
+#### 
+
+You host, install GitLab on your own setup.
+
+Get free trial
+
+[GitLab Self-Managed Trial
+
+You host, install GitLab on your own setup.
+Get free trial](/free-trial/?hosted=self-managed)
+
+## Updates and Upgrades
+
+### Update to the latest release of GitLab
+
+[Update to the latest release of GitLab](/update/)
+
+### Convert a self-compiled installation to a Linux package installation
+
+[Convert a self-compiled installation to a Linux package installation](https://docs.gitlab.com/omnibus/update/convert_to_omnibus/)
+
+### View third party applications that support GitLab
+
+[View third party applications that support GitLab](/partners/)
+
+## 
+
+On this page
+
+[Install Self-Managed GitLab](#install-self-managed-gitlab)
+
+[All in one](#all-in-one)
+
+[Cloud Native](#cloud-native)
+
+[Linux package](#linux-package)
+
+[Large installations](#large-installations)
+
+[Other deployment methods](#other-deployment-methods)
+
+[Updates and Upgrades](#updates-and-upgrades)
+
+## 
+
+Start building faster today
+
+See what your team can do with the intelligent orchestration platform for DevSecOps.
+
+[Get your free trial](https://gitlab.com/-/trial_registrations/new?glm_content=default-saas-trial&amp;glm_source=about.gitlab.com/install)
+
+[Contact sales](/sales/)
+
+*Footer:*
+®
+
+## Footer links
+
+*Header:*
+### Pricing
+
+- [View plans](/pricing/)
+- [Why Premium?](/pricing/premium/)
+- [Why Ultimate?](/pricing/ultimate/)
+
+*Header:*
+### Contact Us
+
+- [Contact sales](/sales/)
+- [Support portal](https://support.gitlab.com)
+- [Customer portal](https://customers.gitlab.com/customers/sign_in/)
+- [Status](https://status.gitlab.com/)
+- [Terms of use](/terms/)
+- [Privacy statement](/privacy/)
+
+*Header:*
+### Product
+
+- [DevSecOps platform](/platform/)
+- [AI-Assisted Development](/gitlab-duo-agent-platform/)
+
+*Header:*
+### Topics
+
+- [CICD](/topics/ci-cd/)
+- [GitOps](/topics/gitops/)
+- [DevOps](/topics/devops/)
+- [Version Control](/topics/v</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
@@ -519,11 +1069,11 @@
   model  = "claude-haiku-4-5"
   -- model = "gemini-2.5-flash" — also works
   -- model = "gpt-5.1-nano"     — also works
-);</pre></article>
+);</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
--- same AILANG code, four different provider paths underneath.</pre></article>
+-- same AILANG code, four different provider paths underneath.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
--- the eval harness pins the exact resolved model ID.</pre></article></div>
+-- the eval harness pins the exact resolved model ID.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

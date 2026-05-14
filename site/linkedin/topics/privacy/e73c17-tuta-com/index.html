@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -486,9 +526,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on tuta.com</p>
-    <h2 class="sk-prom-audience">This site is for individuals and businesses seeking a secure and private email service, prioritizing data protection and freedom from tracking.</h2>
-    <blockquote class="sk-prom-narrative">Tuta is an email service focused on security and privacy, offering end-to-end encryption for emails, contacts, and calendars. It emphasizes an open-source approach, proprietary infrastructure, and quantum-safe cryptography to protect user data from tracking and unauthorized access, across web, mobile, and desktop clients.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Secure email service</span> <span class="sk-chip">End-to-end encryption</span> <span class="sk-chip">Open source software</span> <span class="sk-chip">Quantum-safe cryptography</span> <span class="sk-chip">Encrypted search index</span> <span class="sk-chip">Desktop clients</span></div>
+    <h2 class="sk-prom-audience">Individuals and businesses seeking a secure and private email communication solution, free from tracking and third-party data access.</h2>
+    <blockquote class="sk-prom-narrative">Tuta provides a secure, end-to-end encrypted email service that prioritizes user privacy. It features fully encrypted mailboxes, contacts, and calendars, built on an open-source tech stack to avoid third-party dependencies and tracking. The service emphasizes local data search and proprietary encryption methods, including quantum-safe cryptography, for comprehensive data protection.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">End-to-end encryption</span> <span class="sk-chip">Open source</span> <span class="sk-chip">Secure email service</span> <span class="sk-chip">Data privacy</span> <span class="sk-chip">Quantum-safe cryptography</span> <span class="sk-chip">Encrypted mailbox</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on tuta.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">16</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">1</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">5</span> sections</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Secure emails at the tip of your finger</span> <span class="sk-chip" title="extracted heading">Security and privacy go hand-in-hand</span> <span class="sk-chip" title="extracted heading">Control of the software stack</span> <span class="sk-chip" title="extracted heading">Security</span> <span class="sk-chip" title="extracted heading">End-to-end encryption</span> <span class="sk-chip" title="extracted heading">TLS encryption</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">**Who pays for it?** The users or the advertisers? If the answer is "the advertisers", the service can never offer a truly secure and private solution. Its top priority is the advertisers’ interest by helping them to identify target audiences based on users’ data and to serve them ads.  Protecting users' privacy always comes second with such a business model.</span> <span class="sk-chip" title="list item">**Who controls the tech stack?** This is a very technical but crucially important question. If a service uses third-party 'tech' such as Dovecot, Roundcube, Google reCaptcha or Google Push, you know for sure that security and privacy cannot be its core priority as the provider knowingly leaks information to others - without warning the users about this. This is another reason why you should choose a service that is open source and doesn’t rely on integrations with closed-source software.</span> <span class="sk-chip" title="list item">**What data is encrypted end-to-end (E2E)?** Many providers claim that their service provides secure email and that the data stored with them is 'encrypted'. What makes this question so important is **how is the data encrypted?** Because only when data is encrypted end-to-end, it is truly inaccessible to the online service as well as to other third parties. Only then the service can be considered as offering **secure email**. That's why simply "encrypting" data is not sufficient, the data must be **encrypted end-to-end**.</span> <span class="sk-chip" title="list item">We do not use PGP, but a slightly different implementation (initially based on AES 256 and RSA 2048), which lets us encrypt much more data (subject lines) as well as encrypt all other features that we add to Tuta such as contacts and calendars - which are all 100% encrypted. We have replaced RSA with ECDH (x25519) Kyber-1024 to release [quantum-safe cryptography](https://tuta.com/blog/post-quantum-cryptography) to all Tuta users. In the future, we plan to also support forward secrecy.</span> <span class="sk-chip" title="list item">We do not search through your data on the server because it is encrypted there. Instead Tuta builds an encrypted search index, which is stored locally on your device or in your browser  and searched there. This enables you to search through your entire emails (sender, recipient, subject line, body, attachment) locally while protecting your privacy.</span> <span class="sk-chip" title="list item">We do not offer IMAP as it would only work if we sent **decrypted** data to your device. Instead we have built our own [open source desktop clients](https://tuta.com/blog/desktop-clients), which store your data encrypted. The desktop clients are also signed so that everyone can [verify](https://tuta.com/support#verify-desktop) that the client is running exactly the same code as the code published on GitHub.</span> <span class="sk-chip" title="list item">Tuta is based on the data privacy principles of "data minimization" and "privacy by design".</span> <span class="sk-chip" title="list item">All user data is stored end-to-end encrypted in Tuta (except for metadata such as email addresses of senders and recipients of emails as this information is needed by the email protocol to deliver the email to the correct address).</span> <span class="sk-chip" title="list item">We have technical and organizational measures in place which protect your data to the maximum extent.</span> <span class="sk-chip" title="list item">Tuta provides an Order Processing Agreement with legally binding data protection guarantees to help you demonstrate your compliance with GDPR.</span> <span class="sk-chip" title="list item">Tuta blocks images by default. No external content is loaded when you open an email unless you actively allow this.</span> <span class="sk-chip" title="list item">Tuta strips all header information (IP address) from emails sent to protect your privacy.</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">1</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://app.tuta.com/signup?websiteLang=en" target="_blank" rel="noopener" title="https://app.tuta.com/signup?websiteLang=en">Create a secure email address now!</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Security at Tuta | Tuta
 
 
@@ -624,12 +664,12 @@ You can now save time and money by hosting all your business emails encrypted on
   postcode: string<pii>,
   signupDate: string
 }
--- assigning customer.email to a log line is a type error.</pre></article>
+-- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre></article>
+  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
 -- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre></article></div>
+-- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

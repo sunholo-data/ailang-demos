@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -485,10 +525,340 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on langchain.com</p>
-    <h2 class="sk-prom-audience">The site is for developers and engineers building AI agents and applications.</h2>
-    <blockquote class="sk-prom-narrative">LangChain is an open source framework designed to help developers build AI agents more efficiently. It provides pre-built architectures and standard integrations for various AI models and tools, streamlining the development process for complex AI applications.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">LangChain</span> <span class="sk-chip">AI agents</span> <span class="sk-chip">framework</span> <span class="sk-chip">agent architectures</span> <span class="sk-chip">models</span> <span class="sk-chip">tools</span></div>
-    <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">via AI extraction</span></div>
+    <h2 class="sk-prom-audience">Developers and engineers focused on building, evaluating, and deploying AI agents and applications.</h2>
+    <blockquote class="sk-prom-narrative">LangChain provides an open-source framework for developing AI agents, offering pre-built architectures and extensive integrations with models and tools. Complementary platforms like LangSmith enable observability, evaluation, and deployment of these agents. The goal is to accelerate the development, testing, and scaling of AI applications.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">AI agents</span> <span class="sk-chip">LangChain framework</span> <span class="sk-chip">LangSmith platform</span> <span class="sk-chip">LangGraph runtime</span> <span class="sk-chip">Model integrations</span> <span class="sk-chip">Observability</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on langchain.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">13</span> headings</span><span class="stat"><span class="num">34</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">49</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">4</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">6</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">13</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Build agents faster,
+your way</span> <span class="sk-chip" title="extracted heading">Ship fast with proven agent patterns</span> <span class="sk-chip" title="extracted heading">Open and neutral by design</span> <span class="sk-chip" title="extracted heading">Customize without complexity</span> <span class="sk-chip" title="extracted heading">Durable runtime</span> <span class="sk-chip" title="extracted heading">Foundation: Introduction to LangChain - Python</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">34</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c024180a65887312dd40_Frame%202147254707.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c024180a65887312dd40_Frame%202147254707.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c0247f235ca5583fa63b_Frame%202147255166.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c0247f235ca5583fa63b_Frame%202147255166.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c024926f877c1de6e728_updated.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c024926f877c1de6e728_updated.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/69baea024a5f7c2d229815b0_LangSmith%20Fleet_icon_light%20mode%203.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/69baea024a5f7c2d229815b0_LangSmith%20Fleet_icon_light%20mode%203.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6a020888f9b2346912c07f41_sandboxes_light_mode%202.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6a020888f9b2346912c07f41_sandboxes_light_mode%202.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c02453d869396317aaa3_updated-1.svg" target="_blank" rel="noopener" title=""><img src="https://cdn.prod.website-files.com/65b8cd72835ceeacd4449a53/6989c02453d869396317aaa3_updated-1.svg" alt="" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">49</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://www.youtube.com/playlist?list=PLfaIDFEXuae3UwB1QGEjsRAr8BzCQss7s" target="_blank" rel="noopener" title="https://www.youtube.com/playlist?list=PLfaIDFEXuae3UwB1QGEjsRAr8BzCQss7s">Max Agency</a> <a class="sk-chip sk-chip-link" href="https://academy.langchain.com/" target="_blank" rel="noopener" title="https://academy.langchain.com/">LangChain Academy</a> <a class="sk-chip sk-chip-link" href="https://www.youtube.com/@LangChain" target="_blank" rel="noopener" title="https://www.youtube.com/@LangChain">YouTube</a> <a class="sk-chip sk-chip-link" href="https://www.langchain.com/startups" target="_blank" rel="noopener" title="https://www.langchain.com/startups">LangSmith for Startups</a> <a class="sk-chip sk-chip-link" href="https://luma.com/langchain?k=c" target="_blank" rel="noopener" title="https://luma.com/langchain?k=c">Meetups</a> <a class="sk-chip sk-chip-link" href="https://www.langchain.com/community" target="_blank" rel="noopener" title="https://www.langchain.com/community">Community</a> <a class="sk-chip sk-chip-link" href="https://www.langchain.com/pricing" target="_blank" rel="noopener" title="https://www.langchain.com/pricing">Pricing</a> <a class="sk-chip sk-chip-link" href="https://www.langchain.com/contact-sales" target="_blank" rel="noopener" title="https://www.langchain.com/contact-sales">Get a demo</a> <a class="sk-chip sk-chip-link" href="https://github.com/langchain-ai/langchain" target="_blank" rel="noopener" title="https://github.com/langchain-ai/langchain">Start building</a> <a class="sk-chip sk-chip-link" href="https://docs.langchain.com/oss/python/langchain/overview" target="_blank" rel="noopener" title="https://docs.langchain.com/oss/python/langchain/overview">Read the docs</a> <a class="sk-chip sk-chip-link" href="https://academy.langchain.com/courses/foundation-introduction-to-langchain-python" target="_blank" rel="noopener" title="https://academy.langchain.com/courses/foundation-introduction-to-langchain-python">Enroll for free</a> <a class="sk-chip sk-chip-link" href="https://docs.langchain.com/oss/python/integrations/providers/overview" target="_blank" rel="noopener" title="https://docs.langchain.com/oss/python/integrations/providers/overview">See all our integrations</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># LangChain: Open Source AI Agent Framework | Build Agents Faster
+
+
+Products
+
+[LangSmith Platform](/langsmith-platform)
+
+[Image]
+
+Observability
+
+See exactly what your agents are doing
+
+[Observability
+See exactly what your agents are doing](/langsmith/observability)
+
+[Image]
+
+Evaluation
+
+Score and improve agent performance
+
+[Evaluation
+Score and improve agent performance](/langsmith/evaluation)
+
+[Image]
+
+Deployment
+
+Ship and scale agents in production
+
+[Deployment
+Ship and scale agents in production](/langsmith/deployment)
+
+[Image]
+
+Fleet
+
+Agents for the whole company
+
+[Fleet
+Agents for the whole company](/langsmith/fleet)
+
+[Image]
+
+Sandboxes
+
+Run agent-generated code safely
+
+[Sandboxes
+Run agent-generated code safely](/langsmith/sandboxes)
+
+Open Source Frameworks
+
+[Image]
+
+deepagents
+
+Build long-running agents for complex tasks
+
+[deepagents
+Build long-running agents for complex tasks](/deep-agents)
+
+[Image]
+
+langchain
+
+Quick start agents with any model provider
+
+[langchain
+Quick start agents with any model provider](/langchain)
+
+[Image]
+
+langgraph
+
+Build reliable agents with low-level control
+
+[langgraph
+Build reliable agents with low-level control](/langgraph)
+
+Learn
+
+Resources
+
+[Blog](/blog)
+
+[Customer Stories](/customers)
+
+[Guides](/resources)
+
+[Max Agency](https://www.youtube.com/playlist?list=PLfaIDFEXuae3UwB1QGEjsRAr8BzCQss7s)
+
+How-To
+
+[LangChain Academy](https://academy.langchain.com/)
+
+[YouTube](https://www.youtube.com/@LangChain)
+
+[Documentation](https://docs.langchain.com/)
+
+Community
+
+[LangSmith for Startups](/startups)
+
+[Meetups](https://luma.com/langchain?k=c)
+
+[Community](/community)
+
+[Docs](https://docs.langchain.com/)
+
+Company
+
+[About](/about)
+
+[Careers](/careers)
+
+[Partners](/langchain-partner-network)
+
+[Events](/events)
+
+[Pricing](/pricing)
+
+[Try LangSmith](https://smith.langchain.com/)
+
+[Get a demo](/contact-sales)
+
+[Try LangSmith](https://smith.langchain.com/)
+
+[Get a demo](/contact-sales)
+
+[Image]
+
+langchain
+
+# Build agents faster,
+your way
+
+LangChain is an open source framework with a pre-built agent architecture and integrations for any model or tool, so you can build agents that adapt as fast as the ecosystem evolves.
+
+[Start building](https://github.com/langchain-ai/langchain)
+
+[Read the docs](https://docs.langchain.com/oss/python/langchain/overview)
+
+[Image]
+
+## Ship fast with proven agent patterns
+
+Build agents in minutes with templates for common use cases. `create_agent` provides a proven ReAct pattern on LangGraph's durable runtime.
+
+[Image]
+
+[Image]
+
+[Image]
+
+## Open and neutral by design
+
+Swap models, tools, and databases without rewriting your application. With 1000+ integrations, you can future-proof your stack as AI advances, with no vendor lock-in.
+
+[Image]
+
+[Image]
+
+[Image]
+
+## Customize without complexity
+
+Extend agent behavior through middleware without rewriting core logic. Add human-in-the-loop approval, compress long conversations, or remove sensitive data— all with simple, composable hooks.
+
+[Image]
+
+[Image]
+
+[Image]
+
+## Durable runtime
+
+`langchain` runs on `langgraph` 's  durable runtime — giving agents built-in persistence, rewind, checkpointing, and human-in-the-loop support.
+
+[Image]
+
+[Image]
+
+[Image]
+
+### Foundation: Introduction to LangChain - Python
+
+[Image]
+
+[.academy-link-img:hover .academy-img {
+	transform: scale(0.95);
+}](https://academy.langchain.com/courses/foundation-introduction-to-langchain-python)
+
+Learn the basics of how to build agents with LangChain using pre-built architectures and model integrations in this LangChain Academy Course.
+
+[Enroll for free](https://academy.langchain.com/courses/foundation-introduction-to-langchain-python)
+
+[Image]
+
+### Instantly connect to any model or data source
+
+[See all our integrations](https://docs.langchain.com/oss/python/integrations/providers/overview)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/ollama)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/openai)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/aws)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/anthropic)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/google)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/groq)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/huggingface)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/databricks)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/pgvector)
+
+[Image]
+
+[(link)](https://docs.langchain.com/oss/python/integrations/providers/mistralai)
+
+### FAQs for LangChain
+
+Is LangChain open source?
+
+Yes - LangChain is an MIT-licensed open-source library and is free to use.
+
+How do I use LangChain with LangSmith?
+
+LangChain is an open source framework with pre-built agent architectures and as integrations to models, tools, and databases to start building agents quickly. The LangChain framework integrates seamlessly with LangSmith, our platform for agent observability, evaluation, and deployment — you can set just one environment variable to get started.
+
+### See what your agent is really doing
+
+LangSmith, our agent engineering platform, helps developers debug every agent decision, eval changes, and deploy in one click.
+
+[Learn more](/langsmith-platform)
+
+[Play around](https://smith.langchain.com/)
+
+*Footer:*
+###### Products
+
+[LangSmith Platform](/langsmith-platform)
+
+[LangSmith Observability](/langsmith/observability)
+
+[LangSmith Evaluation](/langsmith/evaluation)
+
+[LangSmith Deployment](/langsmith/deployment)
+
+[LangSmith Fleet](/langsmith/fleet)
+
+[LangSmith Sandboxes](/langsmith/sandboxes)
+
+[Deep Agents](/deep-agents)
+
+[LangChain](/langchain)
+
+[LangGraph](/langgraph)
+
+###### Resources
+
+[Blog](/blog)
+
+[Customer Stories](/customers)
+
+[Guides](/resources)
+
+[LangChain Academy](https://academy.langchain.com)
+
+[Community](/join-community)
+
+[Changelog](https://changelog.langchain.com/)
+
+[Docs](https://docs.langchain.com/)
+
+[Support](https://support.langchain.com/)
+
+###### Company
+
+[About](/about)
+
+[Careers](/careers)
+
+[Partners](/langchain-partner-network)
+
+[Trust Center](https://trust.langchain.com/)
+
+[Marketing Assets](https://drive.google.com/drive/folders/1cc_Wdd8k7J5wUONBMvtfIZH_BaYvonym)
+
+[Events](/events)
+
+###### Sign up for our newsletter to stay up to date
+
+Thank you!
+
+Your submission has been received!
+
+Oops! Something went wrong while submitting the form.
+
+[All systems operational](https://status.smith.langchain.com/)
+
+[Privacy policy](/privacy-policy)
+
+[Terms of service](/terms-of-service)
+
+</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
@@ -519,11 +889,11 @@
   model  = "claude-haiku-4-5"
   -- model = "gemini-2.5-flash" — also works
   -- model = "gpt-5.1-nano"     — also works
-);</pre></article>
+);</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
--- same AILANG code, four different provider paths underneath.</pre></article>
+-- same AILANG code, four different provider paths underneath.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
--- the eval harness pins the exact resolved model ID.</pre></article></div>
+-- the eval harness pins the exact resolved model ID.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

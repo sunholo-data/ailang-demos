@@ -104,6 +104,17 @@ These are real findings from the last audits — pattern-match against them befo
 - **`Streaming / SSE`** fires 0% if keywords are only `SSE`, `text/event-stream`, `EventSource`. Real pages say "real-time API", "websocket API", "stream API".
 - **`BYO key`** vocabulary: "bring-your-own", "your own key", "use any provider", "your own model", "caller-provided" — all real, all needed beyond just `BYOK`.
 
+## URL-verification rule
+
+**Never trust a seed URL until you've curl'd it for a 2xx response.** A 404 body that's >200 chars passes the polite-refuse threshold and produces a "sketch" of nothing — the pleo.io case (`/en/developers` and `/en/security` both 404, but Pleo's 404 page is 5KB of marketing copy that compiled into a 1/10 score). Closed by `sketchFetch` rejecting non-2xx in `linkedin/services/sketch_extract.ail` — but before adding a URL to `linkedin/sketch_seed_main.ail`, probe it:
+
+```bash
+UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:115.0) Gecko/20100101 Firefox/115.0"
+/usr/bin/curl -sIL -A "$UA" -m 8 "$url" -o /dev/null -w "%{http_code} %{url_effective}\n"
+```
+
+Anything that isn't 200 → don't add. If the obvious developer-portal URL is 404 (Pleo's was), follow the sitemap or the link graph from the homepage to find what *does* exist publicly. Often it's `/integrations`, `/legal`, or `/security-and-compliance` — pages a partner-API platform actually does publish.
+
 ## Files this skill maintains
 
 | File | Purpose |

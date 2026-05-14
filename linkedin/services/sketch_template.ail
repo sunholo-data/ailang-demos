@@ -44,6 +44,7 @@ func renderCardHtml(c: FeatureCard) -> string = join("", [
   "<h3>", c.feature, "</h3>",
   "<p class=\"rationale\">", c.rationale, "</p>",
   "<pre>", c.code, "</pre>",
+  "<a class=\"sk-card-docs\" href=\"", c.docs, "\" target=\"_blank\" rel=\"noopener\">→ AILANG docs</a>",
   "</article>"
 ])
 

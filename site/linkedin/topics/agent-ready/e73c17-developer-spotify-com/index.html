@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -491,9 +531,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developer.spotify.com</p>
-    <h2 class="sk-prom-audience">This site is for developers who want to integrate with Spotify's platform and build applications using its various APIs and SDKs.</h2>
-    <blockquote class="sk-prom-narrative">This site serves as the central hub for Spotify developers, offering comprehensive documentation for integrating with the Spotify platform. It provides various APIs and SDKs, alongside guides on authorization, data access, and application development. Developers can find resources to build applications that interact with Spotify's extensive media catalog and user data.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Web API</span> <span class="sk-chip">Web Playback SDK</span> <span class="sk-chip">Authorization</span> <span class="sk-chip">Access Token</span> <span class="sk-chip">Playlists</span> <span class="sk-chip">Albums</span></div>
+    <h2 class="sk-prom-audience">This site is for software developers seeking to integrate Spotify's platform and content into their applications.</h2>
+    <blockquote class="sk-prom-narrative">This website provides comprehensive documentation and tools for developers. It offers guides for integrating with Spotify's Web API and SDKs, covering authorization flows, data access for content like albums and artists, and managing user-related data. The goal is to enable developers to build applications leveraging the Spotify platform.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Web API</span> <span class="sk-chip">Web Playback SDK</span> <span class="sk-chip">Access Token</span> <span class="sk-chip">Authorization</span> <span class="sk-chip">Playlists</span> <span class="sk-chip">Albums</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on developer.spotify.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">12</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">13</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">2</span> headers</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">4</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">1</span> section</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Web API</span> <span class="sk-chip" title="extracted heading">Getting started</span> <span class="sk-chip" title="extracted heading">Documentation</span> <span class="sk-chip" title="extracted heading">API reference</span> <span class="sk-chip" title="extracted heading">Examples</span> <span class="sk-chip" title="extracted heading">Support</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">13</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Documentation
 DocumentationProducts
 
@@ -846,15 +886,15 @@ Player
     <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
   pricing.ail catalogue.ail
 -- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre></article>
+-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
   requires { qty > 0, qty <= 10 }
   ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre></article>
+-- the MCP server exposes this with its contract intact.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
 -- MCP client query the language directly:
 --   stdlib_search "URL encoding"
---   submit_feedback "..."</pre></article></div>
+--   submit_feedback "..."</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

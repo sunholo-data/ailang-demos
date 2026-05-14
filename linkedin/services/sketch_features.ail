@@ -15,10 +15,11 @@ module linkedin/services/sketch_features
 import linkedin/types/sketch_types (FeatureCard, Topic, Privacy, Portable, AgentReady)
 
 -- Card constructor helper
-func mkCard(feature: string, rationale: string, code: string) -> FeatureCard = {
+func mkCard(feature: string, rationale: string, code: string, docs: string) -> FeatureCard = {
   feature: feature,
   rationale: rationale,
-  code: code
+  code: code,
+  docs: docs
 }
 
 -- Privacy & data sovereignty — IFC labels, capability scoping, WASM-local, three-runtime.
@@ -26,17 +27,20 @@ export func sketchPrivacyCards() -> [FeatureCard] = [
   mkCard(
     "Information-flow labels on customer data",
     "Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.",
-    "type Customer = {\n  email:    string<pii>,\n  postcode: string<pii>,\n  signupDate: string\n}\n-- assigning customer.email to a log line is a type error."
+    "type Customer = {\n  email:    string<pii>,\n  postcode: string<pii>,\n  signupDate: string\n}\n-- assigning customer.email to a log line is a type error.",
+    "https://ailang.sunholo.com/docs/guides/ifc-labels"
   ),
   mkCard(
     "Capability scoping",
     "A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. \"This part of the system can talk to Stripe; it cannot talk to anyone else\" is enforced.",
-    "func chargeCard(c: Card) -> Result[Receipt, Error]\n  ! {Net @endpoint=\"api.stripe.com\", AI @limit=0}"
+    "func chargeCard(c: Card) -> Result[Receipt, Error]\n  ! {Net @endpoint=\"api.stripe.com\", AI @limit=0}",
+    "https://ailang.sunholo.com/docs/guides/parameterised-effects"
   ),
   mkCard(
     "Three-runtime deploy",
     "The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.",
-    "-- Browser: load AILANG WASM, run the module in the user's tab.\n-- Cloud Run: same .ail file packaged as a container.\n-- Native CLI: same .ail file, ailang run."
+    "-- Browser: load AILANG WASM, run the module in the user's tab.\n-- Cloud Run: same .ail file packaged as a container.\n-- Native CLI: same .ail file, ailang run.",
+    "https://ailang.sunholo.com/docs/guides/wasm-integration"
   )
 ]
 
@@ -45,17 +49,20 @@ export func sketchPortableCards() -> [FeatureCard] = [
   mkCard(
     "One std/ai, five LLM vendors",
     "The same call() function runs against Anthropic, Google, OpenAI, OpenRouter, or local Ollama. Switch providers with a one-character diff, not a refactor.",
-    "let answer = call(\n  prompt = userQuery,\n  model  = \"claude-haiku-4-5\"\n  -- model = \"gemini-2.5-flash\" — also works\n  -- model = \"gpt-5.1-nano\"     — also works\n);"
+    "let answer = call(\n  prompt = userQuery,\n  model  = \"claude-haiku-4-5\"\n  -- model = \"gemini-2.5-flash\" — also works\n  -- model = \"gpt-5.1-nano\"     — also works\n);",
+    "https://ailang.sunholo.com/docs/guides/ai-effect"
   ),
   mkCard(
     "Structured output, portable across providers",
     "callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.",
-    "let result = callJson(prompt, intentSchema);\n-- same AILANG code, four different provider paths underneath."
+    "let result = callJson(prompt, intentSchema);\n-- same AILANG code, four different provider paths underneath.",
+    "https://ailang.sunholo.com/docs/guides/ai-effect"
   ),
   mkCard(
     "OpenRouter routing with replayable resolution",
     "Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.",
-    "call(prompt, model = \"openrouter/meta-llama/llama-4-405b\");\n-- the eval harness pins the exact resolved model ID."
+    "call(prompt, model = \"openrouter/meta-llama/llama-4-405b\");\n-- the eval harness pins the exact resolved model ID.",
+    "https://ailang.sunholo.com/docs/guides/ai-routing"
   )
 ]
 
@@ -64,17 +71,20 @@ export func sketchAgentReadyCards() -> [FeatureCard] = [
   mkCard(
     "REST + MCP + A2A + OpenAPI in one command",
     "ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.",
-    "ailang serve-api --port 8092 --mcp-http \\\n  pricing.ail catalogue.ail\n-- POST /api/pricing/quote, MCP at /mcp/,\n-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc."
+    "ailang serve-api --port 8092 --mcp-http \\\n  pricing.ail catalogue.ail\n-- POST /api/pricing/quote, MCP at /mcp/,\n-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.",
+    "https://ailang.sunholo.com/docs/guides/serve-api"
   ),
   mkCard(
     "Contract-verified tool calls",
     "Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.",
-    "func placeOrder(item: SKU, qty: int) -> Receipt\n  requires { qty > 0, qty <= 10 }\n  ensures  { result.total > 0.0 }\n-- the MCP server exposes this with its contract intact."
+    "func placeOrder(item: SKU, qty: int) -> Receipt\n  requires { qty > 0, qty <= 10 }\n  ensures  { result.total > 0.0 }\n-- the MCP server exposes this with its contract intact.",
+    "https://ailang.sunholo.com/docs/guides/contracts"
   ),
   mkCard(
     "An MCP server for your own docs and tools",
     "Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.",
-    "-- The AILANG docs MCP server lets Claude / Cursor / any\n-- MCP client query the language directly:\n--   stdlib_search \"URL encoding\"\n--   submit_feedback \"...\""
+    "-- The AILANG docs MCP server lets Claude / Cursor / any\n-- MCP client query the language directly:\n--   stdlib_search \"URL encoding\"\n--   submit_feedback \"...\"",
+    "https://ailang.sunholo.com/docs/guides/agent-mcp"
   )
 ]
 

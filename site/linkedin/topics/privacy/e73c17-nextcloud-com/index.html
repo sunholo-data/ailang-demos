@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -486,9 +526,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on nextcloud.com</p>
-    <h2 class="sk-prom-audience">Organizations and individuals seeking a self-hosted, secure digital workspace for file management, communication, and collaboration.</h2>
-    <blockquote class="sk-prom-narrative">Nextcloud offers a self-hosted digital workspace platform enabling secure file sync and share, real-time communication, and collaborative office suite functionalities. It targets individuals and various enterprise sectors, focusing on data privacy, security, and workflow automation for comprehensive digital independence.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Nextcloud Hub</span> <span class="sk-chip">File Sync and Share</span> <span class="sk-chip">Online Collaboration</span> <span class="sk-chip">Data Privacy</span> <span class="sk-chip">Enterprise Solutions</span> <span class="sk-chip">Self-hosting</span></div>
+    <h2 class="sk-prom-audience">Organizations and individuals seeking private cloud solutions for file management, collaboration, and communication.</h2>
+    <blockquote class="sk-prom-narrative">Nextcloud offers a secure, self-hosted digital workspace for file management, real-time collaboration, and communication. It provides solutions for enterprises, public sector, and individuals, focusing on data privacy, control, and workflow automation for digital transformation.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Nextcloud Hub</span> <span class="sk-chip">File Sync and Share</span> <span class="sk-chip">Digital workspace</span> <span class="sk-chip">Data privacy</span> <span class="sk-chip">Enterprise solutions</span> <span class="sk-chip">Collaboration tools</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on nextcloud.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">24</span> headings</span><span class="stat"><span class="num">12</span> images</span><span class="stat"><span class="num">5</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">16</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">11</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">7</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span> <span class="sk-chip" title="section.kind = figure"><span class="sk-kind-count">1</span> figure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">24</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Security and advisories</span> <span class="sk-chip" title="extracted heading">Security in Nextcloud</span> <span class="sk-chip" title="extracted heading">Server owners</span> <span class="sk-chip" title="extracted heading">Report
 
 a security issue</span> <span class="sk-chip" title="extracted heading">Product version</span> <span class="sk-chip" title="extracted heading">A vulnerability description</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2025/01/NC-Summit-logo.svg" target="_blank" rel="noopener" title="Join Nextcloud Summit 2026
@@ -746,12 +786,12 @@ Euro-Office: Building momentum](https://nextcloud.com/blog/euro-office-building-
   postcode: string<pii>,
   signupDate: string
 }
--- assigning customer.email to a log line is a type error.</pre></article>
+-- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre></article>
+  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
 -- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre></article></div>
+-- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

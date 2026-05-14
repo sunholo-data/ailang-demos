@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -486,9 +526,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on mistral.ai</p>
-    <h2 class="sk-prom-audience">Developers and businesses looking to access and integrate large language models into their applications and operations.</h2>
-    <blockquote class="sk-prom-narrative">Mistral AI offers large language models and related products and solutions. The website targets developers and businesses, providing information on their AI capabilities, research, customer stories, and tools like a developer studio for building with their technology.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Mistral AI</span> <span class="sk-chip">Large language models</span> <span class="sk-chip">AI solutions</span> <span class="sk-chip">Developer Studio</span> <span class="sk-chip">AI research</span></div>
+    <h2 class="sk-prom-audience">The site is for developers, businesses, and researchers interested in artificial intelligence models and solutions offered by Mistral AI.</h2>
+    <blockquote class="sk-prom-narrative">This website provides an overview of Mistral AI's offerings, including their AI products, solutions, and research. Users can explore various AI models, access a development studio, and learn about the company's capabilities. It caters to those seeking to leverage or understand advanced AI technology.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Mistral AI</span> <span class="sk-chip">Products</span> <span class="sk-chip">Solutions</span> <span class="sk-chip">Research</span> <span class="sk-chip">Models</span> <span class="sk-chip">Studio</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on mistral.ai</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">7</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" target="_blank" rel="noopener" title="Mistral AI Logo"><img src="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" alt="Mistral AI Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo-white.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" target="_blank" rel="noopener" title="Mistral AI Logo White"><img src="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo-white.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" alt="Mistral AI Logo White" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://mistral.ai/" target="_blank" rel="noopener" title="https://mistral.ai/">(link)</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/solutions" target="_blank" rel="noopener" title="https://mistral.ai/solutions">Solutions</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/models" target="_blank" rel="noopener" title="https://mistral.ai/models">Research</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/news" target="_blank" rel="noopener" title="https://mistral.ai/news">Blog</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/customers" target="_blank" rel="noopener" title="https://mistral.ai/customers">Customers</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/contact" target="_blank" rel="noopener" title="https://mistral.ai/contact">Contact Sales</a> <a class="sk-chip sk-chip-link" href="https://console.mistral.ai?utm_source=website&utm_medium=header_cta" target="_blank" rel="noopener" title="https://console.mistral.ai?utm_source=website&utm_medium=header_cta">Try Studio</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 [Image: Mistral AI Logo]
@@ -546,12 +586,12 @@ Redirecting tolegal.mistral.ai
   postcode: string<pii>,
   signupDate: string
 }
--- assigning customer.email to a log line is a type error.</pre></article>
+-- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre></article>
+  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
 -- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre></article></div>
+-- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

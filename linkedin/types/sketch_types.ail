@@ -69,10 +69,14 @@ export type TopicScore = {
 }
 
 -- A single feature card in the AILANG-x-business section.
+-- `docs` is a deep link into the AILANG docs site for the relevant
+-- primitive — readers who want to dig past the rationale + code
+-- snippet click straight through.
 export type FeatureCard = {
   feature: string,
   rationale: string,
-  code: string
+  code: string,
+  docs: string
 }
 
 -- Output of the docparse-first / AI-fallback extraction pipeline.

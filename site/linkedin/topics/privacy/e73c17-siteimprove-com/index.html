@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
 <meta name="description" content="An AILANG sketch of siteimprove.com — what an AI sees, where AILANG fits.">
 <meta property="og:title" content="AILANG × siteimprove.com">
-<meta property="og:description" content="privacy sketch for siteimprove.com — AI-readiness 0/10.">
+<meta property="og:description" content="privacy sketch for siteimprove.com — AI-readiness 2/10.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -333,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -348,13 +361,40 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.5; overflow-x: auto;
-    white-space: pre;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -463,7 +503,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-20 0,0 -17,10"
+        <polygon points="0,0 17,10 -17,10"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -472,595 +512,24 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">siteimprove.com</span> scored <span class="sk-readiness-num">0/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means siteimprove.com is already strong there; low means AILANG could meaningfully help.</p>
+        <h2><span class="sk-domain">siteimprove.com</span> scored <span class="sk-readiness-num">2/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means siteimprove.com is already strong there; low means AILANG could meaningfully help.</p>
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the privacy leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why privacy scored 0/10</strong><ul><li class="no">Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.</li>
+    <div class="sk-why"><strong>Why privacy scored 2/10</strong><ul><li class="no">Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.</li>
 <li class="no">Page mentions SOC 2, ISO 27001, GDPR, HIPAA, or CCPA — formal commitments to data-handling practice.</li>
 <li class="no">Page mentions "we do not sell", "no third-party sharing", "privacy-first", "data minimization", or "purpose limitation" — explicit constraints on data flow.</li>
-<li class="no">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
+<li class="ok">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
 <li class="no">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on siteimprove.com</p>
-    <h2 class="sk-prom-audience">Digital professionals and organizations responsible for managing web presence, accessibility, and marketing performance across various industries.</h2>
-    <blockquote class="sk-prom-narrative">This site offers a SaaS platform for digital presence management. It provides tools for web and mobile accessibility, marketing and SEO analytics, content strategy, and brand compliance. The platform assists professionals in industries like finance, healthcare, and and retail to improve their digital performance.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Web accessibility</span> <span class="sk-chip">SEO</span> <span class="sk-chip">Marketing analytics</span> <span class="sk-chip">Content strategy</span> <span class="sk-chip">Website auditing</span> <span class="sk-chip">Brand compliance</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on siteimprove.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">1</span> headings</span><span class="stat"><span class="num">3</span> images</span><span class="stat"><span class="num">16</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">1</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Oops! We can't seem to find the page you're looking for.</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" target="_blank" rel="noopener" title=""><img src="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" target="_blank" rel="noopener" title=""><img src="https://www.siteimprove.com/4aeab5/globalassets/media/shared/404/undraw_warning_cyit.png?mode=crop" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://www.siteimprove.com/496631/globalassets/media/rebrand2025/great_place_to_work_footer.jpg" target="_blank" rel="noopener" title="We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027."><img src="https://www.siteimprove.com/496631/globalassets/media/rebrand2025/great_place_to_work_footer.jpg" alt="We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027." loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Why SiteimproveWhy Siteimprove
-
-[
-Why Siteimprove 
-                                                        ](/why-siteimprove/)
-
-[
-
-Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
-[
-
-Competitive comparison](/why-siteimprove/competitor-comparison/)
-[
-
-Professional services](/why-siteimprove/professional-services/)
-[
-
-Integrations](/why-siteimprove/integrations/)
-[
-
-EAA Resource Center](/why-siteimprove/eaa-resource-center/)
-[
-
-ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
-
-Our Commitment
-
-[
-
-Accessibility pledge](/why-siteimprove/accessibility-statement/)</span> <span class="sk-chip" title="list item">[
-
-Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)</span> <span class="sk-chip" title="list item">[
-
-Competitive comparison](/why-siteimprove/competitor-comparison/)</span> <span class="sk-chip" title="list item">[
-
-Professional services](/why-siteimprove/professional-services/)</span> <span class="sk-chip" title="list item">[
-
-Integrations](/why-siteimprove/integrations/)</span> <span class="sk-chip" title="list item">[
-
-EAA Resource Center](/why-siteimprove/eaa-resource-center/)</span> <span class="sk-chip" title="list item">[
-
-ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)</span> <span class="sk-chip" title="list item">[
-
-Accessibility pledge](/why-siteimprove/accessibility-statement/)</span> <span class="sk-chip" title="list item">Siteimprove.ai PlatformSiteimprove.ai Platform
-
-[
-Accessibility 
-                                                        ](/platform/accessibility/)
-
-[
-
-Web accessibility](/platform/accessibility/web-accessibility-software/)
-[
-
-Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
-[
-Analytics 
-                                                        ](/platform/analytics/)
-
-[
-
-Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
-[
-
-Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
-[
-
-App Analytics](/platform/analytics/app-analytics/)
-[
-Content strategy 
-                                                        ](/platform/content-strategy/)
-
-[
-
-Content Strategy & Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
-[
-
-Content Optimization](/platform/content-strategy/content-optimization-software/)
-[
-
-Content Governance & Brand Compliance](/platform/content-strategy/brand-compliance-software/)
-[
-Search 
-                                                        ](/platform/seo/)
-
-[
-
-AEO Visibility](/platform/seo/aeo-visibility/)
-[
-
-Technical SEO & Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
-[
-
-SEO Analytics & Intelligence](/platform/seo/seo-analytics-tool/)
-[
-
-Website Auditing Tool](/platform/seo/website-auditing-tools/)</span> <span class="sk-chip" title="list item">[
-
-Web accessibility](/platform/accessibility/web-accessibility-software/)</span> <span class="sk-chip" title="list item">[
-
-Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)</span> <span class="sk-chip" title="list item">[
-
-Marketing Analytics](/platform/analytics/marketing-analytics-platform/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://www.siteimprove.com/demo-request/" target="_blank" rel="noopener" title="https://www.siteimprove.com/demo-request/">Request a demo</a> <a class="sk-chip sk-chip-link" href="https://my2.siteimprove.com/" target="_blank" rel="noopener" title="https://my2.siteimprove.com/">Login</a> <a class="sk-chip sk-chip-link" href="https://www.siteimprove.com/" target="_blank" rel="noopener" title="https://www.siteimprove.com/">Our front page</a> <a class="sk-chip sk-chip-link" href="https://www.greatplacetowork.com/certified-company/1271608" target="_blank" rel="noopener" title="https://www.greatplacetowork.com/certified-company/1271608">;</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># 404
-
-
-*Header:*
-[Skip to main content](#main)
-
-[.st0 {
-        fill: #202124;
-    }](/)
-
-Close menu
-
-- Why SiteimproveWhy Siteimprove
-
-[
-Why Siteimprove 
-                                                        ](/why-siteimprove/)
-
-[
-
-Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
-[
-
-Competitive comparison](/why-siteimprove/competitor-comparison/)
-[
-
-Professional services](/why-siteimprove/professional-services/)
-[
-
-Integrations](/why-siteimprove/integrations/)
-[
-
-EAA Resource Center](/why-siteimprove/eaa-resource-center/)
-[
-
-ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
-
-Our Commitment
-
-[
-
-Accessibility pledge](/why-siteimprove/accessibility-statement/)
-- [
-
-Siteimprove.ai: How it works](/why-siteimprove/how-it-works/)
-- [
-
-Competitive comparison](/why-siteimprove/competitor-comparison/)
-- [
-
-Professional services](/why-siteimprove/professional-services/)
-- [
-
-Integrations](/why-siteimprove/integrations/)
-- [
-
-EAA Resource Center](/why-siteimprove/eaa-resource-center/)
-- [
-
-ADA Title II Resource Center](/why-siteimprove/ada-title-ii-resource-center/)
-- [
-
-Accessibility pledge](/why-siteimprove/accessibility-statement/)
-- Siteimprove.ai PlatformSiteimprove.ai Platform
-
-[
-Accessibility 
-                                                        ](/platform/accessibility/)
-
-[
-
-Web accessibility](/platform/accessibility/web-accessibility-software/)
-[
-
-Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
-[
-Analytics 
-                                                        ](/platform/analytics/)
-
-[
-
-Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
-[
-
-Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
-[
-
-App Analytics](/platform/analytics/app-analytics/)
-[
-Content strategy 
-                                                        ](/platform/content-strategy/)
-
-[
-
-Content Strategy &amp; Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
-[
-
-Content Optimization](/platform/content-strategy/content-optimization-software/)
-[
-
-Content Governance &amp; Brand Compliance](/platform/content-strategy/brand-compliance-software/)
-[
-Search 
-                                                        ](/platform/seo/)
-
-[
-
-AEO Visibility](/platform/seo/aeo-visibility/)
-[
-
-Technical SEO &amp; Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
-[
-
-SEO Analytics &amp; Intelligence](/platform/seo/seo-analytics-tool/)
-[
-
-Website Auditing Tool](/platform/seo/website-auditing-tools/)
-- [
-
-Web accessibility](/platform/accessibility/web-accessibility-software/)
-- [
-
-Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
-- [
-
-Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
-- [
-
-Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
-- [
-
-App Analytics](/platform/analytics/app-analytics/)
-- [
-
-Content Strategy &amp; Planning Platform](/platform/content-strategy/content-strategy-planning-platform/)
-- [
-
-Content Optimization](/platform/content-strategy/content-optimization-software/)
-- [
-
-Content Governance &amp; Brand Compliance](/platform/content-strategy/brand-compliance-software/)
-- [
-
-AEO Visibility](/platform/seo/aeo-visibility/)
-- [
-
-Technical SEO &amp; Auditing Tools](/platform/seo/technical-seo-auditing-tools/)
-- [
-
-SEO Analytics &amp; Intelligence](/platform/seo/seo-analytics-tool/)
-- [
-
-Website Auditing Tool](/platform/seo/website-auditing-tools/)
-- SolutionsSolutions
-
-By Industry 
-
-[
-
-Finance](/industries/financial-services/)
-[
-
-Healthcare](/industries/healthcare/)
-[
-
-Higher Education](/industries/higher-education/)
-[
-
-Government](/industries/government/)
-[
-
-Manufacturing](/industries/manufacturing/)
-[
-
-Retail](/industries/retail/)
-
-By Role
-
-[
-
-Accessibility Leaders](/solutions/accessibility-leaders/)
-[
-
-Marketing Leaders ](/solutions/marketing-leaders/)
-[
-
-Content Marketers ](/solutions/content-marketers/)
-[
-
-Performance Marketers ](/solutions/performance-marketers/)
-[
-
-Development &amp; Design](/solutions/development-and-design-ux/)
-[
-
-WebOps](/solutions/webops/)
-
-Partnerships
-
-[
-
-Our Partners](/partners/)
-[
-
-Optimizely Partner Page](/optimizely-partner-page/)
-[
-
-Partner Portal](https://partners.siteimprove.com/)
-- [
-
-Finance](/industries/financial-services/)
-- [
-
-Healthcare](/industries/healthcare/)
-- [
-
-Higher Education](/industries/higher-education/)
-- [
-
-Government](/industries/government/)
-- [
-
-Manufacturing](/industries/manufacturing/)
-- [
-
-Retail](/industries/retail/)
-- [
-
-Accessibility Leaders](/solutions/accessibility-leaders/)
-- [
-
-Marketing Leaders ](/solutions/marketing-leaders/)
-- [
-
-Content Marketers ](/solutions/content-marketers/)
-- [
-
-Performance Marketers ](/solutions/performance-marketers/)
-- [
-
-Development &amp; Design](/solutions/development-and-design-ux/)
-- [
-
-WebOps](/solutions/webops/)
-- [
-
-Our Partners](/partners/)
-- [
-
-Optimizely Partner Page](/optimizely-partner-page/)
-- [
-
-Partner Portal](https://partners.siteimprove.com/)
-- [Agentic Content Intelligence
-                        ](/the-ultimate-guide-to-agentic-content-intelligence/)
-- ResourcesResources
-
-Learn
-
-[
-
-Siteimprove Toolkit](/toolkit/)
-[
-
-Compliance](/web-accessibility-compliance/)
-[
-
-Glossary](/glossary/)
-[
-
-Blog](/blog/)
-[
-
-Case studies](/case-studies/)
-[
-
-Podcast](/podcast/)
-
-Connect
-
-[
-
-Events](/events/)
-[
-
-Webinars](/on-demand-webinars/)
-[
-
-Press](/press/)
-
-Explore
-
-[
-
-Search Siteimprove.com](/search/)
-[
-Digital Insights Report 
-                                                        ](/digital-insights-report/)
-
-Curious where your site performance stands today? Get a comprehensive, fully customized report detailing both strengths and actionable opportunities to improve.
-- [
-
-Siteimprove Toolkit](/toolkit/)
-- [
-
-Compliance](/web-accessibility-compliance/)
-- [
-
-Glossary](/glossary/)
-- [
-
-Blog](/blog/)
-- [
-
-Case studies](/case-studies/)
-- [
-
-Podcast](/podcast/)
-- [
-
-Events](/events/)
-- [
-
-Webinars](/on-demand-webinars/)
-- [
-
-Press](/press/)
-- [
-
-Search Siteimprove.com](/search/)
-- Curious where your site performance stands today? Get a comprehensive, fully customized report detailing both strengths and actionable opportunities to improve.
-
-[Request a demo](/demo-request/)
-
-[Login](https://my2.siteimprove.com/)
-
-[Request a demo](/demo-request/)
-
-[Login](https://my2.siteimprove.com/)
-
-[Image]
-
-# Oops! We can't seem to find the page you're looking for.
-
-Before you go, maybe this link will take you in the right direction.
-
-[Our front page](/)
-
-[Image]
-
-*Footer:*
-Why Siteimprove
-
-- [Overview](/why-siteimprove/)
-- [Integrations](/why-siteimprove/integrations/)
-- [Services &amp; Support](/why-siteimprove/professional-services/)
-
-Company
-
-- [Leadership](/leadership/)
-- [Press](/press/)
-- [Contact](/contact/)
-
-Careers
-
-- [Life at Siteimprove](https://careers.siteimprove.com/)
-- [Culture](https://careers.siteimprove.com/our-culture/)
-- [Offices](https://careers.siteimprove.com/our-locations/)
-- [Open Roles](https://careers.siteimprove.com/open-positions/)
-
-Support
-
-- [Getting started](https://help.siteimprove.com/support/solutions/80000220153)
-- [Guides &amp; FAQs](https://help.siteimprove.com/support/solutions/80000220156)
-- [Success Plans](/success-plans/)
-- [Developer Center](https://developer.siteimprove.com/)
-- [System Status](https://status.siteimprove.com/)
-
-Platform
-
-Accessibility
-
-- [Web Accessibility](/platform/accessibility/web-accessibility-software/)
-- [Mobile Accessibility](/platform/accessibility/mobile-accessibility-testing/)
-
-Analytics
-
-- [Marketing Analytics](/platform/analytics/marketing-analytics-platform/)
-- [Paid Search Analytics](/platform/analytics/paid-search-analysis-software/)
-- [App Analytics](/platform/analytics/app-analytics/)
-
-Search
-
-- [AEO Visibility](/platform/seo/aeo-visibility/)
-- [Technical SEO](/platform/seo/technical-seo-auditing-tools/)
-- [SEO Analytics](/platform/seo/seo-analytics-tool/)
-- [Website Auditing Tools](/platform/seo/website-auditing-tools/)
-
-Content Strategy
-
-- [Content Optimization](/platform/content-strategy/content-optimization-software/)
-- [Content Strategy](/platform/content-strategy/content-strategy-planning-platform/)
-- [Content Governance](/platform/content-strategy/brand-compliance-software/)
-
-Solutions
-
-By Sector
-
-- [Government](/industries/government/)
-- [Higher Education](/industries/higher-education/)
-- [Healthcare](/industries/healthcare/)
-- [Finance](/industries/financial-services/)
-- [Manufacturing](/industries/manufacturing/)
-- [Retail](/industries/retail/)
-
-By Role
-
-- [Accessibility Leaders](/solutions/accessibility-leaders/)
-- [Marketing Leaders](/solutions/marketing-leaders/)
-- [Content Marketers](/solutions/content-marketers/)
-- [Performance Marketers](/solutions/performance-marketers/)
-- [Development &amp; Design](/solutions/development-and-design-ux/)
-- [WebOps](/solutions/webops/)
-
-Partners
-
-- [Optimizely](/why-siteimprove/integrations/cms-plugin/optimizely/)
-- [Adobe](/why-siteimprove/integrations/cms-plugin/adobe-experience-manager/)
-- [Sitecore](/why-siteimprove/integrations/cms-plugin/sitecore/)
-
-Customers
-
-- [Scotiabank](/case-studies/scotiabank/)
-- [Northern Arizona Healthcare](/case-studies/northern-arizona-healthcare/)
-- [Springfield Clinic](/case-studies/springfield-clinic/)
-- [City &amp; Count of Denver](/case-studies/city-and-county-of-denver/)
-- [University of North Dakota](/case-studies/university-of-north-dakota/)
-- [Cuisinart](/case-studies/cuisinart/)
-- [Akamai Technologies](/case-studies/akamai-technologies/)
-- [Land-o-Lakes](/case-studies/land-olakes/)
-- [Vodafone](/case-studies/vodafone/)
-- [BT](/case-studies/bt-enterprise/)
-
-- [LinkedIn](https://www.linkedin.com/company/siteimprove)
-- [Twitter](https://twitter.com/siteimprove)
-- [Facebook](https://www.facebook.com/Siteimprove)
-- [Instagram](https://www.instagram.com/siteimprove/)
-- [Threads](https://www.threads.com/@siteimprove)
-- [YouTube](https://www.youtube.com/channel/UCVost3tZNte0o4V2motH2IA)
-- [Bluesky](https://bsky.app/profile/siteimprove.com)
-
-[Image: We’re proud to be a Great Place to Work Certified in the USA, April 2026 to April 2027.]
-
-;
-
-[;](https://www.greatplacetowork.com/certified-company/1271608)
-
-- [Privacy](/privacy/)
-- [Legal](/legal/)
-- [Accessibility Statement](/why-siteimprove/accessibility-statement/)
-
-Siteimprove is a registered trademark of Siteimprove A/S - All rights reserved. 2026
-
-Change language: English
-
-- [
-                                        Deutsch
-                                    ](/de/page-not-found/)
-
-</pre></details>
+    <h2 class="sk-prom-audience"></h2>
+    <blockquote class="sk-prom-narrative">(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)</blockquote>
+    <div class="sk-chips"></div>
+    <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">polite refuse</span></div>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
@@ -1085,18 +554,18 @@ Change language: English
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext"><span class="sk-domain">siteimprove.com</span> scored <strong>0/10</strong> on privacy. AILANG opportunity is therefore <strong>10/10</strong>. Here's where it would land first.</p>
+    <p class="sk-score-pretext"><span class="sk-domain">siteimprove.com</span> scored <strong>2/10</strong> on privacy. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
     <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
   email:    string<pii>,
   postcode: string<pii>,
   signupDate: string
 }
--- assigning customer.email to a log line is a type error.</pre></article>
+-- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre></article>
+  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
 <article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
 -- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre></article></div>
+-- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -1116,11 +585,11 @@ Change language: English
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
         <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
-<tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
+<tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
 <tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
-<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
 <tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
@@ -1128,7 +597,7 @@ Change language: English
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
-<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
+<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
 <tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
