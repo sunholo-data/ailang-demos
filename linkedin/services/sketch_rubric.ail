@@ -17,7 +17,7 @@ module linkedin/services/sketch_rubric
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
 import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
-import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -242,9 +242,80 @@ export func scoreSingleVendorLlm(body: string) -> Signal
   }
 }
 
+-- Count how many of a fixed provider-name list appear in the body.
+-- Used by scoreMultiProviderMentioned to detect vendor-multi sites.
+func boolToInt(b: bool) -> int = if b then 1 else 0
+
+func countProviders(bl: string) -> int =
+  boolToInt(contains(bl, "claude"))    +
+  boolToInt(contains(bl, "anthropic")) +
+  boolToInt(contains(bl, "gpt"))       +
+  boolToInt(contains(bl, "openai"))    +
+  boolToInt(contains(bl, "gemini"))    +
+  boolToInt(contains(bl, "mistral"))   +
+  boolToInt(contains(bl, "llama"))     +
+  boolToInt(contains(bl, "ollama"))    +
+  boolToInt(contains(bl, "openrouter"))
+
+export func scoreMultiProviderMentioned(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigMultiProviderMentioned();
+  let bl = toLower(body);
+  -- Naming two distinct providers (e.g. Claude + Gemini, or Llama +
+  -- OpenAI) is a strong portability signal. "anthropic" and "claude"
+  -- are co-counted; this is intentionally lenient — two co-counted
+  -- mentions still beat one provider being mentioned in isolation.
+  let count = countProviders(bl);
+  let detected = count >= 2;
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreCrossRuntimeClaim(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigCrossRuntimeClaim();
+  let bl = toLower(body);
+  let detected = contains(bl, "self-hosted") || contains(bl, "self host") || contains(bl, "on-prem") || contains(bl, "on premises") || contains(bl, "wasm") || contains(bl, "webassembly") || contains(bl, "deploy anywhere") || contains(bl, "kubernetes") || contains(bl, "docker");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreByoKey(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigByoKey();
+  let bl = toLower(body);
+  let detected = contains(bl, "bring your own key") || contains(bl, "byok") || contains(bl, "byo key") || contains(bl, "model-agnostic") || contains(bl, "model agnostic") || contains(bl, "any llm") || contains(bl, "any model");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
 -- ─── Aggregators ──────────────────────────────────────────────
 
--- Run every scorer against the body, return all 11 Signal records.
+-- Run every scorer against the body, return all 14 Signal records.
 export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreAgentJson(body),
   scoreOpenApi(body),
@@ -256,7 +327,10 @@ export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreLlmProviderMentioned(body),
   scoreThirdPartyDomains(body),
   scoreDataResidencyLanguage(body),
-  scoreSingleVendorLlm(body)
+  scoreSingleVendorLlm(body),
+  scoreMultiProviderMentioned(body),
+  scoreCrossRuntimeClaim(body),
+  scoreByoKey(body)
 ]
 
 -- Compute a 0-10 readiness score for a topic from its signals.

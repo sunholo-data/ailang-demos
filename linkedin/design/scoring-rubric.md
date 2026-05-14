@@ -29,9 +29,9 @@ Inside the §3 deep-dive on each sketch you'll also see the *inverse* framed as 
 
 **Three topics, all with observable signals and leaderboards:**
 
-- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs)
+- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints)
 - `privacy` — third-party data flow + data residency language
-- `portable` — vendor-lock indicators
+- `portable` — vendor-lock indicators, multi-provider citations, cross-runtime claims, BYO-key / model-agnostic language
 
 **Topics we considered and dropped (V0 → V1):**
 
@@ -51,10 +51,16 @@ V1 detection is **body-text-based only**. The sketch executor's effect signature
 | `openapi.json` referenced | `agent-ready` | 2 | Body mentions `openapi.json`, `openapi.yaml`, `swagger`, or `redoc` | `ailang serve-api` generates OpenAPI 3.1 from Hindley-Milner type signatures |
 | MCP endpoint referenced | `agent-ready` | 2 | Body mentions `/mcp/`, `/mcp/sse`, `mcp-server`, or "model context protocol" | `ailang serve-api --mcp-http` exposes typed functions as MCP tools |
 | Public API docs linked | `agent-ready` | 2 | Body mentions "API documentation", "API reference", `/api/docs`, `developers.`, or `/docs/api` | `ailang serve-api` hosts Swagger + ReDoc at `/api/_meta/` by default |
+| Webhooks documented | `agent-ready` | 2 | Body mentions `webhook`, `/webhooks`, "callback url", or `callback_url` | `ailang serve-api` handles webhooks as typed handler functions with effect-tracked side effects |
+| Rate limits documented | `agent-ready` | 2 | Body mentions "rate limit", "rate-limit", "x-ratelimit", `429`, or "throttl…" | Capability budgets — `Net @limit=N` is the symmetric server-side primitive for what agents see as rate limits |
+| Streaming / SSE endpoint | `agent-ready` | 2 | Body mentions "server-sent events", `text/event-stream`, `/sse`, `EventSource`, or "streaming endpoint" | `std/stream` — `ssePost` and the `Stream` effect handle event-source endpoints with typed event types |
 | Named LLM provider mentioned | `privacy` | 2 (informational) | Body mentions "claude", "gpt-", "openai", "anthropic", "gemini", or "powered by ai" | `std/ai` + IFC labels — track and declassify customer data crossing the provider boundary |
 | Third-party domains restrained | `privacy` | 2 | Heuristic on `https://` occurrence count: ≤10 = 2pts, 11-20 = 1pt, >20 = 0 | Capability scoping — each `Net` call declares its endpoint in the effect row |
 | Data residency / on-prem language | `privacy` | 2 | Body mentions "data residency", "on-premises", "on-prem", "sovereign cloud", "EU-hosted", "data sovereignty", or "self-hosted" | Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI |
 | Single-vendor LLM language | `portable` | 2 (penalty) | Body mentions "powered by Claude/GPT/Gemini" or "built on Claude/GPT/Gemini" | `std/ai` multi-provider — switch vendor without rewriting |
+| Multiple AI providers cited | `portable` | 2 | Body names two or more of: `claude`, `anthropic`, `gpt`, `openai`, `gemini`, `mistral`, `llama`, `ollama`, `openrouter` | `std/ai` — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers |
+| Cross-runtime / deployment portability | `portable` | 2 | Body mentions "self-hosted", "on-prem", "wasm", "webassembly", "deploy anywhere", "kubernetes", or "docker" | Three-runtime deploy — same `.ail` module runs as WASM in the browser, a Cloud Run container, and a native CLI |
+| BYO key / model-agnostic | `portable` | 2 | Body mentions "bring your own key", "BYOK", "BYO key", "model-agnostic", "any LLM", or "any model" | Browser `ai.step` with BYO API key — caller-held credentials, AILANG WASM, same Step API as the server |
 
 ### Polarity notes
 
@@ -104,7 +110,7 @@ These are tracked in [`linkedin/design/sketches.md`](sketches.md) §10 (open que
 - [`linkedin/types/sketch_types.ail`](../types/sketch_types.ail) — `Signal`, `TopicScore`, `Topic` ADTs
 - [`linkedin/services/sketch_rubric_signals.ail`](../services/sketch_rubric_signals.ail) — signal manifest (one function per signal, defines metadata + AILANG primitive mapping)
 - [`linkedin/services/sketch_rubric.ail`](../services/sketch_rubric.ail) — detection logic + aggregator, contract-bounded
-- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 26 assertions covering every scorer + the aggregator + the polarity rules
+- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 40 assertions covering every scorer + the aggregator + the polarity rules
 
 Every signal has `ensures { result.points >= 0, result.points <= result.maxPoints }`. The aggregator has `ensures { result.readiness >= 0, result.readiness <= 10 }`. Both are Z3-verifiable.
 

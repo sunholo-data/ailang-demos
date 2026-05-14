@@ -131,6 +131,36 @@ export func sigSingleVendorLlm() -> Signal = {
   ailangFeature: "std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting"
 }
 
+export func sigMultiProviderMentioned() -> Signal = {
+  name:          "Multiple AI providers cited",
+  description:   "Body mentions two or more named AI providers (Claude, GPT, Gemini, Mistral, Llama, etc.) — already vendor-multi.",
+  topic:         Portable,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers"
+}
+
+export func sigCrossRuntimeClaim() -> Signal = {
+  name:          "Cross-runtime / deployment portability",
+  description:   "Body mentions self-hosted, on-prem, WASM, Docker, Kubernetes, or \"deploy anywhere\" — runtime portability claimed.",
+  topic:         Portable,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Three-runtime deploy — same .ail module runs as WASM in the browser, a Cloud Run container, and a native CLI"
+}
+
+export func sigByoKey() -> Signal = {
+  name:          "BYO key / model-agnostic",
+  description:   "Body mentions \"bring your own key\", \"BYOK\", \"any LLM\", or \"model-agnostic\" — caller controls the model.",
+  topic:         Portable,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Browser ai.step with BYO API key — caller-held credentials, AILANG WASM, same Step API as the server"
+}
+
 -- ─── registry — all V1 signals in one list ─────────────────────
 
 export func sketchAllSignalDefs() -> [Signal] = [
@@ -144,5 +174,8 @@ export func sketchAllSignalDefs() -> [Signal] = [
   sigLlmProviderMentioned(),
   sigThirdPartyDomains(),
   sigDataResidencyLanguage(),
-  sigSingleVendorLlm()
+  sigSingleVendorLlm(),
+  sigMultiProviderMentioned(),
+  sigCrossRuntimeClaim(),
+  sigByoKey()
 ]

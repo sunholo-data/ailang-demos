@@ -11,7 +11,7 @@ import std/io (println)
 import std/string (intToStr)
 import std/list (length as listLength)
 import linkedin/types/sketch_types (Signal, TopicScore, AgentReady, Privacy, Portable)
-import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
+import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
 
 func checkBool(name: string, got: bool, want: bool) -> int ! {IO} {
   if got == want then {
@@ -104,11 +104,53 @@ export func main() -> () ! {IO} {
   let tp1 = scoreThirdPartyDomains("<html>https://example.com</html>");
   let t11 = checkRange("low https count = max points", tp1.points, 2, 2);
 
+  -- new agent-ready signals
+  println("");
+  println("scoreWebhooks:");
+  let wh1 = scoreWebhooks("See our webhooks at /webhooks/orders");
+  let tWh = checkBool("detects webhook reference",     wh1.detected, true) +
+            checkInt("max points when detected",       wh1.points, 2);
+  let wh2 = scoreWebhooks("plain landing page");
+  let tWh2 = checkInt("not detected = 0 points",       wh2.points, 0);
+
+  println("");
+  println("scoreRateLimitDocs:");
+  let rl1 = scoreRateLimitDocs("Our API enforces a rate limit of 100 req/min (429 on exceed)");
+  let tRl = checkBool("detects rate-limit language",   rl1.detected, true) +
+            checkInt("max points when detected",       rl1.points, 2);
+
+  println("");
+  println("scoreStreamingEndpoint:");
+  let st1 = scoreStreamingEndpoint("Stream chunks via text/event-stream over /sse");
+  let tSt = checkBool("detects SSE language",          st1.detected, true) +
+            checkInt("max points when detected",       st1.points, 2);
+
+  -- new portable signals
+  println("");
+  println("scoreMultiProviderMentioned:");
+  let mp1 = scoreMultiProviderMentioned("We support Claude, GPT, and Gemini for inference");
+  let tMp = checkBool("detects multi-provider site",   mp1.detected, true) +
+            checkInt("max points when detected",       mp1.points, 2);
+  let mp2 = scoreMultiProviderMentioned("Just powered by Claude");
+  let tMp2 = checkBool("single provider != detected",  mp2.detected, false);
+
+  println("");
+  println("scoreCrossRuntimeClaim:");
+  let cr1 = scoreCrossRuntimeClaim("Self-hosted via Docker — runs anywhere");
+  let tCr = checkBool("detects cross-runtime claim",   cr1.detected, true) +
+            checkInt("max points when detected",       cr1.points, 2);
+
+  println("");
+  println("scoreByoKey:");
+  let bk1 = scoreByoKey("Bring your own key — model-agnostic platform");
+  let tBk = checkBool("detects BYOK language",         bk1.detected, true) +
+            checkInt("max points when detected",       bk1.points, 2);
+
   -- contract bounds (every scorer respects 0..maxPoints)
   println("");
   println("contract bounds — all scorers respect 0..maxPoints:");
   let all = sketchScoreAllSignals("Some HTML with /mcp/ and openapi.json and Claude");
-  let bcheck = checkInt("scoreAllSignals returns 8 signals", listLength(all), 8);
+  let bcheck = checkInt("scoreAllSignals returns 14 signals", listLength(all), 14);
 
   -- aggregator clamps to 0..10
   println("");
@@ -131,8 +173,10 @@ export func main() -> () ! {IO} {
   let t14 = checkBool("AgentReady == AgentReady", topicEq(AgentReady, AgentReady), true) +
             checkBool("AgentReady != Privacy",    topicEq(AgentReady, Privacy), false);
 
-  let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + bcheck + t12 + t13 + t14;
-  let expected = 26;
+  let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11
+            + tWh + tWh2 + tRl + tSt + tMp + tMp2 + tCr + tBk
+            + bcheck + t12 + t13 + t14;
+  let expected = 40;
   println("");
   if total == expected then
     println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")

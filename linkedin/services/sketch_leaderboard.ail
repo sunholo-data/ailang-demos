@@ -391,6 +391,77 @@ func agentReadyProtocolsHtml() -> string = join("", [
   "</section>"
 ])
 
+-- ─── Portable primitives section (Portable topic only) ──────
+
+-- Six tiles linking to the AILANG features that make a stack
+-- vendor-portable: std/ai's multi-provider Step API, OpenRouter
+-- routing, three-runtime deploy (WASM + Cloud Run + native CLI),
+-- BYO-key from the browser, custom AI providers as packages, and Go
+-- interop. Rendered only on the Portable topic page.
+func renderPortablePrimitivesSection(t: Topic) -> string =
+  match t {
+    Portable => portablePrimitivesHtml(),
+    _        => ""
+  }
+
+func portablePrimitivesHtml() -> string = join("", [
+  "<section class=\"tx-section tx-mechanics\">",
+  "<h2>Portability is a language feature</h2>",
+  "<p class=\"lede\">Vendor switching costs come from code coupled to one provider, one runtime, or one deployment shape. Each tile is the AILANG primitive that decouples one of those — at the type-system layer, not as a wrapper library.</p>",
+  "<div class=\"tx-mechanic-grid\">",
+
+  privacyTileHtml(
+    "std/ai  ⟶  Anthropic | OpenAI | Gemini | OpenRouter | Ollama",
+    "One Step API across five built-in providers.",
+    "The <code>std/ai</code> Step API is provider-agnostic. Switch from Claude to GPT to Gemini to a local Ollama model with a single <code>--ai</code> flag — no SDK swap, no rewrite. Tool calling, structured output, and streaming all normalise to the same typed shape.",
+    "https://ailang.sunholo.com/docs/guides/ai-effect",
+    "AI effect guide ↗"
+  ),
+
+  privacyTileHtml(
+    "anthropic/claude-sonnet-4.5  ⟶  google/gemini-2.5-flash",
+    "OpenRouter routing: ~100 models behind one HTTP shape.",
+    "Target <code>&lt;vendor&gt;/&lt;model&gt;</code> strings directly — no per-vendor SDK to add. Cost-routing, fallback, and rate-limit handling are uniform across the catalogue. Cheap-or-fast switches become a config diff, not a refactor.",
+    "https://ailang.sunholo.com/docs/guides/ai-routing",
+    "AI routing ↗"
+  ),
+
+  privacyTileHtml(
+    "same .ail  ⟶  WASM | Cloud Run | native CLI",
+    "Three-runtime deploy from one source.",
+    "The same module compiles to a native binary, a Cloud Run image, and a WebAssembly bundle that runs in a browser tab. Effect handlers are the only runtime-specific layer; business logic is identical. \"Where it runs\" stops being an architecture decision up-front.",
+    "https://ailang.sunholo.com/docs/guides/wasm-integration",
+    "WASM integration ↗"
+  ),
+
+  privacyTileHtml(
+    "ailang WASM + localStorage  ⟶  ai.step in the browser",
+    "BYO-key: same Step API, caller holds the credential.",
+    "A browser tab can call <code>ai.step</code> against the user's own provider key, stored in <code>localStorage</code> — no backend round-trip, no key on your servers. The browser bytecode is the same AILANG module the server runs; only the effect handler differs.",
+    "https://ailang.sunholo.com/docs/guides/wasm-ai-step-byo-key",
+    "Browser ai.step ↗"
+  ),
+
+  privacyTileHtml(
+    "[[ai_provider]] in ailang.toml",
+    "Custom providers are packages, not binary forks.",
+    "Adding a vendor (a regional cloud, a private model gateway, a research lab's API) is a config block plus a <code>.ail</code> adapter. AILANG registers it as a first-class provider with the same budget tracking, AI capability gating, and trace integration the built-ins get.",
+    "https://ailang.sunholo.com/docs/guides/custom-ai-providers",
+    "Custom AI providers ↗"
+  ),
+
+  privacyTileHtml(
+    "ailang compile --emit-go  ⟶  go build",
+    "Production hot paths drop into Go services.",
+    "Need raw throughput or in-process composition with an existing Go codebase? <code>--emit-go</code> compiles AILANG modules to idiomatic Go. ADTs become discriminator structs, exports become package-public functions; effects propagate as <code>error</code> returns. Same source, two runtimes.",
+    "https://ailang.sunholo.com/docs/guides/go-interop",
+    "Go interop ↗"
+  ),
+
+  "</div>",
+  "</section>"
+])
+
 -- ─── Top-level rebuild ────────────────────────────────────────
 
 -- Rebuild the leaderboard JSON for a single topic. No-op if the
@@ -521,7 +592,7 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
   let mechanics = match t {
     Privacy    => renderPrivacyMechanicsSection(t),
     AgentReady => renderAgentReadyProtocolsSection(t),
-    Portable   => ""
+    Portable   => renderPortablePrimitivesSection(t)
   };
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
