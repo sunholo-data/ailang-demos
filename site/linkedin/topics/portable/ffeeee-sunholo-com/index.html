@@ -193,6 +193,27 @@
     color: var(--text-muted); margin: 0 0 8px;
   }
   .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+  /* Image thumbnails — horizontal scroll strip from AILANG Parse's
+     img src URLs (v0.14.1+). Failed loads are hidden by JS. */
+  .sk-img-strip {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: flex-start;
+  }
+  .sk-img-thumb {
+    display: block; width: 96px; height: 72px;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--bg-input);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .sk-img-thumb:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+  .sk-img-thumb img {
+    width: 100%; height: 100%; object-fit: contain;
+    object-position: center; background: white;
+    display: block;
+  }
 
   /* Page-preview image — between §2 and §3. Uses thum.io's free
      screenshot service so we don't depend on the source site allowing
@@ -430,12 +451,16 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking production-grade AI infrastructure and agentic systems.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo provides AI engineering and infrastructure services focused on modular, protocol-native systems. Through its Multivac platform and AILANG programming language, the company enables enterprises to transition from prototypes to production-grade AI. Their offerings prioritize interoperability via MCP and A2A protocols, alongside specialized tools for high-accuracy document parsing and verifiable AI-authored code.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">AILANG Parse</span> <span class="sk-chip">Cognitive Architecture</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">31</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-chips"><span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">AILANG Logo</span> <span class="sk-chip" title="image alt text">AILANG Interactive Playground</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Services</span> <span class="sk-chip" title="list item">Case Studies</span> <span class="sk-chip" title="list item">Demos</span> <span class="sk-chip" title="list item">AILANG Parse</span> <span class="sk-chip" title="list item">Vision</span> <span class="sk-chip" title="list item">Talks</span> <span class="sk-chip" title="list item">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="list item">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="list item">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="list item">Production deployment and scaling</span> <span class="sk-chip" title="list item">Native MCP & A2A protocol support</span> <span class="sk-chip" title="list item">Event-driven microservice architecture</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking production-grade AI infrastructure and document intelligence solutions.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo provides enterprise-scale AI engineering and software infrastructure focused on modularity and production reliability. Its offerings include the Multivac platform for agent orchestration, AILANG Parse for high-fidelity document extraction, and an AI-native programming language designed to provide mechanical guarantees for AI-generated code across various cloud environments.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Multivac</span> <span class="sk-chip">Document Intelligence</span> <span class="sk-chip">Cognitive Architecture</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">10</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ai-engineer.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/ai-engineer.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ailang-logo.svg" target="_blank" rel="noopener" title="AILANG Logo"><img src="https://www.sunholo.com/ailang-logo.svg" alt="AILANG Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" target="_blank" rel="noopener" title="AILANG Parse - Universal Document Parsing"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" alt="AILANG Parse - Universal Document Parsing" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" target="_blank" rel="noopener" title="AILANG Parse"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" alt="AILANG Parse" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Services</span> <span class="sk-chip" title="list item">Case Studies</span> <span class="sk-chip" title="list item">Demos</span> <span class="sk-chip" title="list item">AILANG Parse</span> <span class="sk-chip" title="list item">Vision</span> <span class="sk-chip" title="list item">Talks</span> <span class="sk-chip" title="list item">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="list item">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="list item">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="list item">Production deployment and scaling</span> <span class="sk-chip" title="list item">Native MCP & A2A protocol support</span> <span class="sk-chip" title="list item">Event-driven microservice architecture</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
+[Image: Sunholo Logo]
+
 Sunholo
+
+[Sunholo](index.html)
 
 - Services
 - Case Studies
@@ -451,17 +476,17 @@ NEW
 
 AILANG Parse is live -- Stop parsing photos of your documents. Read Office XML directly. 93.9% on OfficeDocBench.
 
-Try it free
+[Try it free](/ailang-parse/)
 
 # AI Systems Designed to Last
 
 We architect enterprise AI that connects to your data, scales with your team, and evolves with the technology. From multi-model platforms to document intelligence -- built for production, not just demos.
 
-Explore Services
+[Explore Services](#services)
 
-Try Live Demos
+[Try Live Demos](/ailang-demos/)
 
-Get Started
+[Get Started](#contact)
 
 ## Our Services
 
@@ -476,7 +501,7 @@ From prototype to production-grade AI systems. We bring software engineering rig
 - Multi-model: Claude, Gemini, GPT, and open-source
 - Production deployment and scaling
 
-Learn More
+[Learn More](ai-engineering.html)
 
 See examples: Enterprise AI, Aitana, Document Processing
 
@@ -493,7 +518,7 @@ Protocol-native infrastructure for the AI agent economy. Multivac supports MCP a
 - Multi-cloud: GCP, Azure, AWS
 - Framework agnostic - Langchain, LlamaIndex, CrewAI, OpenAI and more
 
-Learn More
+[Learn More](ai-platform.html)
 
 Powers all our client solutions
 
@@ -507,7 +532,7 @@ Close the trust gap in AI-generated code. AILANG is an AI-first programming lang
 - Effect boundaries visible in types prevent hallucinated operations
 - Works with Claude Code, Gemini CLI, and other AI coding agents
 
-Try AILANG
+[Try AILANG](https://ailang.sunholo.com)
 
 AILANG Parse (SaaS) | Live Demos | Case study | Open source
 
@@ -533,9 +558,9 @@ Our approach to orchestrating AI systems: bounded creativity, iterative improvem
 
 Every AI component needs to be independently replaceable, like swapping batteries rather than rewiring your house.
 
-Read Our Blog
+[Read Our Blog](/blog/)
 
-Listen to Podcast
+[Listen to Podcast](https://storage.googleapis.com/sunholo-public-podcasts/The_Protocol_Wars__Why_Your_Custom_AI_Is_Failing_and_How_New_St.mp4)
 
 ## Why Work With Us
 
@@ -549,29 +574,95 @@ See how →
 
 Real-world impact from our AI engineering and platform solutions
 
+[Image: AILANG Parse - Universal Document Parsing]
+
+[Image: AILANG Parse]
+
 AILANG Parse
+
+SaaS
+
+Document AI
+
+### AILANG's First SaaS: Universal Document Parsing
+
+Stop parsing photos of your documents. Read Office XML directly -- track changes, merged cells, and comments preserved. Free in-browser demo, no account required.
+
+93.9% OfficeDocBench
+
+Free in-browser
+
+[AILANG Parse
 SaaSDocument AI
 AILANG's First SaaS: Universal Document Parsing
 Stop parsing photos of your documents. Read Office XML directly -- track changes, merged cells, and comments preserved. Free in-browser demo, no account required.
- 93.9% OfficeDocBench Free in-browser
+ 93.9% OfficeDocBench Free in-browser](case-study-ailang-parse.html)
+
+[Image: Aitana Custom Assistant Builder]
 
 Aitana
+
+Legal Tech
+
+Green Energy
+
+### AI Platform for Green Energy Legal Work
+
+Reduced contract research time from weeks to days with extreme RAG capabilities and multi-channel AI assistants.
+
+Weeks → Days
+
+Higher Quality
+
+[Aitana
 Legal TechGreen Energy
 AI Platform for Green Energy Legal Work
 Reduced contract research time from weeks to days with extreme RAG capabilities and multi-channel AI assistants.
- Weeks → Days Higher Quality
+ Weeks → Days Higher Quality](case-study-aitana.html)
+
+[Image: Enterprise AI Platform]
 
 Global Manufacturer
+
+Enterprise AI
+
+Manufacturing
+
+### Enterprise AI Platform: Chatbot to Production in 16 Weeks
+
+AI assistant with Microsoft 365 integration and multi-model intelligence -- serving 12,000+ employees across 40+ countries.
+
+16 Weeks
+
+12,000+ Staff
+
+[Global Manufacturer
 Enterprise AIManufacturing
 Enterprise AI Platform: Chatbot to Production in 16 Weeks
 AI assistant with Microsoft 365 integration and multi-model intelligence -- serving 12,000+ employees across 40+ countries.
- 16 Weeks 12,000+ Staff
+ 16 Weeks 12,000+ Staff](case-study-enterprise-ai.html)
+
+[Image: Document Processing Pipeline]
 
 Document Extraction at Scale
+
+Document AI
+
+Automation
+
+### Document Processing: 48x Faster
+
+Optimized pipeline reduced processing from 16 hours to 20 minutes with improved accuracy.
+
+48x Faster
+
+10x Savings
+
+[Document Extraction at Scale
 Document AIAutomation
 Document Processing: 48x Faster
 Optimized pipeline reduced processing from 16 hours to 20 minutes with improved accuracy.
- 48x Faster 10x Savings
+ 48x Faster 10x Savings](case-study-document-processing.html)
 
 ##  Try It Yourself: Live AI Demos
             
@@ -582,33 +673,33 @@ See our AI engineering in action. Every demo runs in your browser -- no sign-up 
 
 AI-powered extraction, WASM-based parsing, and Z3 contract verification -- all running client-side.
 
-Document Extractor
+[Document Extractor](/ailang-demos/extractor.html)
 
-DocParse
+[DocParse](/ailang-demos/docparse.html)
 
 ### Streaming &amp; Voice AI
 
 Real-time streaming with SSE, WebSocket audio, and voice-powered document interaction via Gemini Live.
 
-Voice DocParse
+[Voice DocParse](/ailang-demos/streaming/voice_docparse/index.html)
 
-Claude Chat
+[Claude Chat](/ailang-demos/streaming/claude_chat/index.html)
 
 ### Contract-Verified AI
 
 Z3 theorem prover meets AI: contract verification and safe agent tool calling with mechanical guarantees.
 
-Z3 Verify
+[Z3 Verify](/ailang-demos/verify.html)
 
-Safe Agent
+[Safe Agent](/ailang-demos/streaming/safe_agent/index.html)
 
-View All Demos
+[View All Demos](/ailang-demos/)
 
 ## Ready to deploy your AI solution?
 
 Whether you're struggling with a prototype or looking to scale an existing AI application, we can help you overcome technical hurdles and get to market faster.
 
-Schedule a Consultation
+[Schedule a Consultation](#contact)
 
 ##  Open Source &amp; Research
 
@@ -620,9 +711,9 @@ We believe the best AI tools are built in the open. Our open-source projects—A
 
 These aren't side projects—they're the same production-grade tools we use for our clients, shared with the community to accelerate innovation for everyone.
 
-Explore Our Projects
+[Explore Our Projects](open-source.html)
 
-Read Our Blog
+[Read Our Blog](/blog/)
 
 [Image: AILANG Interactive Playground]
 
@@ -638,7 +729,7 @@ AI: Give me the freedom of a tight brief
 
 What AI agents actually demand from you — a framework for delegating decisions, not just tasks.
 
-Read Post →
+[Read Post →](/blog/ai-freedom-tight-brief)
 
 ### Also Recent
 
@@ -646,7 +737,7 @@ Don't ask the AI what it was thinking
 
 The AI's explanation of itself is a performance, not a transcript. The good news: you don't need it. Action-level observability gives you a better paper trail than humans ever…
 
-Read Post →
+[Read Post →](/blog/dont-ask-the-ai)
 
 ### Next on Stage
 
@@ -654,11 +745,11 @@ Programming Languages for AI, Not Humans
 
 Keynote at IDA Driving AI 2026 — Copenhagen, May 27. Why AI's programming languages should be different from ours.
 
-See Talks →
+[See Talks →](presentations.html)
 
-More on the Blog
+[More on the Blog](/blog/)
 
-All Talks
+[All Talks](presentations.html)
 
 ## Get in Touch
 
@@ -672,7 +763,9 @@ Schedule a free 30-minute consultation to explore how we can help you deploy you
 
 multivac@sunholo.com
 
-Connect With Us
+#### Connect With Us
+
+[Connect With Us](https://www.linkedin.com/company/sunholo/)
 
 LinkedIn
 
@@ -726,7 +819,9 @@ Send Message
 
 Get the latest AI deployment tips and Multivac updates at our LinkedIn page.
 
-Connect With Us
+#### Connect With Us
+
+[Connect With Us](https://www.linkedin.com/company/sunholo/)
 
 LinkedIn
 
@@ -829,6 +924,15 @@ LinkedIn
       img.style.display = 'none';
       var f = img.parentElement.querySelector('.sk-preview-fallback');
       if (f) f.style.display = 'block';
+    });
+  });
+
+  // Hide any image thumbnail that fails to load (broken src, CORS, 404).
+  // The whole link wrapper is removed so we don't show empty boxes.
+  document.querySelectorAll('.sk-img-thumb img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      var thumb = img.closest('.sk-img-thumb');
+      if (thumb) thumb.style.display = 'none';
     });
   });
 

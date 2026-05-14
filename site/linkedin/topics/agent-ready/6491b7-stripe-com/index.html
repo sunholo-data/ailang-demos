@@ -193,6 +193,27 @@
     color: var(--text-muted); margin: 0 0 8px;
   }
   .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+  /* Image thumbnails — horizontal scroll strip from AILANG Parse's
+     img src URLs (v0.14.1+). Failed loads are hidden by JS. */
+  .sk-img-strip {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: flex-start;
+  }
+  .sk-img-thumb {
+    display: block; width: 96px; height: 72px;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--bg-input);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .sk-img-thumb:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+  .sk-img-thumb img {
+    width: 100%; height: 100%; object-fit: contain;
+    object-position: center; background: white;
+    display: block;
+  }
 
   /* Page-preview image — between §2 and §3. Uses thum.io's free
      screenshot service so we don't depend on the source site allowing
@@ -433,10 +454,10 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on stripe.com</p>
-    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to Fortune 100 companies, seeking financial infrastructure for global commerce.</h2>
-    <blockquote class="sk-prom-narrative">Stripe provides a comprehensive financial technology suite to manage online and in-person transactions globally. Its infrastructure supports payments, billing, and card issuing through AI-powered developer tools and no-code dashboards. The platform facilitates borderless money movement and embedded finance for diverse business models including SaaS, marketplaces, and traditional enterprises.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">API</span> <span class="sk-chip">Merchant account</span> <span class="sk-chip">Secure payment gateway</span> <span class="sk-chip">Payment methods</span> <span class="sk-chip">Revenue models</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products</span> <span class="sk-chip" title="list item">Solutions</span> <span class="sk-chip" title="list item">Developers</span> <span class="sk-chip" title="list item">Resources</span> <span class="sk-chip" title="list item">Pricing</span> <span class="sk-chip" title="list item">Sign in</span> <span class="sk-chip" title="list item">Sign inSign in</span> <span class="sk-chip" title="list item">Contact sales</span> <span class="sk-chip" title="list item">Lovable grows into a vibe-coding juggernaut with Stripe.
+    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to enterprises, seeking financial infrastructure and payment processing.</h2>
+    <blockquote class="sk-prom-narrative">Stripe provides financial infrastructure that enables businesses to accept payments, manage subscriptions, and provide embedded commerce services. It supports global operations with tools for tax compliance, fraud prevention, and business incorporation, catering to agile startups and large-scale enterprises across 135+ currencies.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">Payment gateway</span> <span class="sk-chip">Stripe Connect</span> <span class="sk-chip">Stripe Billing</span> <span class="sk-chip">API</span> <span class="sk-chip">Merchant account</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">39</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">39</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products</span> <span class="sk-chip" title="list item">Solutions</span> <span class="sk-chip" title="list item">Developers</span> <span class="sk-chip" title="list item">Resources</span> <span class="sk-chip" title="list item">Pricing</span> <span class="sk-chip" title="list item">Sign in</span> <span class="sk-chip" title="list item">Sign inSign in</span> <span class="sk-chip" title="list item">Contact sales</span> <span class="sk-chip" title="list item">Lovable grows into a vibe-coding juggernaut with Stripe.
 Read Lovable's story</span> <span class="sk-chip" title="list item">Runway protects developer time with no-code solutions from Stripe.
 Read Runway's story</span> <span class="sk-chip" title="list item">Supabase delivers its backend-as-a-service to 150 countries with Stripe.
 Read Supabase's story</span> <span class="sk-chip" title="list item">Linear partners with Stripe to handle billing and payments.
@@ -449,9 +470,9 @@ Read Linear's story</span></div></div><details class="sk-extract-details"><summa
 - Pricing
 - Sign in
 
-Start now
+[Start now](https://dashboard.stripe.com/register)
 
-Contact sales
+[Contact sales](/en-dk/contact/sales)
 
 Back
 
@@ -464,9 +485,9 @@ Global GDP running on Stripe:
 
 # Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.
 
-Get started
+[Get started](https://dashboard.stripe.com/register)
 
-Sign up with Google
+[Sign up with Google](https://dashboard.stripe.com/login/oauth/google/init)
 
 ## Flexible solutions for every business model.
 
@@ -498,7 +519,7 @@ Embed payments in your platform
 
 The internet economy conference
 
-Watch on demand
+[Watch on demand](https://stripe.com/sessions/2026?utm_medium=owned-surfaces&amp;utm_source=9cb9&amp;utm_campaign=GLOBAL_4301&amp;utm_content=8a70&amp;utm_term=5a728d3d167c)
 
 Patrick
 Collison
@@ -569,13 +590,13 @@ Run your business on a reliable platform that adapts to your needs.
 *Header:*
 ### Transform your enterprise with agile financial infrastructure
 
-Stripe for enterprises
+[Stripe for enterprises](/en-dk/enterprise)
 
 50% of Fortune 100 companies have used Stripe to grow their businesses – from expanding internationally to reimagining the customer experience.
 
 Hertz unifies commerce with Stripe.
 
-Read the story
+[Read the story](/en-dk/customers/hertz)
 
 160
 
@@ -589,11 +610,11 @@ Products used
 
 Payments, Terminal, Connect, Radar and Stripe Sigma
 
-Read the story
+[Read the story](/en-dk/customers/hertz)
 
 URBN consolidates $5 billion in online and in-store revenue onto Stripe.
 
-Read the story
+[Read the story](/en-dk/customers/urbn)
 
 5+
 
@@ -607,11 +628,11 @@ Products used
 
 Payments, Terminal, Connect, Stripe Sigma, Radar and Link
 
-Read the story
+[Read the story](/en-dk/customers/urbn)
 
 Instacart powers online grocery delivery with Stripe.
 
-Read the story
+[Read the story](/en-dk/customers/instacart)
 
 600K+
 
@@ -625,11 +646,11 @@ Products used
 
 Payments, Connect, Data Pipeline and Issuing
 
-Read the story
+[Read the story](/en-dk/customers/instacart)
 
 Le Monde improves local and international payments with Stripe.
 
-Read the story
+[Read the story](/en-dk/customers/le-monde)
 
 100%
 
@@ -643,7 +664,7 @@ Products used
 
 Payments, Stripe Sigma and Radar
 
-Read the story
+[Read the story](/en-dk/customers/le-monde)
 
 Realise value faster with dedicated experts
 
@@ -651,24 +672,24 @@ Realise value faster with dedicated experts
 
 Get tailored guidance from Stripe on implementation, complex integrations, or major migrations.
 
-View services
+[View services](/en-dk/professional-services)
 
 #### Stripe-certified experts.
 
 Work with a Stripe consulting partner that can integrate and deploy Stripe solutions on your behalf.
 
-View partners
+[View partners](/en-dk/partners)
 
 #### Support plans.
 
 Receive ongoing assistance and day-to-day support for technical questions with tiered plans based on your needs.
 
-View plans
+[View plans](/en-dk/support-plans)
 
 *Header:*
 ### Build a foundation for your startup that enables faster growth
 
-Stripe for startups
+[Stripe for startups](/en-dk/startups)
 
 From stablecoin pioneers to 78% of the Forbes AI 50, Stripe helps startups build what's next on easy-to-integrate financial infrastructure.
 
@@ -687,18 +708,30 @@ Read Browserbase's story
 - Decagon decreases support costs by 65% with Stripe-integrated agents.
 Read Decagon's story
 
-Stripe Startups programme.
+#### Stripe Startups programme.
+
 Access financial benefits, a focused community, and expert resources to help you grow your business.
+
 Apply now
 
-Stripe Atlas.
+[Stripe Startups programme.
+Access financial benefits, a focused community, and expert resources to help you grow your business.
+Apply now](/en-dk/startups#application)
+
+#### Stripe Atlas.
+
 Incorporate and get everything you need to fundraise, bank, and accept payments in two business days.
+
 Start your company
+
+[Stripe Atlas.
+Incorporate and get everything you need to fundraise, bank, and accept payments in two business days.
+Start your company](/en-dk/atlas)
 
 *Header:*
 ### Make your SaaS platform a complete financial operating system
 
-Stripe for platforms
+[Stripe for platforms](/en-dk/use-cases/platforms)
 
 From the Fortune 100 to the Forbes Cloud 100, vertical SaaS platforms use Stripe to expand their product offerings with embedded payments and financial services.
 
@@ -706,19 +739,19 @@ From the Fortune 100 to the Forbes Cloud 100, vertical SaaS platforms use Stripe
 
 Launch and scale payments products with lower operational overhead using embedded components and no-code tools.
 
-Read the guide
+[Read the guide](/en-dk/guides/best-practices-for-launching-and-scaling-platform-payments)
 
 #### Grow new lines of revenue.
 
 Monetise platform transactions – including payments, card interchange and financing fees.
 
-Read the guide
+[Read the guide](/en-dk/guides/introduction-to-monetizing-payments)
 
 #### Manage platform risk.
 
 Stay ahead of global regulations with tools for compliance, credit risk, fraud prevention and account security.
 
-Read the guide
+[Read the guide](/en-dk/guides/introduction-to-risk-management)
 
 With Stripe, we have a global technology partner to help our customers – from Canadian yoga studios to British boxing classes – keep growing and evolving in a new wellness world.
 
@@ -726,7 +759,7 @@ Kurtis Moyer,
 
 Lead Product Manager of Payments, Mindbody
 
-Read the story
+[Read the story](/en-dk/customers/mindbody)
 
 Without Stripe, it would have taken significant time and engineering effort to offer these resources to our customers. The financial infrastructure Stripe offers is incredibly valuable to Jobber, and we look forward to seeing what comes next.
 
@@ -734,7 +767,7 @@ Laura Collinson,
 
 Director of Fintech, Jobber
 
-Read the story
+[Read the story](/en-dk/customers/jobber)
 
 Stripe makes the subscriptions and payment piece really easy for everyone involved. And that helps us make it easy for writers and other creators to do the work they want to do on Substack and get paid for it.
 
@@ -742,7 +775,7 @@ Seth McMillan,
 
 Engineering Manager, Substack
 
-Read the story
+[Read the story](/en-dk/customers/substack)
 
 Stripe offers an enterprise-grade infrastructure that puts our customers on the cutting edge of modern payments technology. The combination of Terminal and Connect is a powerful integrated solution.
 
@@ -750,15 +783,15 @@ Dax Dasilva,
 
 Founder and CEO, Lightspeed
 
-Read the story
+[Read the story](/en-dk/customers/lightspeed-terminal)
 
 ## Reliable, extensible infrastructure for every stack.
 
 Adapt Stripe to your business needs with flexible integration options.
 
-View developer docs
+[View developer docs](https://docs.stripe.com/development)
 
-View Stripe's GitHub
+[View Stripe's GitHub](https://github.com/stripe)
 
 ### Connect to existing systems.
 
@@ -788,19 +821,19 @@ With AI-powered support, rich documentation, and built-in debugging tools, you c
 
 Set up billing, take in-person payments, or share a payment link – right from the Stripe Dashboard, no code required.
 
-Explore no-code
+[Explore no-code](https://docs.stripe.com/no-code)
 
 #### Use a pre-integrated platform.
 
 Browse our directory of platforms that integrate Stripe with website-building tools.
 
-See directory
+[See directory](https://marketplace.stripe.com/)
 
 #### Build your own integration.
 
 Use our SDKs, APIs, MCP server and AI developer tools to build and maintain your own integration with Stripe.
 
-Get started
+[Get started](https://docs.stripe.com/development)
 
 *Header:*
 ## What's happening
@@ -811,90 +844,54 @@ See the latest from Stripe.
 
 Our annual letter explores the trends defining the internet economy – including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.
 
-Read the letter
+[Read the letter](/en-dk/annual-updates/2025)
 
 ### 150K+ users have their best day ever on Stripe.
 
 From Black Friday through Cyber Monday 2025, Stripe processed more than US$40bn for businesses while maintaining a 99.9999% uptime.
 
-See the numbers
+[See the numbers](/en-dk/newsroom/news/bfcm2025)
 
 ### Tidemark's vertical and SMB SaaS benchmark report.
 
 Learn what's driving growth in vertical SaaS in 2025 – going multiproduct, embedding fintech and integrating AI into the core of their products.
 
-Get the data
+[Get the data](/en-dk/lp/vertical-saas-benchmark-2025?utm_medium=owned-surfaces&amp;utm_source=33d6&amp;utm_campaign=GLOBAL_4250&amp;utm_content=819a&amp;utm_term=a6a6d7b23e01)
 
 ### Shopify's Tobi Lütke sits down with John Collison.
 
 Hear them discuss the choices that shaped Shopify and Stripe, the future of commerce, and their advice for founders.
 
-Watch video
+[Watch video](https://www.youtube.com/watch?v=eMSqlQMk480)
 
 ### New tools to process payments outside app stores.
 
 New regulations mean new opportunities. Read how Stripe can help you process payments outside of the iOS and Android app stores, giving you more control and helping grow your revenue.
 
-Learn how
+[Learn how](/en-dk/use-cases/in-app-payments)
 
 ### Crypto.com partners with Stripe to enable better crypto payments.
 
 Learn how the partnership can help you tap into a new global customer base by letting customers pay with their crypto balance directly at checkout.
 
-View announcement
+[View announcement](/en-dk/customers/crypto-com-spotlight)
 
 ### Make your products shoppable through AI platforms.
 
 Find out how the Agentic Commerce Protocol (ACP) allows any business to accept purchases from AI platforms without requiring any major technical changes.
 
-Read more
+[Read more](/en-dk/blog/introducing-our-agentic-commerce-solutions)
 
 ### How leading retailers unify customer experiences and drive growth.
 
 Get insights into how other brands have unified their online and in-store experiences and optimised their checkouts for a seamless shopping experience.
 
-Get the report
+[Get the report](/en-dk/lp/how-retailers-drive-growth)
 
 Item 1 of 8: Businesses on Stripe generated US$1.9tn in 2025.
 
 - Businesses on Stripe generated US$1.9tn in 2025.Our annual letter explores the trends defining the internet economy – including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.Read the letter
-- 150K+ users have their best day ever on Stripe.From Black Friday through Cyber Monday 2025, Stripe processed more than US$40bn for businesses while maintaining a 99.9999% uptime.See the numbers
-- Tidemark's vertical and SMB SaaS benchmark report.Learn what's driving growth in vertical SaaS in 2025 – going multiproduct, embedding fintech and integrating AI into the core of their products.Get the data
-- Shopify's Tobi Lütke sits down with John Collison.Hear them discuss the choices that shaped Shopify and Stripe, the future of commerce, and their advice for founders.Watch video
-- New tools to process payments outside app stores.New regulations mean new opportunities. Read how Stripe can help you process payments outside of the iOS and Android app stores, giving you more control and helping grow your revenue.Learn how
-- Crypto.com partners with Stripe to enable better crypto payments.Learn how the partnership can help you tap into a new global customer base by letting customers pay with their crypto balance directly at checkout.View announcement
-- Make your products shoppable through AI platforms.Find out how the Agentic Commerce Protocol (ACP) allows any business to accept purchases from AI platforms without requiring any major technical changes.Read more
-- How leading retailers unify customer experiences and drive growth.Get insights into how other brands have unified their online and in-store experiences and optimised their checkouts for a seamless shopping experience.Get the report
-
-### Book of the week
-
-Entrepreneurship starts with ideas.
-
-#### 
-
-For more ideas on economic progress and technological advancement, see our in-house publications:
-
-Stripe Press
-
-Works in Progress
-
-Ready to get started?
-
-Create an account instantly, or contact us to design a custom package for your business.
-
-Start now
-
-Contact sales
-
-#### See what you'll pay
-
-Integrated per-transaction pricing with no hidden fees.
-
-Pricing details
-
-#### Start building
-
-Get up and running with Stripe in as little as 1</pre></details>
+- 150K+ users have their best day ever on Stripe.From Black Friday through Cyber Monday 2025, Strip</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
@@ -993,6 +990,15 @@ Get up and running with Stripe in as little as 1</pre></details>
       img.style.display = 'none';
       var f = img.parentElement.querySelector('.sk-preview-fallback');
       if (f) f.style.display = 'block';
+    });
+  });
+
+  // Hide any image thumbnail that fails to load (broken src, CORS, 404).
+  // The whole link wrapper is removed so we don't show empty boxes.
+  document.querySelectorAll('.sk-img-thumb img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      var thumb = img.closest('.sk-img-thumb');
+      if (thumb) thumb.style.display = 'none';
     });
   });
 

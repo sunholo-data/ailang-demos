@@ -27,7 +27,8 @@ import std/process (exec)
 import std/net (httpRequest, HttpResponse, NetError)
 import std/ai (callJson)
 import std/json (decode, getString, getStringArrayOrEmpty, getInt, asArray, asString, get, getOr, jn, ja, Json)
-import linkedin/types/sketch_types (ExtractedContent)
+import linkedin/types/sketch_types (ExtractedContent, DocparseImage)
+import std/string (startsWith, split)
 
 -- ─── Constants ────────────────────────────────────────────────
 
@@ -71,47 +72,48 @@ export func sketchFetch(url: string) -> string ! {Net} {
 -- topHeadings + imageDescriptions + listItems are capped lists used
 -- as chips on the rendered page to show what AILANG Parse saw.
 export type DocparseStats = {
-  headings:           int,
-  tables:             int,
-  images:             int,
-  lists:              int,
-  topHeadings:        [string],
-  imageDescriptions:  [string],
-  listItems:          [string]
+  headings:    int,
+  tables:      int,
+  images:      int,
+  lists:       int,
+  topHeadings: [string],
+  imageInfos:  [DocparseImage],
+  listItems:   [string]
 }
 
 func emptyStats() -> DocparseStats =
   { headings: 0, tables: 0, images: 0, lists: 0,
-    topHeadings: [], imageDescriptions: [], listItems: [] }
+    topHeadings: [], imageInfos: [], listItems: [] }
 
 -- Read /tmp/<...>.html.json (docparse's structured output) and
--- pull (headings, tables, images, topHeadings).
-export func sketchReadDocparseStats() -> DocparseStats ! {FS} {
+-- pull (headings, tables, images, topHeadings, listItems).
+-- pageUrl is needed to resolve relative image src URLs.
+export func sketchReadDocparseStats(pageUrl: string) -> DocparseStats ! {FS} {
   if fileExists(tmpJsonPath()) then
     match decode(readFile(tmpJsonPath())) {
-      Ok(j)  => statsFromJson(j),
+      Ok(j)  => statsFromJson(j, pageUrl),
       Err(_) => emptyStats()
     }
   else emptyStats()
 }
 
-func statsFromJson(top: Json) -> DocparseStats = {
+func statsFromJson(top: Json, pageUrl: string) -> DocparseStats = {
   let doc    = getOr(top, "document", jn());
   let blocks = getOr(doc, "blocks",   ja([]));
   -- Walk the whole tree — docparse's top-level summary only counts
   -- direct children, missing anything wrapped in section containers.
   let arr = match asArray(blocks) { Some(a) => a, None => [] };
   let allH = allHeadingsRec(arr);
-  let allImgDesc = allImageDescriptionsRec(arr);
+  let allImgs = allImagesRec(arr, pageUrl);
   let allListItems = allListItemsRec(arr);
   {
-    headings:          listLength(allH),
-    tables:            countBlocksByTypeRec(arr, "table"),
-    images:            listLength(allImgDesc),
-    lists:             countBlocksByTypeRec(arr, "list"),
-    topHeadings:       takeN(allH, maxTopHeadings()),
-    imageDescriptions: takeN(allImgDesc, maxTopHeadings()),
-    listItems:         takeN(allListItems, 12)
+    headings:    listLength(allH),
+    tables:      countBlocksByTypeRec(arr, "table"),
+    images:      listLength(allImgs),
+    lists:       countBlocksByTypeRec(arr, "list"),
+    topHeadings: takeN(allH, maxTopHeadings()),
+    imageInfos:  takeImages(allImgs, maxTopHeadings()),
+    listItems:   takeN(allListItems, 12)
   }
 }
 
@@ -151,24 +153,65 @@ func takeN(xs: [string], n: int) -> [string] = match xs {
   [x, ...rest] => if n <= 0 then [] else listConcat([x], takeN(rest, n - 1))
 }
 
--- Recursively collect image descriptions (alt text) from a block tree.
--- HTML images don't carry data in docparse's output (only alt text);
--- this lets us still surface them as chips on the rendered page.
-func allImageDescriptionsRec(blocks: [Json]) -> [string] =
-  foldl(\acc b. listConcat(acc, imageDescOfBlock(b)), [], blocks)
+-- Recursively collect images (description + resolved src URL) from a
+-- block tree. AILANG Parse v0.14.1+ exposes the src URL; we resolve
+-- it against pageUrl so the sketch can embed it as a thumbnail.
+func allImagesRec(blocks: [Json], pageUrl: string) -> [DocparseImage] =
+  foldl(\acc b. listConcat(acc, imageInfoOfBlock(b, pageUrl)), [], blocks)
 
-func imageDescOfBlock(b: Json) -> [string] = {
+func imageInfoOfBlock(b: Json, pageUrl: string) -> [DocparseImage] = {
   let t = getOrElse(getString(b, "type"), "");
   if t == "image" then {
     let desc = getOrElse(getString(b, "description"), "");
-    if length(desc) > 0 then [desc] else []
+    let rawSrc = getOrElse(getString(b, "src"), "");
+    if length(rawSrc) == 0 then []
+    else [{ description: desc, src: resolveUrl(pageUrl, rawSrc) }]
   } else if t == "section" then
     match asArray(getOr(b, "blocks", ja([]))) {
-      Some(children) => allImageDescriptionsRec(children),
+      Some(children) => allImagesRec(children, pageUrl),
       None           => []
     }
   else []
 }
+
+func takeImages(xs: [DocparseImage], n: int) -> [DocparseImage] = match xs {
+  []           => [],
+  [x, ...rest] => if n <= 0 then [] else listConcat([x], takeImages(rest, n - 1))
+}
+
+-- ─── URL resolution ──────────────────────────────────────────
+
+-- Resolve a possibly-relative src against the page URL.
+-- Handles: absolute, scheme-relative (//), data URIs, root-relative,
+-- and same-dir relative URLs.
+export func resolveUrl(pageUrl: string, src: string) -> string =
+  if startsWith(src, "http://") || startsWith(src, "https://") then src
+  else if startsWith(src, "//") then "https:${src}"
+  else if startsWith(src, "data:") then src
+  else if startsWith(src, "/") then "${urlOrigin(pageUrl)}${src}"
+  else "${urlBasePath(pageUrl)}${src}"
+
+-- Returns "https://www.sunholo.com" from any URL on that host.
+func urlOrigin(url: string) -> string = match split(url, "/") {
+  [scheme, _, host, ...rest] => "${scheme}//${host}",
+  _                          => url
+}
+
+-- Returns origin + path up to and including the last "/".
+-- "https://example.com/a/b/page.html" → "https://example.com/a/b/"
+-- "https://example.com"               → "https://example.com/"
+func urlBasePath(url: string) -> string =
+  let idx = lastSlashIndex(url) in
+  if idx < 0 || idx < 8 then "${url}/"  -- 8 == length of "https://"
+  else substring(url, 0, idx + 1)
+
+-- Walk from the end of the string finding the last "/".
+func lastSlashIndex(s: string) -> int = scanForLastSlash(s, length(s) - 1)
+
+func scanForLastSlash(s: string, pos: int) -> int =
+  if pos < 0 then -1
+  else if substring(s, pos, pos + 1) == "/" then pos
+  else scanForLastSlash(s, pos - 1)
 
 -- Recursively collect list items. Drops duplicates so the chips
 -- don't repeat the same nav item shown in multiple lists.
@@ -266,7 +309,7 @@ export func sketchClassify(
         imageCount:        stats.images,
         listCount:         stats.lists,
         topHeadings:       stats.topHeadings,
-        imageDescriptions: stats.imageDescriptions,
+        images:            stats.imageInfos,
         listItems:         stats.listItems,
         extractedMarkdown: markdown
       }
@@ -286,7 +329,7 @@ export func sketchClassify(
       imageCount:        0,
       listCount:         0,
       topHeadings:       [],
-      imageDescriptions: [],
+      images:            [],
       listItems:         [],
       extractedMarkdown: ""
     }
@@ -316,14 +359,14 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
       imageCount:        0,
       listCount:         0,
       topHeadings:       [],
-      imageDescriptions: [],
+      images:            [],
       listItems:         [],
       extractedMarkdown: ""
     }
   } else {
     -- Try docparse, fall back to raw HTML.
     match sketchTryDocparse(html) {
-      Some(md) => sketchClassify(url, md, html, "docparse", 1, sketchReadDocparseStats(), sketchTruncate(md, maxExtractedMarkdown())),
+      Some(md) => sketchClassify(url, md, html, "docparse", 1, sketchReadDocparseStats(url), sketchTruncate(md, maxExtractedMarkdown())),
       None     => sketchClassify(url, html, html, "ai-fallback", 0, emptyStats(), "")
     }
   }

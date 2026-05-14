@@ -26,6 +26,14 @@ export type Topic = Privacy
                   | Portable
                   | AgentReady
 
+-- Image extracted by AILANG Parse (v0.14.1+ exposes the src URL).
+-- src is resolved to an absolute URL by sketch_extract.ail so it
+-- can be embedded directly in the sketch page.
+export type DocparseImage = {
+  description: string,
+  src:         string
+}
+
 -- One measurable thing about a fetched page that maps to an
 -- AILANG primitive. The `ailangFeature` field is the answer to
 -- "if this signal is missing, what AILANG feature would supply it".
@@ -83,9 +91,9 @@ export type ExtractedContent = {
   listCount:    int,
   -- Sampled content from each block type, capped by the extractor.
   -- Used as chip rows in the "What AILANG Parse sees" section.
-  topHeadings:       [string],
-  imageDescriptions: [string],
-  listItems:         [string],
+  topHeadings: [string],
+  images:      [DocparseImage],
+  listItems:   [string],
   -- The "LLM-ready" markdown that AILANG Parse emits from the
   -- docparse JSON. Truncated to ~12KB to keep the rendered HTML
   -- size sane. Empty when extractionPath isn't "docparse".

@@ -12,7 +12,7 @@ module linkedin/services/sketch_template
 import std/fs (readFile)
 import std/string (replaceMany, intToStr, join, replace, length)
 import std/list (map, concat as listConcat, length as listLength)
-import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Privacy, Portable, AgentReady)
+import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, DocparseImage, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
 
 -- ─── Topic ↔ string helpers ───────────────────────────────────
@@ -83,8 +83,11 @@ func renderWhyHtml(signals: [Signal]) -> string =
 func renderHeadingPill(h: string) -> string =
   "<span class=\"sk-chip\" title=\"extracted heading\">${h}</span>"
 
-func renderImagePill(d: string) -> string =
-  "<span class=\"sk-chip\" title=\"image alt text\">${d}</span>"
+-- Render an image extracted by AILANG Parse as a thumbnail with
+-- its alt text on hover. The <img> has loading=lazy + the JS error
+-- handler in sketch.html hides any thumbnail that fails to load.
+func renderImageThumb(img: DocparseImage) -> string =
+  "<a class=\"sk-img-thumb\" href=\"${img.src}\" target=\"_blank\" rel=\"noopener\" title=\"${img.description}\"><img src=\"${img.src}\" alt=\"${img.description}\" loading=\"lazy\"></a>"
 
 func renderListPill(item: string) -> string =
   "<span class=\"sk-chip\" title=\"list item\">${item}</span>"
@@ -110,9 +113,10 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
                then "<div class=\"sk-extract-header\"><h3>What AILANG Parse sees on ${domain}</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div>"
                else "";
 
-  let headingsRow = renderExtractRow("headings",  e.headingCount, join(" ", map(renderHeadingPill, e.topHeadings)));
-  let imagesRow   = renderExtractRow("images",    e.imageCount,   join(" ", map(renderImagePill,   e.imageDescriptions)));
-  let listsRow    = renderExtractRow("list items", e.listCount,   join(" ", map(renderListPill,    e.listItems)));
+  let headingsRow = renderExtractRow("headings",   e.headingCount, join(" ", map(renderHeadingPill, e.topHeadings)));
+  let imagesHtml  = if listLength(e.images) == 0 then "" else
+                    "<div class=\"sk-extract-row\"><p class=\"sk-extract-row-label\"><span class=\"num\">${intToStr(e.imageCount)}</span> images</p><div class=\"sk-img-strip\">${join("", map(renderImageThumb, e.images))}</div></div>";
+  let listsRow    = renderExtractRow("list items", e.listCount,    join(" ", map(renderListPill,    e.listItems)));
 
   -- Full markdown extract inside a <details> collapsible.
   let extractDetails = if length(e.extractedMarkdown) < 200 then ""
@@ -128,7 +132,7 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
     "</div>"
   ]);
 
-  "${header}${statsLine}${headingsRow}${imagesRow}${listsRow}${extractDetails}"
+  "${header}${statsLine}${headingsRow}${imagesHtml}${listsRow}${extractDetails}"
 }
 
 -- Minimal HTML-escape so the embedded markdown can't break the page.
