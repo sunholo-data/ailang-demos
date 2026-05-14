@@ -42,8 +42,11 @@ func seeds() -> [SeedEntry] = [
   -- agent-ready: developer portals, API docs
   { url: "https://docs.adyen.com/development-resources/api-credentials/",       topic: AgentReady },
   { url: "https://developer.spotify.com/documentation/web-api",                  topic: AgentReady },
-  -- pleo.io/en/developers and /en/security both 404'd at seed time;
-  -- dropped until a working URL surfaces.
+  -- pleo.io has no public developer portal — /en/developers, /en/security,
+  -- /en/trust-center all 404. Best public-facing agent-relevant page is
+  -- the integrations list. (Previously seeded against 404 pages —
+  -- sketchFetch now refuses non-2xx so that mistake is unrepeatable.)
+  { url: "https://www.pleo.io/en/integrations",                                   topic: AgentReady },
   { url: "https://docs.mollie.com/reference/v2/payments-api/create-payment",     topic: AgentReady },
   { url: "https://docs.klarna.com/api/",                                         topic: AgentReady },
   { url: "https://doc.bunq.com/",                                                topic: AgentReady },
@@ -58,7 +61,9 @@ func seeds() -> [SeedEntry] = [
   { url: "https://mistral.ai/terms",                                             topic: Privacy },
   { url: "https://mailfence.com/en/about",                                       topic: Privacy },
   { url: "https://www.siteimprove.com/glossary/data-privacy/",                   topic: Privacy },
-  -- pleo.io privacy entry also 404'd — see comment above.
+  -- pleo.io privacy/security pages 404; using the legal landing page
+  -- which is their consolidated privacy/terms entry point.
+  { url: "https://www.pleo.io/en/legal",                                          topic: Privacy },
   { url: "https://weaviate.io/security",                                         topic: Privacy },
   { url: "https://posit.co/about/security/",                                     topic: Privacy },
   { url: "https://handbook.gitlab.com/handbook/security/",                       topic: Privacy },
