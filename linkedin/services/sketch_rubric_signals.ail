@@ -148,7 +148,7 @@ export func sigCrossRuntimeClaim() -> Signal = {
   points:        0,
   maxPoints:     2,
   detected:      false,
-  ailangFeature: "Three-runtime deploy — same .ail module runs as WASM in the browser, a Cloud Run container, and a native CLI"
+  ailangFeature: "Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change"
 }
 
 export func sigByoKey() -> Signal = {
@@ -158,7 +158,7 @@ export func sigByoKey() -> Signal = {
   points:        0,
   maxPoints:     2,
   detected:      false,
-  ailangFeature: "Browser ai.step with BYO API key — caller-held credentials, AILANG WASM, same Step API as the server"
+  ailangFeature: "AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side"
 }
 
 -- ─── registry — all V1 signals in one list ─────────────────────

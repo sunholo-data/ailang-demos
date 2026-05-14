@@ -59,8 +59,8 @@ V1 detection is **body-text-based only**. The sketch executor's effect signature
 | Data residency / on-prem language | `privacy` | 2 | Body mentions "data residency", "on-premises", "on-prem", "sovereign cloud", "EU-hosted", "data sovereignty", or "self-hosted" | Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI |
 | Single-vendor LLM language | `portable` | 2 (penalty) | Body mentions "powered by Claude/GPT/Gemini" or "built on Claude/GPT/Gemini" | `std/ai` multi-provider — switch vendor without rewriting |
 | Multiple AI providers cited | `portable` | 2 | Body names two or more of: `claude`, `anthropic`, `gpt`, `openai`, `gemini`, `mistral`, `llama`, `ollama`, `openrouter` | `std/ai` — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers |
-| Cross-runtime / deployment portability | `portable` | 2 | Body mentions "self-hosted", "on-prem", "wasm", "webassembly", "deploy anywhere", "kubernetes", or "docker" | Three-runtime deploy — same `.ail` module runs as WASM in the browser, a Cloud Run container, and a native CLI |
-| BYO key / model-agnostic | `portable` | 2 | Body mentions "bring your own key", "BYOK", "BYO key", "model-agnostic", "any LLM", or "any model" | Browser `ai.step` with BYO API key — caller-held credentials, AILANG WASM, same Step API as the server |
+| Cross-runtime / deployment portability | `portable` | 2 | Body mentions "self-hosted", "on-prem", "wasm", "webassembly", "deploy anywhere", "kubernetes", or "docker" | Effect handlers as runtime adapters — same `.ail` module runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change |
+| BYO key / model-agnostic | `portable` | 2 | Body mentions "bring your own key", "BYOK", "BYO key", "model-agnostic", "any LLM", or "any model" | AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side |
 
 ### Polarity notes
 
