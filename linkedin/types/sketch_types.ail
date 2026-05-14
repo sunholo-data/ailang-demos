@@ -99,6 +99,21 @@ export type ExtractedContent = {
   imageCount:   int,
   listCount:    int,
   linkCount:    int,
+  -- AILANG Parse v0.15.x+ exposes a `kind` field on each section
+  -- block: header, nav, main, article, section, footer, figure.
+  -- These counts let us render the page's structural skeleton —
+  -- proof we understood the page shape, not just the words.
+  sectionHeaderCount:  int,
+  sectionNavCount:     int,
+  sectionMainCount:    int,
+  sectionArticleCount: int,
+  sectionSectionCount: int,
+  sectionFooterCount:  int,
+  sectionFigureCount:  int,
+  -- Count of text blocks whose style is "code" (recursively). A
+  -- strong indicator of developer-doc / API-reference pages — high
+  -- correlation with agent-ready signals.
+  codeBlockCount: int,
   -- Sampled content from each block type, capped by the extractor.
   -- Used as chip rows in the "What AILANG Parse sees" section.
   topHeadings: [string],

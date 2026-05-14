@@ -77,6 +77,16 @@ export type DocparseStats = {
   images:      int,
   lists:       int,
   links:       int,
+  -- section.kind counts (header/nav/main/article/section/footer/figure)
+  sectionHeader:  int,
+  sectionNav:     int,
+  sectionMain:    int,
+  sectionArticle: int,
+  sectionSection: int,
+  sectionFooter:  int,
+  sectionFigure:  int,
+  -- text blocks with style == "code"
+  codeBlocks: int,
   topHeadings: [string],
   imageInfos:  [DocparseImage],
   linkInfos:   [DocparseLink],
@@ -85,6 +95,9 @@ export type DocparseStats = {
 
 func emptyStats() -> DocparseStats =
   { headings: 0, tables: 0, images: 0, lists: 0, links: 0,
+    sectionHeader: 0, sectionNav: 0, sectionMain: 0, sectionArticle: 0,
+    sectionSection: 0, sectionFooter: 0, sectionFigure: 0,
+    codeBlocks: 0,
     topHeadings: [], imageInfos: [], linkInfos: [], listItems: [] }
 
 -- Read /tmp/<...>.html.json (docparse's structured output) and
@@ -110,16 +123,57 @@ func statsFromJson(top: Json, pageUrl: string) -> DocparseStats = {
   let allLinks = dedupLinks(allLinksRec(arr, pageUrl));
   let allListItems = allListItemsRec(arr);
   {
-    headings:    listLength(allH),
-    tables:      countBlocksByTypeRec(arr, "table"),
-    images:      listLength(allImgs),
-    lists:       countBlocksByTypeRec(arr, "list"),
-    links:       listLength(allLinks),
-    topHeadings: takeN(allH, maxTopHeadings()),
-    imageInfos:  takeImages(allImgs, maxTopHeadings()),
-    linkInfos:   takeLinks(allLinks, 12),
-    listItems:   takeN(allListItems, 12)
+    headings:       listLength(allH),
+    tables:         countBlocksByTypeRec(arr, "table"),
+    images:         listLength(allImgs),
+    lists:          countBlocksByTypeRec(arr, "list"),
+    links:          listLength(allLinks),
+    sectionHeader:  countSectionKindRec(arr, "header"),
+    sectionNav:     countSectionKindRec(arr, "nav"),
+    sectionMain:    countSectionKindRec(arr, "main"),
+    sectionArticle: countSectionKindRec(arr, "article"),
+    sectionSection: countSectionKindRec(arr, "section"),
+    sectionFooter:  countSectionKindRec(arr, "footer"),
+    sectionFigure:  countSectionKindRec(arr, "figure"),
+    codeBlocks:     countCodeBlocksRec(arr),
+    topHeadings:    takeN(allH, maxTopHeadings()),
+    imageInfos:     takeImages(allImgs, maxTopHeadings()),
+    linkInfos:      takeLinks(allLinks, 12),
+    listItems:      takeN(allListItems, 12)
   }
+}
+
+-- Recursively count `section` blocks whose `kind` field matches the
+-- target. Sections nest, so we walk the tree.
+func countSectionKindRec(blocks: [Json], targetKind: string) -> int =
+  foldl(\acc b. acc + sectionKindInBlock(b, targetKind), 0, blocks)
+
+func sectionKindInBlock(b: Json, targetKind: string) -> int = {
+  let t = getOrElse(getString(b, "type"), "");
+  let selfCount = if t == "section" && getOrElse(getString(b, "kind"), "") == targetKind then 1 else 0;
+  let childCount = if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => countSectionKindRec(children, targetKind),
+      None           => 0
+    }
+  else 0;
+  selfCount + childCount
+}
+
+-- Recursively count text blocks whose style is "code".
+func countCodeBlocksRec(blocks: [Json]) -> int =
+  foldl(\acc b. acc + codeBlocksInBlock(b), 0, blocks)
+
+func codeBlocksInBlock(b: Json) -> int = {
+  let t = getOrElse(getString(b, "type"), "");
+  let selfCount = if t == "text" && getOrElse(getString(b, "style"), "") == "code" then 1 else 0;
+  let childCount = if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => countCodeBlocksRec(children),
+      None           => 0
+    }
+  else 0;
+  selfCount + childCount
 }
 
 -- Recursively collect heading text from a block tree.
@@ -343,47 +397,63 @@ export func sketchClassify(
       let jobs      = getStringArrayOrEmpty(json, "jobs");
       let entities  = getStringArrayOrEmpty(json, "entities");
       {
-        url:               url,
-        domain:            domain,
-        audience:          audience,
-        jobs:              jobs,
-        entities:          entities,
-        narrative:         narrative,
-        extractionPath:    extractionPath,
-        blockCount:        blockCount,
-        rawBody:           rawBody,
-        headingCount:      stats.headings,
-        tableCount:        stats.tables,
-        imageCount:        stats.images,
-        listCount:         stats.lists,
-        linkCount:         stats.links,
-        topHeadings:       stats.topHeadings,
-        images:            stats.imageInfos,
-        links:             stats.linkInfos,
-        listItems:         stats.listItems,
-        extractedMarkdown: markdown
+        url:                 url,
+        domain:              domain,
+        audience:            audience,
+        jobs:                jobs,
+        entities:            entities,
+        narrative:           narrative,
+        extractionPath:      extractionPath,
+        blockCount:          blockCount,
+        rawBody:             rawBody,
+        headingCount:        stats.headings,
+        tableCount:          stats.tables,
+        imageCount:          stats.images,
+        listCount:           stats.lists,
+        linkCount:           stats.links,
+        sectionHeaderCount:  stats.sectionHeader,
+        sectionNavCount:     stats.sectionNav,
+        sectionMainCount:    stats.sectionMain,
+        sectionArticleCount: stats.sectionArticle,
+        sectionSectionCount: stats.sectionSection,
+        sectionFooterCount:  stats.sectionFooter,
+        sectionFigureCount:  stats.sectionFigure,
+        codeBlockCount:      stats.codeBlocks,
+        topHeadings:         stats.topHeadings,
+        images:              stats.imageInfos,
+        links:               stats.linkInfos,
+        listItems:           stats.listItems,
+        extractedMarkdown:   markdown
       }
     },
     Err(_) => {
-      url:               url,
-      domain:            "other",
-      audience:          "",
-      jobs:              [],
-      entities:          [],
-      narrative:         "(extraction failed — JSON parse error)",
-      extractionPath:    "polite-refuse",
-      blockCount:        0,
-      rawBody:           rawBody,
-      headingCount:      0,
-      tableCount:        0,
-      imageCount:        0,
-      listCount:         0,
-      linkCount:         0,
-      topHeadings:       [],
-      images:            [],
-      links:             [],
-      listItems:         [],
-      extractedMarkdown: ""
+      url:                 url,
+      domain:              "other",
+      audience:            "",
+      jobs:                [],
+      entities:            [],
+      narrative:           "(extraction failed — JSON parse error)",
+      extractionPath:      "polite-refuse",
+      blockCount:          0,
+      rawBody:             rawBody,
+      headingCount:        0,
+      tableCount:          0,
+      imageCount:          0,
+      listCount:           0,
+      linkCount:           0,
+      sectionHeaderCount:  0,
+      sectionNavCount:     0,
+      sectionMainCount:    0,
+      sectionArticleCount: 0,
+      sectionSectionCount: 0,
+      sectionFooterCount:  0,
+      sectionFigureCount:  0,
+      codeBlockCount:      0,
+      topHeadings:         [],
+      images:              [],
+      links:               [],
+      listItems:           [],
+      extractedMarkdown:   ""
     }
   }
 }
@@ -397,25 +467,33 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
   if length(html) < 200 then {
     -- Empty or tiny body — polite refuse, no AI call.
     {
-      url:               url,
-      domain:            "other",
-      audience:          "",
-      jobs:              [],
-      entities:          [],
-      narrative:         "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
-      extractionPath:    "polite-refuse",
-      blockCount:        0,
-      rawBody:           html,
-      headingCount:      0,
-      tableCount:        0,
-      imageCount:        0,
-      listCount:         0,
-      linkCount:         0,
-      topHeadings:       [],
-      images:            [],
-      links:             [],
-      listItems:         [],
-      extractedMarkdown: ""
+      url:                 url,
+      domain:              "other",
+      audience:            "",
+      jobs:                [],
+      entities:            [],
+      narrative:           "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
+      extractionPath:      "polite-refuse",
+      blockCount:          0,
+      rawBody:             html,
+      headingCount:        0,
+      tableCount:          0,
+      imageCount:          0,
+      listCount:           0,
+      linkCount:           0,
+      sectionHeaderCount:  0,
+      sectionNavCount:     0,
+      sectionMainCount:    0,
+      sectionArticleCount: 0,
+      sectionSectionCount: 0,
+      sectionFooterCount:  0,
+      sectionFigureCount:  0,
+      codeBlockCount:      0,
+      topHeadings:         [],
+      images:              [],
+      links:               [],
+      listItems:           [],
+      extractedMarkdown:   ""
     }
   } else {
     -- Try docparse, fall back to raw HTML.

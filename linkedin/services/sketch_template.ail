@@ -125,10 +125,17 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
                     "<div class=\"sk-extract-row\"><p class=\"sk-extract-row-label\"><span class=\"num\">${intToStr(e.imageCount)}</span> images</p><div class=\"sk-img-strip\">${join("", map(renderImageThumb, e.images))}</div></div>";
   let listsRow    = renderExtractRow("list items", e.listCount,    join(" ", map(renderListPill,    e.listItems)));
   let linksRow    = renderExtractRow("links",      e.linkCount,    join(" ", map(renderLinkChip,    e.links)));
+  let skeletonRow = renderPageSkeletonRow(e);
 
   -- Full markdown extract inside a <details> collapsible.
   let extractDetails = if length(e.extractedMarkdown) < 200 then ""
                        else "<details class=\"sk-extract-details\"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class=\"sk-extract-md\">${escapeHtmlForPre(e.extractedMarkdown)}</pre></details>";
+
+  -- Optional "code samples" stat — only appears when ≥1, since most
+  -- marketing pages have zero and the chip would just read as noise.
+  let codeStat = if e.codeBlockCount > 0 then
+    "<span class=\"stat\"><span class=\"num\">${intToStr(e.codeBlockCount)}</span> code samples</span>"
+  else "";
 
   let statsLine = join("", [
     "<div class=\"sk-extract-stats\">",
@@ -137,11 +144,48 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.listCount),    "</span> lists</span>",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.tableCount),   "</span> tables</span>",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.linkCount),    "</span> links</span>",
+    codeStat,
     "<span class=\"", pathClass, "\">", pathLabel, "</span>",
     "</div>"
   ]);
 
-  "${header}${statsLine}${headingsRow}${imagesHtml}${listsRow}${linksRow}${extractDetails}"
+  "${header}${statsLine}${skeletonRow}${headingsRow}${imagesHtml}${listsRow}${linksRow}${extractDetails}"
+}
+
+-- Page-skeleton chip row using `section.kind` counts from AILANG
+-- Parse v0.15.x+. Shows the structural shape of the page: header,
+-- nav, main, article, section, footer, figure. Each kind that's
+-- absent is silently dropped so the row stays clean.
+func renderPageSkeletonRow(e: ExtractedContent) -> string =
+  let chips = join(" ", concatChips([
+    skeletonChip("header",  e.sectionHeaderCount),
+    skeletonChip("nav",     e.sectionNavCount),
+    skeletonChip("main",    e.sectionMainCount),
+    skeletonChip("article", e.sectionArticleCount),
+    skeletonChip("section", e.sectionSectionCount),
+    skeletonChip("footer",  e.sectionFooterCount),
+    skeletonChip("figure",  e.sectionFigureCount)
+  ])) in
+  let totalKinds = e.sectionHeaderCount + e.sectionNavCount + e.sectionMainCount
+                 + e.sectionArticleCount + e.sectionSectionCount + e.sectionFooterCount
+                 + e.sectionFigureCount
+  in if totalKinds == 0 then ""
+  else join("", [
+    "<div class=\"sk-extract-row\">",
+    "<p class=\"sk-extract-row-label\"><span class=\"num\">", intToStr(totalKinds), "</span> section${if totalKinds == 1 then "" else "s"} — page skeleton</p>",
+    "<div class=\"sk-chips\">", chips, "</div>",
+    "</div>"
+  ])
+
+-- Returns "<chip>" if count > 0, "" otherwise. Plural-friendly.
+func skeletonChip(kind: string, count: int) -> string =
+  if count == 0 then ""
+  else "<span class=\"sk-chip\" title=\"section.kind = ${kind}\"><span class=\"sk-kind-count\">${intToStr(count)}</span> ${kind}${if count == 1 then "" else "s"}</span>"
+
+-- Drop empty strings from a list of chip HTMLs.
+func concatChips(xs: [string]) -> [string] = match xs {
+  []           => [],
+  [x, ...rest] => if length(x) == 0 then concatChips(rest) else listConcat([x], concatChips(rest))
 }
 
 -- Minimal HTML-escape so the embedded markdown can't break the page.
