@@ -42,7 +42,8 @@ func seeds() -> [SeedEntry] = [
   -- agent-ready: developer portals, API docs
   { url: "https://docs.adyen.com/development-resources/api-credentials/",       topic: AgentReady },
   { url: "https://developer.spotify.com/documentation/web-api",                  topic: AgentReady },
-  { url: "https://www.pleo.io/en/developers",                                    topic: AgentReady },
+  -- pleo.io/en/developers and /en/security both 404'd at seed time;
+  -- dropped until a working URL surfaces.
   { url: "https://docs.mollie.com/reference/v2/payments-api/create-payment",     topic: AgentReady },
   { url: "https://docs.klarna.com/api/",                                         topic: AgentReady },
   { url: "https://doc.bunq.com/",                                                topic: AgentReady },
@@ -57,7 +58,7 @@ func seeds() -> [SeedEntry] = [
   { url: "https://mistral.ai/terms",                                             topic: Privacy },
   { url: "https://mailfence.com/en/about",                                       topic: Privacy },
   { url: "https://www.siteimprove.com/glossary/data-privacy/",                   topic: Privacy },
-  { url: "https://www.pleo.io/en/security",                                      topic: Privacy },
+  -- pleo.io privacy entry also 404'd — see comment above.
   { url: "https://weaviate.io/security",                                         topic: Privacy },
   { url: "https://posit.co/about/security/",                                     topic: Privacy },
   { url: "https://handbook.gitlab.com/handbook/security/",                       topic: Privacy },

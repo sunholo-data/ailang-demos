@@ -56,11 +56,19 @@ func classifyPrompt(text: string) -> string =
 
 -- ─── Fetch ────────────────────────────────────────────────────
 
--- Fetch a URL once. Returns the body string or "" on failure.
+-- Fetch a URL once. Returns the body string or "" on failure, where
+-- failure includes any non-2xx status. Without this check, sites'
+-- 404/410 pages are often large enough to pass the polite-refuse
+-- threshold downstream — we'd end up scoring the marketing 404 page
+-- instead of refusing to score (e.g. pleo.io shipped a 5KB 404 with
+-- enough text to compile a "sketch" of nothing).
 -- The Net @limit=1 budget is the executor's; this just makes the one call.
-export func sketchFetch(url: string) -> string ! {Net} {
+export func sketchFetch(url: string) -> string ! {Net, IO} {
   match httpRequest("GET", url, [], "") {
-    Ok(resp)  => resp.body,
+    Ok(resp)  => if resp.ok then resp.body else {
+      println("  ✗ ${url} returned HTTP ${intToStr(resp.status)} — refusing to score the error page");
+      ""
+    },
     Err(_)    => ""
   }
 }
