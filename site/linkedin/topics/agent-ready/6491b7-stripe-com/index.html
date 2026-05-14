@@ -194,9 +194,9 @@
   }
   .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
 
-  /* Iframe preview of the source URL — between §2 and §3.
-     Sandboxed for safety; many sites X-Frame-Options block embedding
-     so the fallback link below is the always-working alternative. */
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
   .sk-preview-section {
     margin: 0 0 16px;
     background: var(--bg-card); border: 1px solid var(--border);
@@ -216,17 +216,30 @@
     max-width: 60%;
   }
   .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
-  .sk-preview-iframe {
-    width: 100%; height: 480px; border: 0; display: block;
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
     background: var(--bg-input);
   }
   .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
     padding: 10px 20px;
     font-family: var(--font-mono); font-size: 11px;
     color: var(--text-muted); letter-spacing: 0.04em;
-    background: var(--bg-input);
+    border-top: 1px solid var(--border);
+    text-align: right;
   }
-  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
 
   /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
   details.sk-extract-details {
@@ -420,9 +433,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on stripe.com</p>
-    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to Fortune 100 enterprises, looking to integrate global financial infrastructure.</h2>
-    <blockquote class="sk-prom-narrative">Stripe provides comprehensive financial infrastructure for the internet economy. The platform enables businesses to accept payments, manage subscriptions, issue cards, and handle complex revenue models through a global API-driven network. It supports over 135 currencies and provides tools for fraud prevention, compliance, and enterprise-scale financial operations.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">Payment gateway</span> <span class="sk-chip">Stripe Billing</span> <span class="sk-chip">API integration</span> <span class="sk-chip">Merchant account</span> <span class="sk-chip">Global payout</span></div>
+    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to Fortune 100 companies, seeking financial infrastructure for global commerce.</h2>
+    <blockquote class="sk-prom-narrative">Stripe provides a comprehensive financial technology suite to manage online and in-person transactions globally. Its infrastructure supports payments, billing, and card issuing through AI-powered developer tools and no-code dashboards. The platform facilitates borderless money movement and embedded finance for diverse business models including SaaS, marketplaces, and traditional enterprises.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">API</span> <span class="sk-chip">Merchant account</span> <span class="sk-chip">Secure payment gateway</span> <span class="sk-chip">Payment methods</span> <span class="sk-chip">Revenue models</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products</span> <span class="sk-chip" title="list item">Solutions</span> <span class="sk-chip" title="list item">Developers</span> <span class="sk-chip" title="list item">Resources</span> <span class="sk-chip" title="list item">Pricing</span> <span class="sk-chip" title="list item">Sign in</span> <span class="sk-chip" title="list item">Sign inSign in</span> <span class="sk-chip" title="list item">Contact sales</span> <span class="sk-chip" title="list item">Lovable grows into a vibe-coding juggernaut with Stripe.
 Read Lovable's story</span> <span class="sk-chip" title="list item">Runway protects developer time with no-code solutions from Stripe.
 Read Runway's story</span> <span class="sk-chip" title="list item">Supabase delivers its backend-as-a-service to 150 countries with Stripe.
@@ -884,21 +897,22 @@ Pricing details
 Get up and running with Stripe in as little as 1</pre></details>
   </section>
 
-  <!-- ─── Preview iframe of the source URL ─── -->
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
   <section class="sk-preview-section">
     <div class="sk-preview-head">
       <span>page preview · the URL we fetched</span>
       <a class="url" href="https://stripe.com" target="_blank" rel="noopener">https://stripe.com ↗</a>
     </div>
-    <iframe class="sk-preview-iframe"
-            src="https://stripe.com"
-            loading="lazy"
-            referrerpolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-popups"
-            title="Preview of stripe.com"></iframe>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://stripe.com"
+         alt="Screenshot of stripe.com"
+         loading="lazy">
     <p class="sk-preview-fallback">
-      Some sites set X-Frame-Options that block iframe embedding. If the frame above is blank,
-      <a href="https://stripe.com" target="_blank" rel="noopener">open the URL in a new tab</a>.
+      Couldn't render a preview for this site.
+      <a href="https://stripe.com" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
     </p>
   </section>
 
@@ -972,6 +986,16 @@ Get up and running with Stripe in as little as 1</pre></details>
 </div>
 
 <script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
   // Fill the rank callout from the topic's leaderboard.json. Server-render
   // can't know the rank ahead of time — it changes whenever another sketch
   // is added or re-scored. JS reads ../leaderboard.json (relative to this

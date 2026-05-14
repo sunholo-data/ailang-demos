@@ -194,9 +194,9 @@
   }
   .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
 
-  /* Iframe preview of the source URL — between §2 and §3.
-     Sandboxed for safety; many sites X-Frame-Options block embedding
-     so the fallback link below is the always-working alternative. */
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
   .sk-preview-section {
     margin: 0 0 16px;
     background: var(--bg-card); border: 1px solid var(--border);
@@ -216,17 +216,30 @@
     max-width: 60%;
   }
   .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
-  .sk-preview-iframe {
-    width: 100%; height: 480px; border: 0; display: block;
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
     background: var(--bg-input);
   }
   .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
     padding: 10px 20px;
     font-family: var(--font-mono); font-size: 11px;
     color: var(--text-muted); letter-spacing: 0.04em;
-    background: var(--bg-input);
+    border-top: 1px solid var(--border);
+    text-align: right;
   }
-  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
 
   /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
   details.sk-extract-details {
@@ -420,9 +433,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking production-grade AI infrastructure and document intelligence solutions.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and platform provider focusing on modular, interoperable AI systems for production. They offer Multivac, a protocol-native infrastructure, and AILANG, an AI-first programming language designed for deterministic code execution. The site emphasizes technical rigor, offering document parsing tools and consulting services to move AI projects from prototype to enterprise-scale deployment.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">AILANG</span> <span class="sk-chip">Multivac</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">RAG</span> <span class="sk-chip">Cognitive Architecture</span></div>
+    <h2 class="sk-prom-audience">Enterprise leaders and developers seeking production-grade AI infrastructure and agentic architectures.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and platform provider specializing in modular, protocol-native infrastructure. They offer Multivac for agent orchestration and AILANG for verifiable, AI-first programming. The site focuses on moving beyond demos to production-grade systems using standardized protocols like MCP and A2A to ensure interoperability and long-term technical scalability.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">MCP (Model Context Protocol)</span> <span class="sk-chip">A2A (Agent-to-Agent)</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Multivac</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">RAG</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">31</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-chips"><span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">AILANG Logo</span> <span class="sk-chip" title="image alt text">AILANG Interactive Playground</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Services</span> <span class="sk-chip" title="list item">Case Studies</span> <span class="sk-chip" title="list item">Demos</span> <span class="sk-chip" title="list item">AILANG Parse</span> <span class="sk-chip" title="list item">Vision</span> <span class="sk-chip" title="list item">Talks</span> <span class="sk-chip" title="list item">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="list item">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="list item">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="list item">Production deployment and scaling</span> <span class="sk-chip" title="list item">Native MCP & A2A protocol support</span> <span class="sk-chip" title="list item">Event-driven microservice architecture</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 Sunholo
@@ -725,21 +738,22 @@ LinkedIn
 </pre></details>
   </section>
 
-  <!-- ─── Preview iframe of the source URL ─── -->
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
   <section class="sk-preview-section">
     <div class="sk-preview-head">
       <span>page preview · the URL we fetched</span>
       <a class="url" href="https://www.sunholo.com" target="_blank" rel="noopener">https://www.sunholo.com ↗</a>
     </div>
-    <iframe class="sk-preview-iframe"
-            src="https://www.sunholo.com"
-            loading="lazy"
-            referrerpolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-popups"
-            title="Preview of sunholo.com"></iframe>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://www.sunholo.com"
+         alt="Screenshot of sunholo.com"
+         loading="lazy">
     <p class="sk-preview-fallback">
-      Some sites set X-Frame-Options that block iframe embedding. If the frame above is blank,
-      <a href="https://www.sunholo.com" target="_blank" rel="noopener">open the URL in a new tab</a>.
+      Couldn't render a preview for this site.
+      <a href="https://www.sunholo.com" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
     </p>
   </section>
 
@@ -813,6 +827,16 @@ LinkedIn
 </div>
 
 <script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
   // Fill the rank callout from the topic's leaderboard.json. Server-render
   // can't know the rank ahead of time — it changes whenever another sketch
   // is added or re-scored. JS reads ../leaderboard.json (relative to this

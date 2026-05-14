@@ -194,9 +194,9 @@
   }
   .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
 
-  /* Iframe preview of the source URL — between §2 and §3.
-     Sandboxed for safety; many sites X-Frame-Options block embedding
-     so the fallback link below is the always-working alternative. */
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
   .sk-preview-section {
     margin: 0 0 16px;
     background: var(--bg-card); border: 1px solid var(--border);
@@ -216,17 +216,30 @@
     max-width: 60%;
   }
   .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
-  .sk-preview-iframe {
-    width: 100%; height: 480px; border: 0; display: block;
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
     background: var(--bg-input);
   }
   .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
     padding: 10px 20px;
     font-family: var(--font-mono); font-size: 11px;
     color: var(--text-muted); letter-spacing: 0.04em;
-    background: var(--bg-input);
+    border-top: 1px solid var(--border);
+    text-align: right;
   }
-  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
 
   /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
   details.sk-extract-details {
@@ -423,21 +436,22 @@
     {{EXTRACT_STATS_HTML}}
   </section>
 
-  <!-- ─── Preview iframe of the source URL ─── -->
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
   <section class="sk-preview-section">
     <div class="sk-preview-head">
       <span>page preview · the URL we fetched</span>
       <a class="url" href="{{PREVIEW_URL}}" target="_blank" rel="noopener">{{PREVIEW_URL}} ↗</a>
     </div>
-    <iframe class="sk-preview-iframe"
-            src="{{PREVIEW_URL}}"
-            loading="lazy"
-            referrerpolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-popups"
-            title="Preview of {{DOMAIN}}"></iframe>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/{{PREVIEW_URL}}"
+         alt="Screenshot of {{DOMAIN}}"
+         loading="lazy">
     <p class="sk-preview-fallback">
-      Some sites set X-Frame-Options that block iframe embedding. If the frame above is blank,
-      <a href="{{PREVIEW_URL}}" target="_blank" rel="noopener">open the URL in a new tab</a>.
+      Couldn't render a preview for this site.
+      <a href="{{PREVIEW_URL}}" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
     </p>
   </section>
 
@@ -493,6 +507,16 @@
 </div>
 
 <script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
   // Fill the rank callout from the topic's leaderboard.json. Server-render
   // can't know the rank ahead of time — it changes whenever another sketch
   // is added or re-scored. JS reads ../leaderboard.json (relative to this

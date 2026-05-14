@@ -172,6 +172,75 @@
   .sk-extract-stats .path a:hover { opacity: 0.8; }
   .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
 
+  /* "What AILANG Parse sees" — header above the chip rows */
+  .sk-extract-header {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border);
+  }
+  .sk-extract-header h3 {
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    margin: 0 0 6px; color: var(--text-primary);
+  }
+  .sk-extract-header p {
+    margin: 0 0 14px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .sk-extract-row { margin-top: 14px; }
+  .sk-extract-row-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 8px;
+  }
+  .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+
+  /* Page-preview image — between §2 and §3. Uses thum.io's free
+     screenshot service so we don't depend on the source site allowing
+     iframe embedding (most modern sites block it via X-Frame-Options). */
+  .sk-preview-section {
+    margin: 0 0 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .sk-preview-section .sk-preview-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .sk-preview-section .sk-preview-head .url {
+    color: var(--primary); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 60%;
+  }
+  .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
+  .sk-preview-img {
+    display: block;
+    width: 100%;
+    max-height: 600px;
+    object-fit: cover;
+    object-position: top;
+    background: var(--bg-input);
+  }
+  .sk-preview-fallback {
+    padding: 14px 20px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+    display: none;       /* shown by JS only if screenshot fails */
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+  .sk-preview-credit {
+    padding: 10px 20px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    border-top: 1px solid var(--border);
+    text-align: right;
+  }
+  .sk-preview-credit a { color: var(--primary); text-decoration: none; }
+
   /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
   details.sk-extract-details {
     margin-top: 18px;
@@ -361,10 +430,10 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking production-grade AI engineering and modular agentic infrastructure.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo provides enterprise-grade AI engineering services and infrastructure focused on modularity and protocol-native design. The firm offers the Multivac platform for agent orchestration and AILANG, a programming language designed for deterministic AI code execution. They specialize in moving AI projects from prototype to production through document intelligence, multi-model platforms, and software engineering rigor.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">AILANG Parse</span> <span class="sk-chip">Multivac Platform</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">RAG</span></div>
-    <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> images</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking production-grade AI infrastructure and agentic systems.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo provides AI engineering and infrastructure services focused on modular, protocol-native systems. Through its Multivac platform and AILANG programming language, the company enables enterprises to transition from prototypes to production-grade AI. Their offerings prioritize interoperability via MCP and A2A protocols, alongside specialized tools for high-accuracy document parsing and verifiable AI-authored code.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">AILANG Parse</span> <span class="sk-chip">Cognitive Architecture</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">31</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-chips"><span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">Sunholo Logo</span> <span class="sk-chip" title="image alt text">AILANG Logo</span> <span class="sk-chip" title="image alt text">AILANG Interactive Playground</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Services</span> <span class="sk-chip" title="list item">Case Studies</span> <span class="sk-chip" title="list item">Demos</span> <span class="sk-chip" title="list item">AILANG Parse</span> <span class="sk-chip" title="list item">Vision</span> <span class="sk-chip" title="list item">Talks</span> <span class="sk-chip" title="list item">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="list item">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="list item">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="list item">Production deployment and scaling</span> <span class="sk-chip" title="list item">Native MCP & A2A protocol support</span> <span class="sk-chip" title="list item">Event-driven microservice architecture</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 Sunholo
 
@@ -666,6 +735,25 @@ LinkedIn
 </pre></details>
   </section>
 
+  <!-- ─── Page-preview screenshot of the source URL ─── -->
+  <section class="sk-preview-section">
+    <div class="sk-preview-head">
+      <span>page preview · the URL we fetched</span>
+      <a class="url" href="https://www.sunholo.com" target="_blank" rel="noopener">https://www.sunholo.com ↗</a>
+    </div>
+    <img class="sk-preview-img"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://www.sunholo.com"
+         alt="Screenshot of sunholo.com"
+         loading="lazy">
+    <p class="sk-preview-fallback">
+      Couldn't render a preview for this site.
+      <a href="https://www.sunholo.com" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+    </p>
+    <p class="sk-preview-credit">
+      Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
+    </p>
+  </section>
+
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
@@ -734,6 +822,16 @@ LinkedIn
 </div>
 
 <script>
+  // If the page-preview screenshot (thum.io) fails to load, hide the
+  // <img> and reveal the "open in new tab" fallback below it.
+  document.querySelectorAll('.sk-preview-img').forEach(function (img) {
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var f = img.parentElement.querySelector('.sk-preview-fallback');
+      if (f) f.style.display = 'block';
+    });
+  });
+
   // Fill the rank callout from the topic's leaderboard.json. Server-render
   // can't know the rank ahead of time — it changes whenever another sketch
   // is added or re-scored. JS reads ../leaderboard.json (relative to this
