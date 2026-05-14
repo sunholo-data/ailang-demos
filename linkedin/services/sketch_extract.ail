@@ -66,17 +66,23 @@ export func sketchFetch(url: string) -> string ! {Net} {
 
 -- ─── docparse stats (structural info from the JSON output) ──
 
--- A subset of docparse's per-document summary, plus the top headings
--- we extract from blocks. Populated only when docparse succeeded.
+-- A subset of docparse's per-document summary plus sampled content
+-- from each block type. Populated only when docparse succeeded.
+-- topHeadings + imageDescriptions + listItems are capped lists used
+-- as chips on the rendered page to show what AILANG Parse saw.
 export type DocparseStats = {
-  headings:    int,
-  tables:      int,
-  images:      int,
-  topHeadings: [string]
+  headings:           int,
+  tables:             int,
+  images:             int,
+  lists:              int,
+  topHeadings:        [string],
+  imageDescriptions:  [string],
+  listItems:          [string]
 }
 
 func emptyStats() -> DocparseStats =
-  { headings: 0, tables: 0, images: 0, topHeadings: [] }
+  { headings: 0, tables: 0, images: 0, lists: 0,
+    topHeadings: [], imageDescriptions: [], listItems: [] }
 
 -- Read /tmp/<...>.html.json (docparse's structured output) and
 -- pull (headings, tables, images, topHeadings).
@@ -92,17 +98,20 @@ export func sketchReadDocparseStats() -> DocparseStats ! {FS} {
 func statsFromJson(top: Json) -> DocparseStats = {
   let doc    = getOr(top, "document", jn());
   let blocks = getOr(doc, "blocks",   ja([]));
-  -- Walk the whole tree so nested headings inside `section` blocks count.
-  -- docparse's top-level summary only counts top-level blocks, which
-  -- under-reports for sites that wrap everything in section containers.
-  let allH = match asArray(blocks) { Some(arr) => allHeadingsRec(arr), None => [] };
-  let allT = match asArray(blocks) { Some(arr) => countBlocksByTypeRec(arr, "table"), None => 0 };
-  let allI = match asArray(blocks) { Some(arr) => countBlocksByTypeRec(arr, "image"), None => 0 };
+  -- Walk the whole tree — docparse's top-level summary only counts
+  -- direct children, missing anything wrapped in section containers.
+  let arr = match asArray(blocks) { Some(a) => a, None => [] };
+  let allH = allHeadingsRec(arr);
+  let allImgDesc = allImageDescriptionsRec(arr);
+  let allListItems = allListItemsRec(arr);
   {
-    headings:    listLength(allH),
-    tables:      allT,
-    images:      allI,
-    topHeadings: takeN(allH, maxTopHeadings())
+    headings:          listLength(allH),
+    tables:            countBlocksByTypeRec(arr, "table"),
+    images:            listLength(allImgDesc),
+    lists:             countBlocksByTypeRec(arr, "list"),
+    topHeadings:       takeN(allH, maxTopHeadings()),
+    imageDescriptions: takeN(allImgDesc, maxTopHeadings()),
+    listItems:         takeN(allListItems, 12)
   }
 }
 
@@ -140,6 +149,54 @@ func countTypeInBlock(b: Json, targetType: string) -> int = {
 func takeN(xs: [string], n: int) -> [string] = match xs {
   []           => [],
   [x, ...rest] => if n <= 0 then [] else listConcat([x], takeN(rest, n - 1))
+}
+
+-- Recursively collect image descriptions (alt text) from a block tree.
+-- HTML images don't carry data in docparse's output (only alt text);
+-- this lets us still surface them as chips on the rendered page.
+func allImageDescriptionsRec(blocks: [Json]) -> [string] =
+  foldl(\acc b. listConcat(acc, imageDescOfBlock(b)), [], blocks)
+
+func imageDescOfBlock(b: Json) -> [string] = {
+  let t = getOrElse(getString(b, "type"), "");
+  if t == "image" then {
+    let desc = getOrElse(getString(b, "description"), "");
+    if length(desc) > 0 then [desc] else []
+  } else if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => allImageDescriptionsRec(children),
+      None           => []
+    }
+  else []
+}
+
+-- Recursively collect list items. Drops duplicates so the chips
+-- don't repeat the same nav item shown in multiple lists.
+func allListItemsRec(blocks: [Json]) -> [string] =
+  dedupStrings(foldl(\acc b. listConcat(acc, listItemsOfBlock(b)), [], blocks))
+
+func listItemsOfBlock(b: Json) -> [string] = {
+  let t = getOrElse(getString(b, "type"), "");
+  if t == "list" then
+    getStringArrayOrEmpty(b, "items")
+  else if t == "section" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => allListItemsRec(children),
+      None           => []
+    }
+  else []
+}
+
+func dedupStrings(xs: [string]) -> [string] = match xs {
+  []           => [],
+  [x, ...rest] => if containsString(rest, x)
+                    then dedupStrings(rest)
+                    else listConcat([x], dedupStrings(rest))
+}
+
+func containsString(xs: [string], target: string) -> bool = match xs {
+  []           => false,
+  [x, ...rest] => if x == target then true else containsString(rest, target)
 }
 
 -- ─── docparse path ────────────────────────────────────────────
@@ -207,7 +264,10 @@ export func sketchClassify(
         headingCount:      stats.headings,
         tableCount:        stats.tables,
         imageCount:        stats.images,
+        listCount:         stats.lists,
         topHeadings:       stats.topHeadings,
+        imageDescriptions: stats.imageDescriptions,
+        listItems:         stats.listItems,
         extractedMarkdown: markdown
       }
     },
@@ -224,7 +284,10 @@ export func sketchClassify(
       headingCount:      0,
       tableCount:        0,
       imageCount:        0,
+      listCount:         0,
       topHeadings:       [],
+      imageDescriptions: [],
+      listItems:         [],
       extractedMarkdown: ""
     }
   }
@@ -251,7 +314,10 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
       headingCount:      0,
       tableCount:        0,
       imageCount:        0,
+      listCount:         0,
       topHeadings:       [],
+      imageDescriptions: [],
+      listItems:         [],
       extractedMarkdown: ""
     }
   } else {

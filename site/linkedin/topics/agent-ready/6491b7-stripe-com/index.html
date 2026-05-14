@@ -172,6 +172,62 @@
   .sk-extract-stats .path a:hover { opacity: 0.8; }
   .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
 
+  /* "What AILANG Parse sees" — header above the chip rows */
+  .sk-extract-header {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border);
+  }
+  .sk-extract-header h3 {
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    margin: 0 0 6px; color: var(--text-primary);
+  }
+  .sk-extract-header p {
+    margin: 0 0 14px;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+  .sk-extract-row { margin-top: 14px; }
+  .sk-extract-row-label {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 8px;
+  }
+  .sk-extract-row-label .num { color: var(--primary); font-weight: 700; }
+
+  /* Iframe preview of the source URL — between §2 and §3.
+     Sandboxed for safety; many sites X-Frame-Options block embedding
+     so the fallback link below is the always-working alternative. */
+  .sk-preview-section {
+    margin: 0 0 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .sk-preview-section .sk-preview-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .sk-preview-section .sk-preview-head .url {
+    color: var(--primary); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 60%;
+  }
+  .sk-preview-section .sk-preview-head .url:hover { text-decoration: underline; }
+  .sk-preview-iframe {
+    width: 100%; height: 480px; border: 0; display: block;
+    background: var(--bg-input);
+  }
+  .sk-preview-fallback {
+    padding: 10px 20px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    background: var(--bg-input);
+  }
+  .sk-preview-fallback a { color: var(--primary); text-decoration: none; }
+
   /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
   details.sk-extract-details {
     margin-top: 18px;
@@ -364,10 +420,14 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on stripe.com</p>
-    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to enterprises, seeking financial infrastructure to manage payments and revenue operations.</h2>
-    <blockquote class="sk-prom-narrative">Stripe provides a comprehensive suite of financial tools and APIs designed to handle end-to-end payment processing, subscription management, and banking-as-a-service. It supports global commerce through high-uptime infrastructure, enabling companies to monetize products, manage risk, and scale revenue operations across various business models and 135+ currencies.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Payment Processing</span> <span class="sk-chip">Stripe Billing</span> <span class="sk-chip">API Integration</span> <span class="sk-chip">Financial Infrastructure</span> <span class="sk-chip">Merchant Account</span> <span class="sk-chip">SaaS Platforms</span></div>
-    <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> images</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to Fortune 100 enterprises, looking to integrate global financial infrastructure.</h2>
+    <blockquote class="sk-prom-narrative">Stripe provides comprehensive financial infrastructure for the internet economy. The platform enables businesses to accept payments, manage subscriptions, issue cards, and handle complex revenue models through a global API-driven network. It supports over 135 currencies and provides tools for fraud prevention, compliance, and enterprise-scale financial operations.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">Payment gateway</span> <span class="sk-chip">Stripe Billing</span> <span class="sk-chip">API integration</span> <span class="sk-chip">Merchant account</span> <span class="sk-chip">Global payout</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products</span> <span class="sk-chip" title="list item">Solutions</span> <span class="sk-chip" title="list item">Developers</span> <span class="sk-chip" title="list item">Resources</span> <span class="sk-chip" title="list item">Pricing</span> <span class="sk-chip" title="list item">Sign in</span> <span class="sk-chip" title="list item">Sign inSign in</span> <span class="sk-chip" title="list item">Contact sales</span> <span class="sk-chip" title="list item">Lovable grows into a vibe-coding juggernaut with Stripe.
+Read Lovable's story</span> <span class="sk-chip" title="list item">Runway protects developer time with no-code solutions from Stripe.
+Read Runway's story</span> <span class="sk-chip" title="list item">Supabase delivers its backend-as-a-service to 150 countries with Stripe.
+Read Supabase's story</span> <span class="sk-chip" title="list item">Linear partners with Stripe to handle billing and payments.
+Read Linear's story</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 - Products
 - Solutions
@@ -824,6 +884,24 @@ Pricing details
 Get up and running with Stripe in as little as 1</pre></details>
   </section>
 
+  <!-- ─── Preview iframe of the source URL ─── -->
+  <section class="sk-preview-section">
+    <div class="sk-preview-head">
+      <span>page preview · the URL we fetched</span>
+      <a class="url" href="https://stripe.com" target="_blank" rel="noopener">https://stripe.com ↗</a>
+    </div>
+    <iframe class="sk-preview-iframe"
+            src="https://stripe.com"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-popups"
+            title="Preview of stripe.com"></iframe>
+    <p class="sk-preview-fallback">
+      Some sites set X-Frame-Options that block iframe embedding. If the frame above is blank,
+      <a href="https://stripe.com" target="_blank" rel="noopener">open the URL in a new tab</a>.
+    </p>
+  </section>
+
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
@@ -875,6 +953,15 @@ Get up and running with Stripe in as little as 1</pre></details>
   <!-- ─── Footer handshake ─── -->
   <footer class="sk-footer">
     <p class="pitch">Public sketch. The private version reads your full site against your data — <a href="mailto:mark@aitanalabs.com">mark@aitanalabs.com</a></p>
+    <p style="margin: 6px 0 14px;">
+      <a class="li-cta" href="https://www.linkedin.com/company/sunholo" target="_blank" rel="noopener">
+        <svg class="li-cta-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 0H5C2.24 0 0 2.24 0 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5V5c0-2.76-2.24-5-5-5zM8 19H5V8h3v11zm-1.5-12.5C5.67 6.5 5 5.83 5 5s.67-1.5 1.5-1.5S8 4.17 8 5s-.67 1.5-1.5 1.5zM19 19h-3v-5.7c0-3.05-3.5-2.8-3.5 0V19h-3V8h3v1.5c1.4-2.6 6.5-2.8 6.5 2.5V19z"/>
+        </svg>
+        Sketch another URL on LinkedIn
+        <span class="li-cta-arrow">↗</span>
+      </a>
+    </p>
     <div class="links">
       <a href="../">← agent-ready topic</a>
       <a href="../../">← All topics</a>

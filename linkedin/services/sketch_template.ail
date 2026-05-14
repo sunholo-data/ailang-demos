@@ -76,33 +76,59 @@ func renderWhyLi(s: Signal) -> string =
 func renderWhyHtml(signals: [Signal]) -> string =
   join("\n", map(renderWhyLi, signals))
 
--- §2 extraction stats — surfaces docparse output below the chips.
--- Shows totals + a small list of top headings if extracted.
+-- §2 extraction surface — "What AILANG Parse sees on <domain>".
+-- Surfaces docparse's structural output: headings, image alt-text,
+-- list items. Each as a row of chips. Plus the full markdown extract
+-- inside a collapsible <details>.
 func renderHeadingPill(h: string) -> string =
   "<span class=\"sk-chip\" title=\"extracted heading\">${h}</span>"
 
-func renderExtractStats(e: ExtractedContent) -> string = {
+func renderImagePill(d: string) -> string =
+  "<span class=\"sk-chip\" title=\"image alt text\">${d}</span>"
+
+func renderListPill(item: string) -> string =
+  "<span class=\"sk-chip\" title=\"list item\">${item}</span>"
+
+func renderExtractRow(label: string, count: int, html: string) -> string =
+  if length(html) == 0 then ""
+  else join("", [
+    "<div class=\"sk-extract-row\">",
+    "<p class=\"sk-extract-row-label\"><span class=\"num\">", intToStr(count), "</span> ", label, "</p>",
+    "<div class=\"sk-chips\">", html, "</div>",
+    "</div>"
+  ])
+
+func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
   let pathLabel = if e.extractionPath == "docparse"
                     then "HTML parsing by <a href=\"https://www.sunholo.com/ailang-parse\" target=\"_blank\" rel=\"noopener\">AILANG Parse</a>"
                   else if e.extractionPath == "ai-fallback"
                     then "via AI extraction"
                   else "polite refuse";
   let pathClass = if e.extractionPath == "docparse" then "path path-docparse" else "path";
-  let headingsHtml = if listLength(e.topHeadings) == 0 then ""
-                     else "<div style=\"margin-top:18px;\"><p class=\"sk-section-label\" style=\"margin-bottom:10px;\">structure found</p><div class=\"sk-chips\">${join(" ", map(renderHeadingPill, e.topHeadings))}</div></div>";
-  -- Full extraction (markdown) inside a <details> collapsible.
-  -- Shown only when docparse succeeded and we have non-trivial content.
+
+  let header = if e.extractionPath == "docparse"
+               then "<div class=\"sk-extract-header\"><h3>What AILANG Parse sees on ${domain}</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div>"
+               else "";
+
+  let headingsRow = renderExtractRow("headings",  e.headingCount, join(" ", map(renderHeadingPill, e.topHeadings)));
+  let imagesRow   = renderExtractRow("images",    e.imageCount,   join(" ", map(renderImagePill,   e.imageDescriptions)));
+  let listsRow    = renderExtractRow("list items", e.listCount,   join(" ", map(renderListPill,    e.listItems)));
+
+  -- Full markdown extract inside a <details> collapsible.
   let extractDetails = if length(e.extractedMarkdown) < 200 then ""
                        else "<details class=\"sk-extract-details\"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class=\"sk-extract-md\">${escapeHtmlForPre(e.extractedMarkdown)}</pre></details>";
+
   let statsLine = join("", [
     "<div class=\"sk-extract-stats\">",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.headingCount), "</span> headings</span>",
-    "<span class=\"stat\"><span class=\"num\">", intToStr(e.tableCount), "</span> tables</span>",
-    "<span class=\"stat\"><span class=\"num\">", intToStr(e.imageCount), "</span> images</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.imageCount),   "</span> images</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.listCount),    "</span> lists</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.tableCount),   "</span> tables</span>",
     "<span class=\"", pathClass, "\">", pathLabel, "</span>",
     "</div>"
   ]);
-  "${headingsHtml}${statsLine}${extractDetails}"
+
+  "${header}${statsLine}${headingsRow}${imagesRow}${listsRow}${extractDetails}"
 }
 
 -- Minimal HTML-escape so the embedded markdown can't break the page.
@@ -248,7 +274,8 @@ export func sketchRenderHtml(
     ("{{NARRATIVE_HEADLINE}}",  extracted.audience),
     ("{{NARRATIVE_BODY}}",      extracted.narrative),
     ("{{CHIPS_HTML}}",          chipsHtml),
-    ("{{EXTRACT_STATS_HTML}}",  renderExtractStats(extracted)),
+    ("{{EXTRACT_STATS_HTML}}",  renderExtractStats(extracted, sketch.registrableDomain)),
+    ("{{PREVIEW_URL}}",         sketch.url),
     ("{{CARDS_HTML}}",          cardsHtml),
     ("{{SIGNALS_HTML}}",        signalsHtml),
     ("{{OG_SUMMARY}}",          ogSummary)
