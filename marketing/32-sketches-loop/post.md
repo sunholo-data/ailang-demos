@@ -1,5 +1,5 @@
 ---
-title: I Just Scored 30 European Pages on Agent-Readiness. Yours Lands Here in an Hour.
+title: I Just Scored 30 European Sites on Agent-Readiness. Comment Here So I Can Score Yours.
 day: 94
 demo: Comment-driven sketches — public AILANG scoring from a hashtag
 link: https://www.sunholo.com/ailang-demos/linkedin/topics/agent-ready/
@@ -9,29 +9,36 @@ assets:
   - "Screenshot: the agent-ready leaderboard with 12 seeded entries, top to bottom"
 ---
 
-I told you a while back that comments on my posts would come back to me. The loop is now live.
+A few weeks ago I told you comments on my posts would come back to me. The loop is live.
 
-Drop your URL in a reply with one of three hashtags, and inside an hour a public page appears at sunholo.com/ailang-demos/linkedin/topics/your-topic/your-domain with a score, a breakdown, and the AILANG features that would close the gaps.
+Reply on this post — or any other AILANG post on Sunholo's page — with your URL plus one of three hashtags. The cron sweeps every AILANG post, not just the latest. A public page appears at sunholo.com/ailang-demos/linkedin/topics/your-topic/your-domain on the next 3-hourly tick.
 
 The three threads:
 
-— "#ailangAgentReady" — can an agent transact with your site? Does it publish A2A, OpenAPI, MCP, webhooks, rate limits, authentication, idempotency?
-— "#ailangPrivacy" — can your data go anywhere the type system can't see? End-to-end encryption, compliance certs, data-minimisation language all count.
+— "#ailangAgentReady" — can an agent transact with your site? A2A, OpenAPI, MCP, webhooks, rate limits, authentication, idempotency.
+— "#ailangPrivacy" — can your data leak somewhere the type system can't see? End-to-end encryption, compliance certs, data-minimisation language.
 — "#ailangPortable" — can your stack switch vendors with a flag, not a refactor? Multi-provider, cross-runtime, BYO key.
 
-To make sure the rubric isn't lying, I seeded the leaderboard with 30 European commercial pages — fintechs, mail providers, devtools, language models. Here is some of what came back:
+I seeded the leaderboard with 30 European pages so the rubric had something to chew on:
 
-— developer.gocardless.com — 8/10 on agent-ready. They publish webhooks, rate limits, authentication, idempotency. An agent could integrate against that doc page tomorrow.
-— tuta.com — 6/10 on privacy. End-to-end encryption documented. Compliance certifications cited. Data minimisation in their product copy, not just their lawyers' footer.
-— developers.tradeshift.com — 0/10 on agent-ready. The rubric correctly identifies a marketing-grade docs page as not yet an integration surface.
+— developer.gocardless.com — 8/10 agent-ready. Webhooks, rate limits, authentication, idempotency. An agent could integrate against that doc page tomorrow.
+— tuta.com — 6/10 privacy. End-to-end encryption, compliance certs, data minimisation as product copy not just lawyer copy.
+— developers.tradeshift.com — 0/10 agent-ready. The rubric honestly flags a marketing-grade docs page as not yet an integration surface.
 
-The scoring rubric is open-source AILANG code. Every signal maps to a real AILANG primitive — IFC labels, capability budgets, requires and ensures contracts, std/ai multi-provider, three-runtime deploy. If a signal can't map to a feature a reader could adopt, it does not get measured. That rule is what keeps the scores honest.
+Things that broke along the way, since you'll ask:
 
-What I will not measure: llms.txt, robots.txt, OpenGraph completeness, cookie-consent quality. AILANG does not have a position on those, so neither does the leaderboard.
+— LinkedIn caps "socialActions/comments-GET_ALL" at 100 fetches per user per day, so the cron is 3-hourly. Same loop, slower beat.
+— My default trace tier buffered spans for export and OOMed the seeder at sketch 15 of 30. Fix: "AILANG_TRACE=off" for batches.
+— Needed URL form-encoding for the OAuth2 dance. std/string doesn't ship one yet. Hand-rolled in six lines.
+— AILANG Parse picked up anchor link extraction, section-kind, and a code-style flag on text blocks during this build. The sketches now surface all three.
 
-Every signal extractor is contract-verified, Z3-bounded, and PR-able on GitHub.
+The fixes for those didn't go to a tracker — they went to AILANG core via "ailang messages send", an inter-AI message bus that drops feedback into the core agent's inbox. Next session, they read it on startup. No Jira, no ceremony.
 
-Reply below with your URL plus "#ailangAgentReady", "#ailangPrivacy", or "#ailangPortable". Your sketch surfaces, anonymously, at sunholo.com/ailang-demos/linkedin within the hour. Your sceptical eyebrow steers the next iteration of the rubric.
+The scoring rubric is open-source AILANG. Every signal maps to a real AILANG primitive — IFC labels, capability budgets, requires and ensures contracts, std/ai multi-provider, three-runtime deploy. If a signal can't map to a feature a reader could adopt, it does not get measured. That rule keeps the scores honest.
+
+What I will not measure: llms.txt, robots.txt, OpenGraph completeness, cookie-consent quality. AILANG has no position on those.
+
+Reply with your URL plus "#ailangAgentReady", "#ailangPrivacy", or "#ailangPortable". Your sceptical eyebrow steers the next iteration of the rubric.
 
 — AILANG
 

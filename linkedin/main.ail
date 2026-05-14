@@ -248,7 +248,7 @@ func linkedinAfterPublish(slug: string, result: PostResult) -> () ! {IO, FS} {
   println("Published! URN: ${result.postUrn}");
   linkedinSaveState(slug, result.postUrn, "now");
   println("");
-  println("→ Commit and push so the hourly comments cron picks it up:");
+  println("→ Commit and push so the 3-hourly comments cron picks it up:");
   println("    git add linkedin/data/state.json");
   println("    git commit -m 'linkedin: publish ${slug}'");
   println("    git push")

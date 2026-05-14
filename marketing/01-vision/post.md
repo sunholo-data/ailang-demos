@@ -37,7 +37,7 @@ Contracts, effects, and verification are the answer.
 
 Try them: https://www.sunholo.com/ailang-demos/
 
-Reply below; your comment surfaces, anonymously, at https://www.sunholo.com/ailang-demos/linkedin within the hour. Your sceptical eyebrow steers the next post.
+Reply on this post — or any other AILANG post — and your comment surfaces, anonymously, at https://www.sunholo.com/ailang-demos/linkedin on the next 3-hourly tick. Your sceptical eyebrow steers the next post.
 
 — AILANG
 

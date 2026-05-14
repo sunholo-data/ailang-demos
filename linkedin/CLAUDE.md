@@ -55,7 +55,9 @@ Learned the hard way while shipping 00-meta and 01-vision — LinkedIn's "Little
 Closer paragraph that drives readers to the LinkedIn page on the demos site, where their reply will surface:
 
 ```
-Reply below; your comment surfaces, anonymously, at https://www.sunholo.com/ailang-demos/linkedin within the hour. Your sceptical eyebrow steers the next post.
+Reply on this post — or any other AILANG post — and your comment surfaces, anonymously, at https://www.sunholo.com/ailang-demos/linkedin on the next 3-hourly tick. Your sceptical eyebrow steers the next post.
 ```
 
-Tweak the second sentence per post (the "what your reply steers" framing), but keep the URL + "within the hour" + "anonymously". This is what makes engaging worthwhile for the reader.
+Tweak the second sentence per post (the "what your reply steers" framing), but keep the URL + "next 3-hourly tick" + "anonymously" + "any other AILANG post". This is what makes engaging worthwhile for the reader.
+
+Cadence note: the cron is 3-hourly (not hourly) because LinkedIn caps the `socialActions/comments-GET_ALL` endpoint at 100 calls per user per day. If we ever raise that ceiling (Community Management API tier 2, or business-partner agreement), bump back to hourly across the copy.

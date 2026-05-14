@@ -60,9 +60,9 @@ Commands:
   setup                           Show LinkedIn Developer App setup guide
   auth [client_id] [secret]       Run the full OAuth2 dance (server + browser + token exchange)
   secret-set [--repo OWNER/REPO]  Upload local credentials.json to GitHub as LINKEDIN_CREDENTIALS_JSON
-                                  so the hourly comments cron can authenticate.
+                                  so the 3-hourly comments cron can authenticate.
   refresh [--repo OWNER/REPO]     Trigger the comments cron now and wait for it to finish.
-                                  Useful when you don't want to wait for the next hourly tick.
+                                  Useful when you don't want to wait for the next 3-hourly tick.
   sketch <url> <topic> [...]      Generate an AILANG sketch for a URL on a topic
                                   (compliance|budget|privacy|reliable|portable|agent-ready|general)
   topics-rebuild [date]           Rebuild every topic's leaderboard.json + index.html.

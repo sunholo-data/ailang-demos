@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG · LinkedIn — the other end of the wire</title>
 <link rel="icon" type="image/svg+xml" href="../ailang-logo.svg">
-<meta name="description" content="AILANG, a programming language, is publishing to LinkedIn. The replies come back here, by code, anonymised, on the hour.">
+<meta name="description" content="AILANG, a programming language, is publishing to LinkedIn. Replies come back here, by code, anonymised, every 3 hours.">
 <meta property="og:title" content="AILANG · LinkedIn">
 <meta property="og:description" content="The other end of the wire. A programming language publishes, then listens.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1311,7 +1311,7 @@
   <span class="ll-tx-sep"></span>
   <span class="ll-tx-id" title="urn:li:share:7459919765009137665">tx · li:share:7459919⋯9137665</span>
   <span class="ll-tx-sep"></span>
-  <span id="ll-tx-since">since 2026-05-12 · refreshed hourly</span>
+  <span id="ll-tx-since">since 2026-05-12 · refreshed every 3 hours</span>
 </div>
 
 <main class="ll-page">
@@ -1331,7 +1331,7 @@
         </h1>
         <p class="ll-hero-sub">
           AILANG &mdash; a programming language with opinions &mdash; is publishing to LinkedIn.
-          Replies come back <strong>here</strong>, by code, anonymised, on the hour.
+          Replies come back <strong>here</strong>, by code, anonymised, every 3 hours.
         </p>
         <div class="ll-hero-meta">
           <div class="ll-hero-meta-cell">
@@ -1348,7 +1348,7 @@
           </div>
           <div class="ll-hero-meta-cell">
             <span class="ll-hero-meta-k">Refresh</span>
-            <span class="ll-hero-meta-v">cron · hourly</span>
+            <span class="ll-hero-meta-v">cron · every 3h</span>
           </div>
         </div>
       </div>
@@ -1362,7 +1362,7 @@
             <path d="M19 0H5C2.24 0 0 2.24 0 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5V5c0-2.76-2.24-5-5-5zM8 19H5V8h3v11zm-1.5-12.5C5.67 6.5 5 5.83 5 5s.67-1.5 1.5-1.5S8 4.17 8 5s-.67 1.5-1.5 1.5zM19 19h-3v-5.7c0-3.05-3.5-2.8-3.5 0V19h-3V8h3v1.5c1.4-2.6 6.5-2.8 6.5 2.5V19z"/>
           </svg>
           <span>Live on LinkedIn</span>
-          <span class="live-dot">hourly</span>
+          <span class="live-dot">every 3h</span>
         </div>
         <div class="ll-hero-card-head">
           <div class="ll-hero-card-avatar" aria-hidden="true">S</div>
@@ -1374,7 +1374,7 @@
         </div>
         <div class="ll-hero-card-body">
           <p class="quote">"This Post Was Published by a Programming Language."</p>
-          <p>Six typed modules. One network call. The replies funnel back here within the hour — pseudonymously.</p>
+          <p>Six typed modules. One network call. The replies funnel back here every 3 hours — pseudonymously.</p>
         </div>
         <div class="ll-hero-card-tags">
           <span>#AILANG</span><span>#ProgrammingLanguages</span><span>#TypeSystems</span>
@@ -1405,7 +1405,7 @@
     <div class="ll-section-head">
       <div class="ll-eyebrow"><span class="ll-eyebrow-glyph">◇</span><span>One</span></div>
       <span class="ll-section-title" id="lh-topics">Pick a thread</span>
-      <p>Three commercial concerns AILANG has a position on. Comment your site's URL with the matching hashtag on any Sunholo LinkedIn post, and within the hour an AILANG-generated sketch about your business lands at <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);color:var(--primary)">/linkedin/topics/&lt;topic&gt;/</code>.</p>
+      <p>Three commercial concerns AILANG has a position on. Comment your site's URL with the matching hashtag on any AILANG post on Sunholo's LinkedIn page — the cron sweeps every post, not just the latest — and on the next 3-hourly tick a sketch about your business lands at <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);color:var(--primary)">/linkedin/topics/&lt;topic&gt;/</code>.</p>
     </div>
     <div class="ll-topics-grid" id="ll-topics-grid">
       <a class="ll-topic-card" href="topics/agent-ready/" data-topic="agent-ready" data-has-leaderboard="true">
@@ -1496,7 +1496,7 @@
         <li>
           <span class="ll-log-t">11:00:01</span>
           <span class="ll-log-n">Listen</span>
-          <span class="ll-log-d"><code>GET /rest/socialActions/⋯/comments</code> scheduled · hourly cron</span>
+          <span class="ll-log-d"><code>GET /rest/socialActions/⋯/comments</code> scheduled · 3-hourly cron (LinkedIn quota: 100/user/day)</span>
         </li>
         <li>
           <span class="ll-log-t">11:00:56</span>
@@ -1585,7 +1585,7 @@
       <a href="https://github.com/sunholo-data/ailang" target="_blank" rel="noopener">AILANG ↗</a>
     </div>
     <div class="ll-foot-meta">
-      ailang-linkedin · 6 modules · text-only · hourly refresh
+      ailang-linkedin · 6 modules · text-only · 3-hourly refresh
     </div>
   </footer>
 
@@ -1646,7 +1646,7 @@
             }, 0);
           if (earliest > 0) {
             const d = new Date(earliest);
-            since.textContent = 'since ' + d.toISOString().slice(0, 10) + ' · refreshed hourly';
+            since.textContent = 'since ' + d.toISOString().slice(0, 10) + ' · refreshed every 3h';
           }
         }
       })
