@@ -1,0 +1,120 @@
+module linkedin/sketch_seed_main
+
+-- CLI entry: seed the leaderboards with a hand-curated list of
+-- (url, topic) pairs. Bypasses the queue/dispatcher entirely — no
+-- LinkedIn API calls, no per-commenter quota, no 30-day history
+-- check. Calls sketchSite directly for each entry, then rebuilds
+-- the three leaderboards.
+--
+-- All seeded entries carry a single shared identity ("AI" /
+-- avatar seed "e73c17", the AILANG coral) so seeded sketches are
+-- visually distinguishable from real reader submissions.
+--
+-- Argv:
+--   1. today — date string for the snapshot header, default "today"
+
+import std/io (println)
+import std/env (getArgs)
+import std/string (intToStr)
+import std/list (length as listLength, nth)
+import std/option (Some, None)
+import linkedin/types/sketch_types (Topic, AgentReady, Privacy, Portable)
+import linkedin/services/sketch (sketchSite)
+import linkedin/services/sketch_leaderboard (sketchRebuildTopic)
+
+func argOr(args: [string], i: int, fallback: string) -> string =
+  match nth(args, i) {
+    Some(v) => v,
+    None    => fallback
+  }
+
+func templatePath() -> string = "linkedin/templates/sketch.html"
+func seedInitials() -> string = "AI"
+func seedAvatarSeed() -> string = "e73c17"
+
+-- ─── Seed list ────────────────────────────────────────────────
+-- 30 European/Nordic commercial targets, deeper-than-homepage paths.
+
+type SeedEntry = { url: string, topic: Topic }
+
+func seeds() -> [SeedEntry] = [
+  -- agent-ready: developer portals, API docs
+  { url: "https://docs.adyen.com/development-resources/api-credentials/",       topic: AgentReady },
+  { url: "https://developer.spotify.com/documentation/web-api",                  topic: AgentReady },
+  { url: "https://www.pleo.io/en/developers",                                    topic: AgentReady },
+  { url: "https://docs.mollie.com/reference/v2/payments-api/create-payment",     topic: AgentReady },
+  { url: "https://docs.klarna.com/api/",                                         topic: AgentReady },
+  { url: "https://doc.bunq.com/",                                                topic: AgentReady },
+  { url: "https://developer.gocardless.com/api-reference",                       topic: AgentReady },
+  { url: "https://developers.mews.com/",                                         topic: AgentReady },
+  { url: "https://documentation-data.trustpilot.com/",                           topic: AgentReady },
+  { url: "https://developers.tradeshift.com/docs/quickstart",                    topic: AgentReady },
+  -- privacy: trust/security pages, data-residency language
+  { url: "https://proton.me/business/data-privacy",                              topic: Privacy },
+  { url: "https://tuta.com/security",                                            topic: Privacy },
+  { url: "https://nextcloud.com/security/",                                      topic: Privacy },
+  { url: "https://mistral.ai/terms",                                             topic: Privacy },
+  { url: "https://mailfence.com/en/about",                                       topic: Privacy },
+  { url: "https://www.siteimprove.com/glossary/data-privacy/",                   topic: Privacy },
+  { url: "https://www.pleo.io/en/security",                                      topic: Privacy },
+  { url: "https://weaviate.io/security",                                         topic: Privacy },
+  { url: "https://posit.co/about/security/",                                     topic: Privacy },
+  { url: "https://handbook.gitlab.com/handbook/security/",                       topic: Privacy },
+  -- portable: multi-runtime, self-host, multi-provider
+  { url: "https://developer.hashicorp.com/terraform/intro",                      topic: Portable },
+  { url: "https://supabase.com/docs/guides/self-hosting",                        topic: Portable },
+  { url: "https://docs.n8n.io/hosting/",                                         topic: Portable },
+  { url: "https://www.langchain.com/langchain",                                  topic: Portable },
+  { url: "https://weaviate.io/developers/weaviate",                              topic: Portable },
+  { url: "https://mistral.ai/technology",                                        topic: Portable },
+  { url: "https://huggingface.co/docs/inference-providers/en/index",             topic: Portable },
+  { url: "https://about.gitlab.com/install/",                                    topic: Portable },
+  { url: "https://posit.co/products/open-source/rstudio/",                       topic: Portable },
+  { url: "https://docs.nextcloud.com/server/latest/admin_manual/installation/",  topic: Portable }
+]
+
+-- ─── Run a single seed ───────────────────────────────────────
+
+func runSeed(s: SeedEntry, today: string) -> () ! {IO, Net, FS, AI, Process} {
+  let _ = sketchSite(
+    s.url,
+    s.topic,
+    seedInitials(),
+    seedAvatarSeed(),
+    today,
+    0,
+    templatePath()
+  );
+  ()
+}
+
+func runAll(xs: [SeedEntry], today: string, pos: int, total: int) -> () ! {IO, Net, FS, AI, Process} {
+  match xs {
+    []           => (),
+    [s, ...rest] => {
+      println("");
+      println("──────── seed ${intToStr(pos)}/${intToStr(total)} ────────");
+      runSeed(s, today);
+      runAll(rest, today, pos + 1, total)
+    }
+  }
+}
+
+export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
+  let args = getArgs();
+  let today = argOr(args, 0, "today");
+  let list = seeds();
+  let total = listLength(list);
+  println("Seeding ${intToStr(total)} sketches (generated ${today}) ...");
+  runAll(list, today, 1, total);
+
+  println("");
+  println("──────── leaderboard rebuild ────────");
+  let nAgent    = sketchRebuildTopic(AgentReady, today);
+  let nPrivacy  = sketchRebuildTopic(Privacy,    today);
+  let nPortable = sketchRebuildTopic(Portable,   today);
+  let totalRanked = nAgent + nPrivacy + nPortable;
+
+  println("");
+  println("Done — ${intToStr(total)} sketches generated, ${intToStr(totalRanked)} entries ranked across the three leaderboards.")
+}

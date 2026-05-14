@@ -38,7 +38,7 @@ export func sketchLeaderboardPath(t: Topic) -> string =
   "${sketchTopicDir(t)}/leaderboard.json"
 
 -- Top-N to publicly rank. The rest sit in the gallery without a rank.
-export func sketchPublicRankCap() -> int = 10
+export func sketchPublicRankCap() -> int = 30
 
 -- ─── Reading sketch.json files ───────────────────────────────
 
