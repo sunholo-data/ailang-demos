@@ -27,7 +27,7 @@ import std/process (exec)
 import std/net (httpRequest, HttpResponse, NetError)
 import std/ai (callJson)
 import std/json (decode, getString, getStringArrayOrEmpty, getInt, asArray, asString, get, getOr, jn, ja, Json)
-import linkedin/types/sketch_types (ExtractedContent, DocparseImage)
+import linkedin/types/sketch_types (ExtractedContent, DocparseImage, DocparseLink)
 import std/string (startsWith, split)
 
 -- ─── Constants ────────────────────────────────────────────────
@@ -76,14 +76,16 @@ export type DocparseStats = {
   tables:      int,
   images:      int,
   lists:       int,
+  links:       int,
   topHeadings: [string],
   imageInfos:  [DocparseImage],
+  linkInfos:   [DocparseLink],
   listItems:   [string]
 }
 
 func emptyStats() -> DocparseStats =
-  { headings: 0, tables: 0, images: 0, lists: 0,
-    topHeadings: [], imageInfos: [], listItems: [] }
+  { headings: 0, tables: 0, images: 0, lists: 0, links: 0,
+    topHeadings: [], imageInfos: [], linkInfos: [], listItems: [] }
 
 -- Read /tmp/<...>.html.json (docparse's structured output) and
 -- pull (headings, tables, images, topHeadings, listItems).
@@ -105,14 +107,17 @@ func statsFromJson(top: Json, pageUrl: string) -> DocparseStats = {
   let arr = match asArray(blocks) { Some(a) => a, None => [] };
   let allH = allHeadingsRec(arr);
   let allImgs = allImagesRec(arr, pageUrl);
+  let allLinks = dedupLinks(allLinksRec(arr, pageUrl));
   let allListItems = allListItemsRec(arr);
   {
     headings:    listLength(allH),
     tables:      countBlocksByTypeRec(arr, "table"),
     images:      listLength(allImgs),
     lists:       countBlocksByTypeRec(arr, "list"),
+    links:       listLength(allLinks),
     topHeadings: takeN(allH, maxTopHeadings()),
     imageInfos:  takeImages(allImgs, maxTopHeadings()),
+    linkInfos:   takeLinks(allLinks, 12),
     listItems:   takeN(allListItems, 12)
   }
 }
@@ -177,6 +182,49 @@ func imageInfoOfBlock(b: Json, pageUrl: string) -> [DocparseImage] = {
 func takeImages(xs: [DocparseImage], n: int) -> [DocparseImage] = match xs {
   []           => [],
   [x, ...rest] => if n <= 0 then [] else listConcat([x], takeImages(rest, n - 1))
+}
+
+func takeLinks(xs: [DocparseLink], n: int) -> [DocparseLink] = match xs {
+  []           => [],
+  [x, ...rest] => if n <= 0 then [] else listConcat([x], takeLinks(rest, n - 1))
+}
+
+-- Recursively collect anchor links. v0.15.0+ exposes link blocks
+-- with text + href + title. We resolve href against the page URL
+-- and skip fragment-only / javascript: / empty hrefs.
+func allLinksRec(blocks: [Json], pageUrl: string) -> [DocparseLink] =
+  foldl(\acc b. listConcat(acc, linkInfoOfBlock(b, pageUrl)), [], blocks)
+
+func linkInfoOfBlock(b: Json, pageUrl: string) -> [DocparseLink] = {
+  let t = getOrElse(getString(b, "type"), "");
+  if t == "link" then {
+    let text = getOrElse(getString(b, "text"), "");
+    let href = getOrElse(getString(b, "href"), "");
+    let title = getOrElse(getString(b, "title"), "");
+    -- Skip fragments, scripts, empty hrefs, mailto/tel — keep only navigable URLs.
+    if length(href) == 0 || startsWith(href, "#") || startsWith(href, "javascript:") || startsWith(href, "mailto:") || startsWith(href, "tel:") then []
+    else if length(text) == 0 then []
+    else [{ text: text, href: resolveUrl(pageUrl, href), title: title }]
+  } else if t == "section" || t == "list" then
+    match asArray(getOr(b, "blocks", ja([]))) {
+      Some(children) => allLinksRec(children, pageUrl),
+      None           => []
+    }
+  else []
+}
+
+-- Dedup links by href (keeps first occurrence — typically the most
+-- semantically meaningful link text).
+func dedupLinks(xs: [DocparseLink]) -> [DocparseLink] = match xs {
+  []           => [],
+  [x, ...rest] => if linksHaveHref(rest, x.href)
+                    then dedupLinks(rest)
+                    else listConcat([x], dedupLinks(rest))
+}
+
+func linksHaveHref(xs: [DocparseLink], target: string) -> bool = match xs {
+  []           => false,
+  [x, ...rest] => if x.href == target then true else linksHaveHref(rest, target)
 }
 
 -- ─── URL resolution ──────────────────────────────────────────
@@ -308,8 +356,10 @@ export func sketchClassify(
         tableCount:        stats.tables,
         imageCount:        stats.images,
         listCount:         stats.lists,
+        linkCount:         stats.links,
         topHeadings:       stats.topHeadings,
         images:            stats.imageInfos,
+        links:             stats.linkInfos,
         listItems:         stats.listItems,
         extractedMarkdown: markdown
       }
@@ -328,8 +378,10 @@ export func sketchClassify(
       tableCount:        0,
       imageCount:        0,
       listCount:         0,
+      linkCount:         0,
       topHeadings:       [],
       images:            [],
+      links:             [],
       listItems:         [],
       extractedMarkdown: ""
     }
@@ -358,8 +410,10 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
       tableCount:        0,
       imageCount:        0,
       listCount:         0,
+      linkCount:         0,
       topHeadings:       [],
       images:            [],
+      links:             [],
       listItems:         [],
       extractedMarkdown: ""
     }

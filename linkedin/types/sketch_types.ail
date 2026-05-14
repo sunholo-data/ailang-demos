@@ -34,6 +34,15 @@ export type DocparseImage = {
   src:         string
 }
 
+-- Anchor link extracted by AILANG Parse (v0.15.0+).
+-- href is resolved to an absolute URL by sketch_extract.ail so the
+-- chips on the sketch page can be clicked through.
+export type DocparseLink = {
+  text:  string,
+  href:  string,
+  title: string
+}
+
 -- One measurable thing about a fetched page that maps to an
 -- AILANG primitive. The `ailangFeature` field is the answer to
 -- "if this signal is missing, what AILANG feature would supply it".
@@ -89,10 +98,12 @@ export type ExtractedContent = {
   tableCount:   int,
   imageCount:   int,
   listCount:    int,
+  linkCount:    int,
   -- Sampled content from each block type, capped by the extractor.
   -- Used as chip rows in the "What AILANG Parse sees" section.
   topHeadings: [string],
   images:      [DocparseImage],
+  links:       [DocparseLink],
   listItems:   [string],
   -- The "LLM-ready" markdown that AILANG Parse emits from the
   -- docparse JSON. Truncated to ~12KB to keep the rendered HTML

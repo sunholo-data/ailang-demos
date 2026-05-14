@@ -12,7 +12,7 @@ module linkedin/services/sketch_template
 import std/fs (readFile)
 import std/string (replaceMany, intToStr, join, replace, length)
 import std/list (map, concat as listConcat, length as listLength)
-import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, DocparseImage, Topic, Privacy, Portable, AgentReady)
+import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, DocparseImage, DocparseLink, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
 
 -- ─── Topic ↔ string helpers ───────────────────────────────────
@@ -92,6 +92,13 @@ func renderImageThumb(img: DocparseImage) -> string =
 func renderListPill(item: string) -> string =
   "<span class=\"sk-chip\" title=\"list item\">${item}</span>"
 
+-- Render an anchor link extracted by AILANG Parse (v0.15.0+) as a
+-- clickable chip. The chip text is the link's visible text; the title
+-- attribute carries the title (if any) plus the resolved href.
+func renderLinkChip(lk: DocparseLink) -> string =
+  let tip = if length(lk.title) == 0 then lk.href else "${lk.title} — ${lk.href}"
+  in "<a class=\"sk-chip sk-chip-link\" href=\"${lk.href}\" target=\"_blank\" rel=\"noopener\" title=\"${tip}\">${lk.text}</a>"
+
 func renderExtractRow(label: string, count: int, html: string) -> string =
   if length(html) == 0 then ""
   else join("", [
@@ -117,6 +124,7 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
   let imagesHtml  = if listLength(e.images) == 0 then "" else
                     "<div class=\"sk-extract-row\"><p class=\"sk-extract-row-label\"><span class=\"num\">${intToStr(e.imageCount)}</span> images</p><div class=\"sk-img-strip\">${join("", map(renderImageThumb, e.images))}</div></div>";
   let listsRow    = renderExtractRow("list items", e.listCount,    join(" ", map(renderListPill,    e.listItems)));
+  let linksRow    = renderExtractRow("links",      e.linkCount,    join(" ", map(renderLinkChip,    e.links)));
 
   -- Full markdown extract inside a <details> collapsible.
   let extractDetails = if length(e.extractedMarkdown) < 200 then ""
@@ -128,11 +136,12 @@ func renderExtractStats(e: ExtractedContent, domain: string) -> string = {
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.imageCount),   "</span> images</span>",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.listCount),    "</span> lists</span>",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.tableCount),   "</span> tables</span>",
+    "<span class=\"stat\"><span class=\"num\">", intToStr(e.linkCount),    "</span> links</span>",
     "<span class=\"", pathClass, "\">", pathLabel, "</span>",
     "</div>"
   ]);
 
-  "${header}${statsLine}${headingsRow}${imagesHtml}${listsRow}${extractDetails}"
+  "${header}${statsLine}${headingsRow}${imagesHtml}${listsRow}${linksRow}${extractDetails}"
 }
 
 -- Minimal HTML-escape so the embedded markdown can't break the page.

@@ -153,6 +153,20 @@
     background: var(--bg-input); color: var(--text-secondary);
     padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
   }
+  /* Anchor-link chips — clickable, with the AILANG accent colour. */
+  a.sk-chip-link {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary-faded);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  a.sk-chip-link::before {
+    content: "↗"; margin-right: 6px; opacity: 0.6;
+  }
+  a.sk-chip-link:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+  }
   /* Extraction stats line at bottom of §2 (filled by step 4) */
   .sk-extract-stats {
     margin-top: 22px; padding-top: 16px; border-top: 1px dashed var(--border);
