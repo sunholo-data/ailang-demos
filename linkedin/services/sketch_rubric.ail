@@ -17,7 +17,7 @@ module linkedin/services/sketch_rubric
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
 import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
-import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigSandboxOffered, sigAuthDocumented, sigIdempotency, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm, sigMultiProviderMentioned, sigCrossRuntimeClaim, sigByoKey)
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -62,7 +62,10 @@ export func scoreOpenApi(body: string) -> Signal
 {
   let def = sigOpenApi();
   let bl = toLower(body);
-  let detected = contains(bl, "openapi.json") || contains(bl, "openapi.yaml") || contains(bl, "swagger") || contains(bl, "redoc");
+  -- Broadened beyond the literal filenames: API providers often say
+  -- "API specification" or ship a "Postman collection" instead of
+  -- linking openapi.json explicitly.
+  let detected = contains(bl, "openapi.json") || contains(bl, "openapi.yaml") || contains(bl, "swagger") || contains(bl, "redoc") || contains(bl, "api specification") || contains(bl, "postman collection") || contains(bl, "postman.json");
   {
     name:          def.name,
     description:   def.description,
@@ -113,7 +116,11 @@ export func scoreWebhooks(body: string) -> Signal
 {
   let def = sigWebhooks();
   let bl = toLower(body);
-  let detected = contains(bl, "webhook") || contains(bl, "/webhooks") || contains(bl, "callback url") || contains(bl, "callback_url");
+  -- Sites variously call the same primitive a webhook, a callback,
+  -- a notification, or an event subscription. Detect any of them —
+  -- "notification" is left lenient (with a leading space-or-quote)
+  -- to avoid matching things like "iOS push notifications".
+  let detected = contains(bl, "webhook") || contains(bl, "/webhooks") || contains(bl, "callback url") || contains(bl, "callback_url") || contains(bl, " callback") || contains(bl, "event subscription") || contains(bl, "event notification") || contains(bl, "notifications api");
   {
     name:          def.name,
     description:   def.description,
@@ -149,6 +156,60 @@ export func scoreStreamingEndpoint(body: string) -> Signal
   let def = sigStreamingEndpoint();
   let bl = toLower(body);
   let detected = contains(bl, "server-sent events") || contains(bl, "text/event-stream") || contains(bl, "/sse") || contains(bl, "eventsource") || contains(bl, "streaming endpoint");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreSandboxOffered(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigSandboxOffered();
+  let bl = toLower(body);
+  let detected = contains(bl, "sandbox") || contains(bl, "test mode") || contains(bl, "test environment") || contains(bl, "testing environment");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreAuthDocumented(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigAuthDocumented();
+  let bl = toLower(body);
+  -- "api key" is broad; "oauth2"/"oauth 2"/"jwt"/"bearer"/"access token"
+  -- are specific. Detecting any one is enough — caller has documented
+  -- *how* an agent should authenticate.
+  let detected = contains(bl, "oauth 2") || contains(bl, "oauth2") || contains(bl, " jwt ") || contains(bl, "bearer token") || contains(bl, "access token") || contains(bl, "api key") || contains(bl, "client credentials");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreIdempotency(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigIdempotency();
+  let bl = toLower(body);
+  let detected = contains(bl, "idempotency") || contains(bl, "idempotent") || contains(bl, "idempotency-key") || contains(bl, "idempotency key");
   {
     name:          def.name,
     description:   def.description,
@@ -315,7 +376,7 @@ export func scoreByoKey(body: string) -> Signal
 
 -- ─── Aggregators ──────────────────────────────────────────────
 
--- Run every scorer against the body, return all 14 Signal records.
+-- Run every scorer against the body, return all 17 Signal records.
 export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreAgentJson(body),
   scoreOpenApi(body),
@@ -324,6 +385,9 @@ export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreWebhooks(body),
   scoreRateLimitDocs(body),
   scoreStreamingEndpoint(body),
+  scoreSandboxOffered(body),
+  scoreAuthDocumented(body),
+  scoreIdempotency(body),
   scoreLlmProviderMentioned(body),
   scoreThirdPartyDomains(body),
   scoreDataResidencyLanguage(body),

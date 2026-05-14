@@ -87,6 +87,36 @@ export func sigStreamingEndpoint() -> Signal = {
   ailangFeature: "std/stream — ssePost and Stream effect handle event-source endpoints with typed event types"
 }
 
+export func sigSandboxOffered() -> Signal = {
+  name:          "Sandbox / test environment offered",
+  description:   "Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI"
+}
+
+export func sigAuthDocumented() -> Signal = {
+  name:          "Authentication documented",
+  description:   "Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level"
+}
+
+export func sigIdempotency() -> Signal = {
+  name:          "Idempotency keys documented",
+  description:   "Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee"
+}
+
 -- ─── privacy signals ───────────────────────────────────────────
 
 export func sigLlmProviderMentioned() -> Signal = {
@@ -171,6 +201,9 @@ export func sketchAllSignalDefs() -> [Signal] = [
   sigWebhooks(),
   sigRateLimitDocs(),
   sigStreamingEndpoint(),
+  sigSandboxOffered(),
+  sigAuthDocumented(),
+  sigIdempotency(),
   sigLlmProviderMentioned(),
   sigThirdPartyDomains(),
   sigDataResidencyLanguage(),

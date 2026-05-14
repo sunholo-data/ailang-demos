@@ -11,7 +11,7 @@ import std/io (println)
 import std/string (intToStr)
 import std/list (length as listLength)
 import linkedin/types/sketch_types (Signal, TopicScore, AgentReady, Privacy, Portable)
-import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
+import linkedin/services/sketch_rubric (scoreAgentJson, scoreOpenApi, scoreMcpEndpoint, scoreApiDocsLink, scoreWebhooks, scoreRateLimitDocs, scoreStreamingEndpoint, scoreSandboxOffered, scoreAuthDocumented, scoreIdempotency, scoreLlmProviderMentioned, scoreThirdPartyDomains, scoreDataResidencyLanguage, scoreSingleVendorLlm, scoreMultiProviderMentioned, scoreCrossRuntimeClaim, scoreByoKey, sketchScoreAllSignals, sketchComputeTopicScore, topicHasLeaderboard, topicEq)
 
 func checkBool(name: string, got: bool, want: bool) -> int ! {IO} {
   if got == want then {
@@ -125,6 +125,24 @@ export func main() -> () ! {IO} {
   let tSt = checkBool("detects SSE language",          st1.detected, true) +
             checkInt("max points when detected",       st1.points, 2);
 
+  println("");
+  println("scoreSandboxOffered:");
+  let sb1 = scoreSandboxOffered("Try the API in our sandbox before going live.");
+  let tSb = checkBool("detects sandbox language",      sb1.detected, true) +
+            checkInt("max points when detected",       sb1.points, 2);
+
+  println("");
+  println("scoreAuthDocumented:");
+  let au1 = scoreAuthDocumented("Use OAuth2 with a bearer token or an API key for client credentials.");
+  let tAu = checkBool("detects auth language",         au1.detected, true) +
+            checkInt("max points when detected",       au1.points, 2);
+
+  println("");
+  println("scoreIdempotency:");
+  let id1 = scoreIdempotency("Send an Idempotency-Key header to retry safely.");
+  let tId = checkBool("detects idempotency language",  id1.detected, true) +
+            checkInt("max points when detected",       id1.points, 2);
+
   -- new portable signals
   println("");
   println("scoreMultiProviderMentioned:");
@@ -150,7 +168,7 @@ export func main() -> () ! {IO} {
   println("");
   println("contract bounds — all scorers respect 0..maxPoints:");
   let all = sketchScoreAllSignals("Some HTML with /mcp/ and openapi.json and Claude");
-  let bcheck = checkInt("scoreAllSignals returns 14 signals", listLength(all), 14);
+  let bcheck = checkInt("scoreAllSignals returns 17 signals", listLength(all), 17);
 
   -- aggregator clamps to 0..10
   println("");
@@ -174,9 +192,10 @@ export func main() -> () ! {IO} {
             checkBool("AgentReady != Privacy",    topicEq(AgentReady, Privacy), false);
 
   let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11
-            + tWh + tWh2 + tRl + tSt + tMp + tMp2 + tCr + tBk
+            + tWh + tWh2 + tRl + tSt + tSb + tAu + tId
+            + tMp + tMp2 + tCr + tBk
             + bcheck + t12 + t13 + t14;
-  let expected = 40;
+  let expected = 46;
   println("");
   if total == expected then
     println("OK: ${intToStr(total)}/${intToStr(expected)} assertions passed")

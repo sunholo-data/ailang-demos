@@ -29,7 +29,7 @@ Inside the §3 deep-dive on each sketch you'll also see the *inverse* framed as 
 
 **Three topics, all with observable signals and leaderboards:**
 
-- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints)
+- `agent-ready` — concrete protocol presence (A2A, OpenAPI, MCP, public API docs, webhooks, rate-limit docs, streaming endpoints, sandbox/test mode, authentication, idempotency)
 - `privacy` — third-party data flow + data residency language
 - `portable` — vendor-lock indicators, multi-provider citations, cross-runtime claims, BYO-key / model-agnostic language
 
@@ -54,6 +54,9 @@ V1 detection is **body-text-based only**. The sketch executor's effect signature
 | Webhooks documented | `agent-ready` | 2 | Body mentions `webhook`, `/webhooks`, "callback url", or `callback_url` | `ailang serve-api` handles webhooks as typed handler functions with effect-tracked side effects |
 | Rate limits documented | `agent-ready` | 2 | Body mentions "rate limit", "rate-limit", "x-ratelimit", `429`, or "throttl…" | Capability budgets — `Net @limit=N` is the symmetric server-side primitive for what agents see as rate limits |
 | Streaming / SSE endpoint | `agent-ready` | 2 | Body mentions "server-sent events", `text/event-stream`, `/sse`, `EventSource`, or "streaming endpoint" | `std/stream` — `ssePost` and the `Stream` effect handle event-source endpoints with typed event types |
+| Sandbox / test environment offered | `agent-ready` | 2 | Body mentions "sandbox", "test mode", "test environment", or "testing environment" | `ailang --ai-stub` plus mock effect handlers — deterministic, capability-scoped fakes for any effect |
+| Authentication documented | `agent-ready` | 2 | Body mentions "OAuth2"/"oauth 2", " JWT ", "bearer token", "access token", "api key", or "client credentials" | `std/jwt` for verification, IFC labels (`string<api-key>` / `string<token>`) to keep credentials out of public sinks at the type level |
+| Idempotency keys documented | `agent-ready` | 2 | Body mentions "idempotency", "idempotent", "idempotency-key", or "idempotency key" | Pure functions are idempotent by construction; `requires`/`ensures` contracts express idempotence as a static guarantee |
 | Named LLM provider mentioned | `privacy` | 2 (informational) | Body mentions "claude", "gpt-", "openai", "anthropic", "gemini", or "powered by ai" | `std/ai` + IFC labels — track and declassify customer data crossing the provider boundary |
 | Third-party domains restrained | `privacy` | 2 | Heuristic on `https://` occurrence count: ≤10 = 2pts, 11-20 = 1pt, >20 = 0 | Capability scoping — each `Net` call declares its endpoint in the effect row |
 | Data residency / on-prem language | `privacy` | 2 | Body mentions "data residency", "on-premises", "on-prem", "sovereign cloud", "EU-hosted", "data sovereignty", or "self-hosted" | Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI |
@@ -110,7 +113,7 @@ These are tracked in [`linkedin/design/sketches.md`](sketches.md) §10 (open que
 - [`linkedin/types/sketch_types.ail`](../types/sketch_types.ail) — `Signal`, `TopicScore`, `Topic` ADTs
 - [`linkedin/services/sketch_rubric_signals.ail`](../services/sketch_rubric_signals.ail) — signal manifest (one function per signal, defines metadata + AILANG primitive mapping)
 - [`linkedin/services/sketch_rubric.ail`](../services/sketch_rubric.ail) — detection logic + aggregator, contract-bounded
-- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 40 assertions covering every scorer + the aggregator + the polarity rules
+- [`linkedin/tests/test_rubric.ail`](../tests/test_rubric.ail) — 46 assertions covering every scorer + the aggregator + the polarity rules
 
 Every signal has `ensures { result.points >= 0, result.points <= result.maxPoints }`. The aggregator has `ensures { result.readiness >= 0, result.readiness <= 10 }`. Both are Z3-verifiable.
 

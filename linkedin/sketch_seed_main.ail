@@ -16,7 +16,8 @@ module linkedin/sketch_seed_main
 import std/io (println)
 import std/env (getArgs)
 import std/string (intToStr)
-import std/list (length as listLength, nth)
+import std/list (length as listLength, nth, concat as listConcat)
+import std/string (stringToInt)
 import std/option (Some, None)
 import linkedin/types/sketch_types (Topic, AgentReady, Privacy, Portable)
 import linkedin/services/sketch (sketchSite)
@@ -100,12 +101,39 @@ func runAll(xs: [SeedEntry], today: string, pos: int, total: int) -> () ! {IO, N
   }
 }
 
+-- Take a slice [start, end) from a list. Memory-safe batching: each
+-- ailang run process can handle a small batch, exit, and free RAM.
+func sliceList(xs: [SeedEntry], start: int, end: int) -> [SeedEntry] =
+  takeUntil(dropN(xs, start), end - start)
+
+func dropN(xs: [SeedEntry], n: int) -> [SeedEntry] =
+  if n <= 0 then xs
+  else match xs {
+    []           => [],
+    [_, ...rest] => dropN(rest, n - 1)
+  }
+
+func takeUntil(xs: [SeedEntry], n: int) -> [SeedEntry] =
+  if n <= 0 then []
+  else match xs {
+    []           => [],
+    [x, ...rest] => listConcat([x], takeUntil(rest, n - 1))
+  }
+
 export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
   let args = getArgs();
   let today = argOr(args, 0, "today");
-  let list = seeds();
+  let allSeeds = seeds();
+  let totalAll = listLength(allSeeds);
+  -- Optional argv[1]=start, argv[2]=end for memory-safe batching.
+  -- Default: run all 30.
+  let startStr = argOr(args, 1, "0");
+  let endStr   = argOr(args, 2, intToStr(totalAll));
+  let start = match stringToInt(startStr) { Some(n) => n, None => 0 };
+  let end   = match stringToInt(endStr)   { Some(n) => n, None => totalAll };
+  let list = sliceList(allSeeds, start, end);
   let total = listLength(list);
-  println("Seeding ${intToStr(total)} sketches (generated ${today}) ...");
+  println("Seeding ${intToStr(total)} sketches (slice [${intToStr(start)},${intToStr(end)}) of ${intToStr(totalAll)}, generated ${today}) ...");
   runAll(list, today, 1, total);
 
   println("");
@@ -116,5 +144,5 @@ export func main() -> () ! {IO, Env, Net, FS, AI, Process} {
   let totalRanked = nAgent + nPrivacy + nPortable;
 
   println("");
-  println("Done — ${intToStr(total)} sketches generated, ${intToStr(totalRanked)} entries ranked across the three leaderboards.")
+  println("Done — ${intToStr(total)} sketches in this slice, ${intToStr(totalRanked)} total leaderboard entries.")
 }
