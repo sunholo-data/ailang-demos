@@ -241,68 +241,130 @@ func renderNoLeaderboardSection(t: Topic) -> string =
     "</section>"
   ])
 
--- ─── Privacy-mechanics section (Privacy topic only) ──────────
+-- ─── Catalog accordion (used by all three topics) ────────────
+-- One <details>/<summary> row per AILANG primitive or rubric signal.
+-- Closed: monogram + name + one-liner + ident path. Open: a two-column
+-- split (Rubric / AILANG ships) with a docs link below. When a row has
+-- no rubric counterpart (most Privacy/Portable rows) the rubric cell
+-- collapses to a one-line "not directly scored" note.
+--
+-- protoRow renders a row WITH a rubric counterpart (e.g. every agent-
+-- ready row, plus the Privacy/Portable rows that overlap a signal).
+func protoRow(num: string, mono: string, name: string, tag: string, ident: string,
+              rubric: string, points: int,
+              ailang: string, href: string, linkLabel: string) -> string = join("", [
+  "<details class=\"tx-proto-row\">",
+  "<summary class=\"tx-proto-summary\">",
+  "<span class=\"tx-proto-num\">", num, "</span>",
+  "<span class=\"tx-proto-monogram\">", mono, "</span>",
+  "<span class=\"tx-proto-text\">",
+  "<span class=\"tx-proto-name\">", name, "</span>",
+  "<p class=\"tx-proto-tag\">", tag, "</p>",
+  "</span>",
+  "<span class=\"tx-proto-id\"><code>", ident, "</code></span>",
+  "<span class=\"tx-proto-chev\" aria-hidden=\"true\">+</span>",
+  "</summary>",
+  "<div class=\"tx-proto-body\">",
+  "<div class=\"tx-proto-cell\"><h4>Rubric — how we score it</h4><p>", rubric, "</p>",
+  "<span class=\"points\"><span class=\"num\">", intToStr(points), "</span> pts max</span></div>",
+  "<div class=\"tx-proto-cell\"><h4>AILANG ships</h4><p>", ailang, "</p></div>",
+  "<div class=\"tx-proto-docs\"><a href=\"", href, "\" target=\"_blank\" rel=\"noopener\">", linkLabel, "</a></div>",
+  "</div>",
+  "</details>"
+])
 
--- Six tiles explaining which AILANG features keep commenter identity,
--- network calls, and content bounds in check. Rendered only on the
--- Privacy topic page — the other two topics surface their own
--- AILANG-feature framing inside each sketch's feature cards.
+-- protoRowNoRubric renders a row whose AILANG primitive has no body-text
+-- detection signal (e.g. IFC labels, ADTs) — the rubric cell carries a
+-- one-line explanation of why instead of a detection rule.
+func protoRowNoRubric(num: string, mono: string, name: string, tag: string, ident: string,
+                      ailang: string, href: string, linkLabel: string) -> string = join("", [
+  "<details class=\"tx-proto-row\">",
+  "<summary class=\"tx-proto-summary\">",
+  "<span class=\"tx-proto-num\">", num, "</span>",
+  "<span class=\"tx-proto-monogram\">", mono, "</span>",
+  "<span class=\"tx-proto-text\">",
+  "<span class=\"tx-proto-name\">", name, "</span>",
+  "<p class=\"tx-proto-tag\">", tag, "</p>",
+  "</span>",
+  "<span class=\"tx-proto-id\"><code>", ident, "</code></span>",
+  "<span class=\"tx-proto-chev\" aria-hidden=\"true\">+</span>",
+  "</summary>",
+  "<div class=\"tx-proto-body\">",
+  "<div class=\"tx-proto-cell\"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div>",
+  "<div class=\"tx-proto-cell\"><h4>AILANG ships</h4><p>", ailang, "</p></div>",
+  "<div class=\"tx-proto-docs\"><a href=\"", href, "\" target=\"_blank\" rel=\"noopener\">", linkLabel, "</a></div>",
+  "</div>",
+  "</details>"
+])
+
+-- ─── Privacy catalog (Privacy topic only) ───────────────────
+
 func renderPrivacyMechanicsSection(t: Topic) -> string =
   match t {
-    Privacy => privacyMechanicsHtml(),
+    Privacy => privacyCatalogHtml(),
     _       => ""
   }
 
-func privacyMechanicsHtml() -> string = join("", [
-  "<section class=\"tx-section tx-mechanics\">",
+func privacyCatalogHtml() -> string = join("", [
+  "<section class=\"tx-section tx-catalog\">",
   "<h2>What the compiler enforces</h2>",
-  "<p class=\"lede\">None of these are policies that hold if a reviewer remembers. Each is a language feature that refuses to compile when we slip up.</p>",
-  "<div class=\"tx-mechanic-grid\">",
+  "<p class=\"lede\">Six AILANG features keep your data inside boundaries the type system polices. Tap any row to see the rubric signal (where there is one) and the language primitive that ships it.</p>",
+  "<div class=\"tx-proto-list\">",
 
-  privacyTileHtml(
-    "string&lt;pii&gt;  ⟶  ! {Declassify}",
-    "Information-flow labels keep your LinkedIn identity private.",
-    "The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code>. That function SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.",
+  protoRowNoRubric(
+    "01", "IFC", "Information-flow labels",
+    "PII can't reach a public sink without an explicit declassification effect.",
+    "string&lt;pii&gt; ⟶ ! {Declassify}",
+    "The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code> — it SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.",
     "https://ailang.sunholo.com/docs/guides/ifc-labels",
     "IFC labels guide ↗"
   ),
 
-  privacyTileHtml(
+  protoRowNoRubric(
+    "02", "EFR", "Effect rows",
+    "Every side effect a function performs appears in its type signature.",
     "! {Net, FS, AI, IO}",
-    "Effect rows make every side effect visible in the signature.",
-    "Each function names what it touches. The dispatcher that publishes a sketch has <code>! {Net, FS, AI, IO}</code> in its type — anything not listed there is unreachable from this code path. Reviewer attention not required.",
+    "The dispatcher that publishes a sketch declares <code>! {Net, FS, AI, IO}</code> in its type. Anything not listed there is unreachable from this code path — no telemetry, no quiet exfil, no \"oh, that function also writes a file\". Reviewer attention not required.",
     "https://ailang.sunholo.com/docs/guides/getting-started",
     "Effects intro ↗"
   ),
 
-  privacyTileHtml(
+  protoRow(
+    "03", "CAP", "Capability budgets",
+    "Each run is capped at a known number of network and AI calls.",
     "Net @limit=1, AI @limit=50",
-    "Capability budgets cap each run at a known number of calls.",
-    "The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.",
+    "Heuristic on outbound HTTPS count in the body — fewer external resources is the proxy. <code>≤10</code> = 2 pts, 11–20 = 1 pt, &gt;20 = 0 pts.",
+    2,
+    "The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.",
     "https://ailang.sunholo.com/docs/guides/parameterised-effects",
     "Parameterised effects ↗"
   ),
 
-  privacyTileHtml(
+  protoRowNoRubric(
+    "04", "CON", "Contracts &amp; Z3 verification",
+    "LinkedIn's 3000-char post limit is proved at compile time, not checked at runtime.",
     "requires { len(text) ≤ 3000 }",
-    "Contracts are Z3-verified, not runtime checks.",
-    "LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.",
+    "<code>linkedinCreatePost</code> carries a <code>requires</code> clause that an SMT solver proves before any binary is produced. The rubric scorer's <code>ensures { points &lt;= maxPoints }</code> is a contract too. Violations don't ship — they don't compile.",
     "https://ailang.sunholo.com/docs/guides/contracts",
     "Contracts &amp; verification ↗"
   ),
 
-  privacyTileHtml(
+  protoRow(
+    "05", "AIE", "The AI effect",
+    "Every Gemini/Claude/GPT call is a typed, budgeted, stubbable effect.",
     "! {AI}",
-    "The AI effect is typed, budgeted, and stubbable.",
-    "The Gemini call that extracts your site is a first-class effect, not a HTTP wrapper. It carries a per-run budget, can be deterministic-stubbed in tests, and appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.",
+    "Detected when the body mentions a known LLM provider (claude, gpt-, openai, anthropic, gemini, \"powered by ai\") — surfaces an existing third-party data flow worth labelling.",
+    2,
+    "The Gemini call that extracts your site is a first-class effect, not an HTTP wrapper. Per-run budget, deterministic-stub in tests, appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.",
     "https://ailang.sunholo.com/docs/guides/ai-effect",
     "AI effect guide ↗"
   ),
 
-  privacyTileHtml(
+  protoRowNoRubric(
+    "06", "ADT", "Closed sum types",
+    "Adding a new case without handling it everywhere is a compile error.",
     "type Topic = Privacy | Portable | AgentReady",
-    "Closed sum types make exhaustive handling a compile error.",
-    "Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no quiet \"unknown topic\" fallback that could drop a sketch on the floor.",
+    "Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no \"unknown topic\" fallback that could quietly drop a sketch.",
     "https://ailang.sunholo.com/docs/examples",
     "ADTs &amp; pattern matching ↗"
   ),
@@ -311,78 +373,82 @@ func privacyMechanicsHtml() -> string = join("", [
   "</section>"
 ])
 
-func privacyTileHtml(primitive: string, title: string, body: string, href: string, linkLabel: string) -> string = join("", [
-  "<article class=\"tx-mechanic-card\">",
-  "<span class=\"primitive\">", primitive, "</span>",
-  "<h3>", title, "</h3>",
-  "<p>", body, "</p>",
-  "<a class=\"learn\" href=\"", href, "\" target=\"_blank\" rel=\"noopener\">", linkLabel, "</a>",
-  "</article>"
-])
+-- ─── Agent-ready catalog (AgentReady topic only) ────────────
 
--- ─── Agent-ready protocols section (AgentReady topic only) ───
-
--- Six tiles linking to the AILANG features that make a site
--- agent-callable: serve-api, OpenAPI 3.1 from H-M signatures, MCP,
--- A2A, streaming, and the typed AI effect. Rendered only on the
--- AgentReady topic page; see renderPrivacyMechanicsSection for the
--- Privacy-topic analogue.
 func renderAgentReadyProtocolsSection(t: Topic) -> string =
   match t {
-    AgentReady => agentReadyProtocolsHtml(),
+    AgentReady => agentReadyCatalogHtml(),
     _          => ""
   }
 
-func agentReadyProtocolsHtml() -> string = join("", [
-  "<section class=\"tx-section tx-mechanics\">",
-  "<h2>Speak the agent protocols, in one command</h2>",
-  "<p class=\"lede\">Each tile is what an agent reaches for. The right-hand link is the AILANG primitive that produces it — usually <code>ailang serve-api</code>, which emits all four at once from your typed function signatures.</p>",
-  "<div class=\"tx-mechanic-grid\">",
+func agentReadyCatalogHtml() -> string = join("", [
+  "<section class=\"tx-section tx-catalog\">",
+  "<h2>The protocols agents reach for</h2>",
+  "<p class=\"lede\">Six surfaces an agent looks for on your site. The rubric detects whether you ship each one; <code>ailang serve-api</code> generates most of them from your typed function signatures.</p>",
+  "<div class=\"tx-proto-list\">",
 
-  privacyTileHtml(
-    "ailang serve-api  ⟶  REST + MCP + A2A + OpenAPI",
-    "One command, four protocols, zero glue code.",
-    "Point <code>ailang serve-api</code> at a directory of <code>.ail</code> modules. It exposes every exported function as a REST endpoint, an MCP tool, an A2A skill, and an OpenAPI 3.1 schema simultaneously. The same module runs in three places — native CLI, Cloud Run container, browser WASM.",
-    "https://ailang.sunholo.com/docs/guides/serve-api",
-    "Serve API guide ↗"
-  ),
-
-  privacyTileHtml(
-    "func price(sku: string, qty: int) -> Money  ⟶  openapi.json",
-    "OpenAPI 3.1 is generated from your Hindley-Milner signatures.",
-    "Function types are the API spec. A function's parameters, return type, and effect row determine paths, request bodies, response schemas, and security requirements automatically. Swagger UI is hosted at <code>/api/_meta/docs</code>; ReDoc at <code>/api/_meta/redoc</code>. No separate spec file to drift.",
-    "https://ailang.sunholo.com/docs/guides/serve-api#interactive-api-documentation",
-    "Interactive docs ↗"
-  ),
-
-  privacyTileHtml(
-    "POST /mcp/  ⟶  Model Context Protocol",
-    "Your typed functions become MCP tools.",
-    "Claude Desktop, Cursor, Cline, and any MCP-aware harness can call your AILANG functions directly. Arguments are validated against the same <code>requires</code> contracts the REST endpoint enforces. Run as HTTP at <code>/mcp/</code> or stdio for desktop hosts.",
-    "https://ailang.sunholo.com/docs/guides/serve-api#protocol-support",
-    "Protocol support ↗"
-  ),
-
-  privacyTileHtml(
-    "GET /.well-known/agent.json",
-    "Agent-to-Agent discovery comes for free.",
-    "<code>serve-api</code> writes the A2A agent card automatically — capabilities, skills, schemas, and authentication metadata all derive from your module exports. Agents that follow the A2A discovery convention land on a complete, machine-readable description of what you offer.",
+  protoRow(
+    "01", "A2A", "Agent discovery card",
+    "Auto-generated metadata that any agent scanning /.well-known/ will find.",
+    "/.well-known/agent.json",
+    "Body mentions <code>/.well-known/agent.json</code> or quotes <code>agent.json</code>.",
+    2,
+    "<code>ailang serve-api</code> writes the A2A agent card automatically from your module exports — capabilities, skills, schemas, authentication metadata. Agents following the A2A discovery convention land on a complete description of what you offer.",
     "https://ailang.sunholo.com/docs/guides/serve-api#protocol-support",
     "A2A in serve-api ↗"
   ),
 
-  privacyTileHtml(
-    "requires { ... }  ⟶  JSON Schema constraints",
-    "Contracts are agent-visible guarantees, not server-only checks.",
-    "Your <code>requires</code> and <code>ensures</code> clauses surface in the OpenAPI spec as JSON Schema constraints, so an agent calling your endpoint knows what's valid before it tries. Invalid requests get rejected by the runtime; valid ones come with a contract on what shape the response has.",
-    "https://ailang.sunholo.com/docs/guides/contracts",
-    "Contracts &amp; verification ↗"
+  protoRow(
+    "02", "API", "OpenAPI 3.1 + Swagger/ReDoc",
+    "Machine-readable spec generated from Hindley-Milner signatures.",
+    "openapi.json · /api/_meta/",
+    "Body mentions <code>openapi.json</code>, <code>openapi.yaml</code>, \"swagger\", \"redoc\", or a public API docs route (<code>/api/docs</code>, <code>developers.</code>, etc.). Two signals; up to 4 pts combined.",
+    4,
+    "Function types are the spec. Parameters, return type, and effect row determine paths, request bodies, response schemas, and security requirements automatically. Swagger UI lives at <code>/api/_meta/docs</code>; ReDoc at <code>/api/_meta/redoc</code>. No separate spec file to drift.",
+    "https://ailang.sunholo.com/docs/guides/serve-api#interactive-api-documentation",
+    "Interactive docs ↗"
   ),
 
-  privacyTileHtml(
-    "std/stream  ⟶  text/event-stream",
-    "Streaming endpoints are typed too.",
-    "<code>std/stream</code> exposes SSE and WebSocket as a single <code>Stream</code> effect. Handlers receive typed event values, not raw bytes; back-pressure is in the effect signature. Agents reading incrementally get the same contract guarantees as a single-shot request.",
+  protoRow(
+    "03", "MCP", "Model Context Protocol",
+    "Your typed functions become tools Claude Desktop, Cursor, and Cline can call.",
+    "POST /mcp/",
+    "Body mentions <code>/mcp/</code>, <code>/mcp/sse</code>, <code>mcp-server</code>, or \"model context protocol\".",
+    2,
+    "Same module, exposed as MCP tools. Arguments are validated against the same <code>requires</code> contracts the REST endpoint enforces. Run as HTTP at <code>/mcp/</code> or stdio for desktop hosts.",
+    "https://ailang.sunholo.com/docs/guides/serve-api#protocol-support",
+    "MCP support ↗"
+  ),
+
+  protoRow(
+    "04", "WHK", "Webhooks",
+    "Event subscriptions modelled as typed handler functions with declared side effects.",
+    "/webhooks/...",
+    "Body mentions <code>webhook</code>, <code>/webhooks</code>, \"callback url\", or <code>callback_url</code>.",
+    2,
+    "<code>ailang serve-api</code> handles webhooks as typed handler functions. Each handler's effect row declares exactly what it can do; payload schemas come from the input type; retry semantics belong to the handler, not the framework.",
+    "https://ailang.sunholo.com/docs/guides/serve-api",
+    "Serve API guide ↗"
+  ),
+
+  protoRow(
+    "05", "RTL", "Rate-limit contract",
+    "Capability budgets are the symmetric server-side primitive for what agents see as 429s.",
+    "429 · X-RateLimit-*",
+    "Body mentions \"rate limit\", \"rate-limit\", <code>x-ratelimit</code>, <code>429</code>, or \"throttl…\".",
+    2,
+    "<code>Net @limit=N</code> caps each function's outbound calls at compile time. The runtime enforces it, surfacing as 429s. Agents reading your docs get the same contract the type system enforces server-side.",
+    "https://ailang.sunholo.com/docs/guides/parameterised-effects",
+    "Parameterised effects ↗"
+  ),
+
+  protoRow(
+    "06", "SSE", "Streaming / live events",
+    "Server-Sent Events and WebSockets as a single typed Stream effect.",
+    "text/event-stream",
+    "Body mentions \"server-sent events\", <code>text/event-stream</code>, <code>/sse</code>, <code>EventSource</code>, or \"streaming endpoint\".",
+    2,
+    "<code>std/stream</code> exposes SSE and WebSocket through one <code>Stream</code> effect. Handlers receive typed event values, not raw bytes; back-pressure is in the effect signature. Agents reading incrementally get the same contract as a single-shot request.",
     "https://ailang.sunholo.com/docs/guides/streaming",
     "Streaming guide ↗"
   ),
@@ -391,69 +457,76 @@ func agentReadyProtocolsHtml() -> string = join("", [
   "</section>"
 ])
 
--- ─── Portable primitives section (Portable topic only) ──────
+-- ─── Portable catalog (Portable topic only) ─────────────────
 
--- Six tiles linking to the AILANG features that make a stack
--- vendor-portable: std/ai's multi-provider Step API, OpenRouter
--- routing, three-runtime deploy (WASM + Cloud Run + native CLI),
--- BYO-key from the browser, custom AI providers as packages, and Go
--- interop. Rendered only on the Portable topic page.
 func renderPortablePrimitivesSection(t: Topic) -> string =
   match t {
-    Portable => portablePrimitivesHtml(),
+    Portable => portableCatalogHtml(),
     _        => ""
   }
 
-func portablePrimitivesHtml() -> string = join("", [
-  "<section class=\"tx-section tx-mechanics\">",
+func portableCatalogHtml() -> string = join("", [
+  "<section class=\"tx-section tx-catalog\">",
   "<h2>Portability is a language feature</h2>",
-  "<p class=\"lede\">Vendor switching costs come from code coupled to one provider, one runtime, or one deployment shape. Each tile is the AILANG primitive that decouples one of those — at the type-system layer, not as a wrapper library.</p>",
-  "<div class=\"tx-mechanic-grid\">",
+  "<p class=\"lede\">Vendor-switching cost comes from code coupled to one provider, one runtime, or one deployment shape. Each row is the AILANG primitive that decouples one of those — paired with the rubric signal that detects it where there is one.</p>",
+  "<div class=\"tx-proto-list\">",
 
-  privacyTileHtml(
-    "std/ai  ⟶  Anthropic | OpenAI | Gemini | OpenRouter | Ollama",
-    "One Step API across five built-in providers.",
-    "The <code>std/ai</code> Step API is provider-agnostic. Switch from Claude to GPT to Gemini to a local Ollama model with a single <code>--ai</code> flag — no SDK swap, no rewrite. Tool calling, structured output, and streaming all normalise to the same typed shape.",
+  protoRow(
+    "01", "AI5", "std/ai multi-provider Step API",
+    "One typed Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama.",
+    "std/ai → 5 providers",
+    "Detected when the body names two or more of: claude, anthropic, gpt, openai, gemini, mistral, llama, ollama, openrouter — you're already vendor-multi. A separate penalty signal docks 2 pts if exactly one is named with no portability claim.",
+    4,
+    "Switch from Claude to GPT to Gemini to a local Ollama model with a single <code>--ai</code> flag — no SDK swap, no rewrite. Tool calling, structured output, and streaming all normalise to the same typed shape.",
     "https://ailang.sunholo.com/docs/guides/ai-effect",
     "AI effect guide ↗"
   ),
 
-  privacyTileHtml(
-    "anthropic/claude-sonnet-4.5  ⟶  google/gemini-2.5-flash",
-    "OpenRouter routing: ~100 models behind one HTTP shape.",
-    "Target <code>&lt;vendor&gt;/&lt;model&gt;</code> strings directly — no per-vendor SDK to add. Cost-routing, fallback, and rate-limit handling are uniform across the catalogue. Cheap-or-fast switches become a config diff, not a refactor.",
+  protoRowNoRubric(
+    "02", "OR", "OpenRouter routing",
+    "Target ~100 frontier models behind one HTTP shape.",
+    "vendor/model strings",
+    "Target <code>&lt;vendor&gt;/&lt;model&gt;</code> directly — <code>anthropic/claude-sonnet-4.5</code>, <code>google/gemini-2.5-flash</code>, <code>meta-llama/llama-3.3-70b-instruct</code>. Cost routing, fallback, and rate-limit handling are uniform across the catalogue.",
     "https://ailang.sunholo.com/docs/guides/ai-routing",
     "AI routing ↗"
   ),
 
-  privacyTileHtml(
-    "same .ail  ⟶  WASM | Cloud Run | native CLI",
-    "Three-runtime deploy from one source.",
-    "The same module compiles to a native binary, a Cloud Run image, and a WebAssembly bundle that runs in a browser tab. Effect handlers are the only runtime-specific layer; business logic is identical. \"Where it runs\" stops being an architecture decision up-front.",
+  protoRow(
+    "03", "3RT", "Three-runtime deploy",
+    "Same .ail compiles to a native binary, a Cloud Run image, and a WASM bundle.",
+    "WASM | Cloud Run | native",
+    "Body mentions \"self-hosted\", \"on-prem\", \"wasm\", \"webassembly\", \"deploy anywhere\", \"kubernetes\", or \"docker\".",
+    2,
+    "Same module, three runtimes. Effect handlers are the only runtime-specific layer; business logic is identical. \"Where it runs\" stops being an architecture decision up-front.",
     "https://ailang.sunholo.com/docs/guides/wasm-integration",
     "WASM integration ↗"
   ),
 
-  privacyTileHtml(
-    "ailang WASM + localStorage  ⟶  ai.step in the browser",
-    "BYO-key: same Step API, caller holds the credential.",
-    "A browser tab can call <code>ai.step</code> against the user's own provider key, stored in <code>localStorage</code> — no backend round-trip, no key on your servers. The browser bytecode is the same AILANG module the server runs; only the effect handler differs.",
+  protoRow(
+    "04", "BYO", "Browser ai.step with BYO key",
+    "Same Step API in a browser tab, the caller holds the credential.",
+    "ai.step + localStorage",
+    "Body mentions \"bring your own key\", \"BYOK\", \"BYO key\", \"model-agnostic\", \"any LLM\", or \"any model\".",
+    2,
+    "A browser tab calls <code>ai.step</code> against the user's own provider key, stored in <code>localStorage</code> — no backend round-trip, no key on your servers. The browser bytecode is the same AILANG module the server runs; only the effect handler differs.",
     "https://ailang.sunholo.com/docs/guides/wasm-ai-step-byo-key",
     "Browser ai.step ↗"
   ),
 
-  privacyTileHtml(
+  protoRowNoRubric(
+    "05", "PKG", "Custom AI providers as packages",
+    "Adding a vendor is a config block, not a binary fork.",
     "[[ai_provider]] in ailang.toml",
-    "Custom providers are packages, not binary forks.",
-    "Adding a vendor (a regional cloud, a private model gateway, a research lab's API) is a config block plus a <code>.ail</code> adapter. AILANG registers it as a first-class provider with the same budget tracking, AI capability gating, and trace integration the built-ins get.",
+    "A regional cloud, a private model gateway, or a research lab's API becomes a first-class provider with one TOML block plus a <code>.ail</code> adapter. Budget tracking, AI capability gating, and trace integration come for free.",
     "https://ailang.sunholo.com/docs/guides/custom-ai-providers",
     "Custom AI providers ↗"
   ),
 
-  privacyTileHtml(
-    "ailang compile --emit-go  ⟶  go build",
-    "Production hot paths drop into Go services.",
-    "Need raw throughput or in-process composition with an existing Go codebase? <code>--emit-go</code> compiles AILANG modules to idiomatic Go. ADTs become discriminator structs, exports become package-public functions; effects propagate as <code>error</code> returns. Same source, two runtimes.",
+  protoRowNoRubric(
+    "06", "GO",  "Go interop",
+    "Production hot paths drop into existing Go services as idiomatic Go code.",
+    "ailang compile --emit-go",
+    "Same source compiles to Go. ADTs become discriminator structs, exports become package-public functions, effects propagate as <code>error</code> returns. Same module, two runtimes — interpret in dev, compile for prod.",
     "https://ailang.sunholo.com/docs/guides/go-interop",
     "Go interop ↗"
   ),
@@ -544,56 +617,21 @@ func topicHumanName(t: Topic) -> string = match t {
   AgentReady => "agent-ready"
 }
 
-func renderTopicCard(t: Topic) -> string ! {FS} {
-  let lbPath = sketchLeaderboardPath(t);
-  let count = if fileExists(lbPath) then
-    match decode(readFile(lbPath)) {
-      Ok(j) => getOrElse(getInt(j, "totalSketches"), 0),
-      Err(_) => 0
-    }
-  else 0;
-  let countCell = if topicHasLeaderboard(t) then
-    "<span class=\"count\"><span class=\"num\">${intToStr(count)}</span> sketch${if count == 1 then "" else "es"}</span>"
-  else
-    "<span class=\"no-rank\">no leaderboard</span>";
-  join("", [
-    "<a class=\"ti-card\" href=\"", topicSlug(t), "/\">",
-    "<div class=\"top\">",
-    "<h2>AILANG <span class=\"accent\">×</span> ", topicHumanName(t), "</h2>",
-    "<span class=\"hashtag\">", topicHashtag(t), "</span>",
-    "</div>",
-    "<p class=\"desc\">", topicDescription(t), "</p>",
-    "<div class=\"meta\">", countCell, "</div>",
-    "</a>"
-  ])
-}
-
--- Render the all-topics gallery page at site/linkedin/topics/index.html.
-export func sketchRenderTopicsIndex() -> () ! {FS} {
-  let template = readFile("linkedin/templates/topics_index.html");
-  let cardsHtml = join("\n", [
-    renderTopicCard(AgentReady),
-    renderTopicCard(Privacy),
-    renderTopicCard(Portable)
-  ]);
-  let html = replaceMany(template, [("{{TOPIC_CARDS_HTML}}", cardsHtml)]);
-  mkdirAll(sketchTopicsDir());
-  writeFile("${sketchTopicsDir()}/index.html", html);
-  ()
-}
-
 -- Render the topic landing page at site/linkedin/topics/<topic>/index.html.
 export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generatedAt: string) -> () ! {FS} {
   let template = readFile("linkedin/templates/topic_index.html");
   let section = if topicHasLeaderboard(t)
                 then renderLeaderboardSection(t, entries, generatedAt)
                 else renderNoLeaderboardSection(t);
-  let rubric = renderRubricSection(t);
   let mechanics = match t {
     Privacy    => renderPrivacyMechanicsSection(t),
     AgentReady => renderAgentReadyProtocolsSection(t),
     Portable   => renderPortablePrimitivesSection(t)
   };
+  -- Active-nav class for the cross-topic pill that matches `t`.
+  let activeAR = match t { AgentReady => "is-active", _ => "" };
+  let activePR = match t { Privacy    => "is-active", _ => "" };
+  let activePO = match t { Portable   => "is-active", _ => "" };
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
     ("{{TOPIC_SLUG}}",               topicSlug(t)),
@@ -602,7 +640,9 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
     ("{{TOPIC_DESCRIPTION_META}}",   topicDescriptionMeta(t)),
     ("{{LEADERBOARD_SECTION_HTML}}", section),
     ("{{MECHANICS_SECTION_HTML}}",   mechanics),
-    ("{{RUBRIC_SECTION_HTML}}",      rubric)
+    ("{{NAV_AR_ACTIVE}}",            activeAR),
+    ("{{NAV_PR_ACTIVE}}",            activePR),
+    ("{{NAV_PO_ACTIVE}}",            activePO)
   ]);
   mkdirAll(sketchTopicDir(t));
   writeFile("${sketchTopicDir(t)}/index.html", html);

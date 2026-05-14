@@ -38,6 +38,33 @@
   .tx-logo { display: flex; align-items: center; gap: 10px; }
   .tx-logo img { width: 28px; height: 28px; }
   .tx-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+  /* Cross-topic navigator — sits between the logo and the back link.
+     The current topic is marked .is-active by the renderer so it looks
+     pressed-in rather than clickable. */
+  .tx-topnav {
+    display: flex; gap: 4px;
+    margin-left: 4px;
+    font-family: var(--font-mono); font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .tx-topnav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 999px;
+    transition: color .15s, background .15s;
+  }
+  .tx-topnav a:hover { color: var(--primary); background: var(--primary-faded); }
+  .tx-topnav a.is-active {
+    color: var(--primary);
+    background: var(--primary-faded);
+    cursor: default;
+    font-weight: 600;
+  }
+  @media (max-width: 640px) {
+    .tx-topnav { font-size: 11px; gap: 2px; }
+    .tx-topnav a { padding: 5px 8px; }
+  }
 
   .tx-hero {
     padding: 30px 0 36px;
@@ -120,96 +147,178 @@
   }
   .tx-no-leaderboard strong { color: var(--text-primary); }
 
-  /* Rubric inline (replaces footer link) */
-  .tx-rubric { padding: 30px 0; border-top: 1px dashed var(--border); }
-  .tx-rubric h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0 0 8px; color: var(--text-primary); }
-  .tx-rubric p.lede { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 22px; max-width: 640px; }
-  .tx-rubric p.lede strong { color: var(--text-primary); }
-  .tx-signal {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 12px;
-    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  /* ─── Catalog of protocols / primitives ──────────────────────
+     A magazine-TOC accordion. Each row is a <details> element so the
+     experience works without JS. Closed state is one slim line; opening
+     reveals a Rubric / AILANG-ships split with a docs link beneath. */
+  .tx-catalog {
+    padding: 36px 0 8px;
+    border-top: 1px dashed var(--border);
   }
-  @media (max-width: 560px) { .tx-signal { grid-template-columns: 1fr; } }
-  .tx-signal .name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  .tx-signal .points {
-    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
-    letter-spacing: 0.04em; white-space: nowrap;
+  .tx-catalog h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 4px; color: var(--text-primary); letter-spacing: -0.01em;
   }
-  .tx-signal .points .num { color: var(--primary); font-weight: 700; }
-  .tx-signal .how {
-    grid-column: 1 / -1; margin: 6px 0 8px;
-    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps {
-    grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--border);
-    font-size: 12px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps strong { color: var(--primary); font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 8px; }
-  .tx-rubric .no-rubric {
-    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
-    padding: 18px 22px; color: var(--text-secondary); line-height: 1.55;
-  }
-  .tx-rubric .no-rubric strong { color: var(--text-primary); }
-
-  /* What the compiler enforces (Privacy topic only) */
-  .tx-mechanics .lede {
+  .tx-catalog p.lede {
     color: var(--text-secondary); font-size: 14px; line-height: 1.6;
-    margin: 0 0 22px; max-width: 640px;
+    margin: 0 0 28px; max-width: 640px;
   }
-  .tx-mechanic-grid {
+
+  .tx-proto-list { display: flex; flex-direction: column; }
+  .tx-proto-row {
+    border-top: 1px dashed var(--border);
+    position: relative;
+  }
+  .tx-proto-row:last-child { border-bottom: 1px dashed var(--border); }
+  /* Coral hairline on the left edge when the row is open. */
+  .tx-proto-row::before {
+    content: '';
+    position: absolute; top: 0; bottom: 0; left: 0;
+    width: 0;
+    background: var(--primary);
+    transition: width 0.22s ease;
+    pointer-events: none;
+  }
+  .tx-proto-row[open]::before { width: 3px; }
+
+  .tx-proto-summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: 52px 56px minmax(0, 1fr) auto 22px;
+    align-items: center;
+    gap: 18px;
+    padding: 22px 6px 22px 18px;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.15s ease;
+    user-select: none;
   }
-  .tx-mechanic-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 20px 16px;
-    display: flex; flex-direction: column; gap: 9px;
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  .tx-proto-summary::-webkit-details-marker { display: none; }
+  .tx-proto-summary::marker { content: ''; }
+  .tx-proto-row:hover > .tx-proto-summary { background: rgba(231, 60, 23, 0.025); }
+  .tx-proto-row[open] > .tx-proto-summary { background: rgba(231, 60, 23, 0.030); }
+
+  .tx-proto-num {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 30px; line-height: 1; letter-spacing: -0.04em;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    transition: color 0.15s ease;
   }
-  .tx-mechanic-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(231, 60, 23, 0.30);
-    box-shadow: 0 14px 30px -18px rgba(231, 60, 23, 0.20);
+  .tx-proto-row[open] .tx-proto-num,
+  .tx-proto-row:hover .tx-proto-num { color: var(--primary); }
+
+  .tx-proto-monogram {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 22px; padding: 0 8px;
+    background: var(--primary-faded); color: var(--primary);
+    font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+    border-radius: 4px; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
-  .tx-mechanic-card .primitive {
-    font-family: var(--font-mono); font-size: 11.5px;
+
+  .tx-proto-text { min-width: 0; }
+  .tx-proto-name {
+    font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    color: var(--text-primary); line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .tx-proto-tag {
+    font-family: var(--font-display); font-size: 13.5px;
+    color: var(--text-secondary); line-height: 1.4;
+    margin: 0;
+  }
+
+  .tx-proto-id {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .tx-proto-chev {
+    font-family: var(--font-mono); font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.22s ease, color 0.15s ease;
+    text-align: center;
+    line-height: 1;
+  }
+  .tx-proto-row[open] .tx-proto-chev {
+    transform: rotate(45deg);
     color: var(--primary);
-    background: var(--primary-faded);
-    padding: 4px 9px; border-radius: 6px;
-    align-self: flex-start; line-height: 1.4;
   }
-  .tx-mechanic-card h3 {
-    font-family: var(--font-display); font-size: 15.5px; font-weight: 700;
+
+  .tx-proto-body {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 28px 48px;
+    padding: 4px 18px 26px 90px;
+    animation: tx-proto-fade 0.32s ease both;
+  }
+  @keyframes tx-proto-fade {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .tx-proto-cell h4 {
+    font-family: var(--font-mono); font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--primary);
+    margin: 0 0 8px;
+  }
+  .tx-proto-cell p {
+    font-family: var(--font-display); font-size: 14px; line-height: 1.6;
     color: var(--text-primary);
-    margin: 4px 0 0; letter-spacing: -0.012em; line-height: 1.3;
+    margin: 0;
   }
-  .tx-mechanic-card p {
-    font-family: var(--font-display); font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0; line-height: 1.6; flex-grow: 1;
+  .tx-proto-cell .points {
+    display: inline-block; margin-top: 8px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
   }
-  .tx-mechanic-card .learn {
-    display: inline-flex; align-items: center; gap: 5px;
-    margin-top: 6px;
-    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  .tx-proto-cell .points .num { color: var(--primary); font-weight: 700; }
+  .tx-proto-cell code {
+    font-family: var(--font-mono); font-size: 12.5px;
+    background: var(--bg-input); color: var(--text-primary);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .tx-proto-docs {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+  }
+  .tx-proto-docs a {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
     color: var(--primary); text-decoration: none;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    align-self: flex-start;
+    letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(231, 60, 23, 0.28);
     padding-bottom: 1px;
     transition: border-color 0.15s;
   }
-  .tx-mechanic-card .learn:hover { border-bottom-color: var(--primary); }
-  @media (max-width: 900px) {
-    .tx-mechanic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 560px) {
-    .tx-mechanic-grid { grid-template-columns: 1fr; }
-    .tx-mechanic-card { padding: 16px 16px 14px; }
+  .tx-proto-docs a:hover { border-bottom-color: var(--primary); }
+
+  @media (max-width: 720px) {
+    .tx-proto-summary {
+      grid-template-columns: 38px 1fr 18px;
+      grid-template-rows: auto auto;
+      grid-template-areas:
+        "num   name chev"
+        "mono  tag  id";
+      gap: 6px 14px;
+      padding: 18px 4px 18px 14px;
+    }
+    .tx-proto-num { grid-area: num; font-size: 24px; }
+    .tx-proto-monogram { grid-area: mono; justify-self: start; }
+    .tx-proto-text { grid-area: name; }
+    .tx-proto-tag { font-size: 13px; }
+    .tx-proto-id  { grid-area: id; font-size: 11px; max-width: 100%; }
+    .tx-proto-chev { grid-area: chev; }
+    .tx-proto-body {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      padding: 4px 14px 22px 14px;
+    }
   }
 
   .tx-footer {
@@ -229,6 +338,11 @@
       <img src="../../../ailang-logo.svg" alt="AILANG">
       <span>AILANG · topics</span>
     </div>
+    <nav class="tx-topnav">
+      <a class="{{NAV_AR_ACTIVE}}" href="../agent-ready/" data-topic="agent-ready">agent-ready</a>
+      <a class="{{NAV_PR_ACTIVE}}" href="../privacy/"      data-topic="privacy">privacy</a>
+      <a class="{{NAV_PO_ACTIVE}}" href="../portable/"     data-topic="portable">portable</a>
+    </nav>
     <a class="back" href="../../">← LinkedIn demo</a>
   </header>
 
@@ -253,12 +367,9 @@
 
   {{MECHANICS_SECTION_HTML}}
 
-  {{RUBRIC_SECTION_HTML}}
-
   <footer class="tx-footer">
-    <p>The rubric above is the <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">full open-source AILANG source</a> — every signal extractor is contract-verified. Pull requests welcome.</p>
+    <p>The full rubric is <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">open-source AILANG source</a> — every signal extractor is contract-verified, Z3-bounded, and PR-able.</p>
     <div class="links">
-      <a href="../">← All topics</a>
       <a href="../../">← LinkedIn demo</a>
       <a href="../../../">← AILANG demos hub</a>
     </div>

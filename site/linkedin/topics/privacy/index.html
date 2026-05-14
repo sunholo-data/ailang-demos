@@ -38,6 +38,33 @@
   .tx-logo { display: flex; align-items: center; gap: 10px; }
   .tx-logo img { width: 28px; height: 28px; }
   .tx-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+  /* Cross-topic navigator — sits between the logo and the back link.
+     The current topic is marked .is-active by the renderer so it looks
+     pressed-in rather than clickable. */
+  .tx-topnav {
+    display: flex; gap: 4px;
+    margin-left: 4px;
+    font-family: var(--font-mono); font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .tx-topnav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 999px;
+    transition: color .15s, background .15s;
+  }
+  .tx-topnav a:hover { color: var(--primary); background: var(--primary-faded); }
+  .tx-topnav a.is-active {
+    color: var(--primary);
+    background: var(--primary-faded);
+    cursor: default;
+    font-weight: 600;
+  }
+  @media (max-width: 640px) {
+    .tx-topnav { font-size: 11px; gap: 2px; }
+    .tx-topnav a { padding: 5px 8px; }
+  }
 
   .tx-hero {
     padding: 30px 0 36px;
@@ -120,96 +147,178 @@
   }
   .tx-no-leaderboard strong { color: var(--text-primary); }
 
-  /* Rubric inline (replaces footer link) */
-  .tx-rubric { padding: 30px 0; border-top: 1px dashed var(--border); }
-  .tx-rubric h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0 0 8px; color: var(--text-primary); }
-  .tx-rubric p.lede { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 22px; max-width: 640px; }
-  .tx-rubric p.lede strong { color: var(--text-primary); }
-  .tx-signal {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 12px;
-    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  /* ─── Catalog of protocols / primitives ──────────────────────
+     A magazine-TOC accordion. Each row is a <details> element so the
+     experience works without JS. Closed state is one slim line; opening
+     reveals a Rubric / AILANG-ships split with a docs link beneath. */
+  .tx-catalog {
+    padding: 36px 0 8px;
+    border-top: 1px dashed var(--border);
   }
-  @media (max-width: 560px) { .tx-signal { grid-template-columns: 1fr; } }
-  .tx-signal .name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  .tx-signal .points {
-    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
-    letter-spacing: 0.04em; white-space: nowrap;
+  .tx-catalog h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 4px; color: var(--text-primary); letter-spacing: -0.01em;
   }
-  .tx-signal .points .num { color: var(--primary); font-weight: 700; }
-  .tx-signal .how {
-    grid-column: 1 / -1; margin: 6px 0 8px;
-    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps {
-    grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--border);
-    font-size: 12px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps strong { color: var(--primary); font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 8px; }
-  .tx-rubric .no-rubric {
-    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
-    padding: 18px 22px; color: var(--text-secondary); line-height: 1.55;
-  }
-  .tx-rubric .no-rubric strong { color: var(--text-primary); }
-
-  /* What the compiler enforces (Privacy topic only) */
-  .tx-mechanics .lede {
+  .tx-catalog p.lede {
     color: var(--text-secondary); font-size: 14px; line-height: 1.6;
-    margin: 0 0 22px; max-width: 640px;
+    margin: 0 0 28px; max-width: 640px;
   }
-  .tx-mechanic-grid {
+
+  .tx-proto-list { display: flex; flex-direction: column; }
+  .tx-proto-row {
+    border-top: 1px dashed var(--border);
+    position: relative;
+  }
+  .tx-proto-row:last-child { border-bottom: 1px dashed var(--border); }
+  /* Coral hairline on the left edge when the row is open. */
+  .tx-proto-row::before {
+    content: '';
+    position: absolute; top: 0; bottom: 0; left: 0;
+    width: 0;
+    background: var(--primary);
+    transition: width 0.22s ease;
+    pointer-events: none;
+  }
+  .tx-proto-row[open]::before { width: 3px; }
+
+  .tx-proto-summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: 52px 56px minmax(0, 1fr) auto 22px;
+    align-items: center;
+    gap: 18px;
+    padding: 22px 6px 22px 18px;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.15s ease;
+    user-select: none;
   }
-  .tx-mechanic-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 20px 16px;
-    display: flex; flex-direction: column; gap: 9px;
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  .tx-proto-summary::-webkit-details-marker { display: none; }
+  .tx-proto-summary::marker { content: ''; }
+  .tx-proto-row:hover > .tx-proto-summary { background: rgba(231, 60, 23, 0.025); }
+  .tx-proto-row[open] > .tx-proto-summary { background: rgba(231, 60, 23, 0.030); }
+
+  .tx-proto-num {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 30px; line-height: 1; letter-spacing: -0.04em;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    transition: color 0.15s ease;
   }
-  .tx-mechanic-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(231, 60, 23, 0.30);
-    box-shadow: 0 14px 30px -18px rgba(231, 60, 23, 0.20);
+  .tx-proto-row[open] .tx-proto-num,
+  .tx-proto-row:hover .tx-proto-num { color: var(--primary); }
+
+  .tx-proto-monogram {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 22px; padding: 0 8px;
+    background: var(--primary-faded); color: var(--primary);
+    font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+    border-radius: 4px; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
-  .tx-mechanic-card .primitive {
-    font-family: var(--font-mono); font-size: 11.5px;
+
+  .tx-proto-text { min-width: 0; }
+  .tx-proto-name {
+    font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    color: var(--text-primary); line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .tx-proto-tag {
+    font-family: var(--font-display); font-size: 13.5px;
+    color: var(--text-secondary); line-height: 1.4;
+    margin: 0;
+  }
+
+  .tx-proto-id {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .tx-proto-chev {
+    font-family: var(--font-mono); font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.22s ease, color 0.15s ease;
+    text-align: center;
+    line-height: 1;
+  }
+  .tx-proto-row[open] .tx-proto-chev {
+    transform: rotate(45deg);
     color: var(--primary);
-    background: var(--primary-faded);
-    padding: 4px 9px; border-radius: 6px;
-    align-self: flex-start; line-height: 1.4;
   }
-  .tx-mechanic-card h3 {
-    font-family: var(--font-display); font-size: 15.5px; font-weight: 700;
+
+  .tx-proto-body {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 28px 48px;
+    padding: 4px 18px 26px 90px;
+    animation: tx-proto-fade 0.32s ease both;
+  }
+  @keyframes tx-proto-fade {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .tx-proto-cell h4 {
+    font-family: var(--font-mono); font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--primary);
+    margin: 0 0 8px;
+  }
+  .tx-proto-cell p {
+    font-family: var(--font-display); font-size: 14px; line-height: 1.6;
     color: var(--text-primary);
-    margin: 4px 0 0; letter-spacing: -0.012em; line-height: 1.3;
+    margin: 0;
   }
-  .tx-mechanic-card p {
-    font-family: var(--font-display); font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0; line-height: 1.6; flex-grow: 1;
+  .tx-proto-cell .points {
+    display: inline-block; margin-top: 8px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
   }
-  .tx-mechanic-card .learn {
-    display: inline-flex; align-items: center; gap: 5px;
-    margin-top: 6px;
-    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  .tx-proto-cell .points .num { color: var(--primary); font-weight: 700; }
+  .tx-proto-cell code {
+    font-family: var(--font-mono); font-size: 12.5px;
+    background: var(--bg-input); color: var(--text-primary);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .tx-proto-docs {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+  }
+  .tx-proto-docs a {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
     color: var(--primary); text-decoration: none;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    align-self: flex-start;
+    letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(231, 60, 23, 0.28);
     padding-bottom: 1px;
     transition: border-color 0.15s;
   }
-  .tx-mechanic-card .learn:hover { border-bottom-color: var(--primary); }
-  @media (max-width: 900px) {
-    .tx-mechanic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 560px) {
-    .tx-mechanic-grid { grid-template-columns: 1fr; }
-    .tx-mechanic-card { padding: 16px 16px 14px; }
+  .tx-proto-docs a:hover { border-bottom-color: var(--primary); }
+
+  @media (max-width: 720px) {
+    .tx-proto-summary {
+      grid-template-columns: 38px 1fr 18px;
+      grid-template-rows: auto auto;
+      grid-template-areas:
+        "num   name chev"
+        "mono  tag  id";
+      gap: 6px 14px;
+      padding: 18px 4px 18px 14px;
+    }
+    .tx-proto-num { grid-area: num; font-size: 24px; }
+    .tx-proto-monogram { grid-area: mono; justify-self: start; }
+    .tx-proto-text { grid-area: name; }
+    .tx-proto-tag { font-size: 13px; }
+    .tx-proto-id  { grid-area: id; font-size: 11px; max-width: 100%; }
+    .tx-proto-chev { grid-area: chev; }
+    .tx-proto-body {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      padding: 4px 14px 22px 14px;
+    }
   }
 
   .tx-footer {
@@ -229,6 +338,11 @@
       <img src="../../../ailang-logo.svg" alt="AILANG">
       <span>AILANG · topics</span>
     </div>
+    <nav class="tx-topnav">
+      <a class="" href="../agent-ready/" data-topic="agent-ready">agent-ready</a>
+      <a class="is-active" href="../privacy/"      data-topic="privacy">privacy</a>
+      <a class="" href="../portable/"     data-topic="portable">portable</a>
+    </nav>
     <a class="back" href="../../">← LinkedIn demo</a>
   </header>
 
@@ -251,16 +365,11 @@
 
   <section class="tx-section"><h2>Leaderboard</h2><p class="updated">refreshed daily · last update 2026-05-14 · 1 sketches</p><div class="tx-leaderboard"><div class="tx-row"><span class="rank">#1</span><span class="avatar" style="background: conic-gradient(from 140deg, var(--primary), var(--ai-orange), var(--primary));"></span><div class="domain"><span class="initials">MO</span>sunholo.com</div><div class="score">3/10</div><div class="col-link"><a href="6491b7-sunholo-com/">view sketch ↗</a></div><div class="col-updated">2026-05-14</div></div></div></section>
 
-  <section class="tx-section tx-mechanics"><h2>What the compiler enforces</h2><p class="lede">None of these are policies that hold if a reviewer remembers. Each is a language feature that refuses to compile when we slip up.</p><div class="tx-mechanic-grid"><article class="tx-mechanic-card"><span class="primitive">string&lt;pii&gt;  ⟶  ! {Declassify}</span><h3>Information-flow labels keep your LinkedIn identity private.</h3><p>The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code>. That function SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">IFC labels guide ↗</a></article><article class="tx-mechanic-card"><span class="primitive">! {Net, FS, AI, IO}</span><h3>Effect rows make every side effect visible in the signature.</h3><p>Each function names what it touches. The dispatcher that publishes a sketch has <code>! {Net, FS, AI, IO}</code> in its type — anything not listed there is unreachable from this code path. Reviewer attention not required.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Effects intro ↗</a></article><article class="tx-mechanic-card"><span class="primitive">Net @limit=1, AI @limit=50</span><h3>Capability budgets cap each run at a known number of calls.</h3><p>The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">Parameterised effects ↗</a></article><article class="tx-mechanic-card"><span class="primitive">requires { len(text) ≤ 3000 }</span><h3>Contracts are Z3-verified, not runtime checks.</h3><p>LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">Contracts &amp; verification ↗</a></article><article class="tx-mechanic-card"><span class="primitive">! {AI}</span><h3>The AI effect is typed, budgeted, and stubbable.</h3><p>The Gemini call that extracts your site is a first-class effect, not a HTTP wrapper. It carries a per-run budget, can be deterministic-stubbed in tests, and appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a></article><article class="tx-mechanic-card"><span class="primitive">type Topic = Privacy | Portable | AgentReady</span><h3>Closed sum types make exhaustive handling a compile error.</h3><p>Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no quiet "unknown topic" fallback that could drop a sketch on the floor.</p><a class="learn" href="https://ailang.sunholo.com/docs/examples" target="_blank" rel="noopener">ADTs &amp; pattern matching ↗</a></article></div></section>
-
-  <section class="tx-rubric"><h2>What we measure</h2><p class="lede">Every score on this page is computed by <strong>contract-verified AILANG code</strong>. The signals below — and only these signals — feed the rank. Each one maps to an AILANG primitive a reader could adopt. No llms.txt, no robots.txt, no JSON-LD: AILANG doesn't have a position on those.</p><div class="tx-signal"><div class="name">Named LLM provider mentioned</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page copy or scripts mention Claude / GPT / Gemini / Anthropic / OpenAI — indicates data flowing to a third-party LLM service.</div><div class="maps"><strong>maps to</strong>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</div></div>
-<div class="tx-signal"><div class="name">Third-party domains restrained</div><div class="points"><span class="num">2</span> pts</div><div class="how">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</div><div class="maps"><strong>maps to</strong>Capability scoping — each Net call declares its endpoint in the effect row</div></div>
-<div class="tx-signal"><div class="name">Data residency / on-prem language</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</div><div class="maps"><strong>maps to</strong>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</div></div></section>
+  <section class="tx-section tx-catalog"><h2>What the compiler enforces</h2><p class="lede">Six AILANG features keep your data inside boundaries the type system polices. Tap any row to see the rubric signal (where there is one) and the language primitive that ships it.</p><div class="tx-proto-list"><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">01</span><span class="tx-proto-monogram">IFC</span><span class="tx-proto-text"><span class="tx-proto-name">Information-flow labels</span><p class="tx-proto-tag">PII can't reach a public sink without an explicit declassification effect.</p></span><span class="tx-proto-id"><code>string&lt;pii&gt; ⟶ ! {Declassify}</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>The <code>LinkedInComment</code> type marks <code>authorName</code> and <code>text</code> as <code>string&lt;pii&gt;</code>. To produce a public version they must pass through <code>linkedinSanitiseComment</code>, whose signature carries <code>! {Declassify}</code> — it SHA-256s the actor URN into initials + a six-hex seed. Any code that publishes the raw fields doesn't compile.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">IFC labels guide ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">02</span><span class="tx-proto-monogram">EFR</span><span class="tx-proto-text"><span class="tx-proto-name">Effect rows</span><p class="tx-proto-tag">Every side effect a function performs appears in its type signature.</p></span><span class="tx-proto-id"><code>! {Net, FS, AI, IO}</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>The dispatcher that publishes a sketch declares <code>! {Net, FS, AI, IO}</code> in its type. Anything not listed there is unreachable from this code path — no telemetry, no quiet exfil, no "oh, that function also writes a file". Reviewer attention not required.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/getting-started" target="_blank" rel="noopener">Effects intro ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">03</span><span class="tx-proto-monogram">CAP</span><span class="tx-proto-text"><span class="tx-proto-name">Capability budgets</span><p class="tx-proto-tag">Each run is capped at a known number of network and AI calls.</p></span><span class="tx-proto-id"><code>Net @limit=1, AI @limit=50</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Heuristic on outbound HTTPS count in the body — fewer external resources is the proxy. <code>≤10</code> = 2 pts, 11–20 = 1 pt, &gt;20 = 0 pts.</p><span class="points"><span class="num">2</span> pts max</span></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">Parameterised effects ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">04</span><span class="tx-proto-monogram">CON</span><span class="tx-proto-text"><span class="tx-proto-name">Contracts &amp; Z3 verification</span><p class="tx-proto-tag">LinkedIn's 3000-char post limit is proved at compile time, not checked at runtime.</p></span><span class="tx-proto-id"><code>requires { len(text) ≤ 3000 }</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p><code>linkedinCreatePost</code> carries a <code>requires</code> clause that an SMT solver proves before any binary is produced. The rubric scorer's <code>ensures { points &lt;= maxPoints }</code> is a contract too. Violations don't ship — they don't compile.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">Contracts &amp; verification ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">05</span><span class="tx-proto-monogram">AIE</span><span class="tx-proto-text"><span class="tx-proto-name">The AI effect</span><p class="tx-proto-tag">Every Gemini/Claude/GPT call is a typed, budgeted, stubbable effect.</p></span><span class="tx-proto-id"><code>! {AI}</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Detected when the body mentions a known LLM provider (claude, gpt-, openai, anthropic, gemini, "powered by ai") — surfaces an existing third-party data flow worth labelling.</p><span class="points"><span class="num">2</span> pts max</span></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>The Gemini call that extracts your site is a first-class effect, not an HTTP wrapper. Per-run budget, deterministic-stub in tests, appears in every caller's signature. Nothing in the rendering path can sneak in a second model call.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">06</span><span class="tx-proto-monogram">ADT</span><span class="tx-proto-text"><span class="tx-proto-name">Closed sum types</span><p class="tx-proto-tag">Adding a new case without handling it everywhere is a compile error.</p></span><span class="tx-proto-id"><code>type Topic = Privacy | Portable | AgentReady</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>Topics are a closed ADT. Adding a fourth without handling it in the scorer, the renderer, and the leaderboard is a compile-time error — there's no "unknown topic" fallback that could quietly drop a sketch.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/examples" target="_blank" rel="noopener">ADTs &amp; pattern matching ↗</a></div></div></details></div></section>
 
   <footer class="tx-footer">
-    <p>The rubric above is the <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">full open-source AILANG source</a> — every signal extractor is contract-verified. Pull requests welcome.</p>
+    <p>The full rubric is <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">open-source AILANG source</a> — every signal extractor is contract-verified, Z3-bounded, and PR-able.</p>
     <div class="links">
-      <a href="../">← All topics</a>
       <a href="../../">← LinkedIn demo</a>
       <a href="../../../">← AILANG demos hub</a>
     </div>

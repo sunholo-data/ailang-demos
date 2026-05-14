@@ -38,6 +38,33 @@
   .tx-logo { display: flex; align-items: center; gap: 10px; }
   .tx-logo img { width: 28px; height: 28px; }
   .tx-logo span { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+  /* Cross-topic navigator — sits between the logo and the back link.
+     The current topic is marked .is-active by the renderer so it looks
+     pressed-in rather than clickable. */
+  .tx-topnav {
+    display: flex; gap: 4px;
+    margin-left: 4px;
+    font-family: var(--font-mono); font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .tx-topnav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 999px;
+    transition: color .15s, background .15s;
+  }
+  .tx-topnav a:hover { color: var(--primary); background: var(--primary-faded); }
+  .tx-topnav a.is-active {
+    color: var(--primary);
+    background: var(--primary-faded);
+    cursor: default;
+    font-weight: 600;
+  }
+  @media (max-width: 640px) {
+    .tx-topnav { font-size: 11px; gap: 2px; }
+    .tx-topnav a { padding: 5px 8px; }
+  }
 
   .tx-hero {
     padding: 30px 0 36px;
@@ -120,96 +147,178 @@
   }
   .tx-no-leaderboard strong { color: var(--text-primary); }
 
-  /* Rubric inline (replaces footer link) */
-  .tx-rubric { padding: 30px 0; border-top: 1px dashed var(--border); }
-  .tx-rubric h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0 0 8px; color: var(--text-primary); }
-  .tx-rubric p.lede { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 22px; max-width: 640px; }
-  .tx-rubric p.lede strong { color: var(--text-primary); }
-  .tx-signal {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 12px;
-    display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  /* ─── Catalog of protocols / primitives ──────────────────────
+     A magazine-TOC accordion. Each row is a <details> element so the
+     experience works without JS. Closed state is one slim line; opening
+     reveals a Rubric / AILANG-ships split with a docs link beneath. */
+  .tx-catalog {
+    padding: 36px 0 8px;
+    border-top: 1px dashed var(--border);
   }
-  @media (max-width: 560px) { .tx-signal { grid-template-columns: 1fr; } }
-  .tx-signal .name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  .tx-signal .points {
-    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
-    letter-spacing: 0.04em; white-space: nowrap;
+  .tx-catalog h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+    margin: 0 0 4px; color: var(--text-primary); letter-spacing: -0.01em;
   }
-  .tx-signal .points .num { color: var(--primary); font-weight: 700; }
-  .tx-signal .how {
-    grid-column: 1 / -1; margin: 6px 0 8px;
-    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps {
-    grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed var(--border);
-    font-size: 12px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .tx-signal .maps strong { color: var(--primary); font-family: var(--font-mono); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 8px; }
-  .tx-rubric .no-rubric {
-    background: var(--bg-card); border: 1px dashed var(--border); border-radius: 10px;
-    padding: 18px 22px; color: var(--text-secondary); line-height: 1.55;
-  }
-  .tx-rubric .no-rubric strong { color: var(--text-primary); }
-
-  /* What the compiler enforces (Privacy topic only) */
-  .tx-mechanics .lede {
+  .tx-catalog p.lede {
     color: var(--text-secondary); font-size: 14px; line-height: 1.6;
-    margin: 0 0 22px; max-width: 640px;
+    margin: 0 0 28px; max-width: 640px;
   }
-  .tx-mechanic-grid {
+
+  .tx-proto-list { display: flex; flex-direction: column; }
+  .tx-proto-row {
+    border-top: 1px dashed var(--border);
+    position: relative;
+  }
+  .tx-proto-row:last-child { border-bottom: 1px dashed var(--border); }
+  /* Coral hairline on the left edge when the row is open. */
+  .tx-proto-row::before {
+    content: '';
+    position: absolute; top: 0; bottom: 0; left: 0;
+    width: 0;
+    background: var(--primary);
+    transition: width 0.22s ease;
+    pointer-events: none;
+  }
+  .tx-proto-row[open]::before { width: 3px; }
+
+  .tx-proto-summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: 52px 56px minmax(0, 1fr) auto 22px;
+    align-items: center;
+    gap: 18px;
+    padding: 22px 6px 22px 18px;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.15s ease;
+    user-select: none;
   }
-  .tx-mechanic-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 20px 16px;
-    display: flex; flex-direction: column; gap: 9px;
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  .tx-proto-summary::-webkit-details-marker { display: none; }
+  .tx-proto-summary::marker { content: ''; }
+  .tx-proto-row:hover > .tx-proto-summary { background: rgba(231, 60, 23, 0.025); }
+  .tx-proto-row[open] > .tx-proto-summary { background: rgba(231, 60, 23, 0.030); }
+
+  .tx-proto-num {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 30px; line-height: 1; letter-spacing: -0.04em;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    transition: color 0.15s ease;
   }
-  .tx-mechanic-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(231, 60, 23, 0.30);
-    box-shadow: 0 14px 30px -18px rgba(231, 60, 23, 0.20);
+  .tx-proto-row[open] .tx-proto-num,
+  .tx-proto-row:hover .tx-proto-num { color: var(--primary); }
+
+  .tx-proto-monogram {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 22px; padding: 0 8px;
+    background: var(--primary-faded); color: var(--primary);
+    font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+    border-radius: 4px; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
-  .tx-mechanic-card .primitive {
-    font-family: var(--font-mono); font-size: 11.5px;
+
+  .tx-proto-text { min-width: 0; }
+  .tx-proto-name {
+    font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    color: var(--text-primary); line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .tx-proto-tag {
+    font-family: var(--font-display); font-size: 13.5px;
+    color: var(--text-secondary); line-height: 1.4;
+    margin: 0;
+  }
+
+  .tx-proto-id {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted); letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .tx-proto-chev {
+    font-family: var(--font-mono); font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.22s ease, color 0.15s ease;
+    text-align: center;
+    line-height: 1;
+  }
+  .tx-proto-row[open] .tx-proto-chev {
+    transform: rotate(45deg);
     color: var(--primary);
-    background: var(--primary-faded);
-    padding: 4px 9px; border-radius: 6px;
-    align-self: flex-start; line-height: 1.4;
   }
-  .tx-mechanic-card h3 {
-    font-family: var(--font-display); font-size: 15.5px; font-weight: 700;
+
+  .tx-proto-body {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 28px 48px;
+    padding: 4px 18px 26px 90px;
+    animation: tx-proto-fade 0.32s ease both;
+  }
+  @keyframes tx-proto-fade {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .tx-proto-cell h4 {
+    font-family: var(--font-mono); font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--primary);
+    margin: 0 0 8px;
+  }
+  .tx-proto-cell p {
+    font-family: var(--font-display); font-size: 14px; line-height: 1.6;
     color: var(--text-primary);
-    margin: 4px 0 0; letter-spacing: -0.012em; line-height: 1.3;
+    margin: 0;
   }
-  .tx-mechanic-card p {
-    font-family: var(--font-display); font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0; line-height: 1.6; flex-grow: 1;
+  .tx-proto-cell .points {
+    display: inline-block; margin-top: 8px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
   }
-  .tx-mechanic-card .learn {
-    display: inline-flex; align-items: center; gap: 5px;
-    margin-top: 6px;
-    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  .tx-proto-cell .points .num { color: var(--primary); font-weight: 700; }
+  .tx-proto-cell code {
+    font-family: var(--font-mono); font-size: 12.5px;
+    background: var(--bg-input); color: var(--text-primary);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .tx-proto-docs {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+  }
+  .tx-proto-docs a {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
     color: var(--primary); text-decoration: none;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    align-self: flex-start;
+    letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(231, 60, 23, 0.28);
     padding-bottom: 1px;
     transition: border-color 0.15s;
   }
-  .tx-mechanic-card .learn:hover { border-bottom-color: var(--primary); }
-  @media (max-width: 900px) {
-    .tx-mechanic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 560px) {
-    .tx-mechanic-grid { grid-template-columns: 1fr; }
-    .tx-mechanic-card { padding: 16px 16px 14px; }
+  .tx-proto-docs a:hover { border-bottom-color: var(--primary); }
+
+  @media (max-width: 720px) {
+    .tx-proto-summary {
+      grid-template-columns: 38px 1fr 18px;
+      grid-template-rows: auto auto;
+      grid-template-areas:
+        "num   name chev"
+        "mono  tag  id";
+      gap: 6px 14px;
+      padding: 18px 4px 18px 14px;
+    }
+    .tx-proto-num { grid-area: num; font-size: 24px; }
+    .tx-proto-monogram { grid-area: mono; justify-self: start; }
+    .tx-proto-text { grid-area: name; }
+    .tx-proto-tag { font-size: 13px; }
+    .tx-proto-id  { grid-area: id; font-size: 11px; max-width: 100%; }
+    .tx-proto-chev { grid-area: chev; }
+    .tx-proto-body {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      padding: 4px 14px 22px 14px;
+    }
   }
 
   .tx-footer {
@@ -229,6 +338,11 @@
       <img src="../../../ailang-logo.svg" alt="AILANG">
       <span>AILANG · topics</span>
     </div>
+    <nav class="tx-topnav">
+      <a class="" href="../agent-ready/" data-topic="agent-ready">agent-ready</a>
+      <a class="" href="../privacy/"      data-topic="privacy">privacy</a>
+      <a class="is-active" href="../portable/"     data-topic="portable">portable</a>
+    </nav>
     <a class="back" href="../../">← LinkedIn demo</a>
   </header>
 
@@ -251,17 +365,11 @@
 
   <section class="tx-section"><h2>Leaderboard</h2><p class="updated">refreshed daily · last update 2026-05-14 · 1 sketches</p><div class="tx-leaderboard"><div class="tx-row"><span class="rank">#1</span><span class="avatar" style="background: conic-gradient(from 358deg, var(--primary), var(--ai-orange), var(--primary));"></span><div class="domain"><span class="initials">DD</span>sunholo.com</div><div class="score">10/10</div><div class="col-link"><a href="ffeeee-sunholo-com/">view sketch ↗</a></div><div class="col-updated">2026-05-14</div></div></div></section>
 
-  <section class="tx-section tx-mechanics"><h2>Portability is a language feature</h2><p class="lede">Vendor switching costs come from code coupled to one provider, one runtime, or one deployment shape. Each tile is the AILANG primitive that decouples one of those — at the type-system layer, not as a wrapper library.</p><div class="tx-mechanic-grid"><article class="tx-mechanic-card"><span class="primitive">std/ai  ⟶  Anthropic | OpenAI | Gemini | OpenRouter | Ollama</span><h3>One Step API across five built-in providers.</h3><p>The <code>std/ai</code> Step API is provider-agnostic. Switch from Claude to GPT to Gemini to a local Ollama model with a single <code>--ai</code> flag — no SDK swap, no rewrite. Tool calling, structured output, and streaming all normalise to the same typed shape.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a></article><article class="tx-mechanic-card"><span class="primitive">anthropic/claude-sonnet-4.5  ⟶  google/gemini-2.5-flash</span><h3>OpenRouter routing: ~100 models behind one HTTP shape.</h3><p>Target <code>&lt;vendor&gt;/&lt;model&gt;</code> strings directly — no per-vendor SDK to add. Cost-routing, fallback, and rate-limit handling are uniform across the catalogue. Cheap-or-fast switches become a config diff, not a refactor.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">AI routing ↗</a></article><article class="tx-mechanic-card"><span class="primitive">same .ail  ⟶  WASM | Cloud Run | native CLI</span><h3>Three-runtime deploy from one source.</h3><p>The same module compiles to a native binary, a Cloud Run image, and a WebAssembly bundle that runs in a browser tab. Effect handlers are the only runtime-specific layer; business logic is identical. "Where it runs" stops being an architecture decision up-front.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">WASM integration ↗</a></article><article class="tx-mechanic-card"><span class="primitive">ailang WASM + localStorage  ⟶  ai.step in the browser</span><h3>BYO-key: same Step API, caller holds the credential.</h3><p>A browser tab can call <code>ai.step</code> against the user's own provider key, stored in <code>localStorage</code> — no backend round-trip, no key on your servers. The browser bytecode is the same AILANG module the server runs; only the effect handler differs.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/wasm-ai-step-byo-key" target="_blank" rel="noopener">Browser ai.step ↗</a></article><article class="tx-mechanic-card"><span class="primitive">[[ai_provider]] in ailang.toml</span><h3>Custom providers are packages, not binary forks.</h3><p>Adding a vendor (a regional cloud, a private model gateway, a research lab's API) is a config block plus a <code>.ail</code> adapter. AILANG registers it as a first-class provider with the same budget tracking, AI capability gating, and trace integration the built-ins get.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/custom-ai-providers" target="_blank" rel="noopener">Custom AI providers ↗</a></article><article class="tx-mechanic-card"><span class="primitive">ailang compile --emit-go  ⟶  go build</span><h3>Production hot paths drop into Go services.</h3><p>Need raw throughput or in-process composition with an existing Go codebase? <code>--emit-go</code> compiles AILANG modules to idiomatic Go. ADTs become discriminator structs, exports become package-public functions; effects propagate as <code>error</code> returns. Same source, two runtimes.</p><a class="learn" href="https://ailang.sunholo.com/docs/guides/go-interop" target="_blank" rel="noopener">Go interop ↗</a></article></div></section>
-
-  <section class="tx-rubric"><h2>What we measure</h2><p class="lede">Every score on this page is computed by <strong>contract-verified AILANG code</strong>. The signals below — and only these signals — feed the rank. Each one maps to an AILANG primitive a reader could adopt. No llms.txt, no robots.txt, no JSON-LD: AILANG doesn't have a position on those.</p><div class="tx-signal"><div class="name">Single-vendor LLM language</div><div class="points"><span class="num">2</span> pts</div><div class="how">Page copy that names one specific LLM provider (e.g. "powered by Claude") without portability claims.</div><div class="maps"><strong>maps to</strong>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</div></div>
-<div class="tx-signal"><div class="name">Multiple AI providers cited</div><div class="points"><span class="num">2</span> pts</div><div class="how">Body mentions two or more named AI providers (Claude, GPT, Gemini, Mistral, Llama, etc.) — already vendor-multi.</div><div class="maps"><strong>maps to</strong>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</div></div>
-<div class="tx-signal"><div class="name">Cross-runtime / deployment portability</div><div class="points"><span class="num">2</span> pts</div><div class="how">Body mentions self-hosted, on-prem, WASM, Docker, Kubernetes, or "deploy anywhere" — runtime portability claimed.</div><div class="maps"><strong>maps to</strong>Three-runtime deploy — same .ail module runs as WASM in the browser, a Cloud Run container, and a native CLI</div></div>
-<div class="tx-signal"><div class="name">BYO key / model-agnostic</div><div class="points"><span class="num">2</span> pts</div><div class="how">Body mentions "bring your own key", "BYOK", "any LLM", or "model-agnostic" — caller controls the model.</div><div class="maps"><strong>maps to</strong>Browser ai.step with BYO API key — caller-held credentials, AILANG WASM, same Step API as the server</div></div></section>
+  <section class="tx-section tx-catalog"><h2>Portability is a language feature</h2><p class="lede">Vendor-switching cost comes from code coupled to one provider, one runtime, or one deployment shape. Each row is the AILANG primitive that decouples one of those — paired with the rubric signal that detects it where there is one.</p><div class="tx-proto-list"><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">01</span><span class="tx-proto-monogram">AI5</span><span class="tx-proto-text"><span class="tx-proto-name">std/ai multi-provider Step API</span><p class="tx-proto-tag">One typed Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama.</p></span><span class="tx-proto-id"><code>std/ai → 5 providers</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Detected when the body names two or more of: claude, anthropic, gpt, openai, gemini, mistral, llama, ollama, openrouter — you're already vendor-multi. A separate penalty signal docks 2 pts if exactly one is named with no portability claim.</p><span class="points"><span class="num">4</span> pts max</span></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>Switch from Claude to GPT to Gemini to a local Ollama model with a single <code>--ai</code> flag — no SDK swap, no rewrite. Tool calling, structured output, and streaming all normalise to the same typed shape.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">AI effect guide ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">02</span><span class="tx-proto-monogram">OR</span><span class="tx-proto-text"><span class="tx-proto-name">OpenRouter routing</span><p class="tx-proto-tag">Target ~100 frontier models behind one HTTP shape.</p></span><span class="tx-proto-id"><code>vendor/model strings</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>Target <code>&lt;vendor&gt;/&lt;model&gt;</code> directly — <code>anthropic/claude-sonnet-4.5</code>, <code>google/gemini-2.5-flash</code>, <code>meta-llama/llama-3.3-70b-instruct</code>. Cost routing, fallback, and rate-limit handling are uniform across the catalogue.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">AI routing ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">03</span><span class="tx-proto-monogram">3RT</span><span class="tx-proto-text"><span class="tx-proto-name">Three-runtime deploy</span><p class="tx-proto-tag">Same .ail compiles to a native binary, a Cloud Run image, and a WASM bundle.</p></span><span class="tx-proto-id"><code>WASM | Cloud Run | native</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Body mentions "self-hosted", "on-prem", "wasm", "webassembly", "deploy anywhere", "kubernetes", or "docker".</p><span class="points"><span class="num">2</span> pts max</span></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>Same module, three runtimes. Effect handlers are the only runtime-specific layer; business logic is identical. "Where it runs" stops being an architecture decision up-front.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">WASM integration ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">04</span><span class="tx-proto-monogram">BYO</span><span class="tx-proto-text"><span class="tx-proto-name">Browser ai.step with BYO key</span><p class="tx-proto-tag">Same Step API in a browser tab, the caller holds the credential.</p></span><span class="tx-proto-id"><code>ai.step + localStorage</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Body mentions "bring your own key", "BYOK", "BYO key", "model-agnostic", "any LLM", or "any model".</p><span class="points"><span class="num">2</span> pts max</span></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>A browser tab calls <code>ai.step</code> against the user's own provider key, stored in <code>localStorage</code> — no backend round-trip, no key on your servers. The browser bytecode is the same AILANG module the server runs; only the effect handler differs.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/wasm-ai-step-byo-key" target="_blank" rel="noopener">Browser ai.step ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">05</span><span class="tx-proto-monogram">PKG</span><span class="tx-proto-text"><span class="tx-proto-name">Custom AI providers as packages</span><p class="tx-proto-tag">Adding a vendor is a config block, not a binary fork.</p></span><span class="tx-proto-id"><code>[[ai_provider]] in ailang.toml</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>A regional cloud, a private model gateway, or a research lab's API becomes a first-class provider with one TOML block plus a <code>.ail</code> adapter. Budget tracking, AI capability gating, and trace integration come for free.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/custom-ai-providers" target="_blank" rel="noopener">Custom AI providers ↗</a></div></div></details><details class="tx-proto-row"><summary class="tx-proto-summary"><span class="tx-proto-num">06</span><span class="tx-proto-monogram">GO</span><span class="tx-proto-text"><span class="tx-proto-name">Go interop</span><p class="tx-proto-tag">Production hot paths drop into existing Go services as idiomatic Go code.</p></span><span class="tx-proto-id"><code>ailang compile --emit-go</code></span><span class="tx-proto-chev" aria-hidden="true">+</span></summary><div class="tx-proto-body"><div class="tx-proto-cell"><h4>Rubric — how we score it</h4><p>Not directly scored — the rubric measures what's visible in a single page fetch, and this is a type-system property of the code you ship.</p></div><div class="tx-proto-cell"><h4>AILANG ships</h4><p>Same source compiles to Go. ADTs become discriminator structs, exports become package-public functions, effects propagate as <code>error</code> returns. Same module, two runtimes — interpret in dev, compile for prod.</p></div><div class="tx-proto-docs"><a href="https://ailang.sunholo.com/docs/guides/go-interop" target="_blank" rel="noopener">Go interop ↗</a></div></div></details></div></section>
 
   <footer class="tx-footer">
-    <p>The rubric above is the <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">full open-source AILANG source</a> — every signal extractor is contract-verified. Pull requests welcome.</p>
+    <p>The full rubric is <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">open-source AILANG source</a> — every signal extractor is contract-verified, Z3-bounded, and PR-able.</p>
     <div class="links">
-      <a href="../">← All topics</a>
       <a href="../../">← LinkedIn demo</a>
       <a href="../../../">← AILANG demos hub</a>
     </div>
