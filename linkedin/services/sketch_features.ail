@@ -11,6 +11,13 @@ module linkedin/services/sketch_features
 -- Rule (per design doc §6.5): every card must demonstrate a
 -- real AILANG primitive a reader could adopt — no aspirational
 -- features, no judgement calls about things AILANG doesn't cover.
+--
+-- The `code` field is rendered inside <pre>…</pre> as raw HTML,
+-- so any `<`, `>`, `&` in the snippet must be HTML-escaped
+-- (&lt;, &gt;, &amp;), and tokens are wrapped in <span class="k|c|s|e">
+-- to match the homepage's `.ll-code` syntax highlighting palette:
+--   .k = keyword (light blue), .c = comment (slate italic),
+--   .s = string (yellow), .e = effect / CLI flag (orange).
 
 import linkedin/types/sketch_types (FeatureCard, Topic, Privacy, Portable, AgentReady)
 
@@ -27,19 +34,19 @@ export func sketchPrivacyCards() -> [FeatureCard] = [
   mkCard(
     "Information-flow labels on customer data",
     "Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.",
-    "type Customer = {\n  email:    string<pii>,\n  postcode: string<pii>,\n  signupDate: string\n}\n-- assigning customer.email to a log line is a type error.",
+    "<span class=\"k\">type</span> Customer = {\n  email:    <span class=\"k\">string</span><span class=\"e\">&lt;pii&gt;</span>,\n  postcode: <span class=\"k\">string</span><span class=\"e\">&lt;pii&gt;</span>,\n  signupDate: <span class=\"k\">string</span>\n}\n<span class=\"c\">-- assigning customer.email to a log line is a type error.</span>",
     "https://ailang.sunholo.com/docs/guides/ifc-labels"
   ),
   mkCard(
     "Capability scoping",
     "A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. \"This part of the system can talk to Stripe; it cannot talk to anyone else\" is enforced.",
-    "func chargeCard(c: Card) -> Result[Receipt, Error]\n  ! {Net @endpoint=\"api.stripe.com\", AI @limit=0}",
+    "<span class=\"k\">func</span> chargeCard(c: Card) -&gt; Result[Receipt, Error]\n  ! {<span class=\"e\">Net @endpoint=<span class=\"s\">\"api.stripe.com\"</span>, AI @limit=0</span>}",
     "https://ailang.sunholo.com/docs/guides/parameterised-effects"
   ),
   mkCard(
     "Three-runtime deploy",
     "The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.",
-    "-- Browser: load AILANG WASM, run the module in the user's tab.\n-- Cloud Run: same .ail file packaged as a container.\n-- Native CLI: same .ail file, ailang run.",
+    "<span class=\"c\">-- Browser: load AILANG WASM, run the module in the user's tab.</span>\n<span class=\"c\">-- Cloud Run: same .ail file packaged as a container.</span>\n<span class=\"c\">-- Native CLI: same .ail file, ailang run.</span>",
     "https://ailang.sunholo.com/docs/guides/wasm-integration"
   )
 ]
@@ -47,21 +54,21 @@ export func sketchPrivacyCards() -> [FeatureCard] = [
 -- Vendor independence — std/ai multi-provider, OpenRouter, structured output, caching.
 export func sketchPortableCards() -> [FeatureCard] = [
   mkCard(
-    "One std/ai, five LLM vendors",
-    "The same call() function runs against Anthropic, Google, OpenAI, OpenRouter, or local Ollama. Switch providers with a one-character diff, not a refactor.",
-    "let answer = call(\n  prompt = userQuery,\n  model  = \"claude-haiku-4-5\"\n  -- model = \"gemini-2.5-flash\" — also works\n  -- model = \"gpt-5.1-nano\"     — also works\n);",
+    "Same module, any LLM — picked at the CLI",
+    "Provider selection isn't a code edit — it's a flag on the run command. The exact same compiled .ail file talks to Anthropic, Google, OpenAI, OpenRouter or local Ollama depending on what you pass to `--ai`. Vendor lock-in becomes a shell-history concern.",
+    "<span class=\"c\"># Same chat.ail, three vendors — no source change.</span>\nailang run <span class=\"e\">--ai</span> <span class=\"s\">claude-haiku-4-5</span>  chat.ail\nailang run <span class=\"e\">--ai</span> <span class=\"s\">gemini-2.5-flash</span> chat.ail\nailang run <span class=\"e\">--ai</span> <span class=\"s\">gpt-5.1-nano</span>     chat.ail\n<span class=\"c\"># std/ai dispatches to each provider's native API.</span>",
     "https://ailang.sunholo.com/docs/guides/ai-effect"
   ),
   mkCard(
     "Structured output, portable across providers",
     "callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.",
-    "let result = callJson(prompt, intentSchema);\n-- same AILANG code, four different provider paths underneath.",
+    "<span class=\"k\">let</span> result = callJson(prompt, intentSchema);\n<span class=\"c\">-- same AILANG code, four different provider paths underneath.</span>",
     "https://ailang.sunholo.com/docs/guides/ai-effect"
   ),
   mkCard(
     "OpenRouter routing with replayable resolution",
     "Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.",
-    "call(prompt, model = \"openrouter/meta-llama/llama-4-405b\");\n-- the eval harness pins the exact resolved model ID.",
+    "call(prompt, model = <span class=\"s\">\"openrouter/meta-llama/llama-4-405b\"</span>);\n<span class=\"c\">-- the eval harness pins the exact resolved model ID.</span>",
     "https://ailang.sunholo.com/docs/guides/ai-routing"
   )
 ]
@@ -71,19 +78,19 @@ export func sketchAgentReadyCards() -> [FeatureCard] = [
   mkCard(
     "REST + MCP + A2A + OpenAPI in one command",
     "ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.",
-    "ailang serve-api --port 8092 --mcp-http \\\n  pricing.ail catalogue.ail\n-- POST /api/pricing/quote, MCP at /mcp/,\n-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.",
+    "ailang serve-api <span class=\"e\">--port</span> <span class=\"s\">8092</span> <span class=\"e\">--mcp-http</span> \\\n  pricing.ail catalogue.ail\n<span class=\"c\">-- POST /api/pricing/quote, MCP at /mcp/,</span>\n<span class=\"c\">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span>",
     "https://ailang.sunholo.com/docs/guides/serve-api"
   ),
   mkCard(
     "Contract-verified tool calls",
     "Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.",
-    "func placeOrder(item: SKU, qty: int) -> Receipt\n  requires { qty > 0, qty <= 10 }\n  ensures  { result.total > 0.0 }\n-- the MCP server exposes this with its contract intact.",
+    "<span class=\"k\">func</span> placeOrder(item: SKU, qty: <span class=\"k\">int</span>) -&gt; Receipt\n  <span class=\"k\">requires</span> { qty &gt; 0, qty &lt;= 10 }\n  <span class=\"k\">ensures</span>  { result.total &gt; 0.0 }\n<span class=\"c\">-- the MCP server exposes this with its contract intact.</span>",
     "https://ailang.sunholo.com/docs/guides/contracts"
   ),
   mkCard(
     "An MCP server for your own docs and tools",
     "Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.",
-    "-- The AILANG docs MCP server lets Claude / Cursor / any\n-- MCP client query the language directly:\n--   stdlib_search \"URL encoding\"\n--   submit_feedback \"...\"",
+    "<span class=\"c\">-- The AILANG docs MCP server lets Claude / Cursor / any</span>\n<span class=\"c\">-- MCP client query the language directly:</span>\n<span class=\"c\">--   stdlib_search \"URL encoding\"</span>\n<span class=\"c\">--   submit_feedback \"...\"</span>",
     "https://ailang.sunholo.com/docs/guides/agent-mcp"
   )
 ]

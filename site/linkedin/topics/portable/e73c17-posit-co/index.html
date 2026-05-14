@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-10 0,0 -17,10"
+        <polygon points="0,0 0,0 -17,10"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -525,11 +533,11 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on posit.co</p>
-    <h2 class="sk-prom-audience">The site is for data scientists, data science leaders, IT professionals, and R and Python developer communities focused on data analysis, development, and infrastructure management.</h2>
-    <blockquote class="sk-prom-narrative">Posit (formerly RStudio) offers open-source and enterprise software for data science, primarily supporting R and Python users. Its products include an integrated development environment, a workbench, and cloud solutions for developing, analyzing, publishing, and governing data insights and applications, alongside tools for package management to ensure secure workflows.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">RStudio IDE</span> <span class="sk-chip">R and Python</span> <span class="sk-chip">Data science</span> <span class="sk-chip">Posit Workbench</span> <span class="sk-chip">Posit Connect</span> <span class="sk-chip">Package repositories</span></div>
+    <h2 class="sk-prom-audience">Data scientists, data science leaders, IT leaders, and business leaders who utilize R and Python for data analysis, development, and communication.</h2>
+    <blockquote class="sk-prom-narrative">This site offers open-source and enterprise tools for data science, focusing on R and Python development. It provides integrated development environments, collaboration platforms, and governance solutions to help data professionals analyze, publish, and manage their data-driven projects securely.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">RStudio IDE</span> <span class="sk-chip">Posit Workbench</span> <span class="sk-chip">Posit Connect</span> <span class="sk-chip">R programming language</span> <span class="sk-chip">Python programming language</span> <span class="sk-chip">Data science</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on posit.co</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">18</span> headings</span><span class="stat"><span class="num">17</span> images</span><span class="stat"><span class="num">7</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">68</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">24</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">14</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">18</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">
-The trusted IDE for R data scientists, now with AI that knows your data</span> <span class="sk-chip" title="extracted heading">The packages you depend on, at home in RStudio</span> <span class="sk-chip" title="extracted heading">Meet Posit Assistant, an AI that understands your R session</span> <span class="sk-chip" title="extracted heading">One IDE for the full data science lifecycle</span> <span class="sk-chip" title="extracted heading">Two paths forward from RStudio</span> <span class="sk-chip" title="extracted heading">Bring RStudio to your whole organization</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">17</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-04/rstudio-hero%402x.png?itok=CwHFPo42" target="_blank" rel="noopener" title="rstudio ide hero background"><img src="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-04/rstudio-hero%402x.png?itok=CwHFPo42" alt="rstudio ide hero background" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_ggplot2.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_ggplot2.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_tidyverse.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_tidyverse.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_shiny.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_shiny.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_quarto_0.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_quarto_0.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_reticulate.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_reticulate.svg" alt="" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">[About](/)
+The trusted IDE for R data scientists, now with AI that knows your data</span> <span class="sk-chip" title="extracted heading">The packages you depend on, at home in RStudio</span> <span class="sk-chip" title="extracted heading">Meet Posit Assistant, an AI that understands your R session</span> <span class="sk-chip" title="extracted heading">One IDE for the full data science lifecycle</span> <span class="sk-chip" title="extracted heading">Two paths forward from RStudio</span> <span class="sk-chip" title="extracted heading">Bring RStudio to your whole organization</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">17</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-04/rstudio-hero%402x.png?itok=CwHFPo42" target="_blank" rel="noopener" title="rstudio ide hero background"><img src="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-04/rstudio-hero%402x.png?itok=CwHFPo42" alt="rstudio ide hero background" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_ggplot2.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_ggplot2.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_tidyverse.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_tidyverse.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_shiny.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_shiny.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_quarto_0.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_quarto_0.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/svg/2026-03/hex_reticulate.svg" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/svg/2026-03/hex_reticulate.svg" alt="" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> list items</p><div class="sk-chips"><span class="sk-chip" title="[About](/)
 
 About
 
@@ -547,18 +555,31 @@ About us
               
 
 Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
-[Learn More](https://conf.posit.co/2026/)</span> <span class="sk-chip" title="list item">**We help the world make sense of data**
-Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.</span> <span class="sk-chip" title="list item">About us
+[Learn More](https://conf.posit.co/2026/)">[About](/)
+
+About
+
+**We help the world make sense of data**
+Open-source software for data…</span> <span class="sk-chip" title="**We help the world make sense of data**
+Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.">**We help the world make sense of data**
+Open-source software for data science, research,…</span> <span class="sk-chip" title="About us
 
 [Company & Mission](/about)
 [Careers](/about/careers)
 [PBC Report](/about/pbc-report)
 [posit::conf](https://conf.posit.co/2026)
-[Legal terms](/about/eula)</span> <span class="sk-chip" title="list item">[Company & Mission](/about)</span> <span class="sk-chip" title="list item">[Careers](/about/careers)</span> <span class="sk-chip" title="list item">[PBC Report](/about/pbc-report)</span> <span class="sk-chip" title="list item">[posit::conf](https://conf.posit.co/2026)</span> <span class="sk-chip" title="list item">[Legal terms](/about/eula)</span> <span class="sk-chip" title="list item">Registration for posit::conf(2026) is open!
+[Legal terms](/about/eula)">About us
+
+[Company & Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-r…</span> <span class="sk-chip" title="[Company & Mission](/about)">[Company & Mission](/about)</span> <span class="sk-chip" title="[Careers](/about/careers)">[Careers](/about/careers)</span> <span class="sk-chip" title="[PBC Report](/about/pbc-report)">[PBC Report](/about/pbc-report)</span> <span class="sk-chip" title="[posit::conf](https://conf.posit.co/2026)">[posit::conf](https://conf.posit.co/2026)</span> <span class="sk-chip" title="[Legal terms](/about/eula)">[Legal terms](/about/eula)</span> <span class="sk-chip" title="Registration for posit::conf(2026) is open!
               
 
 Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
-[Learn More](https://conf.posit.co/2026/)</span> <span class="sk-chip" title="list item">[Partners](/)
+[Learn More](https://conf.posit.co/2026/)">Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python…</span> <span class="sk-chip" title="[Partners](/)
 
 Partners
 
@@ -579,11 +600,22 @@ Channel Partners
 Partner programs, include standard resellers, managed service providers, and professional services.
 [Deal Registration](https://pages.posit.co/partner-deal-registration.html)
 
-For current Posit Resellers to register new deals.</span> <span class="sk-chip" title="list item">Data Platforms
+For current Posit Resellers to register new deals.">[Partners](/)
+
+Partners
+
+Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/…</span> <span class="sk-chip" title="Data Platforms
 
 [Snowflake](/solutions/snowflake)
 [Databricks](/solutions/databricks)
-[Amazon Sagemaker](/solutions/aws)</span> <span class="sk-chip" title="list item">[Snowflake](/solutions/snowflake)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">68</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://posit.co/products/enterprise/team" target="_blank" rel="noopener" title="https://posit.co/products/enterprise/team">Explore Posit Team</a> <a class="sk-chip sk-chip-link" href="https://positron.posit.co/" target="_blank" rel="noopener" title="https://positron.posit.co/">Try Positron</a> <a class="sk-chip sk-chip-link" href="https://docs.posit.co/posit-ai/user/getting-started/" target="_blank" rel="noopener" title="https://docs.posit.co/posit-ai/user/getting-started/">Explore the docs</a> <a class="sk-chip sk-chip-link" href="https://rstudio-ide.chargifypay.com/subscribe/dbvnhkz5bvy6/desktop-pro" target="_blank" rel="noopener" title="https://rstudio-ide.chargifypay.com/subscribe/dbvnhkz5bvy6/desktop-pro">Buy now</a> <a class="sk-chip sk-chip-link" href="https://posit.co/download/rstudio-desktop" target="_blank" rel="noopener" title="https://posit.co/download/rstudio-desktop">Download RStudio</a> <a class="sk-chip sk-chip-link" href="https://posit.ai/" target="_blank" rel="noopener" title="https://posit.ai/">Try Posit AI free</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/financial-services" target="_blank" rel="noopener" title="https://posit.co/solutions/financial-services">Financial Services</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/insurance" target="_blank" rel="noopener" title="https://posit.co/solutions/insurance">Insurance</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/pharma" target="_blank" rel="noopener" title="https://posit.co/solutions/pharma">Pharma</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/public-sector" target="_blank" rel="noopener" title="https://posit.co/solutions/public-sector">Public sector</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-scientists" target="_blank" rel="noopener" title="https://posit.co/solutions/data-scientists">Data Scientists</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-science-leaders" target="_blank" rel="noopener" title="https://posit.co/solutions/data-science-leaders">Data Science Leaders</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># RStudio IDE | The Premier Free IDE for R
+[Amazon Sagemaker](/solutions/aws)">Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Am…</span> <span class="sk-chip" title="[Snowflake](/solutions/snowflake)">[Snowflake](/solutions/snowflake)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">68</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://posit.co/products/enterprise/team" target="_blank" rel="noopener" title="https://posit.co/products/enterprise/team">Explore Posit Team</a> <a class="sk-chip sk-chip-link" href="https://positron.posit.co/" target="_blank" rel="noopener" title="https://positron.posit.co/">Try Positron</a> <a class="sk-chip sk-chip-link" href="https://docs.posit.co/posit-ai/user/getting-started/" target="_blank" rel="noopener" title="https://docs.posit.co/posit-ai/user/getting-started/">Explore the docs</a> <a class="sk-chip sk-chip-link" href="https://rstudio-ide.chargifypay.com/subscribe/dbvnhkz5bvy6/desktop-pro" target="_blank" rel="noopener" title="https://rstudio-ide.chargifypay.com/subscribe/dbvnhkz5bvy6/desktop-pro">Buy now</a> <a class="sk-chip sk-chip-link" href="https://posit.co/download/rstudio-desktop" target="_blank" rel="noopener" title="https://posit.co/download/rstudio-desktop">Download RStudio</a> <a class="sk-chip sk-chip-link" href="https://posit.ai/" target="_blank" rel="noopener" title="https://posit.ai/">Try Posit AI free</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/financial-services" target="_blank" rel="noopener" title="https://posit.co/solutions/financial-services">Financial Services</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/insurance" target="_blank" rel="noopener" title="https://posit.co/solutions/insurance">Insurance</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/pharma" target="_blank" rel="noopener" title="https://posit.co/solutions/pharma">Pharma</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/public-sector" target="_blank" rel="noopener" title="https://posit.co/solutions/public-sector">Public sector</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-scientists" target="_blank" rel="noopener" title="https://posit.co/solutions/data-scientists">Data Scientists</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-science-leaders" target="_blank" rel="noopener" title="https://posit.co/solutions/data-science-leaders">Data Science Leaders</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># RStudio IDE | The Premier Free IDE for R
 
 
 [Skip to main content](#main-content)
@@ -914,16 +946,15 @@ Database &amp; Cloud Integration
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">posit.co</span> scored <strong>2/10</strong> on portable. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>One std/ai, five LLM vendors</h3><p class="rationale">The same call() function runs against Anthropic, Google, OpenAI, OpenRouter, or local Ollama. Switch providers with a one-character diff, not a refactor.</p><pre>let answer = call(
-  prompt = userQuery,
-  model  = "claude-haiku-4-5"
-  -- model = "gemini-2.5-flash" — also works
-  -- model = "gpt-5.1-nano"     — also works
-);</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
--- same AILANG code, four different provider paths underneath.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
--- the eval harness pins the exact resolved model ID.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+    <div class="sk-cards"><article class="sk-card"><h3>Same module, any LLM — picked at the CLI</h3><p class="rationale">Provider selection isn't a code edit — it's a flag on the run command. The exact same compiled .ail file talks to Anthropic, Google, OpenAI, OpenRouter or local Ollama depending on what you pass to `--ai`. Vendor lock-in becomes a shell-history concern.</p><pre><span class="c"># Same chat.ail, three vendors — no source change.</span>
+ailang run <span class="e">--ai</span> <span class="s">claude-haiku-4-5</span>  chat.ail
+ailang run <span class="e">--ai</span> <span class="s">gemini-2.5-flash</span> chat.ail
+ailang run <span class="e">--ai</span> <span class="s">gpt-5.1-nano</span>     chat.ail
+<span class="c"># std/ai dispatches to each provider's native API.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre><span class="k">let</span> result = callJson(prompt, intentSchema);
+<span class="c">-- same AILANG code, four different provider paths underneath.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = <span class="s">"openrouter/meta-llama/llama-4-405b"</span>);
+<span class="c">-- the eval harness pins the exact resolved model ID.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -952,6 +983,10 @@ Database &amp; Cloud Integration
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

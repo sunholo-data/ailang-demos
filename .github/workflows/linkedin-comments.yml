@@ -48,6 +48,13 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    env:
+      # Disable trace buffering across every ailang invocation in this
+      # job. The default `standard` mode buffers OTLP spans in memory for
+      # GCP export; when sketch-dispatch processes a queue of URLs in one
+      # process, that buffer grows fast enough to OOM the 7GB GitHub
+      # runner. We don't ship traces from CI anyway, so off is correct.
+      AILANG_TRACE: "off"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

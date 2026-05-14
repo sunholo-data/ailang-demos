@@ -127,12 +127,27 @@
   .tx-leaderboard {
     display: flex; flex-direction: column; gap: 6px;
   }
+  /* Full row is a single <a> — clicking the rank, avatar, domain,
+     score, "view sketch" affordance, or timestamp all open the sketch.
+     Display: grid, but text-decoration is suppressed; the colour shift
+     on hover is what tells the reader the whole row is interactive. */
   .tx-row {
     display: grid;
     grid-template-columns: 60px 36px 1fr 80px 100px 110px;
     align-items: center; gap: 16px;
     background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 18px;
+    text-decoration: none; color: inherit;
+    transition: background .12s ease, border-color .12s ease, transform .12s ease;
+  }
+  .tx-row:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+    transform: translateX(2px);
+  }
+  .tx-row:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
   @media (max-width: 720px) {
     .tx-row { grid-template-columns: 50px 32px 1fr 60px; }
@@ -147,7 +162,7 @@
   .tx-row .domain { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); }
   .tx-row .domain .initials { color: var(--text-muted); margin-right: 8px; font-size: 12px; }
   .tx-row .score { font-family: var(--font-mono); font-size: 14px; color: var(--primary); font-weight: 700; }
-  .tx-row .col-link a { font-family: var(--font-mono); font-size: 12px; color: var(--primary); text-decoration: none; }
+  .tx-row .col-link span { font-family: var(--font-mono); font-size: 12px; color: var(--primary); }
   .tx-row .col-updated { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
 
   .tx-empty {

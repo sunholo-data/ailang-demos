@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-30 17,10 -43,25"
+        <polygon points="0,-20 17,10 -43,25"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -526,16 +534,16 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on nextcloud.com</p>
-    <h2 class="sk-prom-audience">Organizations and individuals seeking private cloud solutions for file management, collaboration, and communication.</h2>
-    <blockquote class="sk-prom-narrative">Nextcloud offers a secure, self-hosted digital workspace for file management, real-time collaboration, and communication. It provides solutions for enterprises, public sector, and individuals, focusing on data privacy, control, and workflow automation for digital transformation.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Nextcloud Hub</span> <span class="sk-chip">File Sync and Share</span> <span class="sk-chip">Digital workspace</span> <span class="sk-chip">Data privacy</span> <span class="sk-chip">Enterprise solutions</span> <span class="sk-chip">Collaboration tools</span></div>
+    <h2 class="sk-prom-audience">This site is for organizations (public sector, enterprises, education, service providers) and individuals seeking a self-hosted, secure digital workspace and collaboration platform.</h2>
+    <blockquote class="sk-prom-narrative">Nextcloud offers a self-hosted digital workspace platform providing tools for file sync and share, communication, real-time document collaboration, and workflow automation. It caters to enterprises, public sector, education, service providers, and individual users seeking private, secure, and sovereign data management solutions.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Nextcloud Hub</span> <span class="sk-chip">File Sync and Share</span> <span class="sk-chip">Video conferencing</span> <span class="sk-chip">Document collaboration</span> <span class="sk-chip">On-premise webmail</span> <span class="sk-chip">AI assistant</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on nextcloud.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">24</span> headings</span><span class="stat"><span class="num">12</span> images</span><span class="stat"><span class="num">5</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">16</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">11</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">7</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span> <span class="sk-chip" title="section.kind = figure"><span class="sk-kind-count">1</span> figure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">24</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Security and advisories</span> <span class="sk-chip" title="extracted heading">Security in Nextcloud</span> <span class="sk-chip" title="extracted heading">Server owners</span> <span class="sk-chip" title="extracted heading">Report
 
 a security issue</span> <span class="sk-chip" title="extracted heading">Product version</span> <span class="sk-chip" title="extracted heading">A vulnerability description</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2025/01/NC-Summit-logo.svg" target="_blank" rel="noopener" title="Join Nextcloud Summit 2026
 "><img src="https://nextcloud.com/c/uploads/2025/01/NC-Summit-logo.svg" alt="Join Nextcloud Summit 2026
 " loading="lazy"></a><a class="sk-img-thumb" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%200%200'%3E%3C/svg%3E" target="_blank" rel="noopener" title="Nextcloud Hub 26 Spring is coming
 "><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%200%200'%3E%3C/svg%3E" alt="Nextcloud Hub 26 Spring is coming
-" loading="lazy"></a><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2023/02/logo_nextcloud_white.svg" target="_blank" rel="noopener" title="Nextcloud logo"><img src="https://nextcloud.com/c/uploads/2023/02/logo_nextcloud_white.svg" alt="Nextcloud logo" loading="lazy"></a><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2025/10/server.svg" target="_blank" rel="noopener" title="server"><img src="https://nextcloud.com/c/uploads/2025/10/server.svg" alt="server" loading="lazy"></a><a class="sk-img-thumb" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20150%20150'%3E%3C/svg%3E" target="_blank" rel="noopener" title=""><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20150%20150'%3E%3C/svg%3E" alt="" loading="lazy"></a><a class="sk-img-thumb" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20300%20211'%3E%3C/svg%3E" target="_blank" rel="noopener" title="Nextcloud Logo"><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20300%20211'%3E%3C/svg%3E" alt="Nextcloud Logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products
+" loading="lazy"></a><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2023/02/logo_nextcloud_white.svg" target="_blank" rel="noopener" title="Nextcloud logo"><img src="https://nextcloud.com/c/uploads/2023/02/logo_nextcloud_white.svg" alt="Nextcloud logo" loading="lazy"></a><a class="sk-img-thumb" href="https://nextcloud.com/c/uploads/2025/10/server.svg" target="_blank" rel="noopener" title="server"><img src="https://nextcloud.com/c/uploads/2025/10/server.svg" alt="server" loading="lazy"></a><a class="sk-img-thumb" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20150%20150'%3E%3C/svg%3E" target="_blank" rel="noopener" title=""><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20150%20150'%3E%3C/svg%3E" alt="" loading="lazy"></a><a class="sk-img-thumb" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20300%20211'%3E%3C/svg%3E" target="_blank" rel="noopener" title="Nextcloud Logo"><img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20300%20211'%3E%3C/svg%3E" alt="Nextcloud Logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Products
 
 [Nextcloud HubThe next-generation digital workspace](https://nextcloud.com/hub/)
 
@@ -546,14 +554,18 @@ a security issue</span> <span class="sk-chip" title="extracted heading">Product 
 [Nextcloud AssistantPrivate and local AI assistant](https://nextcloud.com/assistant/)
 [Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow/)
 [RoundcubeThe most popular on premise webmail](https://nextcloud.com/roundcube/)
-[Microsoft integrationsOutlook, Sharepoint, Teams and more](https://nextcloud.com/microsoft-integrations/)</span> <span class="sk-chip" title="list item">[Nextcloud HubThe next-generation digital workspace](https://nextcloud.com/hub/)
+[Microsoft integrationsOutlook, Sharepoint, Teams and more](https://nextcloud.com/microsoft-integrations/)">Products
+
+[Nextcloud HubThe next-generation digital workspace](https://nextcloud.com/hub/…</span> <span class="sk-chip" title="[Nextcloud HubThe next-generation digital workspace](https://nextcloud.com/hub/)
 
 [Nextcloud FilesFile Sync and Share](https://nextcloud.com/files/)
 [Nextcloud TalkCalls, chat and video conferencing](https://nextcloud.com/talk/)
 [Nextcloud GroupwareCalendar, Contacts & Mail](https://nextcloud.com/groupware/)
 [Nextcloud OfficeReal time document collaboration](https://nextcloud.com/office/)
 [Nextcloud AssistantPrivate and local AI assistant](https://nextcloud.com/assistant/)
-[Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow/)</span> <span class="sk-chip" title="list item">[Nextcloud FilesFile Sync and Share](https://nextcloud.com/files/)</span> <span class="sk-chip" title="list item">[Nextcloud TalkCalls, chat and video conferencing](https://nextcloud.com/talk/)</span> <span class="sk-chip" title="list item">[Nextcloud GroupwareCalendar, Contacts & Mail](https://nextcloud.com/groupware/)</span> <span class="sk-chip" title="list item">[Nextcloud OfficeReal time document collaboration](https://nextcloud.com/office/)</span> <span class="sk-chip" title="list item">[Nextcloud AssistantPrivate and local AI assistant](https://nextcloud.com/assistant/)</span> <span class="sk-chip" title="list item">[Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow/)</span> <span class="sk-chip" title="list item">[RoundcubeThe most popular on premise webmail](https://nextcloud.com/roundcube/)</span> <span class="sk-chip" title="list item">[Microsoft integrationsOutlook, Sharepoint, Teams and more](https://nextcloud.com/microsoft-integrations/)</span> <span class="sk-chip" title="list item">Solutions
+[Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow/)">[Nextcloud HubThe next-generation digital workspace](https://nextcloud.com/hub/)
+
+[Nextcl…</span> <span class="sk-chip" title="[Nextcloud FilesFile Sync and Share](https://nextcloud.com/files/)">[Nextcloud FilesFile Sync and Share](https://nextcloud.com/files/)</span> <span class="sk-chip" title="[Nextcloud TalkCalls, chat and video conferencing](https://nextcloud.com/talk/)">[Nextcloud TalkCalls, chat and video conferencing](https://nextcloud.com/talk/)</span> <span class="sk-chip" title="[Nextcloud GroupwareCalendar, Contacts & Mail](https://nextcloud.com/groupware/)">[Nextcloud GroupwareCalendar, Contacts & Mail](https://nextcloud.com/groupware/)</span> <span class="sk-chip" title="[Nextcloud OfficeReal time document collaboration](https://nextcloud.com/office/)">[Nextcloud OfficeReal time document collaboration](https://nextcloud.com/office/)</span> <span class="sk-chip" title="[Nextcloud AssistantPrivate and local AI assistant](https://nextcloud.com/assistant/)">[Nextcloud AssistantPrivate and local AI assistant](https://nextcloud.com/assistant/)</span> <span class="sk-chip" title="[Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow/)">[Nextcloud FlowDriving digital transformation with automation](https://nextcloud.com/flow…</span> <span class="sk-chip" title="[RoundcubeThe most popular on premise webmail](https://nextcloud.com/roundcube/)">[RoundcubeThe most popular on premise webmail](https://nextcloud.com/roundcube/)</span> <span class="sk-chip" title="[Microsoft integrationsOutlook, Sharepoint, Teams and more](https://nextcloud.com/microsoft-integrations/)">[Microsoft integrationsOutlook, Sharepoint, Teams and more](https://nextcloud.com/microso…</span> <span class="sk-chip" title="Solutions
 
 [Nextcloud EnterpriseFor mission-critical use](https://nextcloud.com/enterprise/)
 
@@ -563,14 +575,18 @@ a security issue</span> <span class="sk-chip" title="extracted heading">Product 
 [EducationEnterprise for universities and schools](https://nextcloud.com/education/)
 [PricingNextcloud Enterprise plans and pricing](https://nextcloud.com/pricing/)
 [MigrationMigrate to Nextcloud: Simple and secure](https://nextcloud.com/migrate/)
-[Nextcloud at homeFor families, students & you](https://nextcloud.com/home-users/)</span> <span class="sk-chip" title="list item">[Nextcloud EnterpriseFor mission-critical use](https://nextcloud.com/enterprise/)
+[Nextcloud at homeFor families, students & you](https://nextcloud.com/home-users/)">Solutions
+
+[Nextcloud EnterpriseFor mission-critical use](https://nextcloud.com/enterpris…</span> <span class="sk-chip" title="[Nextcloud EnterpriseFor mission-critical use](https://nextcloud.com/enterprise/)
 
 [Public sectorEnterprise for the public sector](https://nextcloud.com/government/)
 [EnterprisesEnterprise for organizations](https://nextcloud.com/enterprises/)
 [Service providersEnterprise for service providers](https://nextcloud.com/service-providers/)
 [EducationEnterprise for universities and schools](https://nextcloud.com/education/)
 [PricingNextcloud Enterprise plans and pricing](https://nextcloud.com/pricing/)
-[MigrationMigrate to Nextcloud: Simple and secure](https://nextcloud.com/migrate/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://nextcloud.com/summit/" target="_blank" rel="noopener" title="Join Nextcloud Summit 2026
+[MigrationMigrate to Nextcloud: Simple and secure](https://nextcloud.com/migrate/)">[Nextcloud EnterpriseFor mission-critical use](https://nextcloud.com/enterprise/)
+
+[Publi…</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://nextcloud.com/summit/" target="_blank" rel="noopener" title="Join Nextcloud Summit 2026
  — https://nextcloud.com/summit/">Register now</a> <a class="sk-chip sk-chip-link" href="https://nextcloud.com/hub26-spring/" target="_blank" rel="noopener" title="Nextcloud Hub 26 Spring is coming
  — https://nextcloud.com/hub26-spring/">Be part of the live launch</a> <a class="sk-chip sk-chip-link" href="https://nextcloud.com/" target="_blank" rel="noopener" title="Nextcloud — https://nextcloud.com/">(link)</a> <a class="sk-chip sk-chip-link" href="https://nextcloud.com/secure/" target="_blank" rel="noopener" title="More about security — https://nextcloud.com/secure/">More about security</a> <a class="sk-chip sk-chip-link" href="https://docs.nextcloud.com/server/latest/admin_manual/installation/harden_server.html" target="_blank" rel="noopener" title="best practices and tips on securing a Nextcloud server — https://docs.nextcloud.com/server/latest/admin_manual/installation/harden_server.html">Server owners
 For server owners, our documentation has a section with best practices and tips on securing a Nextcloud server.See more</a> <a class="sk-chip sk-chip-link" href="https://github.com/nextcloud/security-advisories/security/advisories" target="_blank" rel="noopener" title="Security advisories — https://github.com/nextcloud/security-advisories/security/advisories">Security advisories</a> <a class="sk-chip sk-chip-link" href="https://www.cvedetails.com/vendor/15913/Nextcloud.html" target="_blank" rel="noopener" title="See a full list of historic advisories in the CVE database. — https://www.cvedetails.com/vendor/15913/Nextcloud.html">Official CVE database</a> <a class="sk-chip sk-chip-link" href="https://nextcloud.com/security/threat-model/" target="_blank" rel="noopener" title="Threat model — https://nextcloud.com/security/threat-model/">Threat model</a> <a class="sk-chip sk-chip-link" href="https://nextcloud.com/get-a-quote/" target="_blank" rel="noopener" title="Get a quote — https://nextcloud.com/get-a-quote/">Get a quote</a> <a class="sk-chip sk-chip-link" href="https://download.nextcloud.com/desktop/releases/" target="_blank" rel="noopener" title="Latest release on our download servers — https://download.nextcloud.com/desktop/releases/"><img decoding="async" width="300" height="211" src="https://nextcloud.com/c/uploads/2022/11/logo_nextcloud_white.svg" class="attachment-medium size-medium" alt="Nextcloud Logo" />
@@ -781,17 +797,17 @@ Euro-Office: Building momentum](https://nextcloud.com/blog/euro-office-building-
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">nextcloud.com</span> scored <strong>2/10</strong> on privacy. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
-  email:    string<pii>,
-  postcode: string<pii>,
-  signupDate: string
+    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre><span class="k">type</span> Customer = {
+  email:    <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  postcode: <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  signupDate: <span class="k">string</span>
 }
--- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
--- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- assigning customer.email to a log line is a type error.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre><span class="k">func</span> chargeCard(c: Card) -&gt; Result[Receipt, Error]
+  ! {<span class="e">Net @endpoint=<span class="s">"api.stripe.com"</span>, AI @limit=0</span>}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre><span class="c">-- Browser: load AILANG WASM, run the module in the user's tab.</span>
+<span class="c">-- Cloud Run: same .ail file packaged as a container.</span>
+<span class="c">-- Native CLI: same .ail file, ailang run.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -820,6 +836,10 @@ Euro-Office: Building momentum](https://nextcloud.com/blog/euro-office-building-
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

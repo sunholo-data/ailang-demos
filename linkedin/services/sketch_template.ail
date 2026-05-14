@@ -10,7 +10,7 @@ module linkedin/services/sketch_template
 -- Effects: ! {FS} — reads the template file. Pure otherwise.
 
 import std/fs (readFile)
-import std/string (replaceMany, intToStr, join, replace, length)
+import std/string (replaceMany, intToStr, join, replace, length, substring)
 import std/list (map, concat as listConcat, length as listLength)
 import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, DocparseImage, DocparseLink, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
@@ -90,8 +90,17 @@ func renderHeadingPill(h: string) -> string =
 func renderImageThumb(img: DocparseImage) -> string =
   "<a class=\"sk-img-thumb\" href=\"${img.src}\" target=\"_blank\" rel=\"noopener\" title=\"${img.description}\"><img src=\"${img.src}\" alt=\"${img.description}\" loading=\"lazy\"></a>"
 
+-- Truncate chip text so a single malformed extraction can't blow out
+-- the §2 grid (e.g. handbook.gitlab.com's nav list extracted as one
+-- 2KB markdown blob). Tooltip carries the full string for any reader
+-- who hovers; the full markdown is also in the §2 details block.
+func chipTruncate(s: string, n: int) -> string =
+  if length(s) <= n then s
+  else "${substring(s, 0, n - 1)}…"
+
 func renderListPill(item: string) -> string =
-  "<span class=\"sk-chip\" title=\"list item\">${item}</span>"
+  let short = chipTruncate(item, 90) in
+  "<span class=\"sk-chip\" title=\"${item}\">${short}</span>"
 
 -- Render an anchor link extracted by AILANG Parse (v0.15.0+) as a
 -- clickable chip. The chip text is the link's visible text; the title

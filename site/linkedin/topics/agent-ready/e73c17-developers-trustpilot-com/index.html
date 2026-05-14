@@ -9,11 +9,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AILANG × mailfence.com — privacy sketch</title>
+<title>AILANG × developers.trustpilot.com — agent-ready sketch</title>
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
-<meta name="description" content="An AILANG sketch of mailfence.com — what an AI sees, where AILANG fits.">
-<meta property="og:title" content="AILANG × mailfence.com">
-<meta property="og:description" content="privacy sketch for mailfence.com — AI-readiness 2/10.">
+<meta name="description" content="An AILANG sketch of developers.trustpilot.com — what an AI sees, where AILANG fits.">
+<meta property="og:title" content="AILANG × developers.trustpilot.com">
+<meta property="og:description" content="agent-ready sketch for developers.trustpilot.com — AI-readiness 2/10.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -480,10 +488,10 @@
 
   <!-- ─── Title ─── -->
   <section class="sk-title">
-    <h1>AILANG<span class="times">×</span>mailfence.com</h1>
+    <h1>AILANG<span class="times">×</span>developers.trustpilot.com</h1>
     <div class="meta">
       <span><span class="sk-avatar"></span>AI</span>
-      <span class="topic-tag">privacy</span>
+      <span class="topic-tag">agent-ready</span>
       <span>generated 2026-05-14</span>
     </div>
   </section>
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,0 17,10 -17,10"
+        <polygon points="0,-20 17,10 -17,10"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -512,39 +520,203 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">mailfence.com</span> scored <span class="sk-readiness-num">2/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means mailfence.com is already strong there; low means AILANG could meaningfully help.</p>
-        <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the privacy leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
+        <h2><span class="sk-domain">developers.trustpilot.com</span> scored <span class="sk-readiness-num">2/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means developers.trustpilot.com is already strong there; low means AILANG could meaningfully help.</p>
+        <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the agent-ready leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why privacy scored 2/10</strong><ul><li class="no">Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.</li>
-<li class="no">Page mentions SOC 2, ISO 27001, GDPR, HIPAA, or CCPA — formal commitments to data-handling practice.</li>
-<li class="no">Page mentions "we do not sell", "no third-party sharing", "privacy-first", "data minimization", or "purpose limitation" — explicit constraints on data flow.</li>
-<li class="ok">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
-<li class="no">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+    <div class="sk-why"><strong>Why agent-ready scored 2/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
+<li class="no">Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.</li>
+<li class="no">Page references an MCP endpoint such as /mcp/ or /mcp/sse.</li>
+<li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li>
+<li class="no">Page mentions webhooks, callback URLs, or event subscriptions — the most agent-callable backend pattern.</li>
+<li class="ok">Page documents rate limits, throttling, or 429 handling — agents need to know how to back off.</li>
+<li class="no">Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.</li>
+<li class="no">Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.</li>
+<li class="ok">Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.</li>
+<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li>
+<li class="no">Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.</li>
+<li class="no">Page mentions x402 (Coinbase's signed crypto payment payloads) or Cloudflare's pay-per-crawl (crawler-price header for AI-crawler monetisation). Both revive HTTP 402 for agents — Cloudflare joined the x402 Foundation, so they're one umbrella signal.</li>
+<li class="no">Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.</li>
+<li class="no">Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
-    <p class="sk-section-label">§2 · what an AI sees on mailfence.com</p>
-    <h2 class="sk-prom-audience"></h2>
-    <blockquote class="sk-prom-narrative">(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)</blockquote>
-    <div class="sk-chips"></div>
-    <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">polite refuse</span></div>
+    <p class="sk-section-label">§2 · what an AI sees on developers.trustpilot.com</p>
+    <h2 class="sk-prom-audience">Developers, businesses, and integration partners looking to programmatically interact with Trustpilot's review platform and data.</h2>
+    <blockquote class="sk-prom-narrative">This site provides API documentation for Trustpilot, enabling developers and businesses to integrate review management, collect feedback, and display ratings. It details technical concepts, authentication methods, and API references for various functionalities, including business units, invitations, and data solutions, aimed at streamlining programmatic access to Trustpilot's platform.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">API</span> <span class="sk-chip">Authentication</span> <span class="sk-chip">Business Units</span> <span class="sk-chip">Invitations</span> <span class="sk-chip">Consumer Reviews</span> <span class="sk-chip">Data Solutions</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on developers.trustpilot.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">1</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">5</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">4</span> articles</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">1</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Welcome</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://developers.trustpilot.com/_astro/logo-white.aldZTcuZ.svg" target="_blank" rel="noopener" title=""><img src="https://developers.trustpilot.com/_astro/logo-white.aldZTcuZ.svg" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://developers.trustpilot.com/_astro/logo-white.aldZTcuZ.svg" target="_blank" rel="noopener" title=""><img src="https://developers.trustpilot.com/_astro/logo-white.aldZTcuZ.svg" alt="" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://developers.trustpilot.com/" target="_blank" rel="noopener" title="https://developers.trustpilot.com/">Trustpilot</a> <a class="sk-chip sk-chip-link" href="https://developers.trustpilot.com/introduction" target="_blank" rel="noopener" title="https://developers.trustpilot.com/introduction">Get started</a> <a class="sk-chip sk-chip-link" href="https://developers.trustpilot.com/become-an-integration-partner" target="_blank" rel="noopener" title="https://developers.trustpilot.com/become-an-integration-partner">Get started</a> <a class="sk-chip sk-chip-link" href="https://developers.trustpilot.com/data-solutions-get-started" target="_blank" rel="noopener" title="https://developers.trustpilot.com/data-solutions-get-started">Get started</a> <a class="sk-chip sk-chip-link" href="https://help.trustpilot.com/s/?language=en_US" target="_blank" rel="noopener" title="https://help.trustpilot.com/s/?language=en_US">Help Center</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Welcome | Trustpilot
+
+
+[Skip to content](#_top)
+
+*Header:*
+[Image]
+
+[Image]
+
+Trustpilot
+
+[Trustpilot](/)
+
+Search``Ctrl``K``
+ Cancel
+
+[Help Center](https://help.trustpilot.com/s/?language=en_US)
+
+Select themeDarkLightAuto
+
+(() =&gt; {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details &amp;&amp; typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	
+
+Trustpilot for Business
+
+Get started
+
+[Get started with Trustpilot for Business](/introduction/)
+[API module best practices](/api-module-best-practices/)
+[Schema, data formats and cache](/schema-data-cache/)
+
+Authentication
+
+[Authentication overview](/authentication/)
+[Authorization code](/grant-type-auth-code/)
+[Client credentials](/grant-type-client-credentials/)
+[Implicit](/grant-type-implicit/)
+[Password](/grant-type-password/)
+
+Reference
+
+Business Signup
+
+[Business Signup API overview](/business-signup-api-overview/)
+[Business Signup API (public)](/business-signup-api/)
+
+Business Units
+
+[Business Units overview](/business-units-api-overview/)
+[Business Units API](/business-units-api/)
+[Business Units API (public)](/business-units-api-(public)/)
+
+Invitations
+
+[Invitations API overview](/invitations-api-overview/)
+[Invitation API](/invitation-api/)
+[Categories API](/categories-api/)
+
+Consumer
+
+[Consumer API](/consumer-api/)
+[Consumer Profile API](/consumer-profile-api/)
+
+Products
+
+[Private Products API](/private-products-api/)
+[Product Reviews API](/product-reviews-api/)
+[Resources API](/resources-api/)
+[Service Reviews API](/service-reviews-api/)
+
+Integration partners
+
+[Become an Integration Partner](/become-an-integration-partner/)
+[Become a top tier Integration Partner](/become-a-top-tier-integration-partner/)
+[Build a partner integration](/build-a-partner-integration/)
+[Common error messages for partner integrations](/common-errors-for-integration-partners/)
+
+Data SolutionsNew
+
+Get started
+
+[Get started with Data Solutions](/data-solutions-get-started/)
+[How to use the Data Solutions API](/data-solutions-how-to/)
+[Data Solutions caching best practices](/ds-caching-best-practices/)
+
+Reference
+
+[Data Solutions API](/data-solutions-api/)
+[FAQ](/faq/)
+[Common error messages](/common-error-messages/)
+[Rate limiting best practices](/rate-limiting/)
+[Deletions API](/deletions-api/)
+		(() =&gt; {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+
+[Help Center](https://help.trustpilot.com/s/?language=en_US)
+
+Select themeDarkLightAuto
+
+# Welcome
+
+Welcome to Trustpilot’s API documentation. You can use this documentation to learn about technical concepts, authentication and common errors for each Trustpilot API.
+
+Trustpilot for Business
+
+Send invitations, showcase reviews and reply to feedback
+
+[Get started](/introduction)
+
+Integration partners
+
+Create public integrations with support from Trustpilot
+
+[Get started](/become-an-integration-partner)
+
+Data Solutions
+
+Access Trustpilot’s global database of business profiles and consumer reviews
+
+[Get started](/data-solutions-get-started)
+
+Need help?
+
+Check out the Trustpilot Help Center
+
+[Help Center](https://help.trustpilot.com/s/?language=en_US)
+
+Manage cookies
+
+</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
   <section class="sk-preview-section">
     <div class="sk-preview-head">
       <span>page preview · the URL we fetched</span>
-      <a class="url" href="https://mailfence.com/en/about" target="_blank" rel="noopener">https://mailfence.com/en/about ↗</a>
+      <a class="url" href="https://developers.trustpilot.com/" target="_blank" rel="noopener">https://developers.trustpilot.com/ ↗</a>
     </div>
     <img class="sk-preview-img"
-         src="https://image.thum.io/get/width/1200/maxAge/24/https://mailfence.com/en/about"
-         alt="Screenshot of mailfence.com"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://developers.trustpilot.com/"
+         alt="Screenshot of developers.trustpilot.com"
          loading="lazy">
     <p class="sk-preview-fallback">
       Couldn't render a preview for this site.
-      <a href="https://mailfence.com/en/about" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+      <a href="https://developers.trustpilot.com/" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
     </p>
     <p class="sk-preview-credit">
       Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
@@ -554,18 +726,19 @@
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext"><span class="sk-domain">mailfence.com</span> scored <strong>2/10</strong> on privacy. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
-  email:    string<pii>,
-  postcode: string<pii>,
-  signupDate: string
-}
--- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
--- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+    <p class="sk-score-pretext"><span class="sk-domain">developers.trustpilot.com</span> scored <strong>2/10</strong> on agent-ready. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
+  pricing.ail catalogue.ail
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -587,13 +760,17 @@
         <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
-<tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
+<tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
 <tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
-<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
 <tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
-<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
+<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
@@ -622,7 +799,7 @@
       </a>
     </p>
     <div class="links">
-      <a href="../">← privacy topic</a>
+      <a href="../">← agent-ready topic</a>
       <a href="../../../">← LinkedIn demo</a>
     </div>
   </footer>

@@ -52,20 +52,30 @@ func seeds() -> [SeedEntry] = [
   { url: "https://doc.bunq.com/",                                                topic: AgentReady },
   { url: "https://developer.gocardless.com/api-reference",                       topic: AgentReady },
   { url: "https://developers.mews.com/",                                         topic: AgentReady },
-  { url: "https://documentation-data.trustpilot.com/",                           topic: AgentReady },
+  -- documentation-data.trustpilot.com refused our curl probe (000) and
+  -- the new skip-on-no-content policy drops it cleanly if AILANG also
+  -- can't reach it. developers.trustpilot.com is their canonical
+  -- developer portal entry (200).
+  { url: "https://developers.trustpilot.com/",                                   topic: AgentReady },
   { url: "https://developers.tradeshift.com/docs/quickstart",                    topic: AgentReady },
   -- privacy: trust/security pages, data-residency language
-  { url: "https://proton.me/business/data-privacy",                              topic: Privacy },
+  -- proton.me/business/data-privacy 404s; /legal/privacy is the real
+  -- public privacy policy page (200).
+  { url: "https://proton.me/legal/privacy",                                      topic: Privacy },
   { url: "https://tuta.com/security",                                            topic: Privacy },
   { url: "https://nextcloud.com/security/",                                      topic: Privacy },
   { url: "https://mistral.ai/terms",                                             topic: Privacy },
   { url: "https://mailfence.com/en/about",                                       topic: Privacy },
-  { url: "https://www.siteimprove.com/glossary/data-privacy/",                   topic: Privacy },
+  -- siteimprove.com/glossary/data-privacy/ 404s; /privacy/ is their
+  -- actual public privacy-policy page (200).
+  { url: "https://www.siteimprove.com/privacy/",                                 topic: Privacy },
   -- pleo.io privacy/security pages 404; using the legal landing page
   -- which is their consolidated privacy/terms entry point.
   { url: "https://www.pleo.io/en/legal",                                          topic: Privacy },
   { url: "https://weaviate.io/security",                                         topic: Privacy },
-  { url: "https://posit.co/about/security/",                                     topic: Privacy },
+  -- posit.co/about/security/ 404s; /about/ is the canonical company
+  -- page covering values/governance (200).
+  { url: "https://posit.co/about/",                                              topic: Privacy },
   { url: "https://handbook.gitlab.com/handbook/security/",                       topic: Privacy },
   -- portable: multi-runtime, self-host, multi-provider
   { url: "https://developer.hashicorp.com/terraform/intro",                      topic: Portable },

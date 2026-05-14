@@ -214,15 +214,19 @@ func hexNibbleS(c: string) -> int =
 
 func renderEntryRow(e: LeaderboardEntry) -> string =
   let rankStr = if e.rank == 0 then "<span class=\"rank unranked\">—</span>" else "<span class=\"rank\">#${intToStr(e.rank)}</span>" in
+  -- The whole row is now a single <a> so clicking anywhere — rank,
+  -- avatar, domain, score, "view sketch" affordance, timestamp — opens
+  -- the sketch. The inner "view sketch ↗" is a decorative span (not a
+  -- nested anchor, which would be invalid HTML).
   join("", [
-    "<div class=\"tx-row\">",
+    "<a class=\"tx-row\" href=\"", e.sketchUrl, "\">",
     rankStr,
     avatarSvg(e.avatarSeed),
     "<div class=\"domain\"><span class=\"initials\">", e.initials, "</span>", e.registrableDomain, "</div>",
     "<div class=\"score\">", intToStr(e.score), "/10</div>",
-    "<div class=\"col-link\"><a href=\"", e.sketchUrl, "\">view sketch ↗</a></div>",
+    "<div class=\"col-link\"><span>view sketch ↗</span></div>",
     "<div class=\"col-updated\">", e.updatedAt, "</div>",
-    "</div>"
+    "</a>"
   ])
 
 func renderLeaderboardSection(t: Topic, entries: [LeaderboardEntry], generatedAt: string) -> string =

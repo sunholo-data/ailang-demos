@@ -16,7 +16,7 @@ import std/io (println)
 import std/fs (writeFile, mkdirAll)
 import std/string (length, substring, replace, contains, toLower, find, intToStr)
 import std/list (map)
-import linkedin/types/sketch_types (Sketch, Topic, TopicScore, FeatureCard)
+import linkedin/types/sketch_types (Sketch, Topic, TopicScore, FeatureCard, ExtractedContent)
 import linkedin/services/sketch_extract (sketchExtract)
 import linkedin/services/sketch_rubric (sketchScoreAllSignals, sketchComputeAllTopicScores, topicEq)
 import linkedin/services/sketch_features (sketchCardsForTopic)
@@ -145,6 +145,31 @@ export func sketchSite(
   println("→ Extracting ${url} ...");
   let extracted = sketchExtract(url);
 
+  -- Refuse to publish a sketch when there's nothing real to score:
+  --   * fetch failed / non-2xx (extractionPath = "polite-refuse"), or
+  --   * the page parsed to zero structural blocks (404 marketing
+  --     pages, empty bodies, blocked-by-bot landing pages, etc.)
+  -- Without this guard, every dud URL still gets a 2/10 "what an AI
+  -- sees on …" sketch on the leaderboard, which is worse than no
+  -- sketch at all — it actively misinforms the reader.
+  if extracted.extractionPath == "polite-refuse" || extracted.blockCount == 0 then {
+    println("⚠  Skipping ${url} — no usable content (path=${extracted.extractionPath}, blocks=${intToStr(extracted.blockCount)}). No sketch written.");
+    ""
+  } else sketchSiteWrite(url, topic, initials, avatarSeed, generatedAt, rank, templatePath, extracted)
+}
+
+-- Inner writer — runs only after the polite-refuse / zero-blocks
+-- guard in sketchSite has confirmed the page is worth scoring.
+func sketchSiteWrite(
+  url: string,
+  topic: Topic,
+  initials: string,
+  avatarSeed: string,
+  generatedAt: string,
+  rank: int,
+  templatePath: string,
+  extracted: ExtractedContent
+) -> string ! {FS, IO} {
   println("→ Scoring signals ...");
   let signals = sketchScoreAllSignals(extracted.rawBody);
   let scores  = sketchComputeAllTopicScores(signals);

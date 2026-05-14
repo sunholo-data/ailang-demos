@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -535,10 +543,10 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on ap2-protocol.org</p>
-    <h2 class="sk-prom-audience">Developers, merchants, and payments industry professionals building or integrating solutions for AI agent-initiated payments.</h2>
-    <blockquote class="sk-prom-narrative">AP2 is an open protocol for developers, merchants, and the payments industry to enable secure and interoperable agent commerce. It addresses payment authorization, authenticity, and accountability for AI agent-initiated transactions, using Verifiable Digital Credentials to build trust in the emerging Agent Economy.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Agent Payments Protocol (AP2)</span> <span class="sk-chip">Verifiable Digital Credentials (VDCs)</span> <span class="sk-chip">AI Agents</span> <span class="sk-chip">Agent Economy</span> <span class="sk-chip">Agent-to-Agent (A2A) protocol</span> <span class="sk-chip">Universal Commerce Protocol (UCP)</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on ap2-protocol.org</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">7</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">4</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Agent Payments Protocol (AP2)</span> <span class="sk-chip" title="extracted heading">What is AP2?¶</span> <span class="sk-chip" title="extracted heading">Why an Agent Payments Protocol is Needed¶</span> <span class="sk-chip" title="extracted heading">Core Principles and Goals¶</span> <span class="sk-chip" title="extracted heading">Key Concept: Verifiable Digital Credentials (VDCs)¶</span> <span class="sk-chip" title="extracted heading">See it in action¶</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://ap2-protocol.org/assets/ap2-logo-white.svg" target="_blank" rel="noopener" title="logo"><img src="https://ap2-protocol.org/assets/ap2-logo-white.svg" alt="logo" loading="lazy"></a><a class="sk-img-thumb" href="https://ap2-protocol.org/assets/ap2-logo-black.svg" target="_blank" rel="noopener" title="Agent Payments Protocol Logo"><img src="https://ap2-protocol.org/assets/ap2-logo-black.svg" alt="Agent Payments Protocol Logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Home
+    <h2 class="sk-prom-audience">Developers, merchants, and financial institutions involved in building, integrating, and regulating autonomous agent-based commerce and payment systems.</h2>
+    <blockquote class="sk-prom-narrative">AP2 is an open protocol designed for secure, reliable, and interoperable agent commerce. It addresses authorization, authenticity, and accountability for agent-initiated payments, ensuring user control and privacy. Built on Verifiable Digital Credentials, AP2 aims to establish a trusted framework for the emerging Agent Economy among developers, merchants, and the payments industry.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Agent Payments Protocol (AP2)</span> <span class="sk-chip">Verifiable Digital Credentials (VDCs)</span> <span class="sk-chip">Agent Economy</span> <span class="sk-chip">Agent2Agent (A2A) protocol</span> <span class="sk-chip">Universal Commerce Protocol (UCP)</span> <span class="sk-chip">Agent Authorization Framework</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on ap2-protocol.org</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">7</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">4</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Agent Payments Protocol (AP2)</span> <span class="sk-chip" title="extracted heading">What is AP2?¶</span> <span class="sk-chip" title="extracted heading">Why an Agent Payments Protocol is Needed¶</span> <span class="sk-chip" title="extracted heading">Core Principles and Goals¶</span> <span class="sk-chip" title="extracted heading">Key Concept: Verifiable Digital Credentials (VDCs)¶</span> <span class="sk-chip" title="extracted heading">See it in action¶</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://ap2-protocol.org/assets/ap2-logo-white.svg" target="_blank" rel="noopener" title="logo"><img src="https://ap2-protocol.org/assets/ap2-logo-white.svg" alt="logo" loading="lazy"></a><a class="sk-img-thumb" href="https://ap2-protocol.org/assets/ap2-logo-black.svg" target="_blank" rel="noopener" title="Agent Payments Protocol Logo"><img src="https://ap2-protocol.org/assets/ap2-logo-black.svg" alt="Agent Payments Protocol Logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Home
     
   [
     Home
@@ -563,10 +571,24 @@
       See it in action
     
 
-      Get Started and Build with Us</span> <span class="sk-chip" title="list item">[
+      Get Started and Build with Us">Home
+    
+  [
+    Home
+    
+  ](.)
+
+      Table of contents
+    
+
+      What is AP2?
+    …</span> <span class="sk-chip" title="[
     Executive Summary
     
-  ](overview/)</span> <span class="sk-chip" title="list item">Specification
+  ](overview/)">[
+    Executive Summary
+    
+  ](overview/)</span> <span class="sk-chip" title="Specification
     
   
 
@@ -600,31 +622,66 @@
 [
     Implementation Considerations
     
-  ](ap2/implementation_considerations/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/implementation_considerations/)">Specification
+    
+  
+
+            Specification
+          
+
+[
+    Agent Payments Protoco…</span> <span class="sk-chip" title="[
     Agent Payments Protocol
     
-  ](ap2/specification/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/specification/)">[
+    Agent Payments Protocol
+    
+  ](ap2/specification/)</span> <span class="sk-chip" title="[
     Agent Authorization Framework
     
-  ](ap2/agent_authorization/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/agent_authorization/)">[
+    Agent Authorization Framework
+    
+  ](ap2/agent_authorization/)</span> <span class="sk-chip" title="[
     Flows
     
-  ](ap2/flows/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/flows/)">[
+    Flows
+    
+  ](ap2/flows/)</span> <span class="sk-chip" title="[
     Checkout Mandate
     
-  ](ap2/checkout_mandate/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/checkout_mandate/)">[
+    Checkout Mandate
+    
+  ](ap2/checkout_mandate/)</span> <span class="sk-chip" title="[
     Payment Mandate
     
-  ](ap2/payment_mandate/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/payment_mandate/)">[
+    Payment Mandate
+    
+  ](ap2/payment_mandate/)</span> <span class="sk-chip" title="[
     Security and Privacy Considerations
     
-  ](ap2/security_and_privacy_considerations/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/security_and_privacy_considerations/)">[
+    Security and Privacy Considerations
+    
+  ](ap2/security_and_privacy_consideration…</span> <span class="sk-chip" title="[
     Implementation Considerations
     
-  ](ap2/implementation_considerations/)</span> <span class="sk-chip" title="list item">[
+  ](ap2/implementation_considerations/)">[
+    Implementation Considerations
+    
+  ](ap2/implementation_considerations/)</span> <span class="sk-chip" title="[
     Glossary
     
-  ](glossary/)</span> <span class="sk-chip" title="list item">[
+  ](glossary/)">[
+    Glossary
+    
+  ](glossary/)</span> <span class="sk-chip" title="[
+    FAQ
+    
+  ](faq/)">[
     FAQ
     
   ](faq/)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://ap2-protocol.org/." target="_blank" rel="noopener" title="AP2 - Agent Payments Protocol Documentation — https://ap2-protocol.org/.">(link)</a> <a class="sk-chip sk-chip-link" href="https://github.com/google-agentic-commerce/AP2" target="_blank" rel="noopener" title="Go to repository — https://github.com/google-agentic-commerce/AP2">AP2</a> <a class="sk-chip sk-chip-link" href="https://ap2-protocol.org/overview/" target="_blank" rel="noopener" title="https://ap2-protocol.org/overview/">Next
@@ -1008,18 +1065,18 @@ Made with
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">ap2-protocol.org</span> scored <strong>0/10</strong> on agent-ready. AILANG opportunity is therefore <strong>10/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
   pricing.ail catalogue.ail
--- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
-  requires { qty > 0, qty <= 10 }
-  ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
--- MCP client query the language directly:
---   stdlib_search "URL encoding"
---   submit_feedback "..."</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

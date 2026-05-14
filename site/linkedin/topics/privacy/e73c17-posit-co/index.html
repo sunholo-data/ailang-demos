@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
 <meta name="description" content="An AILANG sketch of posit.co — what an AI sees, where AILANG fits.">
 <meta property="og:title" content="AILANG × posit.co">
-<meta property="og:description" content="privacy sketch for posit.co — AI-readiness 2/10.">
+<meta property="og:description" content="privacy sketch for posit.co — AI-readiness 0/10.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,0 17,10 -17,10"
+        <polygon points="0,0 0,0 -17,10"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -512,39 +520,423 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">posit.co</span> scored <span class="sk-readiness-num">2/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means posit.co is already strong there; low means AILANG could meaningfully help.</p>
+        <h2><span class="sk-domain">posit.co</span> scored <span class="sk-readiness-num">0/10</span> on privacy.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means posit.co is already strong there; low means AILANG could meaningfully help.</p>
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the privacy leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why privacy scored 2/10</strong><ul><li class="no">Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.</li>
+    <div class="sk-why"><strong>Why privacy scored 0/10</strong><ul><li class="no">Page mentions end-to-end encryption, E2EE, zero-knowledge, or client-side encryption — data is sealed before leaving the client.</li>
 <li class="no">Page mentions SOC 2, ISO 27001, GDPR, HIPAA, or CCPA — formal commitments to data-handling practice.</li>
 <li class="no">Page mentions "we do not sell", "no third-party sharing", "privacy-first", "data minimization", or "purpose limitation" — explicit constraints on data flow.</li>
-<li class="ok">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
+<li class="no">Fewer than 5 distinct external script/image domains — indicates fewer third-party data flows.</li>
 <li class="no">Page mentions EU hosting, data residency, on-premises deployment, or sovereign cloud.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on posit.co</p>
-    <h2 class="sk-prom-audience"></h2>
-    <blockquote class="sk-prom-narrative">(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)</blockquote>
-    <div class="sk-chips"></div>
-    <div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">0</span> links</span><span class="path">polite refuse</span></div>
+    <h2 class="sk-prom-audience">The site is for knowledge creators, data scientists, data science leaders, IT leaders, and business leaders who work with data.</h2>
+    <blockquote class="sk-prom-narrative">Posit provides open-source software for data science, research, and communication, primarily supporting R and Python users. It offers tools for data analysis, development, and publishing insights, alongside solutions for managing and governing data science environments. The company aims to help knowledge creators make sense of data.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">data science</span> <span class="sk-chip">open-source software</span> <span class="sk-chip">R and Python</span> <span class="sk-chip">RStudio</span> <span class="sk-chip">Posit Workbench</span> <span class="sk-chip">Posit Connect</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on posit.co</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">10</span> headings</span><span class="stat"><span class="num">5</span> images</span><span class="stat"><span class="num">5</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">63</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">16</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = article"><span class="sk-kind-count">1</span> article</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">6</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">
+Open source for a better world</span> <span class="sk-chip" title="extracted heading">Open since day one</span> <span class="sk-chip" title="extracted heading">Our charter</span> <span class="sk-chip" title="extracted heading">We are proud of the story of our company. And we're only just beginning.</span> <span class="sk-chip" title="extracted heading">The code we live by</span> <span class="sk-chip" title="extracted heading">Open</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-mission-hero.png?itok=LcZOaLae" target="_blank" rel="noopener" title="about page background image"><img src="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-mission-hero.png?itok=LcZOaLae" alt="about page background image" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-img-1b.png?itok=XoiJ1zA8" target="_blank" rel="noopener" title="Posit employees at Posit::conf()"><img src="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-img-1b.png?itok=XoiJ1zA8" alt="Posit employees at Posit::conf()" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-img-2.png?itok=0j81XYg3" target="_blank" rel="noopener" title="Posit employees at Posit::conf()"><img src="https://posit.co/sites/default/files/styles/small_hq/public/image/2026-03/about-img-2.png?itok=0j81XYg3" alt="Posit employees at Posit::conf()" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/image/2026-04/about-illy2.png" target="_blank" rel="noopener" title=""><img src="https://posit.co/sites/default/files/image/2026-04/about-illy2.png" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://posit.co/sites/default/files/styles/small/public/image/2026-04/sol-DS-close-cta3.png?itok=FpXlaDYP" target="_blank" rel="noopener" title="A blue-tinted background of people at a tech conference wall overlaid with a bright inset photo of two women collaborating on laptops."><img src="https://posit.co/sites/default/files/styles/small/public/image/2026-04/sol-DS-close-cta3.png?itok=FpXlaDYP" alt="A blue-tinted background of people at a tech conference wall overlaid with a bright inset photo of two women collaborating on laptops." loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">5</span> list items</p><div class="sk-chips"><span class="sk-chip" title="[About](/)
+
+About
+
+**We help the world make sense of data**
+Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.
+About us
+
+[Company & Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-report)
+[posit::conf](https://conf.posit.co/2026)
+[Legal terms](/about/eula)
+
+                  Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
+[Learn More](https://conf.posit.co/2026/)">[About](/)
+
+About
+
+**We help the world make sense of data**
+Open-source software for data…</span> <span class="sk-chip" title="**We help the world make sense of data**
+Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.">**We help the world make sense of data**
+Open-source software for data science, research,…</span> <span class="sk-chip" title="About us
+
+[Company & Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-report)
+[posit::conf](https://conf.posit.co/2026)
+[Legal terms](/about/eula)">About us
+
+[Company & Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-r…</span> <span class="sk-chip" title="[Company & Mission](/about)">[Company & Mission](/about)</span> <span class="sk-chip" title="[Careers](/about/careers)">[Careers](/about/careers)</span> <span class="sk-chip" title="[PBC Report](/about/pbc-report)">[PBC Report](/about/pbc-report)</span> <span class="sk-chip" title="[posit::conf](https://conf.posit.co/2026)">[posit::conf](https://conf.posit.co/2026)</span> <span class="sk-chip" title="[Legal terms](/about/eula)">[Legal terms](/about/eula)</span> <span class="sk-chip" title="Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
+[Learn More](https://conf.posit.co/2026/)">Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python…</span> <span class="sk-chip" title="[Partners](/)
+
+Partners
+
+Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Amazon Sagemaker](/solutions/aws)
+Cloud Platforms
+
+[Amazon Web Services](/solutions/aws)
+[Google Cloud Platform](/solutions/google-cloud)
+[Microsoft Azure](/solutions/azure-ml)
+Channel Partners
+
+[Partner Program](/partners)
+
+Partner programs, include standard resellers, managed service providers, and professional services.
+[Deal Registration](https://pages.posit.co/partner-deal-registration.html)
+
+For current Posit Resellers to register new deals.">[Partners](/)
+
+Partners
+
+Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/…</span> <span class="sk-chip" title="Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Amazon Sagemaker](/solutions/aws)">Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Am…</span> <span class="sk-chip" title="[Snowflake](/solutions/snowflake)">[Snowflake](/solutions/snowflake)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">63</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://opensource.posit.co/" target="_blank" rel="noopener" title="https://opensource.posit.co/">Posit open source</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/financial-services" target="_blank" rel="noopener" title="https://posit.co/solutions/financial-services">Financial Services</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/insurance" target="_blank" rel="noopener" title="https://posit.co/solutions/insurance">Insurance</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/pharma" target="_blank" rel="noopener" title="https://posit.co/solutions/pharma">Pharma</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/public-sector" target="_blank" rel="noopener" title="https://posit.co/solutions/public-sector">Public sector</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-scientists" target="_blank" rel="noopener" title="https://posit.co/solutions/data-scientists">Data Scientists</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/data-science-leaders" target="_blank" rel="noopener" title="https://posit.co/solutions/data-science-leaders">Data Science Leaders</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/it-leaders" target="_blank" rel="noopener" title="https://posit.co/solutions/it-leaders">IT Leaders</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions/business-leaders" target="_blank" rel="noopener" title="https://posit.co/solutions/business-leaders">Business Leaders</a> <a class="sk-chip sk-chip-link" href="https://posit.co/products/enterprise/academy" target="_blank" rel="noopener" title="https://posit.co/products/enterprise/academy">Posit Academy</a> <a class="sk-chip sk-chip-link" href="https://posit.co/solutions" target="_blank" rel="noopener" title="https://posit.co/solutions">View all</a> <a class="sk-chip sk-chip-link" href="https://posit.co/products/enterprise/workbench" target="_blank" rel="noopener" title="https://posit.co/products/enterprise/workbench">Posit Workbench</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># About Posit | The Open-Source Data Science Company
+
+
+[Skip to main content](#main-content)
+
+prev
+
+next
+
+*Header:*
+Utility Menu
+
+- [About](/)
+
+About
+
+**We help the world make sense of data**
+Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.
+About us
+
+[Company &amp; Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-report)
+[posit::conf](https://conf.posit.co/2026)
+[Legal terms](/about/eula)
+
+                  Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
+[Learn More](https://conf.posit.co/2026/)
+- **We help the world make sense of data**
+Open-source software for data science, research, and communication. Built to serve knowledge creators for the next century.
+- About us
+
+[Company &amp; Mission](/about)
+[Careers](/about/careers)
+[PBC Report](/about/pbc-report)
+[posit::conf](https://conf.posit.co/2026)
+[Legal terms](/about/eula)
+- [Company &amp; Mission](/about)
+- [Careers](/about/careers)
+- [PBC Report](/about/pbc-report)
+- [posit::conf](https://conf.posit.co/2026)
+- [Legal terms](/about/eula)
+- Registration for posit::conf(2026) is open!
+              
+
+Discover how the R and Python communities are bringing a human touch to the tools that solve real-world problems and drive meaningful progress.
+[Learn More](https://conf.posit.co/2026/)
+- [Partners](/)
+
+Partners
+
+Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Amazon Sagemaker](/solutions/aws)
+Cloud Platforms
+
+[Amazon Web Services](/solutions/aws)
+[Google Cloud Platform](/solutions/google-cloud)
+[Microsoft Azure](/solutions/azure-ml)
+Channel Partners
+
+[Partner Program](/partners)
+
+Partner programs, include standard resellers, managed service providers, and professional services.
+[Deal Registration](https://pages.posit.co/partner-deal-registration.html)
+
+For current Posit Resellers to register new deals.
+- Data Platforms
+
+[Snowflake](/solutions/snowflake)
+[Databricks](/solutions/databricks)
+[Amazon Sagemaker](/solutions/aws)
+- [Snowflake](/solutions/snowflake)
+- [Databricks](/solutions/databricks)
+- [Amazon Sagemaker](/solutions/aws)
+- Cloud Platforms
+
+[Amazon Web Services](/solutions/aws)
+[Google Cloud Platform](/solutions/google-cloud)
+[Microsoft Azure](/solutions/azure-ml)
+- [Amazon Web Services](/solutions/aws)
+- [Google Cloud Platform](/solutions/google-cloud)
+- [Microsoft Azure](/solutions/azure-ml)
+- Channel Partners
+
+[Partner Program](/partners)
+
+Partner programs, include standard resellers, managed service providers, and professional services.
+[Deal Registration](https://pages.posit.co/partner-deal-registration.html)
+
+For current Posit Resellers to register new deals.
+- [Partner Program](/partners)
+
+Partner programs, include standard resellers, managed service providers, and professional services.
+- [Deal Registration](https://pages.posit.co/partner-deal-registration.html)
+
+For current Posit Resellers to register new deals.
+- [Download RStudio](/download/rstudio-desktop)
+- [Download Positron](https://positron.posit.co/download.html)
+
+Main navigation
+
+- Solutions
+
+Solutions
+
+By Team
+
+[Data Scientists](/solutions/data-scientists)
+[Data Science Leaders](/solutions/data-science-leaders)
+[IT Leaders](/solutions/it-leaders)
+[Business Leaders](/solutions/business-leaders)
+[Posit Academy](/products/enterprise/academy)
+[AI FOR DATA PEOPLE](/solutions/ai)
+[Explore All Solutions](/solutions)
+By industry
+
+[Financial Services](/solutions/financial-services)
+[Insurance](/solutions/insurance)
+[Pharma](/solutions/pharma)
+[Public Sector](/solutions/public-sector)
+
+                                    Securing Insights Without Compromise  
+                            
+      Pinterest's People Analytics team eliminated risky PII downloads by connecting Posit Workbench directly to Snowflake. This resulted in stronger security, faster collaboration, and advanced statistical modeling for deeper insights. Read how they modernized their workflow.
+  
+[Learn More](/about/customer-stories/pinterest)
+- By Team
+
+[Data Scientists](/solutions/data-scientists)
+[Data Science Leaders](/solutions/data-science-leaders)
+[IT Leaders](/solutions/it-leaders)
+[Business Leaders](/solutions/business-leaders)
+[Posit Academy](/products/enterprise/academy)
+[AI FOR DATA PEOPLE](/solutions/ai)
+[Explore All Solutions](/solutions)
+- [Data Scientists](/solutions/data-scientists)
+- [Data Science Leaders](/solutions/data-science-leaders)
+- [IT Leaders](/solutions/it-leaders)
+- [Business Leaders](/solutions/business-leaders)
+- [Posit Academy](/products/enterprise/academy)
+- [AI FOR DATA PEOPLE](/solutions/ai)
+- [Explore All Solutions](/solutions)
+- By industry
+
+[Financial Services](/solutions/financial-services)
+[Insurance](/solutions/insurance)
+[Pharma](/solutions/pharma)
+[Public Sector](/solutions/public-sector)
+- [Financial Services](/solutions/financial-services)
+- [Insurance](/solutions/insurance)
+- [Pharma](/solutions/pharma)
+- [Public Sector](/solutions/public-sector)
+- Securing Insights Without Compromise  
+                            
+      Pinterest's People Analytics team eliminated risky PII downloads by connecting Posit Workbench directly to Snowflake. This resulted in stronger security, faster collaboration, and advanced statistical modeling for deeper insights. Read how they modernized their workflow.
+  
+[Learn More](/about/customer-stories/pinterest)
+- Products
+
+Products
+
+Analyze
+
+[Posit Workbench](/products/enterprise/workbench)
+      Maintain control with centralized management
+  
+[Posit AI for RStudio](/products/ai)
+      Activate a specialized agent directly in RStudio, transforming your IDE into a powerful collaborator for data analysis.
+  
+[Posit Cloud](/products/enterprise/cloud)
+      Code in RStudio or Jupyter Notebooks and easily share
+  
+[Explore Posit Team Suite](/products/enterprise/team)
+[All products](/products)
+[Get Pricing](/pricing)
+Publish
+
+[Posit Connect](/products/enterprise/connect)
+      Share and update dynamic data insights and applications
+  
+[Posit Connect Cloud](/products/enterprise/connect-cloud)
+      Quickly publish and share Python and R work
+  
+[shinyapps.io](https://www.shinyapps.io/?_gl=1*2w6ctu*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+      Share your Shiny applications online
+  
+Govern
+
+[Posit Package Manager](/products/enterprise/package-manager)
+      Distribute and manage secure, scalable, package repositories for Python and R
+  
+[Public Package Manager](/products/enterprise/public-package-manager)
+      Discover and install Python and R packages from CRAN, PyPl and Bioconductor
+- Analyze
+
+[Posit Workbench](/products/enterprise/workbench)
+      Maintain control with centralized management
+  
+[Posit AI for RStudio](/products/ai)
+      Activate a specialized agent directly in RStudio, transforming your IDE into a powerful collaborator for data analysis.
+  
+[Posit Cloud](/products/enterprise/cloud)
+      Code in RStudio or Jupyter Notebooks and easily share
+  
+[Explore Posit Team Suite](/products/enterprise/team)
+[All products](/products)
+[Get Pricing](/pricing)
+- [Posit Workbench](/products/enterprise/workbench)
+      Maintain control with centralized management
+- [Posit AI for RStudio](/products/ai)
+      Activate a specialized agent directly in RStudio, transforming your IDE into a powerful collaborator for data analysis.
+- [Posit Cloud](/products/enterprise/cloud)
+      Code in RStudio or Jupyter Notebooks and easily share
+- [Explore Posit Team Suite](/products/enterprise/team)
+- [All products](/products)
+- [Get Pricing](/pricing)
+- Publish
+
+[Posit Connect](/products/enterprise/connect)
+      Share and update dynamic data insights and applications
+  
+[Posit Connect Cloud](/products/enterprise/connect-cloud)
+      Quickly publish and share Python and R work
+  
+[shinyapps.io](https://www.shinyapps.io/?_gl=1*2w6ctu*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+      Share your Shiny applications online
+- [Posit Connect](/products/enterprise/connect)
+      Share and update dynamic data insights and applications
+- [Posit Connect Cloud](/products/enterprise/connect-cloud)
+      Quickly publish and share Python and R work
+- [shinyapps.io](https://www.shinyapps.io/?_gl=1*2w6ctu*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+      Share your Shiny applications online
+- Govern
+
+[Posit Package Manager](/products/enterprise/package-manager)
+      Distribute and manage secure, scalable, package repositories for Python and R
+  
+[Public Package Manager](/products/enterprise/public-package-manager)
+      Discover and install Python and R packages from CRAN, PyPl and Bioconductor
+- [Posit Package Manager](/products/enterprise/package-manager)
+      Distribute and manage secure, scalable, package repositories for Python and R
+- [Public Package Manager](/products/enterprise/public-package-manager)
+      Discover and install Python and R packages from CRAN, PyPl and Bioconductor
+- Open Source
+
+Open Source
+
+Analyze &amp; Explore
+
+[Positron](/products/ide/positron)
+[RStudio IDE](/products/open-source/rstudio)
+[Tidyverse](https://www.tidyverse.org/)
+[Download rstudio ](/download/rstudio-desktop)
+[Download Positron](https://positron.posit.co/download.html)
+Communicate &amp; Interact
+
+[Quarto](https://quarto.org/)
+[Shiny](https://shiny.posit.co/?_gl=1*1hsrx2j*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+[Great Tables](https://posit-dev.github.io/great-tables/articles/intro.html?_gl=1*y3489p*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+[ggplot2](https://ggplot2.tidyverse.org/)
+Database &amp; Cloud Integration
+
+[dbplyr](https://dbplyr.tidyverse.org/)
+[sparklyr](https://spark.posit.co/)
+[googlesheets4](https://googlesheets4.tidyverse.org/)
+[odbc](https://solutions.posit.co/connections/db/r-packages/odbc/)
+
+                                    Open Source is in Our DNA
+                            
+      We believe data science software should be free and open for everyone. Check out our latest open-source initiatives and libraries.
+  
+[Learn More](https://opensource.posit.co/)
+- Analyze &amp; Explore
+
+[Positron](/products/ide/positron)
+[RStudio IDE](/products/open-source/rstudio)
+[Tidyverse](https://www.tidyverse.org/)
+[Download rstudio ](/download/rstudio-desktop)
+[Download Positron](https://positron.posit.co/download.html)
+- [Positron](/products/ide/positron)
+- [RStudio IDE](/products/open-source/rstudio)
+- [Tidyverse](https://www.tidyverse.org/)
+- [Download rstudio ](/download/rstudio-desktop)
+- [Download Positron](https://positron.posit.co/download.html)
+- Communicate &amp; Interact
+
+[Quarto](https://quarto.org/)
+[Shiny](https://shiny.posit.co/?_gl=1*1hsrx2j*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+[Great Tables](https://posit-dev.github.io/great-tables/articles/intro.html?_gl=1*y3489p*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+[ggplot2](https://ggplot2.tidyverse.org/)
+- [Quarto](https://quarto.org/)
+- [Shiny](https://shiny.posit.co/?_gl=1*1hsrx2j*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+- [Great Tables](https://posit-dev.github.io/great-tables/articles/intro.html?_gl=1*y3489p*_ga*MjAzNTYzNjYyLjE3Njk0NTQ1MTU.*_ga_2C0WZ1JHG0*czE3NzIyMjUwMzUkbzk0JGcxJHQxNzcyMjI3NjAxJGo2MCRsMCRoMA..)
+- [ggplot2](https://ggplot2.tidyverse.org/)
+- Database &amp; Cloud Integration
+
+[dbplyr](https://dbplyr.tidyverse.org/)
+[sparklyr](https://spark.posit.co/)
+[googlesheets4](https://googlesheets4.tidyverse.org/)
+[odbc](https:</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
   <section class="sk-preview-section">
     <div class="sk-preview-head">
       <span>page preview · the URL we fetched</span>
-      <a class="url" href="https://posit.co/about/security/" target="_blank" rel="noopener">https://posit.co/about/security/ ↗</a>
+      <a class="url" href="https://posit.co/about/" target="_blank" rel="noopener">https://posit.co/about/ ↗</a>
     </div>
     <img class="sk-preview-img"
-         src="https://image.thum.io/get/width/1200/maxAge/24/https://posit.co/about/security/"
+         src="https://image.thum.io/get/width/1200/maxAge/24/https://posit.co/about/"
          alt="Screenshot of posit.co"
          loading="lazy">
     <p class="sk-preview-fallback">
       Couldn't render a preview for this site.
-      <a href="https://posit.co/about/security/" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
+      <a href="https://posit.co/about/" target="_blank" rel="noopener">Open the URL in a new tab ↗</a>
     </p>
     <p class="sk-preview-credit">
       Screenshot via <a href="https://thum.io" target="_blank" rel="noopener">thum.io</a>
@@ -554,18 +946,18 @@
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext"><span class="sk-domain">posit.co</span> scored <strong>2/10</strong> on privacy. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
-  email:    string<pii>,
-  postcode: string<pii>,
-  signupDate: string
+    <p class="sk-score-pretext"><span class="sk-domain">posit.co</span> scored <strong>0/10</strong> on privacy. AILANG opportunity is therefore <strong>10/10</strong>. Here's where it would land first.</p>
+    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre><span class="k">type</span> Customer = {
+  email:    <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  postcode: <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  signupDate: <span class="k">string</span>
 }
--- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
--- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- assigning customer.email to a log line is a type error.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre><span class="k">func</span> chargeCard(c: Card) -&gt; Result[Receipt, Error]
+  ! {<span class="e">Net @endpoint=<span class="s">"api.stripe.com"</span>, AI @limit=0</span>}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre><span class="c">-- Browser: load AILANG WASM, run the module in the user's tab.</span>
+<span class="c">-- Cloud Run: same .ail file packaged as a container.</span>
+<span class="c">-- Native CLI: same .ail file, ailang run.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -589,15 +981,19 @@
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
 <tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
-<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
 <tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
-<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
+<tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
 <tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>

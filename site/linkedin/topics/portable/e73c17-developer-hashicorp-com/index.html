@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-20 17,10 -43,25"
+        <polygon points="0,-10 17,10 -43,25"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -525,10 +533,10 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on developer.hashicorp.com</p>
-    <h2 class="sk-prom-audience">IT professionals, developers, and operations teams seeking to manage and provision cloud and on-premise infrastructure using code.</h2>
-    <blockquote class="sk-prom-narrative">Terraform is an infrastructure as code tool that allows users to define, provision, and manage cloud and on-premise resources using human-readable configuration files. It uses providers to interact with APIs, following a workflow of writing configurations, planning changes, and applying them safely and efficiently.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as code</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Configuration files</span> <span class="sk-chip">Cloud resources</span> <span class="sk-chip">Terraform Registry</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on developer.hashicorp.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">10</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">12</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Intro to Terraform</span> <span class="sk-chip" title="extracted heading">What is Terraform?</span> <span class="sk-chip" title="extracted heading">How does Terraform work?</span> <span class="sk-chip" title="extracted heading">Why Terraform?</span> <span class="sk-chip" title="extracted heading">Manage any infrastructure</span> <span class="sk-chip" title="extracted heading">Track your infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Infrastructure Lifecycle Management
+    <h2 class="sk-prom-audience">The site is for IT operations, cloud engineers, and developers who manage and provision cloud and on-premise infrastructure.</h2>
+    <blockquote class="sk-prom-narrative">Terraform is an infrastructure as code tool by HashiCorp for building, changing, and versioning cloud and on-prem resources. It enables users to define infrastructure in configuration files, generate execution plans, and apply changes consistently. It supports various providers for managing diverse low-level and high-level components.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Terraform</span> <span class="sk-chip">Infrastructure as Code (IaC)</span> <span class="sk-chip">Cloud resources</span> <span class="sk-chip">Configuration files</span> <span class="sk-chip">Providers</span> <span class="sk-chip">Execution plan</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on developer.hashicorp.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">10</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">12</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">6</span> navs</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Intro to Terraform</span> <span class="sk-chip" title="extracted heading">What is Terraform?</span> <span class="sk-chip" title="extracted heading">How does Terraform work?</span> <span class="sk-chip" title="extracted heading">Why Terraform?</span> <span class="sk-chip" title="extracted heading">Manage any infrastructure</span> <span class="sk-chip" title="extracted heading">Track your infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Infrastructure Lifecycle Management
 
 [
 
@@ -544,17 +552,31 @@ NomadOrchestrate workloads](/nomad)
 WaypointStandardize application patterns](/waypoint)
 [
 
-VagrantBuild developer environments](/vagrant)</span> <span class="sk-chip" title="list item">[
+VagrantBuild developer environments](/vagrant)">Infrastructure Lifecycle Management
 
-TerraformManage infrastructure as code](/terraform)</span> <span class="sk-chip" title="list item">[
+[
 
-PackerBuild machine images](/packer)</span> <span class="sk-chip" title="list item">[
+TerraformManage infrastructure as code](/terrafor…</span> <span class="sk-chip" title="[
 
-NomadOrchestrate workloads](/nomad)</span> <span class="sk-chip" title="list item">[
+TerraformManage infrastructure as code](/terraform)">[
 
-WaypointStandardize application patterns](/waypoint)</span> <span class="sk-chip" title="list item">[
+TerraformManage infrastructure as code](/terraform)</span> <span class="sk-chip" title="[
 
-VagrantBuild developer environments](/vagrant)</span> <span class="sk-chip" title="list item">Security Lifecycle Management
+PackerBuild machine images](/packer)">[
+
+PackerBuild machine images](/packer)</span> <span class="sk-chip" title="[
+
+NomadOrchestrate workloads](/nomad)">[
+
+NomadOrchestrate workloads](/nomad)</span> <span class="sk-chip" title="[
+
+WaypointStandardize application patterns](/waypoint)">[
+
+WaypointStandardize application patterns](/waypoint)</span> <span class="sk-chip" title="[
+
+VagrantBuild developer environments](/vagrant)">[
+
+VagrantBuild developer environments](/vagrant)</span> <span class="sk-chip" title="Security Lifecycle Management
 
 [
 
@@ -567,15 +589,31 @@ BoundarySecure remote access](/boundary)
 Vault RadarScan for embedded secrets](/hcp/docs/vault-radar)
 [
 
-ConsulSecure network services](/consul)</span> <span class="sk-chip" title="list item">[
+ConsulSecure network services](/consul)">Security Lifecycle Management
 
-VaultCentrally manage secrets](/vault)</span> <span class="sk-chip" title="list item">[
+[
 
-BoundarySecure remote access](/boundary)</span> <span class="sk-chip" title="list item">[
+VaultCentrally manage secrets](/vault)
+[
 
-Vault RadarScan for embedded secrets](/hcp/docs/vault-radar)</span> <span class="sk-chip" title="list item">[
+BoundarySecur…</span> <span class="sk-chip" title="[
 
-ConsulSecure network services](/consul)</span> <span class="sk-chip" title="list item">[
+VaultCentrally manage secrets](/vault)">[
+
+VaultCentrally manage secrets](/vault)</span> <span class="sk-chip" title="[
+
+BoundarySecure remote access](/boundary)">[
+
+BoundarySecure remote access](/boundary)</span> <span class="sk-chip" title="[
+
+Vault RadarScan for embedded secrets](/hcp/docs/vault-radar)">[
+
+Vault RadarScan for embedded secrets](/hcp/docs/vault-radar)</span> <span class="sk-chip" title="[
+
+ConsulSecure network services](/consul)">[
+
+ConsulSecure network services](/consul)</span> <span class="sk-chip" title="[
+CertificationsGet HashiCorp certified](/certifications)">[
 CertificationsGet HashiCorp certified](/certifications)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://www.hashicorp.com/conferences/hashiconf#livestream" target="_blank" rel="noopener" title="https://www.hashicorp.com/conferences/hashiconf#livestream">HashiConf 2025Don't miss the live stream of HashiConf Day 2 happening nowView live stream</a> <a class="sk-chip sk-chip-link" href="https://developer.hashicorp.com/hcp" target="_blank" rel="noopener" title="https://developer.hashicorp.com/hcp">All HCP Products</a> <a class="sk-chip sk-chip-link" href="https://developer.hashicorp.com/terraform" target="_blank" rel="noopener" title="https://developer.hashicorp.com/terraform">Terraform Home</a> <a class="sk-chip sk-chip-link" href="https://github.com/hashicorp/web-unified-docs/blob/main/content/terraform/v1.15.x/docs/intro/index.mdx" target="_blank" rel="noopener" title="https://github.com/hashicorp/web-unified-docs/blob/main/content/terraform/v1.15.x/docs/intro/index.mdx">Edit this page on GitHub</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># What is Terraform | Terraform | HashiCorp Developer
 
 
@@ -910,16 +948,15 @@ Theme
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">developer.hashicorp.com</span> scored <strong>5/10</strong> on portable. AILANG opportunity is therefore <strong>5/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>One std/ai, five LLM vendors</h3><p class="rationale">The same call() function runs against Anthropic, Google, OpenAI, OpenRouter, or local Ollama. Switch providers with a one-character diff, not a refactor.</p><pre>let answer = call(
-  prompt = userQuery,
-  model  = "claude-haiku-4-5"
-  -- model = "gemini-2.5-flash" — also works
-  -- model = "gpt-5.1-nano"     — also works
-);</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre>let result = callJson(prompt, intentSchema);
--- same AILANG code, four different provider paths underneath.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = "openrouter/meta-llama/llama-4-405b");
--- the eval harness pins the exact resolved model ID.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+    <div class="sk-cards"><article class="sk-card"><h3>Same module, any LLM — picked at the CLI</h3><p class="rationale">Provider selection isn't a code edit — it's a flag on the run command. The exact same compiled .ail file talks to Anthropic, Google, OpenAI, OpenRouter or local Ollama depending on what you pass to `--ai`. Vendor lock-in becomes a shell-history concern.</p><pre><span class="c"># Same chat.ail, three vendors — no source change.</span>
+ailang run <span class="e">--ai</span> <span class="s">claude-haiku-4-5</span>  chat.ail
+ailang run <span class="e">--ai</span> <span class="s">gemini-2.5-flash</span> chat.ail
+ailang run <span class="e">--ai</span> <span class="s">gpt-5.1-nano</span>     chat.ail
+<span class="c"># std/ai dispatches to each provider's native API.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Structured output, portable across providers</h3><p class="rationale">callJson(prompt, schema) maps to each provider's native structured-output primitive — responseSchema for Gemini, response_format for OpenAI, forced-tool for Anthropic. Your schema, their plumbing.</p><pre><span class="k">let</span> result = callJson(prompt, intentSchema);
+<span class="c">-- same AILANG code, four different provider paths underneath.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-effect" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>OpenRouter routing with replayable resolution</h3><p class="rationale">Reach SOTA open-source models through OpenRouter; the resolved model ID is logged so the eval is replayable months later, even if the upstream router has moved on.</p><pre>call(prompt, model = <span class="s">"openrouter/meta-llama/llama-4-405b"</span>);
+<span class="c">-- the eval harness pins the exact resolved model ID.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ai-routing" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -948,6 +985,10 @@ Theme
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

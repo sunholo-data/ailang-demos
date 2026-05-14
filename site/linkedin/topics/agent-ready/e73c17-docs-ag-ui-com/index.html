@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -535,24 +543,40 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on docs.ag-ui.com</p>
-    <h2 class="sk-prom-audience">Developers building user-facing applications with AI agents who need a standardized way to manage agent-user interactions.</h2>
-    <blockquote class="sk-prom-narrative">AG-UI is an open, event-based protocol designed to standardize how AI agents connect to user-facing applications. It provides a bi-directional connection for agent state, UI intents, and user interactions. This enables application developers to build reliable, debuggable, and user-friendly agentic features, overcoming the challenges of long-running and non-deterministic agent behaviors.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">AG-UI Protocol</span> <span class="sk-chip">AI Agents</span> <span class="sk-chip">User-facing applications</span> <span class="sk-chip">Event-based communication</span> <span class="sk-chip">Agentic protocols</span> <span class="sk-chip">Generative UI</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.ag-ui.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">35</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">10</span> lists</span><span class="stat"><span class="num">10</span> tables</span><span class="stat"><span class="num">6</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">35</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Get Started</span> <span class="sk-chip" title="extracted heading">Concepts</span> <span class="sk-chip" title="extracted heading">Draft Proposals</span> <span class="sk-chip" title="extracted heading">Tutorials</span> <span class="sk-chip" title="extracted heading">Development</span> <span class="sk-chip" title="extracted heading">AG-UI Overview</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-light.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=c57caffa024bdd6be582021e55906830" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-light.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=c57caffa024bdd6be582021e55906830" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-dark.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=4d71ef5bf99f79cbad4283d48fb08d02" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-dark.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=4d71ef5bf99f79cbad4283d48fb08d02" alt="dark logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">[Discord](https://discord.gg/Jd3FzfdJa8)</span> <span class="sk-chip" title="list item">[
+    <h2 class="sk-prom-audience">Application developers creating user-facing AI agent features.</h2>
+    <blockquote class="sk-prom-narrative">AG-UI is an open, event-based protocol standardizing communication between AI agents and user-facing applications. It enables real-time, multimodal, interactive experiences by managing agent state and user interactions. This protocol simplifies the development of reliable, debuggable agentic features, bridging traditional client-server architectures with dynamic AI agent systems.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">AG-UI Protocol</span> <span class="sk-chip">AI agents</span> <span class="sk-chip">User-facing applications</span> <span class="sk-chip">Event-based communication</span> <span class="sk-chip">Agentic protocols</span> <span class="sk-chip">Generative UI</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.ag-ui.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">35</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">10</span> lists</span><span class="stat"><span class="num">10</span> tables</span><span class="stat"><span class="num">6</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">35</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Get Started</span> <span class="sk-chip" title="extracted heading">Concepts</span> <span class="sk-chip" title="extracted heading">Draft Proposals</span> <span class="sk-chip" title="extracted heading">Tutorials</span> <span class="sk-chip" title="extracted heading">Development</span> <span class="sk-chip" title="extracted heading">AG-UI Overview</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-light.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=c57caffa024bdd6be582021e55906830" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-light.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=c57caffa024bdd6be582021e55906830" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-dark.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=4d71ef5bf99f79cbad4283d48fb08d02" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/tawkitai/2TrL7P1RsYhkJ7Hv/logo/ag-ui-dark.svg?fit=max&auto=format&n=2TrL7P1RsYhkJ7Hv&q=85&s=4d71ef5bf99f79cbad4283d48fb08d02" alt="dark logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> list items</p><div class="sk-chips"><span class="sk-chip" title="[Discord](https://discord.gg/Jd3FzfdJa8)">[Discord](https://discord.gg/Jd3FzfdJa8)</span> <span class="sk-chip" title="[
 
-ag-ui-protocol/ag-ui](https://github.com/ag-ui-protocol/ag-ui)</span> <span class="sk-chip" title="list item">[TypeScript SDK](https://docs.ag-ui.com/sdk/js/core/overview)</span> <span class="sk-chip" title="list item">[Python SDK](https://docs.ag-ui.com/sdk/python/core/overview)</span> <span class="sk-chip" title="list item">[
+ag-ui-protocol/ag-ui](https://github.com/ag-ui-protocol/ag-ui)">[
 
-AG-UI Overview](/introduction)</span> <span class="sk-chip" title="list item">[
+ag-ui-protocol/ag-ui](https://github.com/ag-ui-protocol/ag-ui)</span> <span class="sk-chip" title="[TypeScript SDK](https://docs.ag-ui.com/sdk/js/core/overview)">[TypeScript SDK](https://docs.ag-ui.com/sdk/js/core/overview)</span> <span class="sk-chip" title="[Python SDK](https://docs.ag-ui.com/sdk/python/core/overview)">[Python SDK](https://docs.ag-ui.com/sdk/python/core/overview)</span> <span class="sk-chip" title="[
 
-MCP, A2A, and AG-UI](/agentic-protocols)</span> <span class="sk-chip" title="list item">Quickstart</span> <span class="sk-chip" title="list item">[
+AG-UI Overview](/introduction)">[
 
-Core architecture](/concepts/architecture)</span> <span class="sk-chip" title="list item">[
+AG-UI Overview](/introduction)</span> <span class="sk-chip" title="[
 
-Events](/concepts/events)</span> <span class="sk-chip" title="list item">[
+MCP, A2A, and AG-UI](/agentic-protocols)">[
 
-Agents](/concepts/agents)</span> <span class="sk-chip" title="list item">[
+MCP, A2A, and AG-UI](/agentic-protocols)</span> <span class="sk-chip" title="Quickstart">Quickstart</span> <span class="sk-chip" title="[
 
-Middleware](/concepts/middleware)</span> <span class="sk-chip" title="list item">[
+Core architecture](/concepts/architecture)">[
+
+Core architecture](/concepts/architecture)</span> <span class="sk-chip" title="[
+
+Events](/concepts/events)">[
+
+Events](/concepts/events)</span> <span class="sk-chip" title="[
+
+Agents](/concepts/agents)">[
+
+Agents](/concepts/agents)</span> <span class="sk-chip" title="[
+
+Middleware](/concepts/middleware)">[
+
+Middleware](/concepts/middleware)</span> <span class="sk-chip" title="[
+
+Messages](/concepts/messages)">[
 
 Messages](/concepts/messages)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">6</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://docs.ag-ui.com/" target="_blank" rel="noopener" title="https://docs.ag-ui.com/">Agent User Interaction Protocol home page</a> <a class="sk-chip sk-chip-link" href="https://docs.ag-ui.com/introduction" target="_blank" rel="noopener" title="https://docs.ag-ui.com/introduction">Documentation</a> <a class="sk-chip sk-chip-link" href="https://docs.ag-ui.com/sdk/js/core/overview" target="_blank" rel="noopener" title="https://docs.ag-ui.com/sdk/js/core/overview">SDKs</a> <a class="sk-chip sk-chip-link" href="https://docs.ag-ui.com/agentic-protocols" target="_blank" rel="noopener" title="https://docs.ag-ui.com/agentic-protocols">MCP, A2A, and AG-UI
 Next</a> <a class="sk-chip sk-chip-link" href="https://github.com/ag-ui-protocol/ag-ui" target="_blank" rel="noopener" title="https://github.com/ag-ui-protocol/ag-ui">github</a> <a class="sk-chip sk-chip-link" href="https://www.mintlify.com?utm_campaign=poweredBy&utm_medium=referral&utm_source=tawkitai" target="_blank" rel="noopener" title="https://www.mintlify.com?utm_campaign=poweredBy&utm_medium=referral&utm_source=tawkitai">Powered byThis documentation is built and hosted on Mintlify, a developer documentation platform</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># AG-UI Overview - Agent User Interaction Protocol
@@ -929,18 +953,18 @@ AG-UI was born from CopilotKit’s initial **partnership** with LangGraph and Cr
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">docs.ag-ui.com</span> scored <strong>3/10</strong> on agent-ready. AILANG opportunity is therefore <strong>7/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
   pricing.ail catalogue.ail
--- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
-  requires { qty > 0, qty <= 10 }
-  ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
--- MCP client query the language directly:
---   stdlib_search "URL encoding"
---   submit_feedback "..."</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

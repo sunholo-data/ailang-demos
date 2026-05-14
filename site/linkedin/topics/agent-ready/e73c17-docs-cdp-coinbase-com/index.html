@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -535,17 +543,24 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on docs.cdp.coinbase.com</p>
-    <h2 class="sk-prom-audience">Developers, service providers, and AI agents seeking to implement or utilize programmatic, on-chain payments for digital services and APIs.</h2>
-    <blockquote class="sk-prom-narrative">x402 is an open payment protocol by Coinbase, enabling instant, automatic stablecoin payments directly over HTTP. It allows sellers to monetize APIs and digital content on-chain, while buyers (human or AI) can programmatically pay for access without traditional accounts. It revives the HTTP 402 status code for on-chain payment required.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">x402 protocol</span> <span class="sk-chip">HTTP 402 Payment Required</span> <span class="sk-chip">Stablecoins</span> <span class="sk-chip">APIs</span> <span class="sk-chip">Blockchain</span> <span class="sk-chip">Payment Facilitator</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.cdp.coinbase.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">19</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">19</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">13</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">19</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">GET STARTED</span> <span class="sk-chip" title="extracted heading">PAYMENTS</span> <span class="sk-chip" title="extracted heading">TRADING</span> <span class="sk-chip" title="extracted heading">WALLETS</span> <span class="sk-chip" title="extracted heading">ONCHAIN TOOLS</span> <span class="sk-chip" title="extracted heading">WEBHOOKS</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" alt="dark logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" alt="dark logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">19</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">[Get help](https://discord.com/invite/cdp)</span> <span class="sk-chip" title="list item">[Dev portal](https://portal.cdp.coinbase.com/)</span> <span class="sk-chip" title="list item">[
-Dev portal](https://portal.cdp.coinbase.com/)</span> <span class="sk-chip" title="list item">[
+    <h2 class="sk-prom-audience">The site is for developers (human and AI agents) and service providers who want to integrate or utilize a payment protocol for monetizing APIs and digital content onchain.</h2>
+    <blockquote class="sk-prom-narrative">x402 is an open payment protocol by Coinbase for instant, automatic stablecoin payments over HTTP. It enables service providers to monetize APIs and digital content onchain, and developers or AI agents to programmatically pay for access without traditional accounts. The site provides documentation, SDKs, and tools for integrating and managing these microtransactions.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">x402 protocol</span> <span class="sk-chip">HTTP 402 Payment Required</span> <span class="sk-chip">stablecoin payments</span> <span class="sk-chip">API monetization</span> <span class="sk-chip">Facilitator</span> <span class="sk-chip">ERC-20 tokens</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on docs.cdp.coinbase.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">19</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">19</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">13</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">19</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">GET STARTED</span> <span class="sk-chip" title="extracted heading">PAYMENTS</span> <span class="sk-chip" title="extracted heading">TRADING</span> <span class="sk-chip" title="extracted heading">WALLETS</span> <span class="sk-chip" title="extracted heading">ONCHAIN TOOLS</span> <span class="sk-chip" title="extracted heading">WEBHOOKS</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" alt="dark logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" target="_blank" rel="noopener" title="light logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-light.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=0eb5640aeec58541851e1cba9c6ccc8b" alt="light logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" target="_blank" rel="noopener" title="dark logo"><img src="https://mintcdn.com/coinbase-prod/B68gj-lD9xkJGij4/logos/wordmark-dark.svg?fit=max&auto=format&n=B68gj-lD9xkJGij4&q=85&s=53721303b967eaae0304eee4d72b76a4" alt="dark logo" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">19</span> list items</p><div class="sk-chips"><span class="sk-chip" title="[Get help](https://discord.com/invite/cdp)">[Get help](https://discord.com/invite/cdp)</span> <span class="sk-chip" title="[Dev portal](https://portal.cdp.coinbase.com/)">[Dev portal](https://portal.cdp.coinbase.com/)</span> <span class="sk-chip" title="[
+Dev portal](https://portal.cdp.coinbase.com/)">[
+Dev portal](https://portal.cdp.coinbase.com/)</span> <span class="sk-chip" title="[
 
-Home](/)</span> <span class="sk-chip" title="list item">[
+Home](/)">[
 
-Quickstart](/get-started/quickstart)</span> <span class="sk-chip" title="list item">Build with AI</span> <span class="sk-chip" title="list item">Authentication</span> <span class="sk-chip" title="list item">[
+Home](/)</span> <span class="sk-chip" title="[
 
-Supported Networks](/get-started/supported-networks)</span> <span class="sk-chip" title="list item">Onramp & Offramp</span> <span class="sk-chip" title="list item">Transfers</span> <span class="sk-chip" title="list item">x402
+Quickstart](/get-started/quickstart)">[
+
+Quickstart](/get-started/quickstart)</span> <span class="sk-chip" title="Build with AI">Build with AI</span> <span class="sk-chip" title="Authentication">Authentication</span> <span class="sk-chip" title="[
+
+Supported Networks](/get-started/supported-networks)">[
+
+Supported Networks](/get-started/supported-networks)</span> <span class="sk-chip" title="Onramp & Offramp">Onramp & Offramp</span> <span class="sk-chip" title="Transfers">Transfers</span> <span class="sk-chip" title="x402
 
 [
 
@@ -567,7 +582,20 @@ MCP Server with x402](/x402/mcp-server)
 
 REST API Reference](/api-reference/v2/rest-api/x402-facilitator/x402-facilitator)
 
-Support</span> <span class="sk-chip" title="list item">[
+Support">x402
+
+[
+
+Overview](/x402/welcome)
+
+Quickstart
+
+Core Concepts
+[
+
+Network Support](/x402/ne…</span> <span class="sk-chip" title="[
+
+Overview](/x402/welcome)">[
 
 Overview](/x402/welcome)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">13</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/api-reference/v2/introduction" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/api-reference/v2/introduction">API Reference</a> <a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/sdks" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/sdks">SDKs</a> <a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/get-started/demo-apps/learn" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/get-started/demo-apps/learn">Recipes</a> <a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/get-started/changelog" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/get-started/changelog">Changelogs</a> <a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/payments/send-and-receive" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/payments/send-and-receive">Sending Transactions
 Previous</a> <a class="sk-chip sk-chip-link" href="https://docs.cdp.coinbase.com/x402/quickstart-for-buyers" target="_blank" rel="noopener" title="https://docs.cdp.coinbase.com/x402/quickstart-for-buyers">Quickstart for Buyers
@@ -919,18 +947,18 @@ Responses are generated using AI and may contain mistakes.
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">docs.cdp.coinbase.com</span> scored <strong>7/10</strong> on agent-ready. AILANG opportunity is therefore <strong>3/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
   pricing.ail catalogue.ail
--- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
-  requires { qty > 0, qty <= 10 }
-  ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
--- MCP client query the language directly:
---   stdlib_search "URL encoding"
---   submit_feedback "..."</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->

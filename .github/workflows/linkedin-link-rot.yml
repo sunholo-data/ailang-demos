@@ -1,0 +1,93 @@
+name: LinkedIn Sketches — Weekly Link-Rot Audit
+
+# HEAD-checks every URL recorded in site/linkedin/topics/*/e73c17-*/sketch.json
+# (and the seed list) and fails the run if any URL no longer returns 2xx.
+#
+# Why this exists: the in-pipeline guard (sketch.ail) refuses to PUBLISH a
+# sketch when the page is unreachable, so any future drift is auto-skipped.
+# But sketches that were 200 when first generated can rot later — a vendor
+# rebrands, a path moves, a /security/ page becomes a 404 — and we'd never
+# notice because the cron pipeline only writes new sketches, never re-checks
+# old ones. This workflow is the periodic re-check.
+#
+# Behaviour: report-only. Doesn't delete or rewrite anything; surfaces the
+# dead URLs in the run summary so a human can fix the seed list and reseed.
+#
+# Cadence: weekly (Monday 09:00 UTC) + manual.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: HEAD-check every published sketch URL
+        run: |
+          set -euo pipefail
+          if [ ! -d site/linkedin/topics ]; then
+            echo "::warning::No published sketches found — nothing to audit."
+            exit 0
+          fi
+
+          dead_count=0
+          total=0
+          : > /tmp/link-rot.tsv
+
+          # GET (not HEAD) because several vendors (Cloudflare-fronted,
+          # Trustpilot, Mailfence) return 405/000 to HEAD but 200 to GET.
+          # -sL follows redirects; -A "Mozilla/5.0" dodges the same bot
+          # filters AILANG's fetcher has to dodge anyway.
+          while IFS= read -r sketch; do
+            url=$(jq -r '.url' "$sketch")
+            [ -z "$url" ] || [ "$url" = "null" ] && continue
+            total=$((total + 1))
+            code=$(curl -sL -A "Mozilla/5.0" --max-time 25 \
+                     -o /dev/null -w "%{http_code}" "$url" || echo "000")
+            case "$code" in
+              2*) ;;
+              *)
+                dead_count=$((dead_count + 1))
+                printf "%s\t%s\t%s\n" "$code" "$url" "$sketch" >> /tmp/link-rot.tsv
+                ;;
+            esac
+          done < <(find site/linkedin/topics -name sketch.json)
+
+          echo "Audited $total URL(s); $dead_count rotted."
+
+          {
+            echo "## LinkedIn sketch link-rot audit"
+            echo ""
+            echo "**$total** URL(s) checked across published sketches."
+            echo ""
+            if [ "$dead_count" -eq 0 ]; then
+              echo "✅ All URLs returned 2xx. Nothing rotted."
+            else
+              echo "❌ **$dead_count** URL(s) no longer return 2xx:"
+              echo ""
+              echo "| HTTP | URL | Sketch file |"
+              echo "|------|-----|-------------|"
+              while IFS=$'\t' read -r c u f; do
+                echo "| \`$c\` | $u | \`$f\` |"
+              done < /tmp/link-rot.tsv
+              echo ""
+              echo "Fix by editing \`linkedin/sketch_seed_main.ail\` (for seeded URLs)"
+              echo "or removing the stale sketch directory, then re-running the"
+              echo "seed CLI locally."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$dead_count" -gt 0 ]; then
+            echo "::error::$dead_count rotted URL(s) — see job summary."
+            exit 1
+          fi

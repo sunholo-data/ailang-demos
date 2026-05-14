@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -526,11 +534,11 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on weaviate.io</p>
-    <h2 class="sk-prom-audience">Developers, engineers, and data scientists who are building and scaling AI applications, particularly those requiring robust vector database solutions with strong security and compliance features.</h2>
-    <blockquote class="sk-prom-narrative">Weaviate provides a vector database and AI agent platform for developers to build and scale AI applications. It offers features for data management, advanced search, and AI use cases like RAG, with a strong focus on enterprise-grade security, compliance, and deployment flexibility.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Vector Database</span> <span class="sk-chip">Weaviate Agents</span> <span class="sk-chip">Embeddings</span> <span class="sk-chip">RAG</span> <span class="sk-chip">Hybrid Search</span> <span class="sk-chip">Security and Compliance</span></div>
+    <h2 class="sk-prom-audience">Developers and enterprise teams building and deploying AI applications.</h2>
+    <blockquote class="sk-prom-narrative">Weaviate offers a vector database and tools for building and scaling AI applications, including Weaviate Agents and RAG solutions. It provides flexible cloud deployment options (shared, dedicated, BYOC) with a strong focus on data security, compliance, and availability through features like end-to-end encryption, role-based access controls, and active monitoring.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Weaviate</span> <span class="sk-chip">Vector Database</span> <span class="sk-chip">AI applications</span> <span class="sk-chip">Weaviate Agents</span> <span class="sk-chip">RAG</span> <span class="sk-chip">Cloud deployment</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on weaviate.io</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">12</span> headings</span><span class="stat"><span class="num">4</span> images</span><span class="stat"><span class="num">9</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">7</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">12</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Trust, security, and privacy
-come first </span> <span class="sk-chip" title="extracted heading">We’re with you on your security and compliance journey </span> <span class="sk-chip" title="extracted heading">We keep your data safe (and available)</span> <span class="sk-chip" title="extracted heading">Secure Deployment</span> <span class="sk-chip" title="extracted heading">End-to-end Encryption</span> <span class="sk-chip" title="extracted heading">Role Based Access Controls</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://static.scarf.sh/a.png?x-pxid=a41b0758-a3a9-4874-a880-8b5d5a363d40" target="_blank" rel="noopener" title=""><img src="https://static.scarf.sh/a.png?x-pxid=a41b0758-a3a9-4874-a880-8b5d5a363d40" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://px.ads.linkedin.com/collect/?pid=6758089&fmt=gif" target="_blank" rel="noopener" title=""><img src="https://px.ads.linkedin.com/collect/?pid=6758089&fmt=gif" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://weaviate.io/img/site/weaviate-logo-horizontal-light-1.svg" target="_blank" rel="noopener" title="Weaviate"><img src="https://weaviate.io/img/site/weaviate-logo-horizontal-light-1.svg" alt="Weaviate" loading="lazy"></a><a class="sk-img-thumb" href="https://weaviate.io/img/site/weaviate-logo-horizontal-dark-1.svg" target="_blank" rel="noopener" title="Weaviate"><img src="https://weaviate.io/img/site/weaviate-logo-horizontal-dark-1.svg" alt="Weaviate" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Overview
+come first </span> <span class="sk-chip" title="extracted heading">We’re with you on your security and compliance journey </span> <span class="sk-chip" title="extracted heading">We keep your data safe (and available)</span> <span class="sk-chip" title="extracted heading">Secure Deployment</span> <span class="sk-chip" title="extracted heading">End-to-end Encryption</span> <span class="sk-chip" title="extracted heading">Role Based Access Controls</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://static.scarf.sh/a.png?x-pxid=a41b0758-a3a9-4874-a880-8b5d5a363d40" target="_blank" rel="noopener" title=""><img src="https://static.scarf.sh/a.png?x-pxid=a41b0758-a3a9-4874-a880-8b5d5a363d40" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://px.ads.linkedin.com/collect/?pid=6758089&fmt=gif" target="_blank" rel="noopener" title=""><img src="https://px.ads.linkedin.com/collect/?pid=6758089&fmt=gif" alt="" loading="lazy"></a><a class="sk-img-thumb" href="https://weaviate.io/img/site/weaviate-logo-horizontal-light-1.svg" target="_blank" rel="noopener" title="Weaviate"><img src="https://weaviate.io/img/site/weaviate-logo-horizontal-light-1.svg" alt="Weaviate" loading="lazy"></a><a class="sk-img-thumb" href="https://weaviate.io/img/site/weaviate-logo-horizontal-dark-1.svg" target="_blank" rel="noopener" title="Weaviate"><img src="https://weaviate.io/img/site/weaviate-logo-horizontal-dark-1.svg" alt="Weaviate" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">9</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Overview
 [Vector Database](/platform)
 [Embeddings](/product/embeddings)
 [Integrations](/product/integrations)
@@ -559,7 +567,10 @@ Weaviate Agents
 Deployment
 [Shared Cloud](/deployment/shared)
 [Dedicated Cloud](/deployment/dedicated)
-[Enablement](/deployment/enablement)</span> <span class="sk-chip" title="list item">Overview</span> <span class="sk-chip" title="list item">[Embeddings](/product/embeddings)</span> <span class="sk-chip" title="list item">[Integrations](/product/integrations)</span> <span class="sk-chip" title="list item">[All Products](/product)</span> <span class="sk-chip" title="list item">[Previews](/product-previews)</span> <span class="sk-chip" title="list item">Weaviate Agents</span> <span class="sk-chip" title="list item">[Query Agent](/product/query-agent)</span> <span class="sk-chip" title="list item">[Transformation Agent](/product/transformation-agent)</span> <span class="sk-chip" title="list item">[Personalization Agent](/product/personalization-agent)</span> <span class="sk-chip" title="list item">Use Cases
+[Enablement](/deployment/enablement)">Overview
+[Vector Database](/platform)
+[Embeddings](/product/embeddings)
+[Integrations](/p…</span> <span class="sk-chip" title="Overview">Overview</span> <span class="sk-chip" title="[Embeddings](/product/embeddings)">[Embeddings](/product/embeddings)</span> <span class="sk-chip" title="[Integrations](/product/integrations)">[Integrations](/product/integrations)</span> <span class="sk-chip" title="[All Products](/product)">[All Products](/product)</span> <span class="sk-chip" title="[Previews](/product-previews)">[Previews](/product-previews)</span> <span class="sk-chip" title="Weaviate Agents">Weaviate Agents</span> <span class="sk-chip" title="[Query Agent](/product/query-agent)">[Query Agent](/product/query-agent)</span> <span class="sk-chip" title="[Transformation Agent](/product/transformation-agent)">[Transformation Agent](/product/transformation-agent)</span> <span class="sk-chip" title="[Personalization Agent](/product/personalization-agent)">[Personalization Agent](/product/personalization-agent)</span> <span class="sk-chip" title="Use Cases
 [RAG](/rag)
 [Hybrid Search](/hybrid-search)
 [Agentic AI](/agentic-ai)
@@ -576,7 +587,11 @@ Use Cases
 [Infrastructure Optimization](/deployment/dedicated)
 Examples
 [Case Studies](/case-studies)
-[Demos](/community/demos)</span> <span class="sk-chip" title="list item">[Cost-Performance Optimization](/cost-performance-optimization)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://weaviate.io/blog/weaviate-agent-skills" target="_blank" rel="noopener" title="https://weaviate.io/blog/weaviate-agent-skills">Introducing Weaviate Agent Skills – Read our Blog</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/" target="_blank" rel="noopener" title="https://weaviate.io/">(link)</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/pricing" target="_blank" rel="noopener" title="https://weaviate.io/pricing">Pricing</a> <a class="sk-chip sk-chip-link" href="https://github.com/weaviate/weaviate" target="_blank" rel="noopener" title="https://github.com/weaviate/weaviate">GitHub</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/contact" target="_blank" rel="noopener" title="https://weaviate.io/contact">Contact</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/pricing#contact-sales" target="_blank" rel="noopener" title="https://weaviate.io/pricing#contact-sales">Contact Sales</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/go/console" target="_blank" rel="noopener" title="https://weaviate.io/go/console">Start Free</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Security | Weaviate
+[Demos](/community/demos)">Use Cases
+[RAG](/rag)
+[Hybrid Search](/hybrid-search)
+[Agentic AI](/agentic-ai)
+[Cost-Per…</span> <span class="sk-chip" title="[Cost-Performance Optimization](/cost-performance-optimization)">[Cost-Performance Optimization](/cost-performance-optimization)</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://weaviate.io/blog/weaviate-agent-skills" target="_blank" rel="noopener" title="https://weaviate.io/blog/weaviate-agent-skills">Introducing Weaviate Agent Skills – Read our Blog</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/" target="_blank" rel="noopener" title="https://weaviate.io/">(link)</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/pricing" target="_blank" rel="noopener" title="https://weaviate.io/pricing">Pricing</a> <a class="sk-chip sk-chip-link" href="https://github.com/weaviate/weaviate" target="_blank" rel="noopener" title="https://github.com/weaviate/weaviate">GitHub</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/contact" target="_blank" rel="noopener" title="https://weaviate.io/contact">Contact</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/pricing#contact-sales" target="_blank" rel="noopener" title="https://weaviate.io/pricing#contact-sales">Contact Sales</a> <a class="sk-chip sk-chip-link" href="https://weaviate.io/go/console" target="_blank" rel="noopener" title="https://weaviate.io/go/console">Start Free</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md"># Security | Weaviate
 
 
 [Image]
@@ -892,7 +907,7 @@ Product
 
 Use Cases
 
-- [RAG](/RAG)
+- [RAG](/rag)
 - [Hybrid Search](/hybrid-search)
 - [Agentic AI](/agentic-ai)
 - [Cost Performance Optimization](/cost-performance-optimization)
@@ -971,17 +986,17 @@ Copyright © 2026 Weaviate, B.V. Built with Docusaurus.
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">weaviate.io</span> scored <strong>4/10</strong> on privacy. AILANG opportunity is therefore <strong>6/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
-  email:    string<pii>,
-  postcode: string<pii>,
-  signupDate: string
+    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre><span class="k">type</span> Customer = {
+  email:    <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  postcode: <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  signupDate: <span class="k">string</span>
 }
--- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
--- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- assigning customer.email to a log line is a type error.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre><span class="k">func</span> chargeCard(c: Card) -&gt; Result[Receipt, Error]
+  ! {<span class="e">Net @endpoint=<span class="s">"api.stripe.com"</span>, AI @limit=0</span>}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre><span class="c">-- Browser: load AILANG WASM, run the module in the user's tab.</span>
+<span class="c">-- Cloud Run: same .ail file packaged as a container.</span>
+<span class="c">-- Native CLI: same .ail file, ailang run.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -1010,6 +1025,10 @@ Copyright © 2026 Weaviate, B.V. Built with Docusaurus.
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-ok">✓</td><td>2/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-ok">✓</td><td>2/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>

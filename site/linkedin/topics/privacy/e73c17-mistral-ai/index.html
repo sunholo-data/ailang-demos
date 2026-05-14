@@ -382,6 +382,14 @@
   .sk-card pre::-webkit-scrollbar { height: 5px; }
   .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
   .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
   /* Deep-link into AILANG docs for this primitive — bottom-right of
      each card so readers can dig past the snippet. */
   .sk-card-docs {
@@ -503,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-30 17,10 -43,25"
+        <polygon points="0,-20 17,10 -43,25"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -526,9 +534,9 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on mistral.ai</p>
-    <h2 class="sk-prom-audience">The site is for developers, businesses, and researchers interested in artificial intelligence models and solutions offered by Mistral AI.</h2>
-    <blockquote class="sk-prom-narrative">This website provides an overview of Mistral AI's offerings, including their AI products, solutions, and research. Users can explore various AI models, access a development studio, and learn about the company's capabilities. It caters to those seeking to leverage or understand advanced AI technology.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Mistral AI</span> <span class="sk-chip">Products</span> <span class="sk-chip">Solutions</span> <span class="sk-chip">Research</span> <span class="sk-chip">Models</span> <span class="sk-chip">Studio</span></div>
+    <h2 class="sk-prom-audience">The site targets developers, researchers, and businesses interested in leveraging advanced AI models and solutions.</h2>
+    <blockquote class="sk-prom-narrative">Mistral AI provides access to advanced AI models and solutions for developers and businesses. The platform highlights its products, research, and customer offerings, encouraging engagement through its 'Studio' for testing and integration of AI technologies.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">AI models</span> <span class="sk-chip">AI solutions</span> <span class="sk-chip">AI research</span> <span class="sk-chip">Development studio</span> <span class="sk-chip">Customers</span></div>
     <div class="sk-extract-header"><h3>What AILANG Parse sees on mistral.ai</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">0</span> headings</span><span class="stat"><span class="num">2</span> images</span><span class="stat"><span class="num">0</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">7</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">3</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">2</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" target="_blank" rel="noopener" title="Mistral AI Logo"><img src="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" alt="Mistral AI Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo-white.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" target="_blank" rel="noopener" title="Mistral AI Logo White"><img src="https://mistral.ai/_next/image?url=%2Fimg%2Fmistral-ai-logo-white.svg&w=256&q=75&dpl=371572ea8819d8463edd7a84714500fb4fb3dfd80b7bbddaba0d95ad0592731b366130343132316130393332636261633130323461653739" alt="Mistral AI Logo White" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">7</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://mistral.ai/" target="_blank" rel="noopener" title="https://mistral.ai/">(link)</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/solutions" target="_blank" rel="noopener" title="https://mistral.ai/solutions">Solutions</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/models" target="_blank" rel="noopener" title="https://mistral.ai/models">Research</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/news" target="_blank" rel="noopener" title="https://mistral.ai/news">Blog</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/customers" target="_blank" rel="noopener" title="https://mistral.ai/customers">Customers</a> <a class="sk-chip sk-chip-link" href="https://mistral.ai/contact" target="_blank" rel="noopener" title="https://mistral.ai/contact">Contact Sales</a> <a class="sk-chip sk-chip-link" href="https://console.mistral.ai?utm_source=website&utm_medium=header_cta" target="_blank" rel="noopener" title="https://console.mistral.ai?utm_source=website&utm_medium=header_cta">Try Studio</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 [Image: Mistral AI Logo]
@@ -581,17 +589,17 @@ Redirecting tolegal.mistral.ai
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">mistral.ai</span> scored <strong>2/10</strong> on privacy. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre>type Customer = {
-  email:    string<pii>,
-  postcode: string<pii>,
-  signupDate: string
+    <div class="sk-cards"><article class="sk-card"><h3>Information-flow labels on customer data</h3><p class="rationale">Mark fields containing PII at the type level. The compiler refuses to let a labelled value reach a public sink without an explicit Declassify boundary. Privacy by type, not by code review.</p><pre><span class="k">type</span> Customer = {
+  email:    <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  postcode: <span class="k">string</span><span class="e">&lt;pii&gt;</span>,
+  signupDate: <span class="k">string</span>
 }
--- assigning customer.email to a log line is a type error.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre>func chargeCard(c: Card) -> Result[Receipt, Error]
-  ! {Net @endpoint="api.stripe.com", AI @limit=0}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
-<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre>-- Browser: load AILANG WASM, run the module in the user's tab.
--- Cloud Run: same .ail file packaged as a container.
--- Native CLI: same .ail file, ailang run.</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
+<span class="c">-- assigning customer.email to a log line is a type error.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/ifc-labels" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Capability scoping</h3><p class="rationale">A function declares the network endpoints, file paths, and AI providers it touches. Anything outside the declaration is rejected by the runtime. "This part of the system can talk to Stripe; it cannot talk to anyone else" is enforced.</p><pre><span class="k">func</span> chargeCard(c: Card) -&gt; Result[Receipt, Error]
+  ! {<span class="e">Net @endpoint=<span class="s">"api.stripe.com"</span>, AI @limit=0</span>}</pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/parameterised-effects" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Three-runtime deploy</h3><p class="rationale">The same module runs in the browser via WASM, on Cloud Run, and as a native binary. Sensitive workflows can stay in the user's tab — no server ever sees the data.</p><pre><span class="c">-- Browser: load AILANG WASM, run the module in the user's tab.</span>
+<span class="c">-- Cloud Run: same .ail file packaged as a container.</span>
+<span class="c">-- Native CLI: same .ail file, ailang run.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/wasm-integration" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -620,6 +628,10 @@ Redirecting tolegal.mistral.ai
 <tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
 <tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
 <tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
 <tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
 <tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
 <tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
