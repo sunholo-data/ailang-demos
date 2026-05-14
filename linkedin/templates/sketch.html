@@ -168,7 +168,41 @@
     background: var(--bg-input);
   }
   .sk-extract-stats .path.path-docparse { background: var(--primary-faded); color: var(--primary); }
+  .sk-extract-stats .path a { color: inherit; text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 2px; }
+  .sk-extract-stats .path a:hover { opacity: 0.8; }
   .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
+
+  /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
+  details.sk-extract-details {
+    margin-top: 18px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0;
+  }
+  details.sk-extract-details summary {
+    cursor: pointer; user-select: none;
+    padding: 14px 18px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); letter-spacing: 0.02em;
+    list-style: none;
+    border-radius: 10px;
+  }
+  details.sk-extract-details summary::-webkit-details-marker { display: none; }
+  details.sk-extract-details summary::before {
+    content: "▸";
+    color: var(--primary); margin-right: 10px;
+    display: inline-block; transition: transform .15s ease;
+  }
+  details.sk-extract-details[open] summary::before { transform: rotate(90deg); }
+  details.sk-extract-details summary:hover { color: var(--text-primary); }
+  pre.sk-extract-md {
+    margin: 0; padding: 18px 22px 22px;
+    background: transparent;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.6; white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 480px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
 
   /* ─── §3 AILANG × your business ─── */
   .sk-score-pretext {
@@ -297,7 +331,7 @@
   <section class="sk-radar-section">
     <p class="sk-section-label">§1 · AI-readiness</p>
     <div class="sk-radar-wrap">
-      <svg class="sk-radar-svg" viewBox="-140 -125 280 200" xmlns="http://www.w3.org/2000/svg">
+      <svg class="sk-radar-svg" viewBox="-170 -130 340 215" xmlns="http://www.w3.org/2000/svg">
         <!-- Triangular grid rings — radii 100/75/50/25 -->
         <polygon points="0,-100 86.6,50 -86.6,50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
         <polygon points="0,-75 65,37.5 -65,37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
@@ -310,10 +344,11 @@
         <!-- Data polygon (populated by renderer) -->
         <polygon points="{{RADAR_POINTS}}"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
-        <!-- Axis labels at radius ~112 -->
-        <text x="0" y="-110" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
-        <text x="96" y="60" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
-        <text x="-96" y="60" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
+        <!-- Axis labels at radius ~112. Widened viewBox accommodates the
+             full label widths ("portable", "agent-ready"). -->
+        <text x="0" y="-112" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
+        <text x="98" y="62" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
+        <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
         {{SCORE_HEADLINE_HTML}}
@@ -373,5 +408,36 @@
   </footer>
 
 </div>
+
+<script>
+  // Fill the rank callout from the topic's leaderboard.json. Server-render
+  // can't know the rank ahead of time — it changes whenever another sketch
+  // is added or re-scored. JS reads ../leaderboard.json (relative to this
+  // sketch dir), finds our entry by the sketch directory name, and updates
+  // #sk-rank-num. If no match (e.g. this sketch was deduped out by another
+  // entry on the same domain), the whole callout stays hidden.
+  (function () {
+    var callout = document.getElementById('sk-rank-callout');
+    if (!callout) return;
+    var segs = window.location.pathname.split('/').filter(Boolean);
+    var slug = segs[segs.length - 1];
+    if (!slug) return;
+    fetch('../leaderboard.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.entries)) return;
+        var entry = data.entries.find(function (e) {
+          return e.sketchUrl === slug + '/' || e.sketchUrl === slug;
+        });
+        if (entry && entry.rank > 0) {
+          var span = document.getElementById('sk-rank-num');
+          if (span) span.textContent = '#' + entry.rank;
+          callout.hidden = false;
+        }
+      })
+      .catch(function () { /* silent: callout stays hidden */ });
+  })();
+</script>
+
 </body>
 </html>

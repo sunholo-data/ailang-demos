@@ -10,7 +10,7 @@ module linkedin/services/sketch_template
 -- Effects: ! {FS} — reads the template file. Pure otherwise.
 
 import std/fs (readFile)
-import std/string (replaceMany, intToStr, join)
+import std/string (replaceMany, intToStr, join, replace, length)
 import std/list (map, concat as listConcat, length as listLength)
 import linkedin/types/sketch_types (Sketch, Signal, TopicScore, FeatureCard, ExtractedContent, Topic, Privacy, Portable, AgentReady)
 import linkedin/services/sketch_rubric (topicEq, topicHasLeaderboard)
@@ -82,12 +82,18 @@ func renderHeadingPill(h: string) -> string =
   "<span class=\"sk-chip\" title=\"extracted heading\">${h}</span>"
 
 func renderExtractStats(e: ExtractedContent) -> string = {
-  let pathLabel = if e.extractionPath == "docparse" then "via docparse"
-                  else if e.extractionPath == "ai-fallback" then "via AI extraction"
+  let pathLabel = if e.extractionPath == "docparse"
+                    then "HTML parsing by <a href=\"https://www.sunholo.com/ailang-parse\" target=\"_blank\" rel=\"noopener\">AILANG Parse</a>"
+                  else if e.extractionPath == "ai-fallback"
+                    then "via AI extraction"
                   else "polite refuse";
   let pathClass = if e.extractionPath == "docparse" then "path path-docparse" else "path";
   let headingsHtml = if listLength(e.topHeadings) == 0 then ""
                      else "<div style=\"margin-top:18px;\"><p class=\"sk-section-label\" style=\"margin-bottom:10px;\">structure found</p><div class=\"sk-chips\">${join(" ", map(renderHeadingPill, e.topHeadings))}</div></div>";
+  -- Full extraction (markdown) inside a <details> collapsible.
+  -- Shown only when docparse succeeded and we have non-trivial content.
+  let extractDetails = if length(e.extractedMarkdown) < 200 then ""
+                       else "<details class=\"sk-extract-details\"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class=\"sk-extract-md\">${escapeHtmlForPre(e.extractedMarkdown)}</pre></details>";
   let statsLine = join("", [
     "<div class=\"sk-extract-stats\">",
     "<span class=\"stat\"><span class=\"num\">", intToStr(e.headingCount), "</span> headings</span>",
@@ -96,8 +102,13 @@ func renderExtractStats(e: ExtractedContent) -> string = {
     "<span class=\"", pathClass, "\">", pathLabel, "</span>",
     "</div>"
   ]);
-  "${headingsHtml}${statsLine}"
+  "${headingsHtml}${statsLine}${extractDetails}"
 }
+
+-- Minimal HTML-escape so the embedded markdown can't break the page.
+-- We only need to neutralise <, > and & inside the <pre> block.
+func escapeHtmlForPre(s: string) -> string =
+  replace(replace(replace(s, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
 
 -- ─── Radar polygon ────────────────────────────────────────────
 
@@ -150,7 +161,7 @@ export func topicLabel(t: Topic) -> string = topicSlug(t)
 export func renderScoreHeadline(t: Topic, score: int) -> string =
   if topicHasLeaderboard(t) then join("", [
     "<h2>You scored <span class=\"sk-readiness-num\">", intToStr(score), "/10</span> on ", topicLabel(t), ".</h2>",
-    "<p>The radar shows AILANG-readiness across six commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>"
+    "<p>The radar shows AILANG-readiness across three commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>"
   ]) else join("", [
     "<h2>", topicLabel(t), " isn't scored from a single page fetch.</h2>",
     "<p>Audit trails, AI spend control, and runtime agent reliability aren't visible on a marketing page. The cards below show where AILANG would help — chosen on what we see, not graded.</p>"
@@ -177,11 +188,15 @@ export func renderScorePretext(t: Topic, score: int) -> string =
 
 -- ─── Rank block (optional) ────────────────────────────────────
 
+-- Rank is filled client-side by sk-rank-js (in sketch.html) because
+-- a sketch's rank changes whenever any other sketch is added/scored.
+-- The server-rendered #… is a placeholder; if the JS can't find a
+-- matching leaderboard entry the whole callout hides itself.
 func renderRankBlock(t: Topic, rank: int) -> string =
   if topicHasLeaderboard(t) then join("", [
-    "<div class=\"sk-rank-callout\">",
+    "<div class=\"sk-rank-callout\" hidden id=\"sk-rank-callout\">",
     "<span>Your rank on the ", topicLabel(t), " leaderboard:</span>",
-    "<span class=\"rank-num\">#", intToStr(rank), "</span>",
+    "<span class=\"rank-num\" id=\"sk-rank-num\">#…</span>",
     -- Relative to the sketch page (linkedin/topics/<topic>/<slug>/).
     -- The topic page is one level up.
     "<a href=\"../\">view leaderboard ↗</a>",

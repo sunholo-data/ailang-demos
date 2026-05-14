@@ -82,7 +82,11 @@ export type ExtractedContent = {
   imageCount:   int,
   -- A few top headings extracted from the page (level-1 / level-2),
   -- capped at 6 entries by the extractor.
-  topHeadings:  [string]
+  topHeadings:  [string],
+  -- The "LLM-ready" markdown that AILANG Parse emits from the
+  -- docparse JSON. Truncated to ~12KB to keep the rendered HTML
+  -- size sane. Empty when extractionPath isn't "docparse".
+  extractedMarkdown: string
 }
 
 -- A complete sketch ready for rendering to HTML.

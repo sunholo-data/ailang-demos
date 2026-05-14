@@ -35,8 +35,9 @@ func tmpHtmlPath() -> string = "/tmp/ailang-sketch-input.html"
 func tmpOutDir()  -> string = "/tmp/ailang-sketch-out"
 func tmpMdPath()  -> string = "/tmp/ailang-sketch-out/ailang-sketch-input.html.md"
 func tmpJsonPath() -> string = "/tmp/ailang-sketch-out/ailang-sketch-input.html.json"
-func maxClassifyChars() -> int = 8000
-func maxTopHeadings()   -> int = 6
+func maxClassifyChars()       -> int = 8000
+func maxTopHeadings()         -> int = 6
+func maxExtractedMarkdown()   -> int = 12000  -- ~12KB cap on embedded extract
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -181,7 +182,8 @@ export func sketchClassify(
   rawBody: string,
   extractionPath: string,
   blockCount: int,
-  stats: DocparseStats
+  stats: DocparseStats,
+  markdown: string
 ) -> ExtractedContent ! {AI} {
   let prompt = classifyPrompt(sketchTruncate(text, maxClassifyChars()));
   let raw = callJson(prompt, classifySchema());
@@ -193,35 +195,37 @@ export func sketchClassify(
       let jobs      = getStringArrayOrEmpty(json, "jobs");
       let entities  = getStringArrayOrEmpty(json, "entities");
       {
-        url:            url,
-        domain:         domain,
-        audience:       audience,
-        jobs:           jobs,
-        entities:       entities,
-        narrative:      narrative,
-        extractionPath: extractionPath,
-        blockCount:     blockCount,
-        rawBody:        rawBody,
-        headingCount:   stats.headings,
-        tableCount:     stats.tables,
-        imageCount:     stats.images,
-        topHeadings:    stats.topHeadings
+        url:               url,
+        domain:            domain,
+        audience:          audience,
+        jobs:              jobs,
+        entities:          entities,
+        narrative:         narrative,
+        extractionPath:    extractionPath,
+        blockCount:        blockCount,
+        rawBody:           rawBody,
+        headingCount:      stats.headings,
+        tableCount:        stats.tables,
+        imageCount:        stats.images,
+        topHeadings:       stats.topHeadings,
+        extractedMarkdown: markdown
       }
     },
     Err(_) => {
-      url:            url,
-      domain:         "other",
-      audience:       "",
-      jobs:           [],
-      entities:       [],
-      narrative:      "(extraction failed — JSON parse error)",
-      extractionPath: "polite-refuse",
-      blockCount:     0,
-      rawBody:        rawBody,
-      headingCount:   0,
-      tableCount:     0,
-      imageCount:     0,
-      topHeadings:    []
+      url:               url,
+      domain:            "other",
+      audience:          "",
+      jobs:              [],
+      entities:          [],
+      narrative:         "(extraction failed — JSON parse error)",
+      extractionPath:    "polite-refuse",
+      blockCount:        0,
+      rawBody:           rawBody,
+      headingCount:      0,
+      tableCount:        0,
+      imageCount:        0,
+      topHeadings:       [],
+      extractedMarkdown: ""
     }
   }
 }
@@ -235,25 +239,26 @@ export func sketchExtract(url: string) -> ExtractedContent ! {Net, FS, AI, Proce
   if length(html) < 200 then {
     -- Empty or tiny body — polite refuse, no AI call.
     {
-      url:            url,
-      domain:         "other",
-      audience:       "",
-      jobs:           [],
-      entities:       [],
-      narrative:      "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
-      extractionPath: "polite-refuse",
-      blockCount:     0,
-      rawBody:        html,
-      headingCount:   0,
-      tableCount:     0,
-      imageCount:     0,
-      topHeadings:    []
+      url:               url,
+      domain:            "other",
+      audience:          "",
+      jobs:              [],
+      entities:          [],
+      narrative:         "(could not fetch usable content from this URL — try describing your use case in one line on LinkedIn instead)",
+      extractionPath:    "polite-refuse",
+      blockCount:        0,
+      rawBody:           html,
+      headingCount:      0,
+      tableCount:        0,
+      imageCount:        0,
+      topHeadings:       [],
+      extractedMarkdown: ""
     }
   } else {
     -- Try docparse, fall back to raw HTML.
     match sketchTryDocparse(html) {
-      Some(md) => sketchClassify(url, md, html, "docparse", 1, sketchReadDocparseStats()),
-      None     => sketchClassify(url, html, html, "ai-fallback", 0, emptyStats())
+      Some(md) => sketchClassify(url, md, html, "docparse", 1, sketchReadDocparseStats(), sketchTruncate(md, maxExtractedMarkdown())),
+      None     => sketchClassify(url, html, html, "ai-fallback", 0, emptyStats(), "")
     }
   }
 }

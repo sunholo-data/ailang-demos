@@ -168,7 +168,41 @@
     background: var(--bg-input);
   }
   .sk-extract-stats .path.path-docparse { background: var(--primary-faded); color: var(--primary); }
+  .sk-extract-stats .path a { color: inherit; text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 2px; }
+  .sk-extract-stats .path a:hover { opacity: 0.8; }
   .sk-narrative { color: var(--text-primary); font-size: 16px; line-height: 1.65; margin: 0; }
+
+  /* Collapsible "full extract" — closed by default, shows what AILANG Parse pulled. */
+  details.sk-extract-details {
+    margin-top: 18px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0;
+  }
+  details.sk-extract-details summary {
+    cursor: pointer; user-select: none;
+    padding: 14px 18px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-secondary); letter-spacing: 0.02em;
+    list-style: none;
+    border-radius: 10px;
+  }
+  details.sk-extract-details summary::-webkit-details-marker { display: none; }
+  details.sk-extract-details summary::before {
+    content: "▸";
+    color: var(--primary); margin-right: 10px;
+    display: inline-block; transition: transform .15s ease;
+  }
+  details.sk-extract-details[open] summary::before { transform: rotate(90deg); }
+  details.sk-extract-details summary:hover { color: var(--text-primary); }
+  pre.sk-extract-md {
+    margin: 0; padding: 18px 22px 22px;
+    background: transparent;
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    line-height: 1.6; white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 480px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
 
   /* ─── §3 AILANG × your business ─── */
   .sk-score-pretext {
@@ -289,7 +323,7 @@
     <div class="meta">
       <span><span class="sk-avatar"></span>DD</span>
       <span class="topic-tag">portable</span>
-      <span>generated 2026-05-13</span>
+      <span>generated 2026-05-14</span>
     </div>
   </section>
 
@@ -297,7 +331,7 @@
   <section class="sk-radar-section">
     <p class="sk-section-label">§1 · AI-readiness</p>
     <div class="sk-radar-wrap">
-      <svg class="sk-radar-svg" viewBox="-140 -125 280 200" xmlns="http://www.w3.org/2000/svg">
+      <svg class="sk-radar-svg" viewBox="-170 -130 340 215" xmlns="http://www.w3.org/2000/svg">
         <!-- Triangular grid rings — radii 100/75/50/25 -->
         <polygon points="0,-100 86.6,50 -86.6,50" fill="var(--sketch-radar-bg)" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
         <polygon points="0,-75 65,37.5 -65,37.5" fill="none" stroke="var(--sketch-radar-grid)" stroke-width="0.5"/>
@@ -310,14 +344,15 @@
         <!-- Data polygon (populated by renderer) -->
         <polygon points="0,-50 25,15 -86,50"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
-        <!-- Axis labels at radius ~112 -->
-        <text x="0" y="-110" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
-        <text x="96" y="60" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
-        <text x="-96" y="60" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
+        <!-- Axis labels at radius ~112. Widened viewBox accommodates the
+             full label widths ("portable", "agent-ready"). -->
+        <text x="0" y="-112" text-anchor="middle" dominant-baseline="auto" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">agent-ready</text>
+        <text x="98" y="62" text-anchor="start" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">privacy</text>
+        <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2>You scored <span class="sk-readiness-num">10/10</span> on portable.</h2><p>The radar shows AILANG-readiness across six commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
-        <div class="sk-rank-callout"><span>Your rank on the portable leaderboard:</span><span class="rank-num">#0</span><a href="../">view leaderboard ↗</a></div>
+        <h2>You scored <span class="sk-readiness-num">10/10</span> on portable.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
+        <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the portable leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
     <div class="sk-why"><strong>Why portable scored 10/10</strong><ul><li class="ok">Page copy that names one specific LLM provider (e.g. "powered by Claude") without portability claims.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
@@ -326,10 +361,309 @@
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise organizations and AI developers seeking production-grade infrastructure and engineering services.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and platform provider specializing in modular, protocol-native infrastructure. They offer the Multivac platform for agentic orchestration, AILANG for verifiable AI-authored code, and specialized document parsing tools. The company emphasizes software engineering rigor, moving AI from brittle experimental prototypes to stable, production-ready enterprise deployments using interoperable standards.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Multivac Platform</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">RAG</span></div>
-    <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> images</span><span class="path path-docparse">via docparse</span></div>
+    <h2 class="sk-prom-audience">Enterprise organizations and developers seeking to move AI prototypes into production-grade systems.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo is an AI engineering firm and software provider specializing in transitioning AI projects from concept to production. Their offerings include Multivac, a protocol-native infrastructure platform, and AILANG, an AI-first programming language. The company emphasizes modular architecture, document intelligence, and mechanical guarantees to build interoperable, enterprise-ready AI systems that integrate with major cloud ecosystems.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">AILANG Parse</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">Cognitive Architecture</span> <span class="sk-chip">Office XML</span></div>
+    <div style="margin-top:18px;"><p class="sk-section-label" style="margin-bottom:10px;">structure found</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-stats"><span class="stat"><span class="num">31</span> headings</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">4</span> images</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+*Header:*
+Sunholo
+
+- Services
+- Case Studies
+- Demos
+- AILANG Parse
+- Vision
+- Talks
+- Blog
+- Workshops
+- Contact
+
+NEW
+
+AILANG Parse is live -- Stop parsing photos of your documents. Read Office XML directly. 93.9% on OfficeDocBench.
+
+Try it free
+
+# AI Systems Designed to Last
+
+We architect enterprise AI that connects to your data, scales with your team, and evolves with the technology. From multi-model platforms to document intelligence -- built for production, not just demos.
+
+Explore Services
+
+Try Live Demos
+
+Get Started
+
+## Our Services
+
+[Image: Sunholo Logo]
+
+### AI Engineering
+
+From prototype to production-grade AI systems. We bring software engineering rigour to AI—building modular, testable architectures using MCP, A2A, and OpenAPI so your AI investments compound instead of crumble.
+
+- Agentic AI: orchestration, cognitive architecture, tool use
+- Protocol integration: MCP, A2A, OpenAPI
+- Multi-model: Claude, Gemini, GPT, and open-source
+- Production deployment and scaling
+
+Learn More
+
+See examples: Enterprise AI, Aitana, Document Processing
+
+[Image: Sunholo Logo]
+
+Multivac
+
+### Your AI Platform
+
+Protocol-native infrastructure for the AI agent economy. Multivac supports MCP and A2A out of the box, with modular microservices that let you swap any component without breaking your system.
+
+- Native MCP &amp; A2A protocol support
+- Event-driven microservice architecture
+- Multi-cloud: GCP, Azure, AWS
+- Framework agnostic - Langchain, LlamaIndex, CrewAI, OpenAI and more
+
+Learn More
+
+Powers all our client solutions
+
+[Image: AILANG Logo]
+
+### AILANG: Trustworthy AI Code
+
+Close the trust gap in AI-generated code. AILANG is an AI-first programming language with a type system, effect system, and verification that gives AI-authored code mechanical guarantees -- the same certainty your infrastructure already has.
+
+- Deterministic execution -- same input, same output, every time
+- Effect boundaries visible in types prevent hallucinated operations
+- Works with Claude Code, Gemini CLI, and other AI coding agents
+
+Try AILANG
+
+AILANG Parse (SaaS) | Live Demos | Case study | Open source
+
+##  The Protocol Revolution
+
+Build AI systems designed for change, not just features
+
+The future of AI isn't the best chatbot — it's modular, interoperable systems that evolve without breaking. MCP and A2A are AI's HTTP.
+
+### Model Context Protocol (MCP)
+
+Universal standard for connecting AI to tools and data sources. Released by Anthropic, MCP enables your AI to access databases, APIs, and file systems without custom integrations for each LLM.
+
+### Agent-to-Agent (A2A)
+
+Google's protocol backed by 50+ companies defining how AI agents collaborate. A2A allows agents to discover and coordinate tasks without knowing each other's internal workings—the foundation of an "agent economy."
+
+### Cognitive Design
+
+Our approach to orchestrating AI systems: bounded creativity, iterative improvement, and measurement-driven optimization. Build agents that are predictable, replaceable, and continuously improving.
+
+"Build for change, not features."
+
+Every AI component needs to be independently replaceable, like swapping batteries rather than rewiring your house.
+
+Read Our Blog
+
+Listen to Podcast
+
+## Why Work With Us
+
+### We get stalled AI projects to production.
+
+Multivac has already solved the deployment, scaling and integration problems. You get enterprise-grade AI without building the team to support it — concept to production in weeks, not quarters.
+
+See how →
+
+## Client Success Stories
+
+Real-world impact from our AI engineering and platform solutions
+
+AILANG Parse
+SaaSDocument AI
+AILANG's First SaaS: Universal Document Parsing
+Stop parsing photos of your documents. Read Office XML directly -- track changes, merged cells, and comments preserved. Free in-browser demo, no account required.
+ 93.9% OfficeDocBench Free in-browser
+
+Aitana
+Legal TechGreen Energy
+AI Platform for Green Energy Legal Work
+Reduced contract research time from weeks to days with extreme RAG capabilities and multi-channel AI assistants.
+ Weeks → Days Higher Quality
+
+Global Manufacturer
+Enterprise AIManufacturing
+Enterprise AI Platform: Chatbot to Production in 16 Weeks
+AI assistant with Microsoft 365 integration and multi-model intelligence -- serving 12,000+ employees across 40+ countries.
+ 16 Weeks 12,000+ Staff
+
+Document Extraction at Scale
+Document AIAutomation
+Document Processing: 48x Faster
+Optimized pipeline reduced processing from 16 hours to 20 minutes with improved accuracy.
+ 48x Faster 10x Savings
+
+##  Try It Yourself: Live AI Demos
+            
+
+See our AI engineering in action. Every demo runs in your browser -- no sign-up required for WebAssembly demos.
+
+### Document Intelligence
+
+AI-powered extraction, WASM-based parsing, and Z3 contract verification -- all running client-side.
+
+Document Extractor
+
+DocParse
+
+### Streaming &amp; Voice AI
+
+Real-time streaming with SSE, WebSocket audio, and voice-powered document interaction via Gemini Live.
+
+Voice DocParse
+
+Claude Chat
+
+### Contract-Verified AI
+
+Z3 theorem prover meets AI: contract verification and safe agent tool calling with mechanical guarantees.
+
+Z3 Verify
+
+Safe Agent
+
+View All Demos
+
+## Ready to deploy your AI solution?
+
+Whether you're struggling with a prototype or looking to scale an existing AI application, we can help you overcome technical hurdles and get to market faster.
+
+Schedule a Consultation
+
+##  Open Source &amp; Research
+
+Contributing to the AI ecosystem with tools and research
+
+### Building in Public
+
+We believe the best AI tools are built in the open. Our open-source projects—AILANG (an AI-native programming language) and the Sunholo Python library—represent our commitment to making AI development more accessible and transparent.
+
+These aren't side projects—they're the same production-grade tools we use for our clients, shared with the community to accelerate innovation for everyone.
+
+Explore Our Projects
+
+Read Our Blog
+
+[Image: AILANG Interactive Playground]
+
+AILANG: AI-native programming language with browser-based REPL
+
+##  Recent Thinking
+
+A few of the latest posts and what's next on stage
+
+### Latest Post
+
+AI: Give me the freedom of a tight brief
+
+What AI agents actually demand from you — a framework for delegating decisions, not just tasks.
+
+Read Post →
+
+### Also Recent
+
+Don't ask the AI what it was thinking
+
+The AI's explanation of itself is a performance, not a transcript. The good news: you don't need it. Action-level observability gives you a better paper trail than humans ever…
+
+Read Post →
+
+### Next on Stage
+
+Programming Languages for AI, Not Humans
+
+Keynote at IDA Driving AI 2026 — Copenhagen, May 27. Why AI's programming languages should be different from ours.
+
+See Talks →
+
+More on the Blog
+
+All Talks
+
+## Get in Touch
+
+### Ready to discuss your project?
+
+Schedule a free 30-minute consultation to explore how we can help you deploy your AI application.
+
+✉️
+
+#### Email Us
+
+multivac@sunholo.com
+
+Connect With Us
+
+LinkedIn
+
+Name *
+
+Email *
+
+Company
+
+Subject *
+
+Select a topic...AI Consulting / EngineeringMultivac PlatformWorkshopsPartnershipOther
+
+Message *
+
+I agree to the Privacy Policy and consent to Sunholo processing my personal data to respond to this enquiry.
+
+Send Message
+
+*Footer:*
+### Services
+
+- Agentic AI Support
+- Multivac Platform
+- AILANG
+- Our Process
+- Workshops
+
+### Company
+
+- Our Vision
+- About Us
+- Contact
+- Blog
+
+### Case Studies
+
+- Aitana (Legal Tech)
+- Document Processing
+- Open Source
+
+### Resources
+
+- Live Demos
+- Documentation
+- API Reference
+- Blog
+- Presentations
+
+### Stay Updated
+
+Get the latest AI deployment tips and Multivac updates at our LinkedIn page.
+
+Connect With Us
+
+LinkedIn
+
+© 2025 Holosun ApS. All rights reserved. | Privacy Policy
+
+</pre></details>
   </section>
 
   <!-- ─── §3 AILANG × your business ─── -->
@@ -389,5 +723,36 @@
   </footer>
 
 </div>
+
+<script>
+  // Fill the rank callout from the topic's leaderboard.json. Server-render
+  // can't know the rank ahead of time — it changes whenever another sketch
+  // is added or re-scored. JS reads ../leaderboard.json (relative to this
+  // sketch dir), finds our entry by the sketch directory name, and updates
+  // #sk-rank-num. If no match (e.g. this sketch was deduped out by another
+  // entry on the same domain), the whole callout stays hidden.
+  (function () {
+    var callout = document.getElementById('sk-rank-callout');
+    if (!callout) return;
+    var segs = window.location.pathname.split('/').filter(Boolean);
+    var slug = segs[segs.length - 1];
+    if (!slug) return;
+    fetch('../leaderboard.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.entries)) return;
+        var entry = data.entries.find(function (e) {
+          return e.sketchUrl === slug + '/' || e.sketchUrl === slug;
+        });
+        if (entry && entry.rank > 0) {
+          var span = document.getElementById('sk-rank-num');
+          if (span) span.textContent = '#' + entry.rank;
+          callout.hidden = false;
+        }
+      })
+      .catch(function () { /* silent: callout stays hidden */ });
+  })();
+</script>
+
 </body>
 </html>
