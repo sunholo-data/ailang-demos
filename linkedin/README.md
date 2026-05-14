@@ -238,52 +238,61 @@ Post body text here...
 
 ## Architecture
 
-20+ AILANG modules across three layers — publishing, comment ingestion, and the sketch pipeline.
+The LinkedIn pipeline is in two halves: a published reusable package for the LinkedIn API plumbing, plus everything this demo adds on top (the sketches pipeline, the cron orchestration, the marketing content).
 
-### Publishing + auth + comments
+### Imported from the [`sunholo/linkedin`](https://ailang.sunholo.com/docs/packages/sunholo/linkedin) package
 
-| Module | Purpose |
-|--------|---------|
-| `types/linkedin_types.ail` | ADTs: Post, Comment, Credentials, State |
-| `services/linkedin_auth.ail` | OAuth token refresh (follows gcp_auth.ail pattern) |
-| `services/linkedin_content_loader.ail` | Parse YAML frontmatter from marketing posts |
-| `services/linkedin_posts.ail` | POST to LinkedIn REST API with `requires { len(text) > 0 && len(text) <= 3000 }` |
-| `services/linkedin_comments.ail` | Read-only comment fetching (per-post `Net @limit=1`, global `@limit=20`) |
-| `scripts/oauth_server.ail` | OAuth2 token-exchange handler, uses `std/net.urlEncodeForm` |
-| `main.ail` | CLI dispatch with subcommands |
+A standalone AILANG package (v0.3.1) that wraps LinkedIn's REST API. Reusable for any project that needs to publish to / read from LinkedIn from AILANG. Declared `Net, FS, Env, Declassify, IO` effects.
 
-### Sketch pipeline (comment → public sketch)
+| Imported module | Provides | Net budget |
+|---|---|---|
+| `pkg/sunholo/linkedin/auth` | OAuth2 token storage + auto-refresh | per-call `@limit=1` |
+| `pkg/sunholo/linkedin/posts` | `linkedinCreatePost`, `linkedinCreateImagePost`, `linkedinEscapeLittleText` | per-call `@limit=1` |
+| `pkg/sunholo/linkedin/images` | `linkedinUploadImage` (3-stage register + PUT + finalise) | `@limit=2` per upload |
+| `pkg/sunholo/linkedin/comments` | `socialActions/comments-GET_ALL` with the 100/user/day quota in mind | per-post `@limit=1` |
 
-| Module | Purpose |
-|--------|---------|
-| `types/sketch_types.ail` | ADTs: Topic, Signal, TopicScore, ExtractedContent, Sketch, FeatureCard |
-| `services/sketch_detect.ail` | Parse comment text → `(url, topic)` extraction |
-| `services/sketch_extract.ail` | Fetch URL (rejects non-2xx), invoke `docparse`, classify via `std/ai` |
-| `services/sketch_rubric.ail` | 17 pure scorers, all contract-bounded `ensures { points <= maxPoints }` |
-| `services/sketch_rubric_signals.ail` | Signal manifest — name, max points, AILANG-feature mapping |
-| `services/sketch_features.ail` | Three feature cards per topic with code samples + AILANG docs links |
-| `services/sketch_template.ail` | Render sketch HTML via `replaceMany` over `templates/sketch.html` |
-| `services/sketch.ail` | End-to-end: fetch → score → render → write |
-| `services/sketch_dispatch.ail` | Process queued comments, enforce daily + 30-day quotas |
-| `services/sketch_queue.ail` | Persistent queue (sketch_queue.json) |
-| `services/sketch_history.ail` | 30-day per-(domain, topic) replay protection |
-| `services/sketch_leaderboard.ail` | Rank entries, render leaderboard JSON + topic pages |
-| `sketch_main.ail` | CLI entry for one-off sketch generation |
-| `sketch_dispatch_main.ail` | CLI entry for the 3-hourly dispatcher |
-| `sketch_seed_main.ail` | Hand-curated 30-page seed set with `argv` slicing for memory-safe batches |
-| `leaderboard_main.ail` | CLI entry to rebuild all three leaderboards from disk |
-| `tests/test_rubric.ail` | 50 assertions covering every scorer + the aggregator + polarity rules |
+> The package itself currently has **no `requires`/`ensures` contracts** — just typed effect rows and capability budgets. Contracts would be a fair add (`requires { length(text) > 0 && length(text) <= 3000 }` on `linkedinCreatePost` is the obvious one — LinkedIn's documented hard limit). [Open as upstream feedback when ready.](https://ailang.sunholo.com/docs/packages/sunholo/linkedin)
+
+### Local — sketch pipeline + dispatch (this repo)
+
+Everything the demo adds on top. **32 `requires`/`ensures` contract clauses** across five modules — the rubric being the heaviest user (every scorer bounded `0 ≤ points ≤ maxPoints`).
+
+| Module | Purpose | Contracts |
+|---|---|---:|
+| `types/sketch_types.ail` | ADTs: Topic, Signal, TopicScore, ExtractedContent, Sketch, FeatureCard | — |
+| `services/linkedin_state.ail` | Read/write `state.json` (the `slug → postUrn` map) | — |
+| `services/linkedin_content_loader.ail` | Parse YAML frontmatter from `marketing/<slug>/post.md` | — |
+| `services/sketch_detect.ail` | Parse comment text → `(url, topic)` extraction | — |
+| `services/sketch_extract.ail` | Fetch URL (rejects non-2xx), invoke `docparse`, classify via `std/ai` | 4 |
+| `services/sketch_rubric.ail` | 17 pure scorers, every one bounded `ensures { 0 ≤ points ≤ maxPoints }` | **20** |
+| `services/sketch_rubric_signals.ail` | Signal manifest — name, max points, AILANG-feature mapping | — |
+| `services/sketch_features.ail` | Three feature cards per topic with code samples + AILANG docs links | — |
+| `services/sketch_template.ail` | Render sketch HTML via `replaceMany` over `templates/sketch.html` | — |
+| `services/sketch.ail` | End-to-end: fetch → score → render → write. `sketchSlug`, `sketchAvatarAngle` contract-bounded | 3 |
+| `services/sketch_dispatch.ail` | Process queued comments, enforce daily + 30-day quotas. Quotas guaranteed positive. | 2 |
+| `services/sketch_queue.ail` | Persistent queue (sketch_queue.json), idempotent on `(avatarSeed, url, topic)` | — |
+| `services/sketch_history.ail` | 30-day per-(domain, topic) replay protection | — |
+| `services/sketch_leaderboard.ail` | Rank entries, render leaderboard JSON + topic pages. Rank assignment preserves list length. | 3 |
+| `scripts/oauth_server.ail` | OAuth2 token-exchange handler, uses `std/net.urlEncodeForm` (shipped in v0.20.0) | — |
+| `main.ail` | CLI dispatch with subcommands | — |
+| `sketch_main.ail` | CLI entry for one-off sketch generation | — |
+| `sketch_dispatch_main.ail` | CLI entry for the 3-hourly dispatcher | — |
+| `sketch_seed_main.ail` | Hand-curated 30-page seed set with `argv` slicing for memory-safe batches | — |
+| `leaderboard_main.ail` | CLI entry to rebuild all three leaderboards from disk | — |
+| `tests/test_rubric.ail` | 50 assertions covering every scorer + aggregator + polarity rules | — |
+| **Total** | | **32** |
 
 ### Templates + data
 
 | Path | Purpose |
-|--------|---------|
+|---|---|
 | `templates/sketch.html` | Per-sketch page (radar, breakdown, feature cards, leaderboard rank) |
 | `templates/topic_index.html` | Per-topic leaderboard page (accordion catalog of primitives + ranked list) |
 | `data/state.json` | `slug → postUrn` for every published post (cron uses this to know what to fetch) |
 | `data/sketch_queue.json` | Pending sketch requests (idempotent on `(avatarSeed, url, topic)`) |
 | `data/sketch_history.json` | 30-day window for per-(domain, topic) dedup |
 | `data/sketch_budget.json` | Daily dispatch budget tracker |
+| `data/perf_samples/` | Stashed HTML for AILANG Parse perf testing (e.g. `mollie-create-payment.html`, 1.7 MB) |
 | `design/scoring-rubric.md` | Public methodology (the one rule + signal table) |
 | `design/sketches.md` | Original sketches design doc |
 

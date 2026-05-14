@@ -38,11 +38,20 @@ export type SketchBudget = {
 func budgetPath() -> string = "linkedin/data/sketch_budget.json"
 
 -- Global daily cap across all commenters. Hard ceiling on AI spend.
-func defaultDailyMax() -> int = 50
+-- Positive by contract — a zero cap would silently disable dispatch.
+func defaultDailyMax() -> int
+  ensures { result > 0 }
+{
+  50
+}
 
 -- Per-commenter daily cap. Encourages comments while preventing one
--- person dominating the queue.
-export func perCommenterDailyMax() -> int = 20
+-- person dominating the queue. Same positivity guarantee.
+export func perCommenterDailyMax() -> int
+  ensures { result > 0 }
+{
+  20
+}
 
 func escapeJsonString(s: string) -> string =
   replace(replace(s, "\\", "\\\\"), "\"", "\\\"")

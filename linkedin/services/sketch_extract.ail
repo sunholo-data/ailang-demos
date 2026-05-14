@@ -43,8 +43,14 @@ func maxExtractedMarkdown()   -> int = 12000  -- ~12KB cap on embedded extract
 -- ─── Helpers ──────────────────────────────────────────────────
 
 -- Truncate a string to at most `n` characters.
-func sketchTruncate(s: string, n: int) -> string =
+-- Two-sided contract: caller can't ask for negative truncation,
+-- and we promise the result fits the bound.
+func sketchTruncate(s: string, n: int) -> string
+  requires { n >= 0 }
+  ensures  { length(result) <= n }
+{
   if length(s) <= n then s else substring(s, 0, n)
+}
 
 -- Build the classification schema (JSON Schema as a string).
 func classifySchema() -> string =
@@ -153,8 +159,12 @@ func statsFromJson(top: Json, pageUrl: string) -> DocparseStats = {
 
 -- Recursively count `section` blocks whose `kind` field matches the
 -- target. Sections nest, so we walk the tree.
-func countSectionKindRec(blocks: [Json], targetKind: string) -> int =
+-- Counters are non-negative by construction.
+func countSectionKindRec(blocks: [Json], targetKind: string) -> int
+  ensures { result >= 0 }
+{
   foldl(\acc b. acc + sectionKindInBlock(b, targetKind), 0, blocks)
+}
 
 func sectionKindInBlock(b: Json, targetKind: string) -> int = {
   let t = getOrElse(getString(b, "type"), "");
@@ -169,8 +179,11 @@ func sectionKindInBlock(b: Json, targetKind: string) -> int = {
 }
 
 -- Recursively count text blocks whose style is "code".
-func countCodeBlocksRec(blocks: [Json]) -> int =
+func countCodeBlocksRec(blocks: [Json]) -> int
+  ensures { result >= 0 }
+{
   foldl(\acc b. acc + codeBlocksInBlock(b), 0, blocks)
+}
 
 func codeBlocksInBlock(b: Json) -> int = {
   let t = getOrElse(getString(b, "type"), "");

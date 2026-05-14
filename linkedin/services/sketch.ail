@@ -48,18 +48,28 @@ func firstSegment(s: string) -> string =
   in if idx < 0 then s else substring(s, 0, idx)
 
 -- Slug derived from the registrable domain: "acme.com" -> "acme-com".
-export func sketchSlug(domain: string) -> string =
+-- Contract: domain in, non-empty slug out — no silent empty paths.
+export func sketchSlug(domain: string) -> string
+  requires { length(domain) > 0 }
+  ensures  { length(result) > 0 }
+{
   replace(domain, ".", "-")
+}
 
 -- ─── Avatar angle from seed ───────────────────────────────────
 
 -- Map a 6-hex-char avatarSeed to an angle in [0, 359].
 -- Treats first 2 hex chars as a byte (0..255), scales to 0..359.
-export func sketchAvatarAngle(seed: string) -> int =
+-- Contract guarantees the avatar always lands inside a valid CSS angle
+-- range — the renderer reads this straight into a `conic-gradient`.
+export func sketchAvatarAngle(seed: string) -> int
+  ensures { result >= 0, result < 360 }
+{
   if length(seed) < 2 then 0
   else
     let b = hexByteOf(substring(seed, 0, 2))
     in (b * 360) / 256
+}
 
 func hexByteOf(hex2: string) -> int =
   let hi = hexNibble(substring(hex2, 0, 1))

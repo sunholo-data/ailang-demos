@@ -38,7 +38,12 @@ export func sketchLeaderboardPath(t: Topic) -> string =
   "${sketchTopicDir(t)}/leaderboard.json"
 
 -- Top-N to publicly rank. The rest sit in the gallery without a rank.
-export func sketchPublicRankCap() -> int = 30
+-- Contract: must be positive so we don't accidentally hide every entry.
+export func sketchPublicRankCap() -> int
+  ensures { result > 0 }
+{
+  30
+}
 
 -- ─── Reading sketch.json files ───────────────────────────────
 
@@ -123,10 +128,16 @@ func cmpEntries(a: LeaderboardEntry, b: LeaderboardEntry) -> int =
   else if a.score < b.score then 1
   else 0
 
--- Assign rank 1..10 to top N entries; rank 0 to the rest.
--- Caller must have already sorted descending.
-func assignRanks(sorted: [LeaderboardEntry], cap: int) -> [LeaderboardEntry] =
+-- Assign rank 1..cap to the top entries; rank 0 to the rest.
+-- Caller must have already sorted descending. Two contracts:
+--   - non-negative cap (negative cap would mean "rank nothing")
+--   - preservation: input length = output length, no entries lost
+func assignRanks(sorted: [LeaderboardEntry], cap: int) -> [LeaderboardEntry]
+  requires { cap >= 0 }
+  ensures  { listLength(result) == listLength(sorted) }
+{
   assignRanksAt(sorted, 1, cap)
+}
 
 func assignRanksAt(xs: [LeaderboardEntry], pos: int, cap: int) -> [LeaderboardEntry] = match xs {
   []           => [],
