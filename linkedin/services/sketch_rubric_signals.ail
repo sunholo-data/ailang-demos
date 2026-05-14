@@ -57,6 +57,36 @@ export func sigApiDocsLink() -> Signal = {
   ailangFeature: "ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default"
 }
 
+export func sigWebhooks() -> Signal = {
+  name:          "Webhooks documented",
+  description:   "Page mentions webhooks, callback URLs, or event subscriptions — the most agent-callable backend pattern.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects"
+}
+
+export func sigRateLimitDocs() -> Signal = {
+  name:          "Rate limits documented",
+  description:   "Page documents rate limits, throttling, or 429 handling — agents need to know how to back off.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits"
+}
+
+export func sigStreamingEndpoint() -> Signal = {
+  name:          "Streaming / SSE endpoint",
+  description:   "Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.",
+  topic:         AgentReady,
+  points:        0,
+  maxPoints:     2,
+  detected:      false,
+  ailangFeature: "std/stream — ssePost and Stream effect handle event-source endpoints with typed event types"
+}
+
 -- ─── privacy signals ───────────────────────────────────────────
 
 export func sigLlmProviderMentioned() -> Signal = {
@@ -108,6 +138,9 @@ export func sketchAllSignalDefs() -> [Signal] = [
   sigOpenApi(),
   sigMcpEndpoint(),
   sigApiDocsLink(),
+  sigWebhooks(),
+  sigRateLimitDocs(),
+  sigStreamingEndpoint(),
   sigLlmProviderMentioned(),
   sigThirdPartyDomains(),
   sigDataResidencyLanguage(),

@@ -17,7 +17,7 @@ module linkedin/services/sketch_rubric
 import std/string (contains, toLower, split)
 import std/list (length as listLength, foldl, filter)
 import linkedin/types/sketch_types (Signal, TopicScore, Topic, Privacy, Portable, AgentReady)
-import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm)
+import linkedin/services/sketch_rubric_signals (sigAgentJson, sigOpenApi, sigMcpEndpoint, sigApiDocsLink, sigWebhooks, sigRateLimitDocs, sigStreamingEndpoint, sigLlmProviderMentioned, sigThirdPartyDomains, sigDataResidencyLanguage, sigSingleVendorLlm)
 
 -- ─── Helpers ──────────────────────────────────────────────────
 
@@ -97,6 +97,58 @@ export func scoreApiDocsLink(body: string) -> Signal
   let def = sigApiDocsLink();
   let bl = toLower(body);
   let detected = contains(bl, "api documentation") || contains(bl, "/api/docs") || contains(bl, "developers.") || contains(bl, "/docs/api") || contains(bl, "api reference");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreWebhooks(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigWebhooks();
+  let bl = toLower(body);
+  let detected = contains(bl, "webhook") || contains(bl, "/webhooks") || contains(bl, "callback url") || contains(bl, "callback_url");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreRateLimitDocs(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigRateLimitDocs();
+  let bl = toLower(body);
+  -- "rate limit" / "rate-limit" / "x-ratelimit" header / "429" status / "throttl" prefix.
+  let detected = contains(bl, "rate limit") || contains(bl, "rate-limit") || contains(bl, "x-ratelimit") || contains(bl, "429") || contains(bl, "throttl");
+  {
+    name:          def.name,
+    description:   def.description,
+    topic:         def.topic,
+    points:        if detected then def.maxPoints else 0,
+    maxPoints:     def.maxPoints,
+    detected:      detected,
+    ailangFeature: def.ailangFeature
+  }
+}
+
+export func scoreStreamingEndpoint(body: string) -> Signal
+  ensures { result.points >= 0, result.points <= result.maxPoints }
+{
+  let def = sigStreamingEndpoint();
+  let bl = toLower(body);
+  let detected = contains(bl, "server-sent events") || contains(bl, "text/event-stream") || contains(bl, "/sse") || contains(bl, "eventsource") || contains(bl, "streaming endpoint");
   {
     name:          def.name,
     description:   def.description,
@@ -192,12 +244,15 @@ export func scoreSingleVendorLlm(body: string) -> Signal
 
 -- ─── Aggregators ──────────────────────────────────────────────
 
--- Run every scorer against the body, return all 8 Signal records.
+-- Run every scorer against the body, return all 11 Signal records.
 export func sketchScoreAllSignals(body: string) -> [Signal] = [
   scoreAgentJson(body),
   scoreOpenApi(body),
   scoreMcpEndpoint(body),
   scoreApiDocsLink(body),
+  scoreWebhooks(body),
+  scoreRateLimitDocs(body),
+  scoreStreamingEndpoint(body),
   scoreLlmProviderMentioned(body),
   scoreThirdPartyDomains(body),
   scoreDataResidencyLanguage(body),

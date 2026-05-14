@@ -279,16 +279,16 @@ func privacyMechanicsHtml() -> string = join("", [
     "Net @limit=1, AI @limit=50",
     "Capability budgets cap each run at a known number of calls.",
     "The comment-fetch is <code>Net @limit=1</code> — at most one HTTPS request per run, enforced by the runtime. No retry loops, no telemetry, no surprise outbound traffic. The sketch generator's AI budget is similarly bounded.",
-    "https://ailang.sunholo.com/docs/guides/getting-started",
-    "Capabilities ↗"
+    "https://ailang.sunholo.com/docs/guides/parameterised-effects",
+    "Parameterised effects ↗"
   ),
 
   privacyTileHtml(
     "requires { len(text) ≤ 3000 }",
     "Contracts are Z3-verified, not runtime checks.",
     "LinkedIn's 3000-character post limit is a <code>requires</code> clause on <code>linkedinCreatePost</code>, proved by an SMT solver. The rubric scorer's points-clamping is a contract too. Violations don't ship — they don't compile.",
-    "https://ailang.sunholo.com/docs/reference/implementation-status#verification-v061",
-    "Verification ↗"
+    "https://ailang.sunholo.com/docs/guides/contracts",
+    "Contracts &amp; verification ↗"
   ),
 
   privacyTileHtml(
@@ -318,6 +318,77 @@ func privacyTileHtml(primitive: string, title: string, body: string, href: strin
   "<p>", body, "</p>",
   "<a class=\"learn\" href=\"", href, "\" target=\"_blank\" rel=\"noopener\">", linkLabel, "</a>",
   "</article>"
+])
+
+-- ─── Agent-ready protocols section (AgentReady topic only) ───
+
+-- Six tiles linking to the AILANG features that make a site
+-- agent-callable: serve-api, OpenAPI 3.1 from H-M signatures, MCP,
+-- A2A, streaming, and the typed AI effect. Rendered only on the
+-- AgentReady topic page; see renderPrivacyMechanicsSection for the
+-- Privacy-topic analogue.
+func renderAgentReadyProtocolsSection(t: Topic) -> string =
+  match t {
+    AgentReady => agentReadyProtocolsHtml(),
+    _          => ""
+  }
+
+func agentReadyProtocolsHtml() -> string = join("", [
+  "<section class=\"tx-section tx-mechanics\">",
+  "<h2>Speak the agent protocols, in one command</h2>",
+  "<p class=\"lede\">Each tile is what an agent reaches for. The right-hand link is the AILANG primitive that produces it — usually <code>ailang serve-api</code>, which emits all four at once from your typed function signatures.</p>",
+  "<div class=\"tx-mechanic-grid\">",
+
+  privacyTileHtml(
+    "ailang serve-api  ⟶  REST + MCP + A2A + OpenAPI",
+    "One command, four protocols, zero glue code.",
+    "Point <code>ailang serve-api</code> at a directory of <code>.ail</code> modules. It exposes every exported function as a REST endpoint, an MCP tool, an A2A skill, and an OpenAPI 3.1 schema simultaneously. The same module runs in three places — native CLI, Cloud Run container, browser WASM.",
+    "https://ailang.sunholo.com/docs/guides/serve-api",
+    "Serve API guide ↗"
+  ),
+
+  privacyTileHtml(
+    "func price(sku: string, qty: int) -> Money  ⟶  openapi.json",
+    "OpenAPI 3.1 is generated from your Hindley-Milner signatures.",
+    "Function types are the API spec. A function's parameters, return type, and effect row determine paths, request bodies, response schemas, and security requirements automatically. Swagger UI is hosted at <code>/api/_meta/docs</code>; ReDoc at <code>/api/_meta/redoc</code>. No separate spec file to drift.",
+    "https://ailang.sunholo.com/docs/guides/serve-api#interactive-api-documentation",
+    "Interactive docs ↗"
+  ),
+
+  privacyTileHtml(
+    "POST /mcp/  ⟶  Model Context Protocol",
+    "Your typed functions become MCP tools.",
+    "Claude Desktop, Cursor, Cline, and any MCP-aware harness can call your AILANG functions directly. Arguments are validated against the same <code>requires</code> contracts the REST endpoint enforces. Run as HTTP at <code>/mcp/</code> or stdio for desktop hosts.",
+    "https://ailang.sunholo.com/docs/guides/serve-api#protocol-support",
+    "Protocol support ↗"
+  ),
+
+  privacyTileHtml(
+    "GET /.well-known/agent.json",
+    "Agent-to-Agent discovery comes for free.",
+    "<code>serve-api</code> writes the A2A agent card automatically — capabilities, skills, schemas, and authentication metadata all derive from your module exports. Agents that follow the A2A discovery convention land on a complete, machine-readable description of what you offer.",
+    "https://ailang.sunholo.com/docs/guides/serve-api#protocol-support",
+    "A2A in serve-api ↗"
+  ),
+
+  privacyTileHtml(
+    "requires { ... }  ⟶  JSON Schema constraints",
+    "Contracts are agent-visible guarantees, not server-only checks.",
+    "Your <code>requires</code> and <code>ensures</code> clauses surface in the OpenAPI spec as JSON Schema constraints, so an agent calling your endpoint knows what's valid before it tries. Invalid requests get rejected by the runtime; valid ones come with a contract on what shape the response has.",
+    "https://ailang.sunholo.com/docs/guides/contracts",
+    "Contracts &amp; verification ↗"
+  ),
+
+  privacyTileHtml(
+    "std/stream  ⟶  text/event-stream",
+    "Streaming endpoints are typed too.",
+    "<code>std/stream</code> exposes SSE and WebSocket as a single <code>Stream</code> effect. Handlers receive typed event values, not raw bytes; back-pressure is in the effect signature. Agents reading incrementally get the same contract guarantees as a single-shot request.",
+    "https://ailang.sunholo.com/docs/guides/streaming",
+    "Streaming guide ↗"
+  ),
+
+  "</div>",
+  "</section>"
 ])
 
 -- ─── Top-level rebuild ────────────────────────────────────────
@@ -447,7 +518,11 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
                 then renderLeaderboardSection(t, entries, generatedAt)
                 else renderNoLeaderboardSection(t);
   let rubric = renderRubricSection(t);
-  let privacy = renderPrivacyMechanicsSection(t);
+  let mechanics = match t {
+    Privacy    => renderPrivacyMechanicsSection(t),
+    AgentReady => renderAgentReadyProtocolsSection(t),
+    Portable   => ""
+  };
   let html = replaceMany(template, [
     ("{{TOPIC_LABEL}}",              topicSlug(t)),
     ("{{TOPIC_SLUG}}",               topicSlug(t)),
@@ -455,7 +530,7 @@ export func sketchRenderTopicPage(t: Topic, entries: [LeaderboardEntry], generat
     ("{{TOPIC_DESCRIPTION}}",        topicDescription(t)),
     ("{{TOPIC_DESCRIPTION_META}}",   topicDescriptionMeta(t)),
     ("{{LEADERBOARD_SECTION_HTML}}", section),
-    ("{{PRIVACY_SECTION_HTML}}",     privacy),
+    ("{{MECHANICS_SECTION_HTML}}",   mechanics),
     ("{{RUBRIC_SECTION_HTML}}",      rubric)
   ]);
   mkdirAll(sketchTopicDir(t));
