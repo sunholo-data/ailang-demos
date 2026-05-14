@@ -1284,6 +1284,124 @@
     background: var(--bg-input); color: var(--primary);
     padding: 2px 6px; border-radius: 4px; font-weight: 600;
   }
+
+  /* ─── Top-5 leaderboard previews ───────────────────────────── */
+  /* Three side-by-side mini-leaderboards immediately after the topic
+     cards. Each is a glance — top 5 entries, score, link through to
+     the full topic page for the rest. Rendered client-side from each
+     topic's leaderboard.json. */
+  .ll-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 22px;
+  }
+  @media (max-width: 880px) { .ll-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 580px) { .ll-mini-grid { grid-template-columns: 1fr; } }
+
+  .ll-mini-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 18px 14px;
+    display: flex; flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    position: relative;
+  }
+  /* Coral hairline at the top — small visual anchor without
+     repeating the topic-card affordances. */
+  .ll-mini-card::before {
+    content: '';
+    position: absolute; top: 0; left: 18px; right: 18px;
+    height: 2px; background: var(--primary);
+    border-radius: 2px;
+    opacity: 0.55;
+  }
+  .ll-mini-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px;
+  }
+  .ll-mini-name {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 14.5px; color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .ll-mini-name .accent { color: var(--primary); }
+  .ll-mini-total {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .ll-mini-total .num { color: var(--primary); font-weight: 700; }
+
+  .ll-mini-list {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column;
+    border-top: 1px dashed var(--border);
+  }
+  .ll-mini-row {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    align-items: center; gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 12.5px;
+    transition: background 0.12s ease;
+  }
+  .ll-mini-row:last-child { border-bottom: none; }
+  .ll-mini-row a {
+    color: inherit; text-decoration: none;
+    display: grid; grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center; gap: 10px;
+    padding: 8px 6px; margin: -8px -6px;
+    border-radius: 6px;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .ll-mini-row a:hover {
+    background: var(--primary-faded);
+  }
+  .ll-mini-row a:hover .ll-mini-domain { color: var(--primary); }
+  .ll-mini-rank {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 14px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ll-mini-domain {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-primary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+    transition: color 0.12s ease;
+  }
+  .ll-mini-score {
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .ll-mini-foot {
+    display: flex; justify-content: flex-end;
+    margin-top: 2px;
+  }
+  .ll-mini-see-all {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--primary); text-decoration: none;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.28);
+    padding-bottom: 1px;
+    transition: border-color 0.15s;
+  }
+  .ll-mini-see-all:hover { border-bottom-color: var(--primary); }
+
+  .ll-mini-loading {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    padding: 12px 0;
+  }
 </style>
 </head>
 <body>
@@ -1427,6 +1545,47 @@
         <span class="topic-cta">Open leaderboard →</span>
       </a>
     </div>
+
+    <!-- ─── Top-5 leaderboard previews, one per topic ─── -->
+    <div class="ll-mini-grid" aria-label="Current top-5 entries per topic">
+      <article class="ll-mini-card" data-topic="agent-ready">
+        <header class="ll-mini-head">
+          <span class="ll-mini-name">AILANG <span class="accent">×</span> agent-ready</span>
+          <span class="ll-mini-total"><span class="num">0</span> sketches</span>
+        </header>
+        <ol class="ll-mini-list" data-list="agent-ready">
+          <li class="ll-mini-loading">loading top 5…</li>
+        </ol>
+        <div class="ll-mini-foot">
+          <a class="ll-mini-see-all" href="topics/agent-ready/">See full board →</a>
+        </div>
+      </article>
+      <article class="ll-mini-card" data-topic="privacy">
+        <header class="ll-mini-head">
+          <span class="ll-mini-name">AILANG <span class="accent">×</span> privacy</span>
+          <span class="ll-mini-total"><span class="num">0</span> sketches</span>
+        </header>
+        <ol class="ll-mini-list" data-list="privacy">
+          <li class="ll-mini-loading">loading top 5…</li>
+        </ol>
+        <div class="ll-mini-foot">
+          <a class="ll-mini-see-all" href="topics/privacy/">See full board →</a>
+        </div>
+      </article>
+      <article class="ll-mini-card" data-topic="portable">
+        <header class="ll-mini-head">
+          <span class="ll-mini-name">AILANG <span class="accent">×</span> portable</span>
+          <span class="ll-mini-total"><span class="num">0</span> sketches</span>
+        </header>
+        <ol class="ll-mini-list" data-list="portable">
+          <li class="ll-mini-loading">loading top 5…</li>
+        </ol>
+        <div class="ll-mini-foot">
+          <a class="ll-mini-see-all" href="topics/portable/">See full board →</a>
+        </div>
+      </article>
+    </div>
+
     <div class="ll-topics-trigger">
       <p style="margin: 0 0 14px;">
         <strong>Trigger format:</strong> drop a comment like <code>https://acme.com #ailangAgentReady</code> on any Sunholo LinkedIn post.
@@ -1797,21 +1956,53 @@
     })[c]);
   }
 
-  /* ─── Topic-card live counts ─── */
-  // Each topic with data-has-leaderboard="true" fetches its leaderboard.json
-  // to fill in the sketch count. Topics without leaderboards stay at
-  // "no leaderboard" — no fetch.
-  document.querySelectorAll('.ll-topic-card[data-has-leaderboard="true"]').forEach(card => {
-    const topic = card.getAttribute('data-topic');
-    const countEl = card.querySelector('.topic-count');
+  /* ─── Topic-card live counts + top-5 leaderboard previews ─── */
+  // One fetch per topic; the result feeds both (a) the sketch-count badge
+  // on the topic card and (b) the top-5 mini-leaderboard preview.
+  ['agent-ready', 'privacy', 'portable'].forEach(topic => {
+    const card = document.querySelector(`.ll-topic-card[data-topic="${topic}"]`);
+    const mini = document.querySelector(`.ll-mini-card[data-topic="${topic}"]`);
     fetch(`topics/${topic}/leaderboard.json`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
         const n = data.totalSketches || 0;
         const noun = n === 1 ? 'sketch' : 'sketches';
-        countEl.innerHTML = `<span class="num">${n}</span> ${noun}`;
-        if (n > 0) countEl.classList.add('has-rank');
+
+        // (a) update the topic-card badge
+        if (card) {
+          const countEl = card.querySelector('.topic-count');
+          if (countEl) {
+            countEl.innerHTML = `<span class="num">${n}</span> ${noun}`;
+            if (n > 0) countEl.classList.add('has-rank');
+          }
+        }
+
+        // (b) render top 5 in the mini card
+        if (mini) {
+          const totalEl = mini.querySelector('.ll-mini-total');
+          if (totalEl) {
+            totalEl.innerHTML = `<span class="num">${n}</span> ${noun}`;
+          }
+          const list = mini.querySelector(`.ll-mini-list[data-list="${topic}"]`);
+          if (list) {
+            const top5 = (data.entries || []).slice(0, 5);
+            if (top5.length === 0) {
+              list.innerHTML = '<li class="ll-mini-loading">No entries yet — be the first.</li>';
+            } else {
+              list.innerHTML = top5.map(e => {
+                const dom = escapeHtml(e.registrableDomain);
+                const url = `topics/${topic}/${escapeAttr(e.sketchUrl)}`;
+                const rank = e.rank > 0 ? `#${e.rank}` : '·';
+                return `<li class="ll-mini-row"><a href="${url}">` +
+                  `<span class="ll-mini-rank">${rank}</span>` +
+                  `<span class="ll-mini-domain">${dom}</span>` +
+                  `<span class="ll-mini-score">${e.score}/10</span>` +
+                  `</a></li>`;
+              }).join('');
+            }
+          }
+        }
       })
       .catch(() => { /* silent — topic page may not exist yet */ });
   });
