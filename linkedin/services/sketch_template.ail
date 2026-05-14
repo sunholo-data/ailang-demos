@@ -197,10 +197,10 @@ export func topicLabel(t: Topic) -> string = topicSlug(t)
 -- honestly be measured from a single page fetch).
 
 -- §1 — headline + radar caption
-export func renderScoreHeadline(t: Topic, score: int) -> string =
+export func renderScoreHeadline(t: Topic, score: int, domain: string) -> string =
   if topicHasLeaderboard(t) then join("", [
-    "<h2>You scored <span class=\"sk-readiness-num\">", intToStr(score), "/10</span> on ", topicLabel(t), ".</h2>",
-    "<p>The radar shows AILANG-readiness across three commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>"
+    "<h2><span class=\"sk-domain\">", domain, "</span> scored <span class=\"sk-readiness-num\">", intToStr(score), "/10</span> on ", topicLabel(t), ".</h2>",
+    "<p>The radar shows AILANG-readiness across three commercial concerns. High means ", domain, " is already strong there; low means AILANG could meaningfully help.</p>"
   ]) else join("", [
     "<h2>", topicLabel(t), " isn't scored from a single page fetch.</h2>",
     "<p>Audit trails, AI spend control, and runtime agent reliability aren't visible on a marketing page. The cards below show where AILANG would help — chosen on what we see, not graded.</p>"
@@ -217,12 +217,12 @@ export func renderWhyBlock(t: Topic, whySignalsHtml: string, score: int) -> stri
   ]) else ""
 
 -- §3 — pretext sentence above the AILANG-feature cards.
-export func renderScorePretext(t: Topic, score: int) -> string =
+export func renderScorePretext(t: Topic, score: int, domain: string) -> string =
   if topicHasLeaderboard(t) then join("", [
-    "<p class=\"sk-score-pretext\">You scored <strong>", intToStr(score), "/10</strong> on ", topicLabel(t),
+    "<p class=\"sk-score-pretext\"><span class=\"sk-domain\">", domain, "</span> scored <strong>", intToStr(score), "/10</strong> on ", topicLabel(t),
     ". AILANG opportunity is therefore <strong>", intToStr(10 - score), "/10</strong>. Here's where it would land first.</p>"
   ]) else join("", [
-    "<p class=\"sk-score-pretext\">", topicLabel(t), " isn't scored from a single page fetch — see §1 for why. The cards below are the AILANG features that would help your kind of business.</p>"
+    "<p class=\"sk-score-pretext\">", topicLabel(t), " isn't scored from a single page fetch — see §1 for why. The cards below are the AILANG features that would help ", domain, ".</p>"
   ])
 
 -- ─── Rank block (optional) ────────────────────────────────────
@@ -281,9 +281,9 @@ export func sketchRenderHtml(
     ("{{GENERATED_AT}}",        sketch.generatedAt),
     ("{{RADAR_POINTS}}",        radarPoints),
     ("{{RANK_BLOCK_HTML}}",     rankBlockHtml),
-    ("{{SCORE_HEADLINE_HTML}}", renderScoreHeadline(topic, topicReadiness)),
+    ("{{SCORE_HEADLINE_HTML}}", renderScoreHeadline(topic, topicReadiness, sketch.registrableDomain)),
     ("{{WHY_BLOCK_HTML}}",      renderWhyBlock(topic, whySignalsHtml, topicReadiness)),
-    ("{{SCORE_PRETEXT_HTML}}",  renderScorePretext(topic, topicReadiness)),
+    ("{{SCORE_PRETEXT_HTML}}",  renderScorePretext(topic, topicReadiness, sketch.registrableDomain)),
     ("{{NARRATIVE_HEADLINE}}",  extracted.audience),
     ("{{NARRATIVE_BODY}}",      extracted.narrative),
     ("{{CHIPS_HTML}}",          chipsHtml),
