@@ -618,10 +618,13 @@ async function runPipeline() {
     setStepComplete(1);
 
     // Step 2: Load module into WASM
+    // Note: we used to call engine.reset() here, but that triggers an AILANG
+    // WASM bug — wasmAIHandlerSingleton is a package-level Go var that
+    // survives Reset(), so the post-reset call to ailangSetAIHandler does
+    // NOT re-wire the new REPL's effContext.AI, and the next `! {AI}` call
+    // fails with "no AI model configured". Overwriting the module by name
+    // gives us the freshness we need without losing the AI wiring.
     setStepActive(2);
-    setStepLog(2, 'Resetting WASM runtime...');
-    await engine.reset();
-    docparseLoaded = false; // reset() wipes all dynamic modules
     setStepLog(2, 'Loading extractor module...');
     const loadResult = engine.loadDynamicModule('extractor', ailangSource);
     if (!loadResult.success) {
