@@ -14,20 +14,20 @@
      ================================================================ */
 
   :root {
-    --bg-deep: #05070a;
-    --bg-primary: #0a0d12;
-    --bg-raised: #0f1318;
-    --bg-surface: #141920;
-    --bg-card: #181e28;
-    --bg-hover: #1c2330;
-    --border: #1a2030;
-    --border-active: #253040;
-    --border-bright: #304060;
+    --bg-deep: #161b22;
+    --bg-primary: #1c2230;
+    --bg-raised: #232a39;
+    --bg-surface: #2a3243;
+    --bg-card: #323b4d;
+    --bg-hover: #3a4458;
+    --border: #404a5e;
+    --border-active: #50587a;
+    --border-bright: #6873a0;
 
-    --text-primary: #d8dce6;
-    --text-secondary: #8892a4;
-    --text-muted: #556078;
-    --text-dim: #2d3548;
+    --text-primary: #ebeef4;
+    --text-secondary: #c0c8d7;
+    --text-muted: #8f9aab;
+    --text-dim: #5d6680;
 
     /* Accent palette */
     --green: #00e576;
@@ -1611,6 +1611,11 @@ function cacheDom() {
 // ── GeminiLiveCore Instance ──
 const core = new GeminiLiveCore({
   modules: [
+    // Package dependencies (must load before gemini_live_browser, which imports them).
+    { name: 'pkg/sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'pkg/sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    { name: 'pkg/sunholo/gemini_live/messages',  path: '../../ailang/pkg/sunholo/gemini_live/messages.ail' },
+    { name: 'pkg/sunholo/gemini_live/parsers',   path: '../../ailang/pkg/sunholo/gemini_live/parsers.ail' },
     { name: STREAM_MODULE, path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
     { name: 'streaming/safe_agent/services/business_tools', path: '../../ailang/streaming/safe_agent/services/business_tools.ail' },
     { name: AGENT_MODULE, path: '../../ailang/streaming/safe_agent/services/business_browser.ail' },
