@@ -809,6 +809,20 @@ class GeminiLiveCore {
       return text;
     });
     console.log('[AI Handler] registration:', result);
+
+    // Newer AILANG runtimes (v0.20.x) require grantCapability('AI') after
+    // setAIHandler — the handler registers a callback, but `! {AI}` calls
+    // are rejected without an explicit capability grant. setEffectHandler
+    // for Stream/IO still auto-grants, so we only need this for AI.
+    try {
+      if (typeof repl.grantCapability === 'function') {
+        repl.grantCapability('AI');
+      } else if (typeof window.ailangGrantCapability === 'function') {
+        window.ailangGrantCapability('AI');
+      }
+    } catch (err) {
+      console.warn('grantCapability(AI) failed:', err.message);
+    }
   }
 
   // ── Fallback Event Processing ──
