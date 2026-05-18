@@ -42,14 +42,20 @@ ENTRIES=(
   streaming/test_sse.ail
   streaming/test_stream_basic.ail
   streaming/claude_chat/main.ail
+  streaming/claude_chat/services/claude_chat_browser.ail
   streaming/safe_agent/main.ail
+  streaming/safe_agent/services/safe_agent_browser.ail
+  streaming/safe_agent/services/business_browser.ail
   streaming/gemini_live/main.ail
   streaming/gemini_live/gemini_live_browser.ail
   streaming/voice_docparse/main.ail
   streaming/ambient_assistant/main.ail
   streaming/ambient_assistant/ambient_browser.ail
-  # DocParse — note: parser modules now live in sunholo/ailang-parse.
-  # Only the browser adapter + bug_repro remain here; nothing to check.
+  # DocParse — parser modules live in sunholo/ailang-parse and are vendored
+  # under invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/. Check the
+  # browser adapter so any drift in the vendored package fails CI before
+  # going live on /docparse.html.
+  invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/services/docparse_browser.ail
   # Ecommerce
   ecommerce/main.ail
   ecommerce/bigquery_demo.ail
@@ -105,6 +111,59 @@ for entry in "${ENTRIES[@]}"; do
     fi
   fi
 done
+
+# ── Codegen smoke tests ──────────────────────────────────────
+# Some modules are generated at runtime by JS (e.g. invoice_processor_wasm's
+# schema-compiler.js produces a fresh `extractor.ail` per user schema). These
+# never appear under ENTRIES because they don't exist as static files, but
+# they ship to users and break just as visibly when AILANG syntax changes.
+# Generate a representative sample and check it the same way.
+
+run_codegen_check() {
+  local label="$1" generator="$2"
+  if [[ -n "$FILTER" && "$label" != *"$FILTER"* ]]; then
+    return
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    printf "%-55s %s\n" "$label" "SKIP (no node)"
+    skip=$((skip + 1))
+    return
+  fi
+  local tmp; tmp=$(mktemp -d)
+  trap "rm -rf '$tmp'" RETURN
+  if ! node "$generator" >"$tmp/codegen.ail" 2>"$tmp/codegen.err"; then
+    printf "%-55s %s\n" "$label" "FAIL (codegen)"
+    fail=$((fail + 1))
+    failed_entries+=("$label")
+    if $VERBOSE; then
+      echo "----- $label (generator error) -----"
+      sed 's/^/    /' "$tmp/codegen.err"
+      echo "-----"
+    fi
+    return
+  fi
+  output=$(ailang check "$tmp/codegen.ail" 2>&1)
+  status=$?
+  if [[ $status -eq 0 ]] && grep -q "No errors found" <<<"$output"; then
+    printf "%-55s %s\n" "$label" "PASS"
+    pass=$((pass + 1))
+  else
+    printf "%-55s %s\n" "$label" "FAIL"
+    fail=$((fail + 1))
+    failed_entries+=("$label")
+    if $VERBOSE; then
+      echo "----- $label -----"
+      echo "$output" | sed 's/^/    /'
+      echo "    --- generated source ---"
+      sed 's/^/    /' "$tmp/codegen.ail"
+      echo "-----"
+    fi
+  fi
+}
+
+run_codegen_check \
+  "[codegen] invoice_processor_wasm/extractor.ail" \
+  "$REPO_ROOT/scripts/codegen/check_extractor.mjs"
 
 echo
 echo "Summary: $pass pass, $fail fail, $skip skipped"

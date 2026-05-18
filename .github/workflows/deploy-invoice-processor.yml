@@ -45,16 +45,31 @@ jobs:
         working-directory: website_builder/portal
         run: npm test
 
-      - name: Install AILANG
+      - name: Resolve AILANG version
+        id: ailang_version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          RELEASE_JSON=$(curl -sfL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/sunholo-data/ailang/releases/latest)
-          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          if [ -f .ailang-version ]; then
+            RELEASE_TAG=$(tr -d '[:space:]' < .ailang-version)
+            echo "Pinned to $RELEASE_TAG (from .ailang-version)"
+          else
+            RELEASE_JSON=$(curl -sfL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              https://api.github.com/repos/sunholo-data/ailang/releases/latest)
+            RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+            echo "No .ailang-version pin, tracking latest: $RELEASE_TAG"
+          fi
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install AILANG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.ailang_version.outputs.tag }}
+        run: |
+          set -euo pipefail
           curl -sfL --retry 3 --retry-delay 5 \
             -H "Authorization: Bearer $GH_TOKEN" \
             -o ailang-linux.tar.gz \
@@ -81,21 +96,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve AILANG version
+        id: ailang_version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -f .ailang-version ]; then
+            RELEASE_TAG=$(tr -d '[:space:]' < .ailang-version)
+            echo "Pinned to $RELEASE_TAG (from .ailang-version)"
+          else
+            RELEASE_JSON=$(curl -sfL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              https://api.github.com/repos/sunholo-data/ailang/releases/latest)
+            RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+            echo "No .ailang-version pin, tracking latest: $RELEASE_TAG"
+          fi
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
       - name: Download AILANG WASM tarball
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.ailang_version.outputs.tag }}
         run: |
           set -euo pipefail
           WASM_DIR="wasm"
           mkdir -p "$WASM_DIR"
 
-          echo "::group::Fetching latest AILANG release info"
-          RELEASE_JSON=$(curl -sfL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/sunholo-data/ailang/releases/latest)
-          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
-          echo "Latest release: $RELEASE_TAG"
+          echo "::group::AILANG release"
+          echo "Using: $RELEASE_TAG"
           echo "::endgroup::"
 
           echo "::group::Downloading ailang-wasm.tar.gz"
@@ -217,14 +247,10 @@ jobs:
       - name: Install ailang CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.ailang_version.outputs.tag }}
         run: |
           set -euo pipefail
-          # Reuse the same release tag the WASM tarball came from
-          RELEASE_TAG=$(curl -sfL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/sunholo-data/ailang/releases/latest \
-            | jq -r '.tag_name')
+          # Same release tag the WASM tarball came from (resolved earlier)
           echo "Installing ailang ${RELEASE_TAG}"
           curl -sfL --retry 3 --retry-delay 5 \
             -H "Authorization: Bearer $GH_TOKEN" \

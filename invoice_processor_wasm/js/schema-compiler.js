@@ -79,7 +79,7 @@ pure func jint(n: int) -> Json = jnum(intToFloat(n))
     return `-- Effectful: calls AI oracle for field extraction
 -- The AI effect is host-granted (Gemini Flash via JS handler)
 func extractFields(document: string) -> string ! {AI} {
-  let prompt = "Extract these fields as JSON from the document below.\\nFields:\\n${fieldList}\\nFor int fields, return integer values (e.g. monetary amounts in cents).\\nReturn ONLY a JSON object with these exact field names.\\n\\nDocument:\\n" ++ document in
+  let prompt = "Extract these fields as JSON from the document below.\\nFields:\\n${fieldList}\\nFor int fields, return integer values (e.g. monetary amounts in cents).\\nReturn ONLY a JSON object with these exact field names.\\n\\nDocument:\\n\${document}" in
   call(prompt)
 }
 
@@ -252,7 +252,7 @@ export func processFile(base64Data: string, mimeType: string, fileName: string) 
 -- Validate pre-extracted JSON data (pure, no effects)
 export pure func validateOnly(jsonString: string) -> string =
   match decode(jsonString) {
-    Err(e) => encodeError("Invalid JSON: " ++ e),
+    Err(e) => encodeError("Invalid JSON: \${e}"),
     Ok(jsonObj) =>
       match ${parseFn}(jsonObj) {
         None => encodeError("Failed to parse fields from extraction result"),
