@@ -74,9 +74,25 @@ class AilangEngine {
       } else {
         window.ailangSetAIHandler(handler);
       }
+      // Newer AILANG runtimes don't auto-grant the AI capability from
+      // setAIHandler — the handler registers a callback, but a separate
+      // grantCapability('AI') is required before `! {AI}` calls succeed.
+      this._grantAICapability();
       console.log('Registered native AI handler');
     } else {
       console.log('Stored AI handler for JS-side fallback (no native WASM AI support)');
+    }
+  }
+
+  _grantAICapability() {
+    try {
+      if (typeof this.repl.grantCapability === 'function') {
+        this.repl.grantCapability('AI');
+      } else if (typeof window.ailangGrantCapability === 'function') {
+        window.ailangGrantCapability('AI');
+      }
+    } catch (err) {
+      console.warn('grantCapability(AI) failed:', err.message);
     }
   }
 
@@ -210,13 +226,15 @@ class AilangEngine {
       this.repl.importModule(lib);
     }
 
-    // Re-register AI handler if we have native support
+    // Re-register AI handler if we have native support. reset() also wipes
+    // granted capabilities, so re-grant AI alongside re-registering.
     if (this._hasNativeAI && this._aiHandler) {
       if (typeof this.repl.setAIHandler === 'function') {
         this.repl.setAIHandler(this._aiHandler);
       } else {
         window.ailangSetAIHandler(this._aiHandler);
       }
+      this._grantAICapability();
     }
   }
 
