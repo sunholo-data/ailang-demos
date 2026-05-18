@@ -704,6 +704,11 @@ const DOCPARSE_MODULE = 'docparse/services/docparse_browser';
 // ── GeminiLiveCore instance ──
 const core = new GeminiLiveCore({
   modules: [
+    // Gemini Live package modules — must load before gemini_live_browser (which imports them).
+    { name: 'pkg/sunholo/gemini_live/voices',        path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
+    { name: 'pkg/sunholo/gemini_live/endpoints',     path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+    { name: 'pkg/sunholo/gemini_live/messages',      path: '../../ailang/pkg/sunholo/gemini_live/messages.ail' },
+    { name: 'pkg/sunholo/gemini_live/parsers',       path: '../../ailang/pkg/sunholo/gemini_live/parsers.ail' },
     { name: STREAM_MODULE,                           path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
     // DocParse modules from the vendored sunholo/ailang_parse registry package.
     { name: 'pkg/sunholo/a2ui/components',            path: '../../ailang/pkg/sunholo/a2ui/components.ail' },
