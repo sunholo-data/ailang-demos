@@ -1611,11 +1611,7 @@ function cacheDom() {
 // ── GeminiLiveCore Instance ──
 const core = new GeminiLiveCore({
   modules: [
-    // Package dependencies (must load before gemini_live_browser, which imports them).
-    { name: 'pkg/sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
-    { name: 'pkg/sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
-    { name: 'pkg/sunholo/gemini_live/messages',  path: '../../ailang/pkg/sunholo/gemini_live/messages.ail' },
-    { name: 'pkg/sunholo/gemini_live/parsers',   path: '../../ailang/pkg/sunholo/gemini_live/parsers.ail' },
+    ...GEMINI_LIVE_PKG_MODULES,  // from shared/gemini-live-core.js — required by gemini_live_browser
     { name: STREAM_MODULE, path: '../../ailang/streaming/gemini_live/gemini_live_browser.ail' },
     { name: 'streaming/safe_agent/services/business_tools', path: '../../ailang/streaming/safe_agent/services/business_tools.ail' },
     { name: AGENT_MODULE, path: '../../ailang/streaming/safe_agent/services/business_browser.ail' },

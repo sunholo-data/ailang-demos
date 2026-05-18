@@ -431,6 +431,38 @@ jobs:
           echo "::endgroup::"
           echo "Assembled $(find _site -type f | wc -l) files into _site/"
 
+      - name: Setup Node for smoke test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/smoke/package-lock.json
+
+      - name: Install smoke test dependencies
+        working-directory: scripts/smoke
+        run: |
+          npm ci
+          # Browser binary + system deps (libnss3 et al on ubuntu-latest).
+          npx playwright install --with-deps chromium
+
+      - name: Smoke test — boot every WASM demo
+        # Static HTTP server on _site/ then drive each demo page headlessly.
+        # Each WASM page emits window.__demoReady on successful init; smoke
+        # waits for that signal and fails the build on timeout, page errors,
+        # or non-ignored 4xx responses. Catches the "page loads but never
+        # boots" bug class that ailang check can't see.
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8090 --directory _site > /tmp/smoke-server.log 2>&1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+          # Wait for the server to be reachable
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8090/ -o /dev/null; then break; fi
+            sleep 0.5
+          done
+          BASE=http://localhost:8090 node scripts/smoke/smoke.mjs
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

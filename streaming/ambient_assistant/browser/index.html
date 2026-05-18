@@ -1327,12 +1327,7 @@ function updateStatsUI(stats) {
 const WASM_MODULE = 'streaming/ambient_assistant/ambient_browser';
 const core = new GeminiLiveCore({
   modules: [
-    // Package dependencies (loaded before main module)
-    { name: 'pkg/sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
-    { name: 'pkg/sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
-    { name: 'pkg/sunholo/gemini_live/messages',  path: '../../ailang/pkg/sunholo/gemini_live/messages.ail' },
-    { name: 'pkg/sunholo/gemini_live/parsers',   path: '../../ailang/pkg/sunholo/gemini_live/parsers.ail' },
-    // Main module
+    ...GEMINI_LIVE_PKG_MODULES,  // from shared/gemini-live-core.js — required by gemini_live_browser
     { name: WASM_MODULE, path: '../../ailang/streaming/ambient_assistant/ambient_browser.ail' },
   ],
   playbackRate: 48000,

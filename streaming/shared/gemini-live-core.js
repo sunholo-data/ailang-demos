@@ -15,6 +15,23 @@
 //   // AILANG drives session via std/stream effects
 // ═══════════════════════════════════════════════════
 
+// Shared package-module lists used by every streaming demo that bridges
+// std/stream to Gemini Live. Spread these into the demo's `modules: [...]`
+// array AHEAD of the demo's own browser module — gemini_live_browser
+// imports all four, and silently fails to load if they aren't registered
+// first. Each new demo that forgets these gets the "page never boots up"
+// symptom (see safe_agent, voice_docparse history). Single source so the
+// next demo can't drift.
+//
+// Paths are relative to streaming/<demo>/index.html, where every streaming
+// demo lives.
+const GEMINI_LIVE_PKG_MODULES = [
+  { name: 'pkg/sunholo/gemini_live/voices',    path: '../../ailang/pkg/sunholo/gemini_live/voices.ail' },
+  { name: 'pkg/sunholo/gemini_live/endpoints', path: '../../ailang/pkg/sunholo/gemini_live/endpoints.ail' },
+  { name: 'pkg/sunholo/gemini_live/messages',  path: '../../ailang/pkg/sunholo/gemini_live/messages.ail' },
+  { name: 'pkg/sunholo/gemini_live/parsers',   path: '../../ailang/pkg/sunholo/gemini_live/parsers.ail' },
+];
+
 class GeminiLiveCore {
   constructor(config) {
     // Merge defaults
@@ -137,9 +154,13 @@ class GeminiLiveCore {
       this._wasmReady = true;
       this.config.onLog('ok', 'AILANG WASM loaded — <span class="hl">std/stream effects</span> bridged to browser');
       this.config.onWasmReady();
+      // Smoke-test signal — Playwright waits for this to confirm the page
+      // booted past WASM init + every module load.
+      window.__demoReady = true;
     } catch (e) {
       this.config.onLog('err', GeminiLiveCore.escapeHtml('WASM init failed: ' + e.message));
       this.config.onWasmError(e);
+      window.__demoError = e.message;
     }
   }
 
@@ -1017,3 +1038,7 @@ class GeminiLiveCore {
     return Math.sqrt(sum / data.length);
   }
 }
+
+// Attach as a static property too, so callers can reference it as either
+// GEMINI_LIVE_PKG_MODULES (top-level) or GeminiLiveCore.GEMINI_LIVE_PKG_MODULES.
+GeminiLiveCore.GEMINI_LIVE_PKG_MODULES = GEMINI_LIVE_PKG_MODULES;

@@ -88,10 +88,15 @@ async function init() {
 
     // Load default demo
     loadDemo('invoice');
+
+    // Smoke-test signal — Playwright waits for this to confirm the page
+    // booted past WASM init.
+    window.__demoReady = true;
   } catch (err) {
     hideLoading();
     showError(`Failed to initialize AILANG: ${err.message}`);
     console.error('Init error:', err);
+    window.__demoError = err.message;
   }
 }
 
