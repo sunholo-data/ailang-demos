@@ -16,6 +16,9 @@ on:
       - 'linkedin/data/comments.json'
       - 'ailang.toml'
       - 'ailang.lock'
+      - '.ailang-version'
+      - 'scripts/check_demos.sh'
+      - 'scripts/codegen/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
