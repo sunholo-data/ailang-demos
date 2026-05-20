@@ -2219,9 +2219,28 @@
   // legible even when the rest of the page hasn't rendered. Far easier to
   // diagnose than telling users to open DevTools, and survives a partially
   // failed boot where in-page UI never gets wired up.
+  // Boot diagnostics — every phase boundary AND every error gets pushed here.
+  // Surface in three places: (1) the red fixed banner, (2) console with a
+  // [commons boot] prefix, (3) localStorage so the LAST boot's diag survives
+  // a reload — view at /cognitive_commons/diag.html or just grep localStorage.
+  window.__bootDiag = [];
+  function bootLog(kind, label, detail) {
+    const entry = {
+      t: new Date().toISOString(),
+      kind: kind,        // "phase" | "ok" | "error"
+      label: label,
+      detail: detail || null,
+    };
+    window.__bootDiag.push(entry);
+    try { localStorage.setItem("commons_boot_diag", JSON.stringify(window.__bootDiag)); } catch (_) {}
+    if (kind === "error") console.error("[commons boot] ✗", label, "—", detail);
+    else if (kind === "phase") console.log("[commons boot] →", label);
+    else                       console.log("[commons boot] ✓", label, detail || "");
+  }
+
   function showBootError(label, err) {
     const detail = err && err.stack ? err.stack : (err && err.message ? err.message : String(err));
-    console.error("[commons boot]", label, err);
+    bootLog("error", label, detail);
     let banner = document.getElementById("boot-error-banner");
     if (!banner) {
       banner = document.createElement("div");
@@ -2234,6 +2253,33 @@
         "box-shadow:0 4px 12px rgba(0,0,0,0.4)",
         "max-height:60vh", "overflow:auto", "white-space:pre-wrap",
       ].join(";");
+      // Toolbar row with Copy + Dismiss buttons so the user can paste the
+      // full error directly into chat without scrolling around DevTools.
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex; gap:8px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2);";
+      const copyBtn = document.createElement("button");
+      copyBtn.textContent = "Copy all";
+      copyBtn.style.cssText = "background:#fdfaf3; color:#7a1715; border:none; padding:4px 10px; border-radius:3px; cursor:pointer; font:600 12px 'JetBrains Mono', monospace;";
+      copyBtn.onclick = () => {
+        const text = window.__bootDiag.map(e =>
+          `[${e.t}] ${e.kind.toUpperCase()} ${e.label}` + (e.detail ? "\n  " + String(e.detail).replace(/\n/g, "\n  ") : "")
+        ).join("\n\n");
+        navigator.clipboard.writeText(text).then(
+          () => { copyBtn.textContent = "✓ Copied"; setTimeout(() => copyBtn.textContent = "Copy all", 1500); },
+          () => { copyBtn.textContent = "✗ Clipboard denied"; }
+        );
+      };
+      bar.appendChild(copyBtn);
+      const dismissBtn = document.createElement("button");
+      dismissBtn.textContent = "Dismiss";
+      dismissBtn.style.cssText = copyBtn.style.cssText;
+      dismissBtn.onclick = () => banner.remove();
+      bar.appendChild(dismissBtn);
+      const tag = document.createElement("span");
+      tag.style.cssText = "margin-left:auto; opacity:0.7; font-size:11px;";
+      tag.textContent = "boot diagnostic banner — also at console + localStorage.commons_boot_diag";
+      bar.appendChild(tag);
+      banner.appendChild(bar);
       document.body.appendChild(banner);
     }
     const entry = document.createElement("div");
@@ -2388,20 +2434,33 @@
       console.warn("[commons] AILANG REPL not loaded — pure-JS fallback");
       return;
     }
+    bootLog("phase", "initAilang start");
     const repl = new AilangREPL();
-    // Tag each phase so the boot banner shows EXACTLY which fetch failed.
-    // Previously a single 'AILANG WASM init failed: NetworkError' could mean
-    // either the 40MB WASM binary or any of 5 .ail module fetches — now the
-    // label tells you which.
     try {
       await repl.init("wasm/ailang.wasm");
     } catch (e) {
       throw new Error("WASM binary fetch (wasm/ailang.wasm): " + (e && e.message || e));
     }
+    bootLog("ok", "WASM binary loaded", "ailang version: " + (repl.getVersion ? repl.getVersion() : "(unknown)"));
+
     for (const lib of ["std/json", "std/option", "std/result", "std/string", "std/math", "std/ai", ...AILANG_EXTRA_STDLIBS]) {
-      repl.importModule(lib);
+      const r = repl.importModule(lib);
+      if (typeof r === "string" && r.toLowerCase().includes("error")) {
+        bootLog("error", "importModule failed: " + lib, r);
+      }
     }
+    bootLog("ok", "stdlib imports complete");
+
+    // Loaded modules registry — list AFTER each load so we can see what
+    // the WASM thinks it has available. If a load silently failed, this
+    // tells us which name is missing.
+    const listMods = () => {
+      try { return (repl.listModules && repl.listModules()) || []; }
+      catch (_) { return []; }
+    };
+
     for (const m of AILANG_MODULES) {
+      bootLog("phase", "loadModule: " + m.name);
       let r;
       try {
         r = await fetch(m.path + "?v=" + Date.now());
@@ -2411,7 +2470,18 @@
       if (!r.ok) throw new Error(".ail fetch returned " + r.status + " for " + m.path);
       const src = await r.text();
       const loaded = repl.loadModule(m.name, src);
-      if (!loaded.success) throw new Error("loadModule " + m.name + " failed: " + (loaded.error || "(no error message)"));
+      if (!loaded || !loaded.success) {
+        const errStr = (loaded && loaded.error) || "(no error string returned)";
+        const known = listMods();
+        throw new Error(
+          "loadModule " + m.name + " failed: " + errStr +
+          "\n  Module path: " + m.path +
+          "\n  Source size: " + src.length + " bytes" +
+          "\n  Modules known to WASM at point of failure: " + (known.length ? known.join(", ") : "(none)") +
+          "\n  AILANG version in WASM: " + (repl.getVersion ? repl.getVersion() : "(unknown)")
+        );
+      }
+      bootLog("ok", "loaded " + m.name, src.length + " bytes");
     }
     // Wire std/ai handler — routes back into THIS module's LLM call path
     // so AILANG's compose + judge calls use the user's configured provider.

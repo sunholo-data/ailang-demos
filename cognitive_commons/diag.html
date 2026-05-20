@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cognitive Commons — Boot Diagnostic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --sun-red:#e73c17; --ink:#1a1a1a; --ink-dim:#555; --paper:#fdfaf3; --line:#d8d0bf; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: "Inter", system-ui, sans-serif; }
+    main { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+    h1 { font-family: "Montserrat", sans-serif; color: var(--sun-red); font-size: 28px; margin: 0 0 8px; }
+    p { color: var(--ink-dim); font-size: 14px; line-height: 1.5; }
+    .actions { display: flex; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; }
+    button {
+      font: 600 13px "Inter", sans-serif; padding: 8px 16px; border-radius: 4px;
+      border: 1px solid var(--sun-red); background: white; color: var(--sun-red); cursor: pointer;
+    }
+    button.primary { background: var(--sun-red); color: white; }
+    button:hover { background: var(--sun-red); color: white; }
+    pre {
+      background: var(--ink); color: #e0e0e0; padding: 18px; border-radius: 6px;
+      font: 12px "JetBrains Mono", monospace; line-height: 1.5; white-space: pre-wrap;
+      max-height: 70vh; overflow: auto;
+    }
+    pre .err { color: #ff8a80; font-weight: 600; }
+    pre .ok { color: #80cbc4; }
+    pre .phase { color: #fff59d; }
+    .empty { color: var(--ink-dim); font-style: italic; padding: 40px; text-align: center; border: 1px dashed var(--line); border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Boot diagnostic</h1>
+    <p>Last boot's phase-by-phase trace from <code>localStorage.commons_boot_diag</code>. Updated every time you visit <a href="./">/cognitive_commons/</a>.</p>
+    <div class="actions">
+      <button class="primary" id="btn-copy">Copy to clipboard</button>
+      <button id="btn-reload">Reload demo</button>
+      <button id="btn-clear">Clear diag</button>
+    </div>
+    <pre id="diag" aria-live="polite"></pre>
+  </main>
+  <script>
+    function render() {
+      const pre = document.getElementById("diag");
+      const raw = localStorage.getItem("commons_boot_diag");
+      if (!raw) {
+        pre.innerHTML = '<div class="empty">No diagnostic recorded yet. Visit the demo page first, then come back here.</div>';
+        return;
+      }
+      let entries;
+      try { entries = JSON.parse(raw); } catch (e) {
+        pre.textContent = "Could not parse stored diagnostic: " + e.message + "\n\nRaw:\n" + raw;
+        return;
+      }
+      if (!Array.isArray(entries) || entries.length === 0) {
+        pre.innerHTML = '<div class="empty">Diagnostic is empty.</div>';
+        return;
+      }
+      pre.innerHTML = "";
+      entries.forEach((e) => {
+        const line = document.createElement("div");
+        line.className = e.kind || "";
+        const head = "[" + (e.t || "?") + "] " + (e.kind || "?").toUpperCase().padEnd(5) + " " + (e.label || "(no label)");
+        line.textContent = head;
+        pre.appendChild(line);
+        if (e.detail) {
+          const det = document.createElement("div");
+          det.textContent = "  " + String(e.detail).split("\n").join("\n  ");
+          det.style.opacity = "0.85";
+          pre.appendChild(det);
+        }
+        const sp = document.createElement("div");
+        sp.textContent = "";
+        pre.appendChild(sp);
+      });
+    }
+    function plain() {
+      const raw = localStorage.getItem("commons_boot_diag");
+      if (!raw) return "(empty)";
+      try {
+        const entries = JSON.parse(raw);
+        return entries.map(e =>
+          "[" + e.t + "] " + e.kind.toUpperCase() + " " + e.label +
+          (e.detail ? "\n  " + String(e.detail).replace(/\n/g, "\n  ") : "")
+        ).join("\n\n");
+      } catch (_) { return raw; }
+    }
+    document.getElementById("btn-copy").onclick = () => {
+      navigator.clipboard.writeText(plain()).then(
+        () => alert("Copied " + (window.__lastLen || "all") + " entries to clipboard."),
+        () => alert("Clipboard write denied. Select the text in the box manually.")
+      );
+    };
+    document.getElementById("btn-reload").onclick = () => { window.location.href = "./"; };
+    document.getElementById("btn-clear").onclick = () => {
+      localStorage.removeItem("commons_boot_diag");
+      render();
+    };
+    render();
+  </script>
+</body>
+</html>
