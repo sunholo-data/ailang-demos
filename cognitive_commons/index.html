@@ -2257,13 +2257,16 @@
 
   // Step-instrumented boot — each phase is labelled so the user can see in
   // the error banner exactly which phase failed if anything throws.
+  // Non-fatal by default: log the failure but keep booting so a later
+  // phase (especially WASM init) still gets a chance to run. The earlier
+  // 'throw' here was masking failures by aborting boot before initAilang.
   async function bootStep(label, fn) {
     try {
       const r = fn();
       if (r && typeof r.then === "function") await r;
     } catch (e) {
       showBootError("boot phase failed: " + label, e);
-      throw e;
+      // Don't rethrow — let subsequent phases continue.
     }
   }
 
@@ -2275,45 +2278,39 @@
       return;
     }
 
-    try {
-      await bootStep("CognitiveOS.attach (open IDB)", () => {
-        const result = window.CognitiveOS.attach({
-          rootSelector: "[data-cog-runtime-root]",
-          withEventLog: true,
-          dbName: "ailang_cognitive_commons",
-        });
-        return result && typeof result.then === "function" ? result : null;
+    await bootStep("CognitiveOS.attach (open IDB)", () => {
+      const result = window.CognitiveOS.attach({
+        rootSelector: "[data-cog-runtime-root]",
+        withEventLog: true,
+        dbName: "ailang_cognitive_commons",
       });
+      return result && typeof result.then === "function" ? result : null;
+    });
 
-      // After attach, sender + clock are set.
-      let snap;
-      await bootStep("debugSnapshot + persona assign", () => {
-        snap = window.CognitiveOS.debugSnapshot();
-        app.senderId = snap.sender;
-        app.autoPersona = deterministicPersona(app.senderId);
-        const stored = sessionStorage.getItem("commons_persona");
-        app.persona = stored && PERSONAS.includes(stored) ? stored : app.autoPersona;
-        els.personaSelect.value = stored ? app.persona : "auto";
-        els.senderId.textContent = shortSender(app.senderId);
-        addToRoster(app.senderId, app.persona, snap.clock);
-        refreshRoster();
-      });
+    // After attach, sender + clock are set.
+    let snap;
+    await bootStep("debugSnapshot + persona assign", () => {
+      snap = window.CognitiveOS.debugSnapshot();
+      app.senderId = snap.sender;
+      app.autoPersona = deterministicPersona(app.senderId);
+      const stored = sessionStorage.getItem("commons_persona");
+      app.persona = stored && PERSONAS.includes(stored) ? stored : app.autoPersona;
+      els.personaSelect.value = stored ? app.persona : "auto";
+      els.senderId.textContent = shortSender(app.senderId);
+      addToRoster(app.senderId, app.persona, snap.clock);
+      refreshRoster();
+    });
 
-      await bootStep("reconstructFromLog (read recent events)", () => reconstructFromLog());
-      await bootStep("subscribeCommons (Msg recv pump)", () => subscribeCommons());
-      await bootStep("setupHeartbeat (BroadcastChannel)", () => setupHeartbeat());
-      await bootStep("scheduleCompose (initial timer)", () => scheduleCompose());
-      app.rosterPruneTimer = setInterval(pruneRoster, 4000);
-      await bootStep("wireControls (button handlers)", () => wireControls());
-      await bootStep("restoreAiConfig (provider/key/model from storage)", () => restoreAiConfig());
-      await bootStep("loadTopic + wireTopicInput", () => { loadTopic(); wireTopicInput(); });
-      await bootStep("wireConstellationInteractions (hover/pan/zoom)", () => wireConstellationInteractions());
-      await bootStep("refreshStats (initial counters)", () => refreshStats());
-    } catch (_) {
-      // Each bootStep already surfaced its own error banner; bail before
-      // attempting WASM init since the JS-side state is already broken.
-      return;
-    }
+    await bootStep("reconstructFromLog (read recent events)", () => reconstructFromLog());
+    await bootStep("subscribeCommons (Msg recv pump)", () => subscribeCommons());
+    await bootStep("setupHeartbeat (BroadcastChannel)", () => setupHeartbeat());
+    await bootStep("scheduleCompose (initial timer)", () => scheduleCompose());
+    app.rosterPruneTimer = setInterval(pruneRoster, 4000);
+    await bootStep("wireControls (button handlers)", () => wireControls());
+    await bootStep("restoreAiConfig (provider/key/model from storage)", () => restoreAiConfig());
+    await bootStep("loadTopic + wireTopicInput", () => { loadTopic(); wireTopicInput(); });
+    await bootStep("wireConstellationInteractions (hover/pan/zoom)", () => wireConstellationInteractions());
+    await bootStep("refreshStats (initial counters)", () => refreshStats());
 
     // AILANG WASM compute path — REQUIRED. This demo proves AILANG can
     // own a multi-tab debating society's compute layer. If WASM fails
