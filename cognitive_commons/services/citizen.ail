@@ -1,10 +1,22 @@
--- MINIMAL STUB for WASM bisect — see /tmp/citizen.ail.orig for full version.
+-- TEMPORARY STUB — full citizen.ail (in .orig.full) triggers a WASM
+-- type-checker stack overflow that's UNDER INVESTIGATION upstream.
+-- See debug-notes/wasm-citizen-stack-overflow.md in this repo for the
+-- diagnostic trail. While the upstream fix is pending, this stub
+-- preserves the module's exported shape so commons_browser.ail type-
+-- checks and the page can boot. AI-driven speak() returns a placeholder
+-- until the real body can be re-enabled.
+
 module cognitive_commons/services/citizen
 
 import std/ai (callJson)
+import std/dom (DOMPatch, AddPanel, applyPatchResult)
+import std/cognition (sendMsgResult)
 import std/result (Result, Ok, Err)
-import cognitive_commons/types/personas (Persona)
+import std/string (length)
+
+import cognitive_commons/types/personas (Persona, label)
 import cognitive_commons/services/consensus (CommonsState)
+import cognitive_commons/services/persuasion (JudgeScore)
 
 export type AuthorReply = {
   text: string,
@@ -19,6 +31,26 @@ export func compose(
   proposer: Persona,
   st: CommonsState
 ) -> Result[AuthorReply, string] ! {AI} = {
-  let _r = callJson(persona_prompt, "{}");
-  Ok({ text: "stub", glyph: "", manifesto: "" })
+  let _ignored = callJson(persona_prompt, "{}");
+  Ok({
+    text: "(citizen stub — real AI call disabled pending upstream WASM type-checker fix)",
+    glyph: "",
+    manifesto: ""
+  })
+}
+
+export func speak(
+  st: CommonsState,
+  proposer: Persona,
+  persona_prompt: string,
+  topic: string,
+  recent_dialogue: string,
+  clock: int,
+  region: string
+) -> Result[CommonsState, string] ! {AI, DOM, Msg} = {
+  let proposer_label = label(proposer);
+  let panel_title = "${proposer_label} · clk ${show(clock)} · stub";
+  let _patch = applyPatchResult(region, AddPanel(panel_title, "(citizen stub)"));
+  let _send = sendMsgResult("commons", "(citizen stub)");
+  Ok(st)
 }
