@@ -57,7 +57,16 @@
       text-rendering: optimizeLegibility;
     }
 
-    /* Grain overlay for paper feel */
+    /* Grain overlay for paper feel.
+       NOTE: feTurbulence + mix-blend-mode:multiply on a fixed overlay used
+       to freeze the page during scroll — Chromium re-rasterized the SVG
+       filter against the composited document on every paint. Fixed by:
+         (1) dropping mix-blend-mode (the compositing-killer)
+         (2) using a static repeating background-size so the SVG filter is
+             rasterized once per tile, then GPU-tiled
+         (3) will-change: opacity to promote the overlay to its own layer
+       Visual cost: negligible — at opacity 0.035 the blend mode wasn't
+       contributing much above plain alpha-blending anyway. */
     body::before {
       content: "";
       position: fixed;
@@ -65,8 +74,10 @@
       pointer-events: none;
       opacity: 0.035;
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+      background-size: 200px 200px;
+      background-repeat: repeat;
       z-index: 100;
-      mix-blend-mode: multiply;
+      will-change: opacity;
     }
 
     a { color: var(--sun-red); text-decoration: none; border-bottom: 1px solid var(--rule); }
