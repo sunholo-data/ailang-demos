@@ -1719,6 +1719,28 @@
     <button id="replay-stop">Stop replay</button>
   </div>
 
+  <!-- Diagnosis: the constellation SVG (with pulsing dot halo + radial-gradient
+       background + 60×60 SVG pattern grid + custom-font text labels) was the
+       culprit behind the Firefox "page slowing down" warning when scrolled
+       into view. Hidden behind ?compass=1 so it can be toggled back for
+       comparison. The DOM remains so JS refs (els.constellation, els.sentDot,
+       etc.) stay valid; rendering and animation just don't run. -->
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const want = params.get("compass");
+      // Default OFF (hidden) while we debug the freeze. Pass ?compass=1 to show.
+      if (want !== "1") {
+        const style = document.createElement("style");
+        style.textContent = `
+          .constellation-section { display: none !important; }
+          #sent-dot-halo { animation: none !important; }
+        `;
+        document.documentElement.appendChild(style);
+      }
+    })();
+  </script>
+
   <section class="constellation-section">
     <div class="constellation-rubric">
       <span>
