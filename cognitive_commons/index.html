@@ -2392,16 +2392,29 @@
       return;
     }
     const repl = new AilangREPL();
-    await repl.init("wasm/ailang.wasm");
+    // Tag each phase so the boot banner shows EXACTLY which fetch failed.
+    // Previously a single 'AILANG WASM init failed: NetworkError' could mean
+    // either the 40MB WASM binary or any of 5 .ail module fetches — now the
+    // label tells you which.
+    try {
+      await repl.init("wasm/ailang.wasm");
+    } catch (e) {
+      throw new Error("WASM binary fetch (wasm/ailang.wasm): " + (e && e.message || e));
+    }
     for (const lib of ["std/json", "std/option", "std/result", "std/string", "std/math", "std/ai", ...AILANG_EXTRA_STDLIBS]) {
       repl.importModule(lib);
     }
     for (const m of AILANG_MODULES) {
-      const r = await fetch(m.path + "?v=" + Date.now());
-      if (!r.ok) throw new Error("fetch " + m.path + " → " + r.status);
+      let r;
+      try {
+        r = await fetch(m.path + "?v=" + Date.now());
+      } catch (e) {
+        throw new Error(".ail fetch failed (" + m.path + "): " + (e && e.message || e));
+      }
+      if (!r.ok) throw new Error(".ail fetch returned " + r.status + " for " + m.path);
       const src = await r.text();
       const loaded = repl.loadModule(m.name, src);
-      if (!loaded.success) throw new Error("load " + m.name + ": " + loaded.error);
+      if (!loaded.success) throw new Error("loadModule " + m.name + " failed: " + (loaded.error || "(no error message)"));
     }
     // Wire std/ai handler — routes back into THIS module's LLM call path
     // so AILANG's compose + judge calls use the user's configured provider.
