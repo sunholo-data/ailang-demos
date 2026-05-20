@@ -2182,65 +2182,105 @@
   // ===========================================================================
   // BOOT
   // ===========================================================================
+  // Visible error surface — pinned to top of viewport so a boot failure is
+  // legible even when the rest of the page hasn't rendered. Far easier to
+  // diagnose than telling users to open DevTools, and survives a partially
+  // failed boot where in-page UI never gets wired up.
+  function showBootError(label, err) {
+    const detail = err && err.stack ? err.stack : (err && err.message ? err.message : String(err));
+    console.error("[commons boot]", label, err);
+    let banner = document.getElementById("boot-error-banner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "boot-error-banner";
+      banner.style.cssText = [
+        "position:fixed", "top:0", "left:0", "right:0", "z-index:99999",
+        "background:#7a1715", "color:#ffe9e6", "padding:14px 20px",
+        "font-family:'JetBrains Mono',monospace", "font-size:13px",
+        "line-height:1.5", "border-bottom:3px solid #ff5a3c",
+        "box-shadow:0 4px 12px rgba(0,0,0,0.4)",
+        "max-height:60vh", "overflow:auto", "white-space:pre-wrap",
+      ].join(";");
+      document.body.appendChild(banner);
+    }
+    const entry = document.createElement("div");
+    entry.style.cssText = "margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed rgba(255,255,255,0.2);";
+    const head = document.createElement("strong");
+    head.textContent = "✗ " + label;
+    head.style.cssText = "color:#ffb3a8; display:block; margin-bottom:4px;";
+    entry.appendChild(head);
+    const body = document.createElement("div");
+    body.textContent = detail;
+    entry.appendChild(body);
+    banner.appendChild(entry);
+  }
+  window.addEventListener("error", (e) => {
+    showBootError("Uncaught error: " + (e.message || "(no message)"),
+      e.error || new Error(e.message + " @ " + (e.filename || "?") + ":" + (e.lineno || "?")));
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    showBootError("Unhandled promise rejection", e.reason || new Error("(no reason)"));
+  });
+
+  // Step-instrumented boot — each phase is labelled so the user can see in
+  // the error banner exactly which phase failed if anything throws.
+  async function bootStep(label, fn) {
+    try {
+      const r = fn();
+      if (r && typeof r.then === "function") await r;
+    } catch (e) {
+      showBootError("boot phase failed: " + label, e);
+      throw e;
+    }
+  }
+
   (async function boot() {
     if (!window.CognitiveOS) {
-      els.emptyManifesto.textContent = "Cognitive OS runtime failed to load. Open the browser console.";
+      showBootError("CognitiveOS runtime not loaded",
+        new Error("window.CognitiveOS is undefined — cog/host.js failed to load. Check Network tab for 404s on cog/*.js."));
+      if (els.emptyManifesto) els.emptyManifesto.textContent = "Cognitive OS runtime failed to load. See banner.";
       return;
     }
 
-    const result = window.CognitiveOS.attach({
-      rootSelector: "[data-cog-runtime-root]",
-      withEventLog: true,
-      dbName: "ailang_cognitive_commons",
-    });
-    if (result && typeof result.then === "function") {
-      try { await result; } catch (e) { console.error("[commons] attach failed", e); }
+    try {
+      await bootStep("CognitiveOS.attach (open IDB)", () => {
+        const result = window.CognitiveOS.attach({
+          rootSelector: "[data-cog-runtime-root]",
+          withEventLog: true,
+          dbName: "ailang_cognitive_commons",
+        });
+        return result && typeof result.then === "function" ? result : null;
+      });
+
+      // After attach, sender + clock are set.
+      let snap;
+      await bootStep("debugSnapshot + persona assign", () => {
+        snap = window.CognitiveOS.debugSnapshot();
+        app.senderId = snap.sender;
+        app.autoPersona = deterministicPersona(app.senderId);
+        const stored = sessionStorage.getItem("commons_persona");
+        app.persona = stored && PERSONAS.includes(stored) ? stored : app.autoPersona;
+        els.personaSelect.value = stored ? app.persona : "auto";
+        els.senderId.textContent = shortSender(app.senderId);
+        addToRoster(app.senderId, app.persona, snap.clock);
+        refreshRoster();
+      });
+
+      await bootStep("reconstructFromLog (read recent events)", () => reconstructFromLog());
+      await bootStep("subscribeCommons (Msg recv pump)", () => subscribeCommons());
+      await bootStep("setupHeartbeat (BroadcastChannel)", () => setupHeartbeat());
+      await bootStep("scheduleCompose (initial timer)", () => scheduleCompose());
+      app.rosterPruneTimer = setInterval(pruneRoster, 4000);
+      await bootStep("wireControls (button handlers)", () => wireControls());
+      await bootStep("restoreAiConfig (provider/key/model from storage)", () => restoreAiConfig());
+      await bootStep("loadTopic + wireTopicInput", () => { loadTopic(); wireTopicInput(); });
+      await bootStep("wireConstellationInteractions (hover/pan/zoom)", () => wireConstellationInteractions());
+      await bootStep("refreshStats (initial counters)", () => refreshStats());
+    } catch (_) {
+      // Each bootStep already surfaced its own error banner; bail before
+      // attempting WASM init since the JS-side state is already broken.
+      return;
     }
-    // After attach, sender + clock are set.
-    const snap = window.CognitiveOS.debugSnapshot();
-    app.senderId = snap.sender;
-
-    // Persona: deterministic from sender ID unless overridden via session.
-    app.autoPersona = deterministicPersona(app.senderId);
-    const stored = sessionStorage.getItem("commons_persona");
-    app.persona = stored && PERSONAS.includes(stored) ? stored : app.autoPersona;
-    els.personaSelect.value = stored ? app.persona : "auto";
-
-    // Wire UI
-    els.senderId.textContent = shortSender(app.senderId);
-    addToRoster(app.senderId, app.persona, snap.clock);
-    refreshRoster();
-
-    // Show prior stanzas (replay-on-load gives us continuity across reloads)
-    await reconstructFromLog();
-
-    // Subscribe to commons mailbox — incoming stanzas
-    subscribeCommons();
-
-    // Heartbeat channel — every tab announces itself periodically
-    setupHeartbeat();
-
-    // Periodic compose
-    scheduleCompose();
-
-    // Periodic roster prune — drop citizens we haven't heard from
-    app.rosterPruneTimer = setInterval(pruneRoster, 4000);
-
-    // UI wiring
-    wireControls();
-
-    // Recover stored API config (per-tab via sessionStorage)
-    restoreAiConfig();
-
-    // Topic of debate — load from localStorage + wire input
-    loadTopic();
-    wireTopicInput();
-
-    // Constellation interactivity — hover tooltip, pan, wheel-zoom
-    wireConstellationInteractions();
-
-    // First-poll stats refresh
-    refreshStats();
 
     // AILANG WASM compute path — REQUIRED. This demo proves AILANG can
     // own a multi-tab debating society's compute layer. If WASM fails
@@ -2250,9 +2290,9 @@
     initAilang().then(() => {
       setAilangStatus("ready", "AILANG ready · sentiment + judge + edit-lock run in .ail modules");
     }).catch(e => {
-      console.error("[commons] AILANG init FAILED:", e);
+      showBootError("AILANG WASM init failed", e);
       setAilangStatus("error", "✗ AILANG failed to load: " + (e && e.message || e) +
-        " — demo cannot start. Open the console for the stack trace.");
+        " — see banner above. Demo cannot start until WASM loads.");
     });
   })();
 
