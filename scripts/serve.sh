@@ -112,6 +112,14 @@ mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
+# Cognitive Commons — multi-tab debating society
+# Browser demo references ../wasm/ (the top-level symlink at $SITE/wasm)
+# and ../invoice_processor_wasm/js/ailang-wrapper.js. The latter is the
+# shared AilangEngine wrapper that all WASM demos use.
+ln -sfn "$REPO_ROOT/cognitive_commons" "$SITE/cognitive_commons"
+mkdir -p "$SITE/invoice_processor_wasm"
+ln -sfn "$REPO_ROOT/invoice_processor_wasm/js" "$SITE/invoice_processor_wasm/js"
+
 # Vendor AILANG package modules (for WASM pkg/ imports)
 # Runs early because website_builder and docparse both link to vendored files.
 "$REPO_ROOT/scripts/vendor-wasm-packages.sh" "$SITE/ailang/pkg"

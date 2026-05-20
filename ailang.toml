@@ -13,7 +13,7 @@ description = "AILANG demos and integration tests"
 "sunholo/linkedin" = "0.3.1"
 
 [effects]
-max = ["IO", "FS", "Stream", "Net", "Env", "Process", "AI", "Declassify"]
+max = ["IO", "FS", "Stream", "Net", "Env", "Process", "AI", "Declassify", "DOM", "Msg", "Cog"]
 
 [metadata]
 tags = ["demos", "streaming", "gemini", "voice"]

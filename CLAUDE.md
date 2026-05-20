@@ -120,6 +120,21 @@ GOOGLE_API_KEY="" ailang run --entry main \
 
 **Important:** If `GOOGLE_API_KEY` env var is set, the streaming CLI demos (`speak`, `ambient`) connect to Google AI Studio (with `gemini-3.1-flash-live-preview`) instead of Vertex AI. Use `--google-ai` flag or set `GOOGLE_API_KEY=xxx`. Set `GOOGLE_API_KEY=""` to force ADC/Vertex AI.
 
+### Browser localStorage key convention
+
+**All browser demos in this repo MUST store API keys at `<provider>-api-key`** so users don't re-enter keys when switching between demos. Established by docparse + website_builder; cognitive_commons follows.
+
+| Provider | localStorage key |
+|----------|------------------|
+| Google Gemini  | `gemini-api-key` |
+| Anthropic      | `anthropic-api-key` |
+| OpenAI         | `openai-api-key` |
+| OpenRouter     | `openrouter-api-key` |
+| Deepgram       | `deepgram-api-key` |
+| ElevenLabs     | `elevenlabs-api-key` |
+
+Do not invent demo-scoped prefixes (e.g. `ailang-step-byo-key-*`, `<demo>-anthropic`). New demos: read/write at `<provider>-api-key` exactly. If a demo needs additional per-demo state (model selection, voice, etc.), prefix those with the demo name (e.g. `cognitive_commons-model`, `docparse-voice`).
+
 ## Streaming Demo Status
 
 | Demo | Protocol | CLI Verified | Notes |
@@ -158,6 +173,9 @@ ambient --list                                # list sessions
 | Sessions | Per-project, auto-resumed (2-hour Gemini handles) |
 
 ## Known AILANG Issues
+
+### Canonical syntax: `ailang prompt`
+Run `ailang prompt` for the authoritative reference. Do NOT pattern-match from training data — AILANG has diverged from neighbouring ML languages on several points (notably string concat: `${}` interpolation, not `++`). If something the prompt covers seems wrong, that's the source of truth; flag drift between μRAG and the committed `prompts/vN.M.N.md`.
 
 ### Transitive imports required
 Each entry module must import all transitive dependencies. If `main.ail` imports `services/foo.ail` which uses `std/list.map`, then `main.ail` must also `import std/list (map)`.

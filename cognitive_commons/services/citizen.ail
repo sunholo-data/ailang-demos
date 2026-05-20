@@ -1,0 +1,169 @@
+-- Cognitive Commons — citizen behaviour.
+--
+-- The "main loop" of a single tab. Each tab is one citizen with one
+-- persona. The compose function is invoked by the JS shell on a cadence
+-- (or via the "Speak now" button). It:
+--
+--   1. Reads the current commons state (topic, sentiment, working statement)
+--   2. Calls the AI to author a stanza + (if leading) an edit to the statement
+--   3. Calls the judge to score the stanza on the (x, y) sentiment plane
+--   4. Applies the score to local sentiment + decides if the manifesto
+--      edit can land (edit-lock check is in consensus.ail)
+--   5. Renders the chronicle panel via !: DOM and broadcasts to peer
+--      tabs via !: Msg
+
+module cognitive_commons/services/citizen
+
+import std/ai (callJson)
+import std/json (decode, getString)
+import std/dom (DOMPatch, AddPanel, applyPatchResult)
+import std/cognition (sendMsgResult)
+import std/result (Result, Ok, Err)
+import std/option (Some, None)
+import std/string (length)
+import std/io (println)
+
+import cognitive_commons/types/personas (Persona, label, target, axis_definitions)
+import cognitive_commons/services/consensus
+  ( CommonsState
+  , applyUtterance
+  , applyManifestoEdit
+  , currentLeader
+  , leaderGap
+  , EditOutcome
+  , Accepted
+  , RejectedNotLeader
+  , RejectedTooShort
+  )
+import cognitive_commons/services/persuasion (JudgeScore, judgeUtterance)
+
+-- The shape the citizen LLM is expected to return.
+export type AuthorReply = {
+  text: string,        -- one declarative sentence, 12-26 words
+  glyph: string,       -- SVG path-d ornament; may be ""
+  manifesto: string    -- proposed working-statement edit; ignored if not leading
+}
+
+-- Build the system prompt for the author call. The user can override the
+-- persona-specific portion via the JS UI; this function only assembles
+-- the topic-anchor + edit-lock status that wraps it.
+export pure func compose_system_prompt(
+  persona_prompt: string,
+  topic: string,
+  st: CommonsState,
+  proposer: Persona
+) -> string = {
+  let topic_line = if length(topic) > 0
+    then "\n\n--- CURRENT DEBATE ---\nThe topic right now is: \"${topic}\"."
+    else "";
+  let leader_label = label(currentLeader(st));
+  let proposer_label = label(proposer);
+  let lock_status = if leader_label == proposer_label
+    then "\nEDIT LOCK STATUS: ✓ You ARE currently leading the commons. YOUR manifesto edit WILL replace the working statement."
+    else "\nEDIT LOCK STATUS: ✗ You are NOT leading — ${leader_label} is. Your manifesto field will be discarded. Focus your stanza on shifting sentiment to take over editing.";
+  "${persona_prompt}${topic_line}${lock_status}"
+}
+
+-- Build the user-message prompt.
+export pure func compose_user_prompt(
+  topic: string,
+  recent_dialogue: string,
+  proposer: Persona,
+  st: CommonsState
+) -> string = {
+  let leader_label = label(currentLeader(st));
+  let topic_block = if length(topic) > 0
+    then "TOPIC OF DEBATE: \"${topic}\"\nEverything below is in service of arguing THIS topic. Stay on topic.\n\n"
+    else "";
+  let manifesto_block = if length(st.consensus_text) > 0
+    then "\nTHE COMMONS' CURRENT WORKING STATEMENT (locked to ${leader_label}):\n\"\"\"\n${st.consensus_text}\n\"\"\""
+    else "\nTHE COMMONS' CURRENT WORKING STATEMENT: (empty — the first leader gets to draft it)";
+  let proposer_label = label(proposer);
+  let proposer_target = target(proposer);
+  let axes = axis_definitions();
+  let sx = show(st.sentiment.x);
+  let sy = show(st.sentiment.y);
+  let tx = show(proposer_target.x);
+  let ty = show(proposer_target.y);
+  "${topic_block}${recent_dialogue}\n${manifesto_block}\n\nYOUR ROLE: ${proposer_label}.\n${axes}\nCommons sentiment: x=${sx}, y=${sy}.\nYour preferred sentiment: x=${tx}, y=${ty}.\n\nReply ONLY with strict JSON, no markdown fences:\n{\n  \"text\": \"<one declarative sentence, 12-26 words>\",\n  \"glyph\": \"<SVG path-d in -12..+12 range; M L A Q Z commands only>\",\n  \"manifesto\": \"<ONLY IF leading: 100-200 word edit of the working statement; otherwise empty string>\"\n}"
+}
+
+-- JSON schema for the author response (used where the provider supports it).
+export pure func author_schema() -> string =
+  "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":400},\"glyph\":{\"type\":\"string\",\"maxLength\":400},\"manifesto\":{\"type\":\"string\",\"maxLength\":2400}},\"required\":[\"text\"],\"additionalProperties\":false}"
+
+-- compose — issue the author LLM call.
+export func compose(
+  persona_prompt: string,
+  topic: string,
+  recent_dialogue: string,
+  proposer: Persona,
+  st: CommonsState
+) -> Result[AuthorReply, string] ! {AI} = {
+  let sys = compose_system_prompt(persona_prompt, topic, st, proposer);
+  let usr = compose_user_prompt(topic, recent_dialogue, proposer, st);
+  let schema = author_schema();
+  let full_prompt = "${sys}\n\n---\n\n${usr}";
+  -- callJson returns a plain string, not Result. Errors surface via the
+  -- effect runtime; an error-shaped JSON reply from the JS handler is
+  -- caught by the `error`-field branch below.
+  let raw = callJson(full_prompt, schema);
+  match decode(raw) {
+    Err(e) => Err("compose JSON parse failed: ${e}"),
+    Ok(j) => match getString(j, "error") {
+      -- AI handler returned a JSON envelope with an `error` field — surface it.
+      Some(provider_err) => Err("AI provider: ${provider_err}"),
+      None => match getString(j, "text") {
+      None => Err("compose JSON missing 'text'"),
+      Some(tv) => {
+        let glyph_v = match getString(j, "glyph") {
+          Some(s) => s,
+          None => ""
+        };
+        let manifesto_v = match getString(j, "manifesto") {
+          Some(s) => s,
+          None => ""
+        };
+        Ok({
+          text: tv,
+          glyph: glyph_v,
+          manifesto: manifesto_v
+        })
+      }
+    }
+    }
+  }
+}
+
+-- speak — full turn for one citizen. Orchestrates compose + judge +
+-- sentiment update + edit-lock check + DOM patch + Msg broadcast.
+export func speak(
+  st: CommonsState,
+  proposer: Persona,
+  persona_prompt: string,
+  topic: string,
+  recent_dialogue: string,
+  clock: int,
+  region: string
+) -> Result[CommonsState, string] ! {AI, DOM, Msg} = {
+  match compose(persona_prompt, topic, recent_dialogue, proposer, st) {
+    Err(e) => Err(e),
+    Ok(reply) => {
+      let score_result = judgeUtterance(topic, proposer, reply.text);
+      let has_score = match score_result { Ok(_) => true, Err(_) => false };
+      let sx = match score_result { Ok(s) => s.x, Err(_) => 0.0 };
+      let sy = match score_result { Ok(s) => s.y, Err(_) => 0.0 };
+      let st1 = applyUtterance(st, proposer, has_score, sx, sy);
+      let edit_result = if length(reply.manifesto) >= 40
+        then applyManifestoEdit(st1, proposer, reply.manifesto, clock)
+        else { state: st1, outcome: RejectedTooShort };
+      let st2 = edit_result.state;
+      let proposer_label = label(proposer);
+      let clock_str = show(clock);
+      let panel_title = "${proposer_label} · clk ${clock_str}";
+      let _patch_result = applyPatchResult(region, AddPanel(panel_title, reply.text));
+      let _send_result = sendMsgResult("commons", reply.text);
+      Ok(st2)
+    }
+  }
+}

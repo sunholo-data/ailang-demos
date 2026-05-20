@@ -71,6 +71,14 @@ ENTRIES=(
   linkedin/main.ail
   # Co-presenter (browser-only, but should still type-check)
   co-presenter/co_presenter.ail
+  # Cognitive Commons — multi-agent debating society. CLI smoke test exercises
+  # consensus + personas without any AI calls; browser shell adds DOM/Msg/Cog
+  # effects + provider-routed AI via citizen.ail.
+  cognitive_commons/main.ail
+  cognitive_commons/services/consensus.ail
+  cognitive_commons/services/persuasion.ail
+  cognitive_commons/services/citizen.ail
+  cognitive_commons/services/commons_browser.ail
   # Invoice processor WASM
   wasm/invoice_processor.ail
 )

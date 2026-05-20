@@ -1,0 +1,90 @@
+-- Cognitive Commons — CLI smoke test.
+--
+-- Exercises the pure modules end-to-end without any AI calls.
+-- This is the canonical integration test per the demos/ repo ethos:
+-- every demo must exercise AILANG code paths from the CLI.
+--
+-- What it does:
+--   1. Initialise state (dot at origin, empty manifesto)
+--   2. Run four utterances — one from each persona — with mocked judge
+--      scores set to each persona's sentiment-space target
+--   3. After each turn, attempt a manifesto edit. Only the persona whose
+--      target is currently nearest the sentiment dot wins the edit lock.
+--   4. Print the trace: turn number, speaker, sentiment, leader, editor.
+--
+-- Run:
+--   ailang run --entry main --caps IO cognitive_commons/main.ail
+--
+-- Expected: the leader changes turn-by-turn as the EWMA drags the dot
+-- toward each speaker's corner. Only the leading persona's manifesto
+-- edit lands.
+
+module cognitive_commons/main
+
+import std/io (println)
+import std/string (length)
+import cognitive_commons/types/personas (Persona, label, Visionary, Skeptic, Synthesizer, Archivist)
+import cognitive_commons/services/consensus
+  ( CommonsState
+  , initial_state
+  , applyUtterance
+  , applyManifestoEdit
+  , currentLeader
+  )
+
+-- Mock manifesto (>= 40 chars so the length gate accepts it).
+pure func mockManifesto(p: Persona) -> string = {
+  let lbl = label(p);
+  "Working draft (proposed by ${lbl}): the commons should pivot toward ${lbl}'s stance on the topic at hand."
+}
+
+-- Format a single state line for trace output.
+pure func formatState(turn: int, st: CommonsState, speaker: Persona) -> string = {
+  let t = show(turn);
+  let sx = show(st.sentiment.x);
+  let sy = show(st.sentiment.y);
+  let leader_lbl = label(currentLeader(st));
+  let speaker_lbl = label(speaker);
+  let editor = if length(st.consensus_editor) > 0
+    then st.consensus_editor
+    else "<none>";
+  "turn=${t} speaker=${speaker_lbl} sentiment=(${sx}, ${sy}) leader=${leader_lbl} editor=${editor}"
+}
+
+-- One turn: apply utterance with the judge score equal to the speaker's
+-- target (i.e. they speak perfectly in-persona), then attempt the edit.
+pure func step(
+  st: CommonsState,
+  speaker: Persona,
+  score_x: float,
+  score_y: float,
+  clock: int
+) -> CommonsState = {
+  let st1 = applyUtterance(st, speaker, true, score_x, score_y);
+  let edit = applyManifestoEdit(st1, speaker, mockManifesto(speaker), clock);
+  edit.state
+}
+
+export func main() -> () ! {IO} = {
+  println("Cognitive Commons — CLI smoke test");
+  println("======================================================");
+  let st0 = initial_state();
+  println("turn=0 (initial) sentiment=(0.0, 0.0) leader=Visionary editor=<none>");
+
+  let st1 = step(st0, Visionary, 0.85, 0.4, 1);
+  println(formatState(1, st1, Visionary));
+
+  let st2 = step(st1, Skeptic, -0.85, -0.2, 2);
+  println(formatState(2, st2, Skeptic));
+
+  let st3 = step(st2, Synthesizer, 0.0, 0.9, 3);
+  println(formatState(3, st3, Synthesizer));
+
+  let st4 = step(st3, Archivist, -0.4, -0.85, 4);
+  println(formatState(4, st4, Archivist));
+
+  println("");
+  println("Final manifesto: \"${st4.consensus_text}\"");
+  println("Last editor: ${st4.consensus_editor}");
+  println("Smoke test PASS")
+}
