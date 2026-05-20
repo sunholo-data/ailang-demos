@@ -28,6 +28,23 @@ if lsof -ti :"$PORT" >/dev/null 2>&1; then
   sleep 0.5
 fi
 
+# Pre-flight: the embedded wasm/ailang.wasm must match the AILANG source repo,
+# otherwise browser repl.loadModule() can hang silently on newer .ail syntax.
+# This was a debugging nightmare on 2026-05-20 — added the check so it can't
+# recur silently. Pass --rebuild-wasm to auto-rebuild before serving.
+WASM_REBUILD_ARGS=()
+if [[ "${REBUILD_WASM:-false}" == "true" ]]; then
+  WASM_REBUILD_ARGS=("--rebuild")
+fi
+"$REPO_ROOT/scripts/check-wasm-freshness.sh" "${WASM_REBUILD_ARGS[@]}" || {
+  status=$?
+  if [[ "$status" -eq 1 ]]; then
+    echo "⚠  Continuing anyway — set REBUILD_WASM=true scripts/serve.sh to auto-rebuild."
+  elif [[ "$status" -eq 2 ]]; then
+    echo "ℹ  No AILANG source repo found — using existing wasm/ailang.wasm as-is."
+  fi
+}
+
 echo "Assembling site in $SITE ..."
 rm -rf "$SITE"
 mkdir -p "$SITE"
