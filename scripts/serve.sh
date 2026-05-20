@@ -223,4 +223,15 @@ echo "  Ambient:   http://localhost:$PORT/streaming/ambient_assistant/"
 echo "  Co-Present:http://localhost:$PORT/co-presenter/"
 echo ""
 echo "Press Ctrl+C to stop."
-cd "$SITE" && python3 -m http.server "$PORT"
+# ThreadingHTTPServer instead of the default single-threaded http.server:
+# the cognitive_commons + invoice_processor demos load a ~40MB ailang.wasm
+# AND parallel small .ail module fetches in the same boot. Single-threaded
+# http.server wedges on a 40MB transfer if a second concurrent request lands
+# during the stream — every subsequent request returns "Empty reply from
+# server" until the process is killed. Threaded variant handles each request
+# in its own thread; the WASM transfer no longer blocks the small fetches.
+cd "$SITE" && exec python3 -c "
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+import sys
+ThreadingHTTPServer(('', int(sys.argv[1])), SimpleHTTPRequestHandler).serve_forever()
+" "$PORT"
