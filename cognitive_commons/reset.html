@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cognitive Commons — Reset</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --sun-red: #e73c17;
+      --sun-red-bright: #ff5a3c;
+      --sun-teal: #2c7a7b;
+      --sun-teal-bright: #38a3a5;
+      --sun-purple: #6b46c1;
+      --ink: #1a1a1a;
+      --ink-dim: #555;
+      --paper: #fdfaf3;
+      --paper-soft: #f4ede0;
+      --line: #d8d0bf;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 64px 32px;
+    }
+    h1 {
+      font-family: "Montserrat", sans-serif;
+      font-weight: 700;
+      font-size: 32px;
+      margin: 0 0 8px;
+      color: var(--sun-red);
+      letter-spacing: -0.01em;
+    }
+    .sub {
+      color: var(--ink-dim);
+      font-size: 14px;
+      margin: 0 0 32px;
+    }
+    .card {
+      background: var(--paper-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card h2 {
+      font-family: "Montserrat", sans-serif;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 0 0 6px;
+      color: var(--ink);
+    }
+    .card p {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--ink-dim);
+      line-height: 1.5;
+    }
+    .card .kbd {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.05);
+      padding: 1px 6px;
+      border-radius: 3px;
+      color: var(--ink);
+    }
+    button {
+      font-family: "Inter", sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 18px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--sun-red);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--sun-red-bright); }
+    .btn-danger {
+      background: white;
+      color: var(--sun-red);
+      border-color: var(--sun-red);
+    }
+    .btn-danger:hover { background: var(--sun-red); color: white; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink-dim);
+      border-color: var(--line);
+    }
+    .btn-ghost:hover { background: var(--paper-soft); color: var(--ink); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    #status {
+      margin-top: 24px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      background: var(--ink);
+      color: #e0e0e0;
+      padding: 16px;
+      border-radius: 6px;
+      min-height: 60px;
+      line-height: 1.5;
+    }
+    #status .ok { color: #6ee7b7; }
+    #status .warn { color: #fbbf24; }
+    #status .err { color: #f87171; }
+    .footer {
+      margin-top: 32px;
+      font-size: 12px;
+      color: var(--ink-dim);
+    }
+    .footer a {
+      color: var(--sun-teal);
+      text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Cognitive Commons · Reset</h1>
+    <p class="sub">Static endpoint for nuking demo state when the main page is too sluggish to scroll to its in-page button.</p>
+
+    <div class="card">
+      <h2>Soft reset (recommended)</h2>
+      <p>Clears the IndexedDB event log (<span class="kbd">ailang_cognitive_commons</span>) and per-tab demo state (persona, AILANG snapshot, prompts, model selection). <strong>Keeps</strong> your API keys and the cross-tab topic.</p>
+      <div class="actions">
+        <button class="btn-primary" id="btn-soft">Soft reset</button>
+        <button class="btn-ghost" id="btn-soft-go">Reset and reopen demo</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Hard reset</h2>
+      <p>Everything from a soft reset, <strong>plus</strong> your API keys (<span class="kbd">gemini-api-key</span>, <span class="kbd">anthropic-api-key</span>, <span class="kbd">openai-api-key</span>, <span class="kbd">openrouter-api-key</span>) and the current topic. You'll need to re-paste keys after this.</p>
+      <div class="actions">
+        <button class="btn-danger" id="btn-hard">Hard reset (incl. API keys)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Inspect only</h2>
+      <p>Read-only count of the current event log — confirms whether the slowdown is "too many events" or something else (e.g. WASM compile, network).</p>
+      <div class="actions">
+        <button class="btn-ghost" id="btn-count">Count events</button>
+      </div>
+    </div>
+
+    <div id="status">Ready. Pick an action above.</div>
+
+    <p class="footer">
+      Back to <a href="./">cognitive_commons</a> · DB name <span class="kbd">ailang_cognitive_commons</span>
+    </p>
+  </main>
+
+  <script>
+    "use strict";
+
+    const DB_NAME = "ailang_cognitive_commons";
+    const STORE_NAME = "cognitive_events";
+
+    // localStorage keys that aren't API keys (so we can clear them on soft reset)
+    const LOCAL_STATE_KEYS = ["commons_topic"];
+
+    // localStorage keys that ARE API keys (cleared on hard reset only)
+    const LOCAL_KEY_PROVIDERS = ["gemini", "anthropic", "openai", "openrouter", "deepgram", "elevenlabs"];
+
+    // sessionStorage keys (always per-tab; cleared on any reset)
+    const SESSION_PREFIXES = [
+      "commons_persona",
+      "commons_ailang_state",
+      "commons_ai_provider",
+      "commons_ai_model_",
+      "commons_prompt_",
+    ];
+
+    const statusEl = document.getElementById("status");
+    function log(msg, cls) {
+      const line = document.createElement("div");
+      if (cls) line.className = cls;
+      line.textContent = msg;
+      statusEl.appendChild(line);
+      statusEl.scrollTop = statusEl.scrollHeight;
+    }
+    function clearStatus() { statusEl.textContent = ""; }
+
+    function clearSessionStorage() {
+      let n = 0;
+      const keys = Object.keys(sessionStorage);
+      for (const k of keys) {
+        if (SESSION_PREFIXES.some(p => k === p || k.startsWith(p))) {
+          sessionStorage.removeItem(k); n++;
+        }
+      }
+      return n;
+    }
+
+    function clearLocalState() {
+      let n = 0;
+      for (const k of LOCAL_STATE_KEYS) {
+        if (localStorage.getItem(k) !== null) { localStorage.removeItem(k); n++; }
+      }
+      return n;
+    }
+
+    function clearLocalKeys() {
+      let n = 0;
+      for (const p of LOCAL_KEY_PROVIDERS) {
+        const k = p + "-api-key";
+        if (localStorage.getItem(k) !== null) { localStorage.removeItem(k); n++; }
+      }
+      return n;
+    }
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME);
+        req.onerror = () => reject(new Error("indexedDB.open: " + (req.error && req.error.message)));
+        req.onsuccess = () => resolve(req.result);
+        req.onblocked = () => reject(new Error("indexedDB.open blocked — close other tabs of this demo first"));
+        req.onupgradeneeded = (ev) => {
+          // If the DB doesn't exist yet, abort the upgrade so we don't create a stub.
+          ev.target.transaction.abort();
+        };
+      });
+    }
+
+    async function countEvents() {
+      try {
+        const db = await openDB();
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.close();
+          return 0;
+        }
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.count();
+          req.onsuccess = () => { db.close(); resolve(req.result); };
+          req.onerror = () => { db.close(); reject(req.error); };
+        });
+      } catch (e) {
+        if (/no objectStore/i.test(e.message || "")) return 0;
+        throw e;
+      }
+    }
+
+    async function deleteDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = () => resolve(true);
+        req.onerror   = () => reject(new Error("deleteDatabase: " + (req.error && req.error.message)));
+        req.onblocked = () => reject(new Error("deleteDatabase blocked — close every cognitive_commons tab first"));
+      });
+    }
+
+    async function doSoftReset() {
+      clearStatus();
+      log("→ Soft reset starting...");
+      try {
+        const before = await countEvents().catch(() => "?");
+        log("· IDB events before: " + before);
+      } catch (_) {}
+      try {
+        await deleteDB();
+        log("✓ Deleted IndexedDB: " + DB_NAME, "ok");
+      } catch (e) {
+        log("✗ IDB delete failed: " + e.message, "err");
+        return false;
+      }
+      const ss = clearSessionStorage();
+      log("✓ Cleared " + ss + " sessionStorage keys", "ok");
+      const ls = clearLocalState();
+      log("✓ Cleared " + ls + " localStorage state keys (API keys kept)", "ok");
+      log("Done.", "ok");
+      return true;
+    }
+
+    async function doHardReset() {
+      clearStatus();
+      log("→ Hard reset starting...", "warn");
+      try {
+        const before = await countEvents().catch(() => "?");
+        log("· IDB events before: " + before);
+      } catch (_) {}
+      try {
+        await deleteDB();
+        log("✓ Deleted IndexedDB: " + DB_NAME, "ok");
+      } catch (e) {
+        log("✗ IDB delete failed: " + e.message, "err");
+        return false;
+      }
+      const ss = clearSessionStorage();
+      log("✓ Cleared " + ss + " sessionStorage keys", "ok");
+      const ls = clearLocalState();
+      log("✓ Cleared " + ls + " localStorage state keys", "ok");
+      const lk = clearLocalKeys();
+      log("✓ Cleared " + lk + " API key entries", "ok");
+      log("Done. You'll need to re-paste keys on next visit.", "warn");
+      return true;
+    }
+
+    async function doCount() {
+      clearStatus();
+      log("→ Counting events...");
+      try {
+        const t0 = performance.now();
+        const n = await countEvents();
+        const dt = (performance.now() - t0).toFixed(0);
+        log("· events in " + DB_NAME + ": " + n + " (read in " + dt + "ms)", "ok");
+        if (n === 0) log("DB is empty (or doesn't exist) — slowdown is not coming from the event log.", "warn");
+        else if (n > 5000) log("That's a lot. Soft reset will likely fix the slowdown.", "warn");
+      } catch (e) {
+        log("✗ " + e.message, "err");
+      }
+    }
+
+    document.getElementById("btn-soft").onclick      = () => doSoftReset();
+    document.getElementById("btn-soft-go").onclick   = async () => {
+      const ok = await doSoftReset();
+      if (ok) {
+        log("Redirecting to demo in 1s...", "ok");
+        setTimeout(() => { window.location.href = "./"; }, 1000);
+      }
+    };
+    document.getElementById("btn-hard").onclick      = () => {
+      if (confirm("Hard reset will delete your API keys. Continue?")) doHardReset();
+    };
+    document.getElementById("btn-count").onclick     = () => doCount();
+
+    // Auto-count on load so the user immediately sees how big the DB is.
+    doCount();
+  </script>
+</body>
+</html>
