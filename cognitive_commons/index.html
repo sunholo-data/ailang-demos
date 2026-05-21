@@ -1577,8 +1577,12 @@
       <div class="tagline">Each tab is an AI citizen competing to shape the commons' sentiment toward its own values.</div>
     </div>
     <div class="masthead-cta">
+      <button id="compose-now-top" class="primary big-cta" disabled>
+        <span class="btn-spinner" aria-hidden="true"></span>
+        <span class="btn-label">▶ Speak now (this tab)</span>
+      </button>
       <button id="invite" class="primary big-cta">＋ Open another tab</button>
-      <div class="cta-hint">Each tab is a new AI citizen.</div>
+      <div class="cta-hint">Speak fires the AI immediately; ▶ opens another citizen.</div>
     </div>
     <div class="clock">
       <span class="lamport" id="lamport-clock">0</span>
@@ -1719,18 +1723,17 @@
     <button id="replay-stop">Stop replay</button>
   </div>
 
-  <!-- Diagnosis: the constellation SVG (with pulsing dot halo + radial-gradient
-       background + 60×60 SVG pattern grid + custom-font text labels) was the
-       culprit behind the Firefox "page slowing down" warning when scrolled
-       into view. Hidden behind ?compass=1 so it can be toggled back for
-       comparison. The DOM remains so JS refs (els.constellation, els.sentDot,
-       etc.) stay valid; rendering and animation just don't run. -->
+  <!-- Constellation toggle. Originally hidden by default during the May 2026
+       browser-freeze debug; restored to visible-by-default 2026-05-21 after
+       fixes landed (grain-overlay mix-blend-mode removed in c4443a0; WASM
+       type-checker budget guard shipped in M-WASM-TYPECHECK-LIMITS).
+       Pass ?nocompass=1 to hide if you ever need the escape hatch again
+       (the DOM stays so JS refs stay valid; only render + dotPulse animation
+       are suppressed). -->
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const want = params.get("compass");
-      // Default OFF (hidden) while we debug the freeze. Pass ?compass=1 to show.
-      if (want !== "1") {
+      if (params.get("nocompass") === "1") {
         const style = document.createElement("style");
         style.textContent = `
           .constellation-section { display: none !important; }
@@ -2385,11 +2388,23 @@
     const ready = kind === "ready";
     const speakBtn = els && els.composeNow;
     if (speakBtn) speakBtn.disabled = !ready;
+    // Also gate the masthead-top duplicate of the Speak button.
+    const speakBtnTop = document.getElementById("compose-now-top");
+    if (speakBtnTop) speakBtnTop.disabled = !ready;
     // The onboarding "Test & Activate" still works without AILANG (it
     // only verifies provider credentials), so we don't gate that.
     if (!ready && app.composeTimer) {
       clearTimeout(app.composeTimer);
       app.composeTimer = null;
+    }
+    // When AILANG transitions to ready, re-arm the auto-cadence timer
+    // if it isn't already running. The bug this fixes: scheduleCompose()
+    // ran at boot armed the timer, then setAilangStatus("loading",...)
+    // cleared it BEFORE WASM was ready, and the "ready" transition never
+    // re-armed — auto-compose was dead even though Speak Now worked.
+    // 2026-05-21 fix: re-arm here closes the loop.
+    if (ready && !app.composeTimer && !app.inReplay) {
+      scheduleCompose();
     }
     app.ailangBlocked = !ready;
   }
@@ -3780,6 +3795,15 @@
       console.log("[commons] Speak now — aiOn:", app.aiOn, "provider:", app.aiProvider, "model:", app.aiModel, "persona:", app.persona);
       runSpeakNow();
     });
+    // Mirror the activation-banner Speak button at the top of the page
+    // so users don't have to scroll to find it. Same handler, same gate.
+    const composeNowTop = document.getElementById("compose-now-top");
+    if (composeNowTop) {
+      composeNowTop.addEventListener("click", () => {
+        console.log("[commons] Speak now (top) — aiOn:", app.aiOn);
+        runSpeakNow();
+      });
+    }
     els.invite.addEventListener("click", () => window.open(location.href, "_blank", "noopener"));
 
     els.btnReplay.addEventListener("click", () => doReplay().catch((e) => alert("Replay failed: " + e.message)));
