@@ -31,8 +31,6 @@ module cognitive_commons/services/citizen
 
 import std/ai (callJson)
 import std/json (Json, decode, getString)
-import std/dom (AddPanel, applyPatchResult)
-import std/cognition (sendMsgResult)
 import std/result (Result, Ok, Err)
 import std/option (Some, None)
 import std/string (length)
@@ -193,46 +191,6 @@ export func compose(
   }
 }
 
--- Pattern 2 helper: collapse three matches on Result[JudgeScore, _]
--- into one. The previous shape had `Ok(_) => true/false` then `Ok(s) => s.x`
--- then `Ok(s) => s.y` as three separate matches — each `s.x` triggered
--- a fresh tagged-union receiver analysis, compounding type-check cost.
--- One match into a flat record, then read fields downstream.
-pure func unpack_score(r: Result[JudgeScore, string]) -> {has: bool, x: float, y: float} =
-  match r {
-    Ok(s)  => {has: true,  x: s.x, y: s.y},
-    Err(_) => {has: false, x: 0.0, y: 0.0}
-  }
-
--- speak — full turn for one citizen. Orchestrates compose + judge +
--- sentiment update + edit-lock check + DOM patch + Msg broadcast.
---
--- Pattern 4: this is already the orchestration shape — heavy work is in
--- compose() (single AI effect) and judgeUtterance() (single AI effect).
--- speak() itself just sequences them.
-export func speak(
-  st: CommonsState,
-  proposer: Persona,
-  persona_prompt: string,
-  topic: string,
-  recent_dialogue: string,
-  clock: int,
-  region: string
-) -> Result[CommonsState, string] ! {AI, DOM, Msg} = {
-  match compose(persona_prompt, topic, recent_dialogue, proposer, st) {
-    Err(e) => Err(e),
-    Ok(reply) => {
-      let score = unpack_score(judgeUtterance(topic, proposer, reply.text));
-      let st1 = applyUtterance(st, proposer, score.has, score.x, score.y);
-      let edit_result = if length(reply.manifesto) >= 40
-        then applyManifestoEdit(st1, proposer, reply.manifesto, clock)
-        else { state: st1, outcome: RejectedTooShort };
-      let st2 = edit_result.state;
-      let proposer_label = label(proposer);
-      let panel_title = "${proposer_label} · clk ${show(clock)}";
-      let _patch_result = applyPatchResult(region, AddPanel(panel_title, reply.text));
-      let _send_result = sendMsgResult("commons", reply.text);
-      Ok(st2)
-    }
-  }
-}
+-- speak() with DOM + Msg effects is not implemented here — the browser
+-- path uses commons_browser.speakJson which calls compose() directly.
+-- DOM and Msg effects require AILANG v0.21.0+; omitted for v0.20.1 compat.
