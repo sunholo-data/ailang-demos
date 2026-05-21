@@ -64,6 +64,16 @@ Real-time streaming protocols — SSE, WebSocket bidirectional audio, and hybrid
 | **Gemini Live** | [Try it](https://www.sunholo.com/ailang-demos/streaming/gemini_live/) | WebSocket bidi | Text to streaming audio — 30 voices, native WAV generation |
 | **Safe Agent** | [Try it](https://www.sunholo.com/ailang-demos/streaming/safe_agent/) | WebSocket bidi | Contract-verified AI tool calling with safety guarantees |
 
+### Cognitive Commons
+
+A live, multi-tab AI debating society. Each browser tab is one citizen (Visionary / Skeptic / Synthesizer / Archivist). Citizens debate any topic, competing to drag a shared **sentiment dot** toward their corner of a 2D plane. The persona nearest the dot holds an edit lock on a rolling working statement — the commons' answer to the topic. Only the leader can update the draft; non-leaders must out-argue them first.
+
+All compute is AILANG WASM — citizen composition, persuasion scoring, sentiment EWMA, and edit-lock logic are `.ail` modules. JS handles the constellation SVG, BroadcastChannel cross-tab relay, and provider bridging.
+
+| Demo | Live Link | Description |
+|------|-----------|-------------|
+| **Cognitive Commons** | [Try it](https://www.sunholo.com/ailang-demos/cognitive_commons/) | Multi-tab AI debate — AILANG-driven citizen behaviour, persuasion judge, and consensus edit-lock |
+
 ### Data & Analytics
 
 <p align="center">
@@ -204,6 +214,23 @@ speak --voice Charon "What is AILANG?"
 speak --tools "What's the git status?"    # with tool calling
 ```
 
+### Cognitive Commons
+
+Open four tabs. Assign each a persona. Watch them argue. The AILANG modules (`citizen.ail`, `persuasion.ail`, `consensus.ail`) run entirely in WebAssembly — every AI call, every sentiment update, every edit-lock check goes through AILANG's `! {AI}` effect system, not raw JS.
+
+**[Try Cognitive Commons &rarr;](https://www.sunholo.com/ailang-demos/cognitive_commons/)**
+
+**How it works:**
+
+1. Each tab calls `speakJson(state, persona, prompt, topic, dialogue, clock, region)` in AILANG
+2. AILANG composes a stanza via the citizen's persona prompt, judges it on the (x, y) sentiment plane, applies EWMA, and checks the edit lock — all inside the WASM sandbox
+3. The updated state JSON is broadcast via BroadcastChannel so every other tab's constellation updates in sync
+4. The persona currently closest to the sentiment dot holds the edit lock; only they can advance the working statement
+
+**Features:** 4 personas with editable system prompts, onboarding auto-start on first speak, 2D sentiment constellation with animated dot + persona targets + trail, cross-tab BroadcastChannel state sync, judge score chip per stanza, manifesto panel with edit-lock display, provider-agnostic (Anthropic / OpenAI / OpenRouter / Gemini), shared `<provider>-api-key` localStorage convention.
+
+**AILANG modules:** `cognitive_commons/types/personas.ail` (ADTs, targets, prompts), `cognitive_commons/services/consensus.ail` (pure EWMA + edit-lock), `cognitive_commons/services/persuasion.ail` (judge LLM call), `cognitive_commons/services/citizen.ail` (compose loop), `cognitive_commons/services/commons_browser.ail` (WASM JSON adapter).
+
 ### Website Builder
 
 Describe your business, upload photos and documents, pick a style, and get a multi-page website generated and published to GitHub Pages. No code required. The **first public use case for AILANG Cloud** — server-side AI compute dispatched through AILANG's messaging protocol.
@@ -334,6 +361,14 @@ demos/
 ├── ecommerce/                   # Ecommerce vertical demo
 │   ├── main.ail                 # AI product recommendations
 │   └── services/                # Shared services (auth, BigQuery, AI)
+├── cognitive_commons/           # Multi-tab AI debating society (AILANG WASM)
+│   ├── index.html               # UI shell (constellation, chronicle, onboarding)
+│   ├── types/personas.ail       # Persona ADT, targets, default prompts
+│   ├── services/consensus.ail   # Pure: sentiment EWMA, edit-lock
+│   ├── services/persuasion.ail  # Judge LLM call → JudgeScore {x, y}
+│   ├── services/citizen.ail     # Compose loop ! {AI, DOM, Msg}
+│   ├── services/commons_browser.ail  # WASM JSON adapter (speakJson)
+│   └── cog/                     # Cognitive OS browser JS (host.js, canonical_dom.js)
 ├── verify_demo/                 # Static contract verification (42 contracts)
 │   ├── billing.ail              # Cloud billing: cross-function chains
 │   ├── access_policy.ail        # RBAC: 48 permission paths

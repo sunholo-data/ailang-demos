@@ -11,6 +11,7 @@ on:
       - 'verify_demo/**'
       - 'streaming/**'
       - 'co-presenter/**'
+      - 'cognitive_commons/**'
       - 'site/**'
       - 'website_builder/**'
       - 'linkedin/data/comments.json'
@@ -425,6 +426,18 @@ jobs:
           # Co-Presenter
           mkdir -p _site/co-presenter
           cp co-presenter/index.html _site/co-presenter/
+
+          # Cognitive Commons — multi-tab AI debating society
+          mkdir -p _site/cognitive_commons/types
+          mkdir -p _site/cognitive_commons/services
+          cp cognitive_commons/index.html _site/cognitive_commons/
+          cp cognitive_commons/types/*.ail _site/cognitive_commons/types/
+          cp cognitive_commons/services/*.ail _site/cognitive_commons/services/
+          # Cognitive OS browser JS (cog/ host layer)
+          cp -r cognitive_commons/cog _site/cognitive_commons/cog
+          # invoice_processor_wasm/js symlink (ailang-wrapper) is already
+          # under _site/ via the rsync of invoice_processor_wasm/ above.
+          echo "Copied cognitive_commons demo"
 
           echo "::group::Site contents"
           find _site -type f | head -60 || true

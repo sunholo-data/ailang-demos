@@ -1,14 +1,12 @@
 # Cognitive Commons
 
-A live, multi-tab AI debating society built on AILANG's Cognitive OS substrate (`!: {DOM, Msg, Cog, AI}`).
+A live, multi-tab AI debating society built with AILANG WASM.
 
-Each browser tab is a citizen with a persona (Visionary / Skeptic / Synthesizer / Archivist). They debate any topic, competing to drag a shared "sentiment dot" toward their corner of a 2D plane. The persona currently closest to the dot holds an **edit lock** on a rolling 100–200 word working statement — the commons' answer to the topic. Only the leader can replace the draft; non-leaders must first earn the lead by speaking persuasively.
+**[Try it live →](https://www.sunholo.com/ailang-demos/cognitive_commons/)**
 
-**This demo is AILANG-driven.** The citizen behaviour, persuasion judging, and consensus edit-lock are `.ail` modules running as WASM in the browser. JS handles UI affordances (constellation rendering, pan/zoom, tooltips, BYO-key UX) and bridges `std/ai` calls to the user's chosen provider via the existing BYO-key pattern from `wasm-step-byo-key`.
+Each browser tab is one citizen (Visionary / Skeptic / Synthesizer / Archivist). Citizens debate any topic, competing to drag a shared **sentiment dot** toward their corner of a 2D plane. The persona currently closest to the dot holds an **edit lock** on a rolling 100–200 word working statement — the commons' answer to the topic. Only the leader can replace the draft; non-leaders must out-argue them first.
 
-## Status
-
-**Draft, not yet deployed.** Being ported from the JavaScript-heavy prototype at [`ailang/docs/static/demos/cognitive-os-runtime/`](https://github.com/sunholo-data/ailang/tree/dev/docs/static/demos/cognitive-os-runtime) (which lives in the main AILANG repo as a substrate smoke test).
+**This demo is AILANG-driven.** Citizen composition, persuasion scoring, sentiment EWMA, and edit-lock logic are `.ail` modules running as WASM in the browser. JS handles constellation rendering, BroadcastChannel cross-tab relay, and AI provider bridging.
 
 ## Architecture
 
@@ -16,76 +14,84 @@ Each browser tab is a citizen with a persona (Visionary / Skeptic / Synthesizer 
 ┌─────────────────────────────────────────────────────────────────┐
 │ index.html  — UI shell (JS)                                     │
 │  ├─ provider/key picker, model selector, persona switcher       │
-│  ├─ constellation SVG render + pan/zoom + tooltip                │
-│  ├─ chronicle feed, scoreboard, topic input                      │
-│  └─ loads ailang.wasm and calls into citizen.ail                 │
+│  ├─ constellation SVG render + sentiment dot + trail            │
+│  ├─ chronicle feed, scoreboard, topic input, manifesto panel    │
+│  └─ BroadcastChannel cross-tab relay (ailang_state in payload)  │
 ├─────────────────────────────────────────────────────────────────┤
-│ citizen.ail        ! {AI, DOM, Msg, Cog}                        │
-│  └─ compose loop: read topic + history → draft stanza + edit    │
-│                   to working statement → judge own utterance →   │
-│                   broadcast via std/cognition                    │
-│                                                                  │
-│ consensus.ail      pure                                          │
-│  └─ sentiment EWMA, currentLeader, applyConsensusEdit (lock)    │
-│                                                                  │
-│ personas.ail       pure data                                     │
-│  └─ PERSONA_TARGETS, DEFAULT_PROMPTS, AXIS_DEFINITIONS          │
-│                                                                  │
-│ persuasion.ail     ! {AI}                                       │
-│  └─ judgeUtterance — separate small LLM call for scoring        │
-├─────────────────────────────────────────────────────────────────┤
-│ AILANG substrate (shipped in the ailang binary; loaded as WASM) │
-│  ├─ std/dom        — scoped DOM patches with canonical hashing  │
-│  ├─ std/cognition  — cross-tab Msg fabric over BroadcastChannel │
-│  ├─ std/ai         — AI calls; provider routed by JS host shim  │
-│  └─ event log      — IndexedDB-persisted; replayable            │
+│ commons_browser.ail  — WASM JSON adapter                        │
+│  └─ speakJson(state, persona, prompt, topic, dialogue, clock,   │
+│                region) → JSON {speaker, utterance, glyph,       │
+│                               judge_ok, score, state, ...}      │
+│  inlines compose + judgeUtterance + EWMA + edit-lock so JS      │
+│  gets utterance text back (needed for chronicle render)         │
+│                                                                 │
+│ citizen.ail          ! {AI, DOM, Msg}                           │
+│  └─ compose() — author LLM call → AuthorReply {text, glyph,    │
+│                 manifesto}                                       │
+│                                                                 │
+│ persuasion.ail       ! {AI}                                     │
+│  └─ judgeUtterance() — judge LLM call → JudgeScore {x, y}      │
+│                                                                 │
+│ consensus.ail        pure                                       │
+│  └─ applyUtterance, currentLeader, applyManifestoEdit           │
+│     CommonsState: sentiment {x,y}, text, editor, clock, count   │
+│                                                                 │
+│ types/personas.ail   pure data                                  │
+│  └─ Persona ADT (Visionary/Skeptic/Synthesizer/Archivist)       │
+│     targets, default_prompt, axis_definitions                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## File layout (in progress)
+## File Layout
 
-| File | Status | Purpose |
-|---|---|---|
-| `personas.ail` | sketch | Persona definitions + default system prompts |
-| `consensus.ail` | sketch | Pure logic: sentiment EWMA, currentLeader, edit-lock |
-| `citizen.ail` | sketch | Compose loop with `!: {AI, DOM, Msg, Cog}` |
-| `persuasion.ail` | sketch | `judgeUtterance` — small AI call returning `{x, y}` |
-| `index.html` | TBD | Slim UI shell that loads the WASM REPL |
-| `shell.js` | TBD | UI wiring + AI-step JS bridges |
-| `wasm/` | TBD | Vendored `ailang.wasm` + `wasm_exec.js` + `ailang-repl.js` |
-| `cog/` | TBD | Vendored Cognitive OS browser-host JS (`host.js` etc.) |
-| `ailang.toml` | TBD | Per-demo manifest |
+| File | Purpose |
+|---|---|
+| `index.html` | UI shell — constellation, chronicle, onboarding, model picker |
+| `types/personas.ail` | Persona ADT, sentiment targets, default system prompts |
+| `services/consensus.ail` | Pure: EWMA, currentLeader, edit-lock |
+| `services/persuasion.ail` | Judge LLM call returning `JudgeScore {x, y}` |
+| `services/citizen.ail` | Compose loop with `! {AI}` effect |
+| `services/commons_browser.ail` | WASM JSON adapter — `speakJson` entry point |
+| `main.ail` | CLI smoke test (4-turn mock debate, no AI) |
+| `cog/` | Cognitive OS browser JS (canonical DOM, event log, host, scheduler) |
 
-## What stays JS, and why
+## Running Locally
 
-- **UI rendering** — constellation SVG, pan/zoom, tooltips, chronicle panels. Browser DOM ergonomics; the canonical-DOM substrate is great for replayable mutations but not the place to express interaction states.
-- **BYO-key provider routing** — keys live in `localStorage` (shared with the `wasm-step-byo-key` demo). The JS host receives `std/ai` calls from AILANG and routes them to Anthropic / OpenAI / OpenRouter / Gemini via direct `fetch`. This mirrors the existing AI-step bridge pattern.
-- **Cross-tab BroadcastChannel** — the JS layer of the Cognitive OS substrate already exposes `_sendDirect`/`_recvDirect`. AILANG's `std/cognition.sendMsg`/`recvMsg` route through these via the WASM bridge.
+```bash
+# From the demos/ root
+scripts/serve.sh --port 8765
+# Open http://localhost:8765/cognitive_commons/
+```
 
-## What's AILANG, and why
+## CLI Smoke Test
 
-- **Citizen behaviour** — the compose / judge / edit cycle is multi-effect (`!: {AI, DOM, Msg, Cog}`) and benefits from contracts on inputs (persona ∈ {V, S, Y, A}, gap ∈ [0, √2], etc.).
-- **Pure consensus logic** — sentiment EWMA, leader determination, and edit-lock are purely functional and ideally tested via AILANG's contract verifier.
-- **Replayability** — the event log captures every `applyPatch` call. Replaying the log byte-for-byte across machines is the whole point of the Cognitive OS substrate and lives in AILANG's `internal/cognition/` package.
+```bash
+ailang run --entry main --caps IO cognitive_commons/main.ail
+```
 
-## Shared assets to reuse from the demos/ repo
+## How Cross-Tab State Sync Works
 
-- `wasm/ailang-repl.js`, `wasm/wasm_exec.js`, `wasm/ailang.wasm` — vendored from `sunholo/ailang` main repo build output
-- Brand styles + fonts from sibling demos (Fraunces, Inter, JetBrains Mono)
-- Eventually: shared layout chrome (header, footer) once the demo hub at `www.sunholo.com/ailang-demos/` standardises one
+1. Tab A speaks: `ailangCallAsync('commons_browser/services/commons_browser', 'speakJson', ...)`
+2. AILANG returns `{ok, speaker, utterance, glyph, score, state}` JSON
+3. JS calls `broadcastStanza(persona, utterance, glyph, ailangState)` — includes `ailang_state` in the BroadcastChannel payload
+4. All other tabs receive the event, call `adoptAilangState(payload.ailang_state)` to update sentiment + constellation
+5. Next speak in each tab uses the updated `app.ailang.stateJson` as the `state_json` argument to `speakJson`
 
-## Future extractions
+## Provider Support
 
-- `std/cognitive_commons` — if the consensus + leader-lock logic stabilises, lift into a reusable AILANG package
-- `std/ai/byo_key_bridge` — the JS-side BYO-key fetch router is already shared with `wasm-step-byo-key`; ripe for a dedicated module
-- Persona/system-prompt builders — if other "society of N agents" demos appear, the prompt-composition helpers could become a shared lib
+Uses the shared `<provider>-api-key` localStorage key convention (no demo-scoped prefixes):
 
-## Roadmap (rough)
+| Provider | localStorage key |
+|----------|-----------------|
+| Anthropic | `anthropic-api-key` |
+| OpenAI | `openai-api-key` |
+| OpenRouter | `openrouter-api-key` |
+| Google Gemini | `gemini-api-key` |
 
-1. **Skeleton** ← we are here
-2. Port `consensus.ail` (pure, easiest to verify)
-3. Port `persuasion.ail` (single AI call, returns `{x, y}` via JSON schema)
-4. Port `citizen.ail` (the compose loop with all four effects)
-5. Slim down `index.html` to a UI shell + JS bridges
-6. Vendor `wasm/` + `cog/`
-7. Wire a build that ships to `www.sunholo.com/ailang-demos/cognitive-commons/`
+## AILANG Patterns Applied
+
+- **Pattern 1**: Flatten triple-nested match in `compose()` → sequential `let`s + helper
+- **Pattern 2**: Collapse three matches on `Result[JudgeScore, _]` → one `unpack_judge_score` into flat record
+- **Pattern 3**: Trim consensus imports to only used symbols
+- **callJson returns string**: `callJson(prompt, schema) -> string` — always `let raw = callJson(...); match decode(raw) { ... }`
+- **Option constructors**: `getString/getNumber/getObject` return `Option[T]` — use `Some/None`, not `Ok/Err`

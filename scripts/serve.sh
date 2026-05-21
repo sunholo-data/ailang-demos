@@ -36,7 +36,7 @@ WASM_REBUILD_ARGS=()
 if [[ "${REBUILD_WASM:-false}" == "true" ]]; then
   WASM_REBUILD_ARGS=("--rebuild")
 fi
-"$REPO_ROOT/scripts/check-wasm-freshness.sh" "${WASM_REBUILD_ARGS[@]}" || {
+"$REPO_ROOT/scripts/check-wasm-freshness.sh" ${WASM_REBUILD_ARGS[@]+"${WASM_REBUILD_ARGS[@]}"} || {
   status=$?
   if [[ "$status" -eq 1 ]]; then
     echo "⚠  Continuing anyway — set REBUILD_WASM=true scripts/serve.sh to auto-rebuild."
