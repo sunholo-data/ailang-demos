@@ -87,20 +87,28 @@ export pure func compose_system_prompt(
 }
 
 -- Build the user-message prompt.
--- Pattern 5: let-bind st.sentiment and proposer_target once at the top,
--- then read their fields in the interpolation. Avoids the deep
--- "st.sentiment.x"/"proposer_target.x" repeated-traversal shape.
+-- Pattern 5: let-bind st.sentiment and proposer_target once at the top.
 --
--- TODO 2026-05-21: the JS-side buildUserPrompt() (legacy fallback) has
--- richer conversation dynamics — "address speakers by name", "react to
--- the last move", "make a specific refute/extend/pivot move", dynamic
--- force based on sentiment gap. Should be ported here too. An earlier
--- attempt to inline all of that into a single long interpolation tripped
--- the WASM type-checker (CLI green, harness exit 4 with float-vs-int).
--- Likely the long string-interpolation expression has quadratic
--- inference cost on WASM. Next attempt should compose it from many
--- small pure helpers (each returning string) instead of one fat
--- interpolation — the per-call cost stays bounded.
+-- 2026-05-21 status: TWO attempts to restore the JS-prototype's
+-- conversation dynamics (address-by-name, react-to-last-move, force-by-
+-- gap) both broke the WASM type-checker with a spurious "float vs int"
+-- error in commons_browser.ail at jnum(sx) — even though the CLI passes
+-- both files cleanly and the helpers had explicit float type signatures.
+-- The minimal repro: adding ANY float-returning helper to citizen.ail
+-- (gap_force(gap: float) -> string) makes commons_browser fail to
+-- type-check on WASM. Could be a real WASM-type-checker bug around
+-- float-literal defaulting in records, OR something subtle about how
+-- exporting more identifiers from citizen.ail affects commons_browser's
+-- import resolution under the WASM budget.
+--
+-- Reverted both attempts; left this TODO so the next session can either:
+--   (a) file an upstream type-checker bug (citizen.ail + commons_browser
+--       MWE attached) and add the helpers once fixed
+--   (b) move the prompt-richness logic JS-side instead — buildUserPrompt
+--       in index.html already has it; the JS could compose the full
+--       prompt and pass it whole to AILANG's compose() via a new
+--       `full_prompt` parameter, sidestepping the AILANG-side helpers.
+-- Option (b) is the pragmatic next step.
 export pure func compose_user_prompt(
   topic: string,
   recent_dialogue: string,

@@ -167,6 +167,16 @@ export func speakJson(
         match compose(persona_prompt, topic, recent_dialogue, p, st_in) {
           Err(e) => encode(jo([kv("ok", jb(false)), kv("error", js(e))])),
           Ok(reply) => {
+            -- Note: we'd PREFER the unpack-once-into-record pattern here
+            -- (cleaner + matches citizen.speak), but the unpack_judge_score
+            -- helper was reverted 2026-05-21 — the WASM type-checker hit
+            -- a spurious "float vs int" error at jnum(score.x) even though
+            -- the helper's return type explicitly declares float fields.
+            -- The inline three-match shape below stays close to the
+            -- existing original and passes both CLI + WASM. To re-attempt
+            -- the helper-record refactor, add a type-ascription or rewrite
+            -- the Err arm's record literal to avoid the apparent literal-
+            -- default inference quirk in the WASM type-checker.
             let score_result = judgeUtterance(topic, p, reply.text);
             let has_score = match score_result { Ok(_) => true, Err(_) => false };
             let sx = match score_result { Ok(s) => s.x, Err(_) => 0.0 };

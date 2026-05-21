@@ -2619,12 +2619,67 @@
   // ailangSpeak — drives compose + judge + state update + edit-lock
   // through AILANG. Returns the same shape as parseLlmReply (text + glyph)
   // plus a `state` field that callers use to update local sentiment.
+  //
+  // Prompt-dynamics restoration (2026-05-21): the AILANG-side
+  // compose_user_prompt SHOULD include "address speakers by name",
+  // "react to last move", and dynamic force-based-on-gap framing. Two
+  // attempts to add this in citizen.ail itself broke the WASM type-
+  // checker (CLI green, WASM "float vs int" on unrelated jnum calls in
+  // commons_browser). Workaround: build the rich block JS-side here
+  // and pass it INSIDE the `recent_dialogue` parameter. AILANG embeds
+  // it verbatim. Sidesteps the AILANG-WASM type-check issue. Once the
+  // WASM type-checker bug is fixed upstream, this can move back into
+  // citizen.ail (see TODO there).
   async function ailangSpeak(persona) {
     if (!app.ailang || !app.ailang.ready) return null;
     const personaPrompt = activePrompt(persona);
     const topic = (els.topicInput && els.topicInput.value) || "";
-    const recent = (app.recentStanzas || []).slice(-HISTORY_WINDOW)
+    const stanzas = (app.recentStanzas || []).slice(-HISTORY_WINDOW);
+    const dialogue = stanzas
       .map((s, i) => `${i + 1}. ${s.persona} said: "${s.text}"`).join("\n");
+    const lastSpeaker = stanzas.length > 0 ? stanzas[stanzas.length - 1].persona : "";
+    const yourPriorTurns = stanzas.filter((s) => s.persona === persona).length;
+
+    // Dynamic force based on (sentiment, persona-target) gap, matching
+    // the original JS-prototype's modulation. Small gap → reinforce;
+    // large gap → drag.
+    const target = PERSONA_TARGETS[persona] || { x: 0, y: 0 };
+    const dx = target.x - app.sentiment.x;
+    const dy = target.y - app.sentiment.y;
+    const gap = Math.sqrt(dx * dx + dy * dy);
+    const force = gap < 0.3 ? "gently reinforce" :
+                  gap < 0.9 ? "argue clearly to shift" :
+                              "argue forcefully to drag";
+
+    const reactBlock = lastSpeaker
+      ? `\nThe MOST RECENT speaker was ${lastSpeaker}. Your reply should REACT to them — name their move (agree-but-extend, partially-disagree, refute, or pivot away) before turning the floor.`
+      : "\nYou are FIRST to speak; set the opening tone for your persona.";
+
+    const meBlock = yourPriorTurns > 0
+      ? `\nYou (${persona}) have already spoken ${yourPriorTurns} time(s) in this window. Do NOT repeat phrasing from your earlier turns.`
+      : `\nThis is your first turn as ${persona}.`;
+
+    const constraints = [
+      "",
+      "CONSTRAINTS:",
+      "- ADDRESS the previous speakers BY NAME at least once when refuting (\"Skeptic, your...\", \"Synthesizer claims X — but...\", \"As Visionary just said...\"). Citizens know each other.",
+      "- ACTIVELY REFUTE the strongest point against you; if you partially agree, name what you concede and what you reject.",
+      "- Avoid fence-sitting and aphorisms. Make a specific move: refute / extend / pivot / yield-and-redirect.",
+      "- Do NOT quote prior sentences verbatim. Do NOT repeat key phrases.",
+      `- Do NOT start with your own persona name ("As ${persona}...") or with quotation marks.`,
+      "- Use fresh vocabulary — surprise your interlocutors.",
+      `- Your task: ${force} the commons toward your corner, AS PART OF the ongoing argument.`,
+    ].join("\n");
+
+    // Pack everything into recent_dialogue — AILANG embeds it verbatim
+    // between the topic block and the working-statement block.
+    const recent = [
+      dialogue || "(no prior utterances yet)",
+      reactBlock,
+      meBlock,
+      constraints,
+    ].join("\n");
+
     const clock = Date.now() & 0x7fffffff;
     const region = "manifesto";
     if (typeof window.ailangCallAsync !== "function") {
@@ -2819,9 +2874,19 @@
         setAiStatus("warn", "AILANG returned no text — see browser console.");
         return;
       }
-      const judgeScore = reply.judgeOk ? reply.score : null;
+      // Pass the score regardless of judgeOk so the chronicle shows a
+      // chip on every stanza. When judge fails (no judge-routing key OR
+      // provider rejected the call), the score is (0,0) from
+      // commons_browser's fallback path and beautifyPanel's existing
+      // chip renderer just labels it neutrally. Previously this was
+      // null-gated, so chronicles showed NO chip whenever the judge
+      // call fell through — the user's "we lost the judge visible
+      // score" feedback this turn.
+      const judgeScore = reply.score || null;
       broadcastStanza(persona, reply.text, reply.glyph, reply.state, judgeScore);
-      const sLabel = judgeScore ? `score (${judgeScore.x.toFixed(2)}, ${judgeScore.y.toFixed(2)})` : "score: fallback";
+      const sLabel = reply.judgeOk && judgeScore
+        ? `judge ${judgeScore.x.toFixed(2)}, ${judgeScore.y.toFixed(2)}`
+        : "judge: unavailable (no routing key?)";
       setAiStatus("on", `Active · ${app.aiProvider} · ${app.aiModel} · ${sLabel} · ${new Date().toLocaleTimeString()}.`);
     }).catch((e) => {
       console.error("[commons] AILANG speak failed:", e);
