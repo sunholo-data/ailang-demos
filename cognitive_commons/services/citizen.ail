@@ -40,7 +40,7 @@ import std/string (length)
 -- Pattern 3: trim. Drop leaderGap, EditOutcome, Accepted, RejectedNotLeader
 -- (all imported in the previous version but never used). Drop DOMPatch
 -- and println for the same reason.
-import cognitive_commons/types/personas (Persona, label, target, axis_definitions)
+import cognitive_commons/types/personas (Persona, Point, label, target, axis_definitions)
 import cognitive_commons/services/consensus
   ( CommonsState
   , applyUtterance
@@ -86,29 +86,43 @@ export pure func compose_system_prompt(
   "${persona_prompt}${topic_line}${lock_status}"
 }
 
--- Build the user-message prompt.
--- Pattern 5: let-bind st.sentiment and proposer_target once at the top.
+-- Prompt-building helpers. Each is a small `pure func` that returns one
+-- segment of the user-message prompt. The outer compose_user_prompt
+-- concatenates them via a SHORT interpolation.
 --
--- 2026-05-21 status: TWO attempts to restore the JS-prototype's
+-- History: 2026-05-21 the WASM type-checker rejected the helper-decomposed
+-- shape with a spurious "float vs int" error in commons_browser.ail. Root
+-- cause was missing imported-alias + param/return annotation propagation
+-- in the WASM ModuleRegistry.LoadModule path — fixed upstream in
+-- ad84b68d (M-WASM-TYPECHECK-FLOAT-DIVERGENCE). With that fix, this
+-- helper-decomposition pattern works again. We get the AILANG-side
 -- conversation dynamics (address-by-name, react-to-last-move, force-by-
--- gap) both broke the WASM type-checker with a spurious "float vs int"
--- error in commons_browser.ail at jnum(sx) — even though the CLI passes
--- both files cleanly and the helpers had explicit float type signatures.
--- The minimal repro: adding ANY float-returning helper to citizen.ail
--- (gap_force(gap: float) -> string) makes commons_browser fail to
--- type-check on WASM. Could be a real WASM-type-checker bug around
--- float-literal defaulting in records, OR something subtle about how
--- exporting more identifiers from citizen.ail affects commons_browser's
--- import resolution under the WASM budget.
---
--- Reverted both attempts; left this TODO so the next session can either:
---   (a) file an upstream type-checker bug (citizen.ail + commons_browser
---       MWE attached) and add the helpers once fixed
---   (b) move the prompt-richness logic JS-side instead — buildUserPrompt
---       in index.html already has it; the JS could compose the full
---       prompt and pass it whole to AILANG's compose() via a new
---       `full_prompt` parameter, sidestepping the AILANG-side helpers.
--- Option (b) is the pragmatic next step.
+-- gap) back where they belong — in the typed effect-aware module — and
+-- can drop the JS-side workaround in index.html::ailangSpeak.
+
+pure func gap_force(gap: float) -> string =
+  if gap < 0.3 then "gently reinforce"
+  else if gap < 0.9 then "argue clearly to shift"
+  else "argue forcefully to drag"
+
+pure func conversation_block(recent: string) -> string =
+  if length(recent) > 0
+    then "THE CONVERSATION SO FAR (oldest first; you will speak NEXT):\n${recent}\n\nThe MOST RECENT speaker is the LAST line above. Your reply should REACT to them — name their move (agree-but-extend, partially-disagree, refute, or pivot away) before turning the floor.\n"
+    else "You are the FIRST to speak in this commons. Set the opening tone for your persona.\n"
+
+pure func sentiment_block(s: Point, t: Point, force: string) -> string =
+  "Commons sentiment: x=${show(s.x)}, y=${show(s.y)}.\nYour preferred sentiment: x=${show(t.x)}, y=${show(t.y)}.\nYour task: ${force} the commons toward your corner, AS PART OF the ongoing argument.\n"
+
+pure func constraints_block(proposer_label: string) -> string =
+  "CONSTRAINTS:\n- Reply with ONE declarative sentence, 12-26 words.\n- ADDRESS the previous speakers BY NAME at least once when refuting (\"Skeptic, your...\", \"Synthesizer claims X — but...\", \"As Visionary just said...\"). Citizens know each other.\n- ACTIVELY REFUTE the strongest point against you; if you partially agree, name what you concede and what you reject.\n- Avoid fence-sitting and aphorisms. Make a specific move: refute / extend / pivot / yield-and-redirect.\n- Do NOT quote prior sentences verbatim. Do NOT repeat key phrases.\n- Do NOT start with your own persona name (\"As ${proposer_label}...\") or with quotation marks.\n- Use fresh vocabulary — surprise your interlocutors.\n"
+
+pure func json_format_block() -> string =
+  "Reply ONLY with strict JSON, no markdown fences:\n{\n  \"text\": \"<one declarative sentence, 12-26 words>\",\n  \"glyph\": \"<SVG path-d in -12..+12 range; M L A Q Z commands only>\",\n  \"manifesto\": \"<ONLY IF leading: 100-200 word edit of the working statement; otherwise empty string>\"\n}"
+
+-- Build the user-message prompt by concatenating helper-built segments.
+-- Restores the conversation dynamics from the original JS prototype:
+-- addressing speakers by name, reacting to the most recent move,
+-- dynamic force based on the (sentiment, target) gap.
 export pure func compose_user_prompt(
   topic: string,
   recent_dialogue: string,
@@ -119,14 +133,22 @@ export pure func compose_user_prompt(
   let topic_block = if length(topic) > 0
     then "TOPIC OF DEBATE: \"${topic}\"\nEverything below is in service of arguing THIS topic. Stay on topic.\n\n"
     else "";
+  let dialogue_block = conversation_block(recent_dialogue);
   let manifesto_block = if length(st.consensus_text) > 0
-    then "\nTHE COMMONS' CURRENT WORKING STATEMENT (locked to ${leader_label}):\n\"\"\"\n${st.consensus_text}\n\"\"\""
-    else "\nTHE COMMONS' CURRENT WORKING STATEMENT: (empty — the first leader gets to draft it)";
+    then "\nTHE COMMONS' CURRENT WORKING STATEMENT (locked to ${leader_label}):\n\"\"\"\n${st.consensus_text}\n\"\"\"\n"
+    else "\nTHE COMMONS' CURRENT WORKING STATEMENT: (empty — the first leader gets to draft it)\n";
   let proposer_label = label(proposer);
   let s = st.sentiment;
   let t = target(proposer);
+  let dx = t.x - s.x;
+  let dy = t.y - s.y;
+  let gap = dx * dx + dy * dy;
+  let force = gap_force(gap);
   let axes = axis_definitions();
-  "${topic_block}${recent_dialogue}\n${manifesto_block}\n\nYOUR ROLE: ${proposer_label}.\n${axes}\nCommons sentiment: x=${show(s.x)}, y=${show(s.y)}.\nYour preferred sentiment: x=${show(t.x)}, y=${show(t.y)}.\n\nReply ONLY with strict JSON, no markdown fences:\n{\n  \"text\": \"<one declarative sentence, 12-26 words>\",\n  \"glyph\": \"<SVG path-d in -12..+12 range; M L A Q Z commands only>\",\n  \"manifesto\": \"<ONLY IF leading: 100-200 word edit of the working statement; otherwise empty string>\"\n}"
+  let sent_b = sentiment_block(s, t, force);
+  let cons_b = constraints_block(proposer_label);
+  let json_b = json_format_block();
+  "${topic_block}${dialogue_block}\n${manifesto_block}\nYOUR ROLE: ${proposer_label}.\n${axes}\n${sent_b}\n${cons_b}\n${json_b}"
 }
 
 -- JSON schema for the author response (used where the provider supports it).

@@ -2620,66 +2620,19 @@
   // through AILANG. Returns the same shape as parseLlmReply (text + glyph)
   // plus a `state` field that callers use to update local sentiment.
   //
-  // Prompt-dynamics restoration (2026-05-21): the AILANG-side
-  // compose_user_prompt SHOULD include "address speakers by name",
-  // "react to last move", and dynamic force-based-on-gap framing. Two
-  // attempts to add this in citizen.ail itself broke the WASM type-
-  // checker (CLI green, WASM "float vs int" on unrelated jnum calls in
-  // commons_browser). Workaround: build the rich block JS-side here
-  // and pass it INSIDE the `recent_dialogue` parameter. AILANG embeds
-  // it verbatim. Sidesteps the AILANG-WASM type-check issue. Once the
-  // WASM type-checker bug is fixed upstream, this can move back into
-  // citizen.ail (see TODO there).
+  // 2026-05-21 cleanup: the rich preamble (address-by-name, react-to-
+  // last-move, force-by-gap, CONSTRAINTS) is now BACK in citizen.ail
+  // where it belongs (M-WASM-TYPECHECK-FLOAT-DIVERGENCE fixed the
+  // upstream WASM bug that previously forced us to compose it JS-side).
+  // The recent_dialogue parameter is back to carrying only the dialogue
+  // lines — AILANG's compose_user_prompt wraps them with the
+  // conversation-aware instructions via its helper functions.
   async function ailangSpeak(persona) {
     if (!app.ailang || !app.ailang.ready) return null;
     const personaPrompt = activePrompt(persona);
     const topic = (els.topicInput && els.topicInput.value) || "";
-    const stanzas = (app.recentStanzas || []).slice(-HISTORY_WINDOW);
-    const dialogue = stanzas
+    const recent = (app.recentStanzas || []).slice(-HISTORY_WINDOW)
       .map((s, i) => `${i + 1}. ${s.persona} said: "${s.text}"`).join("\n");
-    const lastSpeaker = stanzas.length > 0 ? stanzas[stanzas.length - 1].persona : "";
-    const yourPriorTurns = stanzas.filter((s) => s.persona === persona).length;
-
-    // Dynamic force based on (sentiment, persona-target) gap, matching
-    // the original JS-prototype's modulation. Small gap → reinforce;
-    // large gap → drag.
-    const target = PERSONA_TARGETS[persona] || { x: 0, y: 0 };
-    const dx = target.x - app.sentiment.x;
-    const dy = target.y - app.sentiment.y;
-    const gap = Math.sqrt(dx * dx + dy * dy);
-    const force = gap < 0.3 ? "gently reinforce" :
-                  gap < 0.9 ? "argue clearly to shift" :
-                              "argue forcefully to drag";
-
-    const reactBlock = lastSpeaker
-      ? `\nThe MOST RECENT speaker was ${lastSpeaker}. Your reply should REACT to them — name their move (agree-but-extend, partially-disagree, refute, or pivot away) before turning the floor.`
-      : "\nYou are FIRST to speak; set the opening tone for your persona.";
-
-    const meBlock = yourPriorTurns > 0
-      ? `\nYou (${persona}) have already spoken ${yourPriorTurns} time(s) in this window. Do NOT repeat phrasing from your earlier turns.`
-      : `\nThis is your first turn as ${persona}.`;
-
-    const constraints = [
-      "",
-      "CONSTRAINTS:",
-      "- ADDRESS the previous speakers BY NAME at least once when refuting (\"Skeptic, your...\", \"Synthesizer claims X — but...\", \"As Visionary just said...\"). Citizens know each other.",
-      "- ACTIVELY REFUTE the strongest point against you; if you partially agree, name what you concede and what you reject.",
-      "- Avoid fence-sitting and aphorisms. Make a specific move: refute / extend / pivot / yield-and-redirect.",
-      "- Do NOT quote prior sentences verbatim. Do NOT repeat key phrases.",
-      `- Do NOT start with your own persona name ("As ${persona}...") or with quotation marks.`,
-      "- Use fresh vocabulary — surprise your interlocutors.",
-      `- Your task: ${force} the commons toward your corner, AS PART OF the ongoing argument.`,
-    ].join("\n");
-
-    // Pack everything into recent_dialogue — AILANG embeds it verbatim
-    // between the topic block and the working-statement block.
-    const recent = [
-      dialogue || "(no prior utterances yet)",
-      reactBlock,
-      meBlock,
-      constraints,
-    ].join("\n");
-
     const clock = Date.now() & 0x7fffffff;
     const region = "manifesto";
     if (typeof window.ailangCallAsync !== "function") {

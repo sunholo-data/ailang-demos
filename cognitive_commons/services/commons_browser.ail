@@ -85,6 +85,17 @@ pure func parseState(obj: Json) -> CommonsState = {
   }
 }
 
+-- Pattern 2 helper: collapse a `Result[JudgeScore, string]` into a flat
+-- record so speakJson's body reads score.has / score.x / score.y as
+-- ordinary record-field access instead of three back-to-back matches
+-- on the same tagged-union receiver. Restored 2026-05-21 after
+-- M-WASM-TYPECHECK-FLOAT-DIVERGENCE landed in ailang/ad84b68d.
+pure func unpack_judge_score(r: Result[JudgeScore, string]) -> {has: bool, x: float, y: float} =
+  match r {
+    Ok(s)  => {has: true,  x: s.x, y: s.y},
+    Err(_) => {has: false, x: 0.0, y: 0.0}
+  }
+
 -- ── public WASM entry points ─────────────────────────────────────
 
 -- Diagnostic helper: round-trip a string through AILANG to confirm
@@ -167,21 +178,12 @@ export func speakJson(
         match compose(persona_prompt, topic, recent_dialogue, p, st_in) {
           Err(e) => encode(jo([kv("ok", jb(false)), kv("error", js(e))])),
           Ok(reply) => {
-            -- Note: we'd PREFER the unpack-once-into-record pattern here
-            -- (cleaner + matches citizen.speak), but the unpack_judge_score
-            -- helper was reverted 2026-05-21 — the WASM type-checker hit
-            -- a spurious "float vs int" error at jnum(score.x) even though
-            -- the helper's return type explicitly declares float fields.
-            -- The inline three-match shape below stays close to the
-            -- existing original and passes both CLI + WASM. To re-attempt
-            -- the helper-record refactor, add a type-ascription or rewrite
-            -- the Err arm's record literal to avoid the apparent literal-
-            -- default inference quirk in the WASM type-checker.
-            let score_result = judgeUtterance(topic, p, reply.text);
-            let has_score = match score_result { Ok(_) => true, Err(_) => false };
-            let sx = match score_result { Ok(s) => s.x, Err(_) => 0.0 };
-            let sy = match score_result { Ok(s) => s.y, Err(_) => 0.0 };
-            let st1 = applyUtterance(st_in, p, has_score, sx, sy);
+            -- Pattern 2 (WASM-friendly): one match into a flat record
+            -- instead of three back-to-back matches on the same Result.
+            -- Re-enabled 2026-05-21 after M-WASM-TYPECHECK-FLOAT-DIVERGENCE
+            -- landed upstream (commit ad84b68d).
+            let score = unpack_judge_score(judgeUtterance(topic, p, reply.text));
+            let st1 = applyUtterance(st_in, p, score.has, score.x, score.y);
             let edit = if length(reply.manifesto) >= 40
               then applyManifestoEdit(st1, p, reply.manifesto, clock)
               else { state: st1, outcome: RejectedTooShort };
@@ -197,8 +199,8 @@ export func speakJson(
               kv("utterance", js(reply.text)),
               kv("glyph",    js(reply.glyph)),
               kv("manifesto_outcome", js(outcome_label)),
-              kv("judge_ok", jb(has_score)),
-              kv("score", jo([kv("x", jnum(sx)), kv("y", jnum(sy))])),
+              kv("judge_ok", jb(score.has)),
+              kv("score", jo([kv("x", jnum(score.x)), kv("y", jnum(score.y))])),
               kv("state", stateToJson(st2))
             ]))
           }
