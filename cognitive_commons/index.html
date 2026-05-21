@@ -806,8 +806,17 @@
     .masthead-cta {
       display: flex;
       flex-direction: column;
-      align-items: end;
+      align-items: flex-end;
       gap: 0.3rem;
+    }
+    /* Buttons sit side-by-side, the cta-hint wraps onto its own line below.
+       Keeps the masthead compact horizontally instead of two stacked CTAs
+       that eat vertical space and visually overweight the right side. */
+    .masthead-cta-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.6rem;
     }
     .big-cta {
       font-family: var(--font-mono);
@@ -1588,12 +1597,14 @@
       <div class="tagline">Each tab is an AI citizen competing to shape the commons' sentiment toward its own values.</div>
     </div>
     <div class="masthead-cta">
-      <button id="compose-now-top" class="primary big-cta" disabled>
-        <span class="btn-spinner" aria-hidden="true"></span>
-        <span class="btn-label">▶ Speak now (this tab)</span>
-      </button>
-      <a id="invite" class="primary big-cta" href="./" target="_blank" rel="noopener">＋ Open another tab</a>
-      <div class="cta-hint">Speak fires the AI immediately; ▶ opens another citizen.</div>
+      <div class="masthead-cta-row">
+        <button id="compose-now-top" class="primary big-cta" disabled>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-label">▶ Speak now</span>
+        </button>
+        <a id="invite" class="primary big-cta" href="./" target="_blank" rel="noopener">＋ Open another tab</a>
+      </div>
+      <div class="cta-hint">▶ fires the AI immediately · ＋ opens another citizen</div>
     </div>
     <div class="clock">
       <span class="lamport" id="lamport-clock">0</span>

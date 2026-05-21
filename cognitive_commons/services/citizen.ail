@@ -90,6 +90,17 @@ export pure func compose_system_prompt(
 -- Pattern 5: let-bind st.sentiment and proposer_target once at the top,
 -- then read their fields in the interpolation. Avoids the deep
 -- "st.sentiment.x"/"proposer_target.x" repeated-traversal shape.
+--
+-- TODO 2026-05-21: the JS-side buildUserPrompt() (legacy fallback) has
+-- richer conversation dynamics — "address speakers by name", "react to
+-- the last move", "make a specific refute/extend/pivot move", dynamic
+-- force based on sentiment gap. Should be ported here too. An earlier
+-- attempt to inline all of that into a single long interpolation tripped
+-- the WASM type-checker (CLI green, harness exit 4 with float-vs-int).
+-- Likely the long string-interpolation expression has quadratic
+-- inference cost on WASM. Next attempt should compose it from many
+-- small pure helpers (each returning string) instead of one fat
+-- interpolation — the per-call cost stays bounded.
 export pure func compose_user_prompt(
   topic: string,
   recent_dialogue: string,
