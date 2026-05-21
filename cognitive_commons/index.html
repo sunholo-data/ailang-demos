@@ -816,12 +816,23 @@
       text-transform: none;
       padding: 0.7rem 1.1rem;
       background: var(--sun-red);
-      border-color: var(--sun-red);
+      border: 1px solid var(--sun-red);
       color: var(--paper-light);
       font-weight: 700;
       box-shadow: 0 3px 0 var(--ink);
+      cursor: pointer;
     }
     .big-cta:hover { box-shadow: 0 5px 0 var(--ink); transform: translateY(-2px); }
+    /* Allow either <button class="big-cta"> or <a class="big-cta">. The
+       anchor form is used for #invite so right-click / middle-click /
+       Cmd-click hand the URL to the browser's native "open in new tab"
+       (a click handler with window.open() bypasses those gestures). */
+    a.big-cta {
+      display: inline-block;
+      text-decoration: none;
+      border-bottom: none;
+    }
+    a.big-cta:hover { border-bottom: none; }
     .cta-hint { font-family: var(--font-mono); font-size: 0.65rem; color: var(--ink-mute); letter-spacing: 0.05em; }
     @media (max-width: 700px) { .masthead-cta { display: none; } }
 
@@ -1581,7 +1592,7 @@
         <span class="btn-spinner" aria-hidden="true"></span>
         <span class="btn-label">▶ Speak now (this tab)</span>
       </button>
-      <button id="invite" class="primary big-cta">＋ Open another tab</button>
+      <a id="invite" class="primary big-cta" href="./" target="_blank" rel="noopener">＋ Open another tab</a>
       <div class="cta-hint">Speak fires the AI immediately; ▶ opens another citizen.</div>
     </div>
     <div class="clock">
@@ -3804,7 +3815,10 @@
         runSpeakNow();
       });
     }
-    els.invite.addEventListener("click", () => window.open(location.href, "_blank", "noopener"));
+    // #invite is now an <a target="_blank"> element — no JS click handler
+    // needed. This lets right-click / middle-click / Cmd-click trigger the
+    // browser's native "open in new tab" gestures (a JS click handler with
+    // window.open() suppresses those, requiring left-click only).
 
     els.btnReplay.addEventListener("click", () => doReplay().catch((e) => alert("Replay failed: " + e.message)));
     els.replayStop.addEventListener("click", () => stopReplay());
