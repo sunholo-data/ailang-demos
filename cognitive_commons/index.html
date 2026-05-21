@@ -2007,14 +2007,12 @@
   // What this script does:
   //   1) Attaches the Cognitive OS runtime, gives this tab a persona + identity
   //   2) Joins a BroadcastChannel "commons" mailbox; gossips heartbeats + stanzas
-  //   3) On a cadence, composes a stanza (deterministic corpus, OR LLM if key)
+  //   3) On a cadence, composes a stanza via LLM (requires API key)
   //   4) Renders every stanza locally via DOM-patch effects → same DOM in every tab
   //   5) Persists everything in IndexedDB → replayable across reloads + machines
   //
   // Determinism notes:
-  //   - The corpus is seeded by (sender_id, lamport_clock) — no Math.random in
-  //     the message content path. Two tabs with the same log produce identical
-  //     stanzas.
+  //   - Personas are assigned deterministically from sender_id — no Math.random.
   //   - LLM-authored stanzas are non-deterministic at write time but replay
   //     reads from the log (not the LLM) → deterministic on replay.
   //   - Animation timing uses Date.now (cosmetic, not asserted by replay).
@@ -2024,47 +2022,9 @@
   const PERSONAS = ["Visionary", "Skeptic", "Synthesizer", "Archivist"];
   const PERSONA_AVATAR = { Visionary: "V", Skeptic: "S", Synthesizer: "Y", Archivist: "A" };
 
-  // Seeded corpus — keyed by persona. Each persona's stanzas reflect a stance.
-  // Used in deterministic mode. The corpus is the v1 baseline; the LLM mode
-  // generates fresh stanzas with the same persona system prompts.
-  const CORPUS = {
-    Visionary: [
-      "Every page is a computer; every tab is a citizen.",
-      "If cognition is durable and runtime is transient, the future is a message log.",
-      "A society is what survives when the workers die.",
-      "When the trace becomes a substrate, every action is a step on a public path.",
-      "The web is not a network of documents. It is a network of minds that happen to be addressable.",
-      "We did not invent intelligence. We invented a way to address it.",
-    ],
-    Skeptic: [
-      "But determinism is not the same as truth.",
-      "A replayable error is still an error — only now with footnotes.",
-      "We confuse reproducibility with understanding.",
-      "Every Lamport clock measures opinion, not time.",
-      "The byte-identical reconstruction proves only that the bytes are identical.",
-      "A society of four tabs is not a society. It is a quorum of nobody.",
-    ],
-    Synthesizer: [
-      "If the visionary is right and the skeptic is right, the design must hold both.",
-      "Determinism is the price of admission; meaning is the show.",
-      "We are not building agents. We are building a way for cognition to keep itself honest.",
-      "The manifesto improves by accretion. The system improves by retraction.",
-      "Replay is the auditor; live composition is the author. Neither is the work.",
-      "Between the visionary and the skeptic, place a written record. Then keep writing.",
-    ],
-    Archivist: [
-      "Event 0001 was a patch named AddPanel. The chain begins.",
-      "Recorded in canonical (clock, sender) order: every word, every echo.",
-      "The log does not forget. The log will outlive every tab that wrote it.",
-      "What was said by whom at what clock — this is the entire content of history.",
-      "In the absence of authors, the index remains.",
-      "The bytes are the witness; the witness is the record.",
-    ],
-  };
-
   // ---------------------------------------------------------------------------
-  // Deterministic helpers — seeded by (sender, clock) so two tabs replaying the
-  // same log produce the same stanzas without any shared state.
+  // Deterministic helpers — seeded by sender_id so two tabs seeing the same
+  // sender always assign the same persona. No Math.random — replay-safe.
   // ---------------------------------------------------------------------------
   function strHash(s) {
     // FNV-1a 32-bit — same family as canonical_dom but truncated.
@@ -2077,10 +2037,6 @@
   }
   function deterministicPersona(senderId) {
     return PERSONAS[strHash(senderId) % PERSONAS.length];
-  }
-  function pickStanza(persona, seedKey) {
-    const pool = CORPUS[persona];
-    return pool[strHash(seedKey) % pool.length];
   }
   function avatarLetter(persona) { return PERSONA_AVATAR[persona] || "?"; }
 
@@ -4413,7 +4369,7 @@
 
     if (!provider || provider === "auto" || !key) {
       app.aiOn = false; app.aiProvider = null; app.aiKey = ""; app.aiModel = "";
-      setAiStatus("idle", "Deterministic mode — stanzas drawn from a seeded corpus.");
+      setAiStatus("idle", "Add an API key to give this tab a voice.");
       return;
     }
 
