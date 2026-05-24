@@ -156,13 +156,22 @@ export pure func requiredPreservation(st: CommonsState) -> float =
 -- Case-insensitive, whitespace-tokenised (good enough for the demo).
 -- Empty previous text trivially returns 1.0 — the leader can write
 -- the first draft from scratch.
+--
+-- Bug fixed 2026-05-24: previously this checked listLength(prev_words)
+-- to detect the empty case, but split("", " ") returns [""] (length 1)
+-- not [], so the guard never fired. Result: the very first manifesto
+-- got RejectedTooDifferent because preserved=0/1=0.0 < required. Now
+-- guards on the input string's length directly.
 export pure func preservationRatio(previous: string, proposed: string) -> float = {
-  let prev_words = split(toLower(previous), " ");
-  let new_words = split(toLower(proposed), " ");
-  let preserved = filter(\w. any(\x. x == w, new_words), prev_words);
-  let total = listLength(prev_words);
-  if total == 0 then 1.0
-  else intToFloat(listLength(preserved)) / intToFloat(total)
+  if length(previous) == 0 then 1.0
+  else {
+    let prev_words = split(toLower(previous), " ");
+    let new_words = split(toLower(proposed), " ");
+    let preserved = filter(\w. any(\x. x == w, new_words), prev_words);
+    let total = listLength(prev_words);
+    if total == 0 then 1.0
+    else intToFloat(listLength(preserved)) / intToFloat(total)
+  }
 }
 
 -- applyManifestoEdit — the edit-lock gate.
