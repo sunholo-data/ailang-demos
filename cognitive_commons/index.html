@@ -665,6 +665,16 @@
     .cg-tooltip[data-p="Synthesizer"] { border-left-color: var(--synth); }
     .cg-tooltip[data-p="Archivist"]   { border-left-color: var(--archivist); }
     .cg-tt-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .cg-tt-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      object-fit: cover; background: var(--paper-light);
+      border: 1.5px solid var(--rule);
+      flex-shrink: 0;
+    }
+    .cg-tt-avatar[data-p="Visionary"]   { border-color: var(--visionary); }
+    .cg-tt-avatar[data-p="Skeptic"]     { border-color: var(--skeptic); }
+    .cg-tt-avatar[data-p="Synthesizer"] { border-color: var(--synth); }
+    .cg-tt-avatar[data-p="Archivist"]   { border-color: var(--archivist); }
     .cg-tt-meta { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.04em; color: var(--ink-mute); }
     .cg-tt-model { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.02em; color: var(--sun-purple); margin-bottom: 0.2rem; }
     .cg-tt-model:empty { display: none; }
@@ -1272,13 +1282,25 @@
       border-radius: 4px;
       transition: border-left-color 0.5s;
       display: grid;
-      grid-template-columns: 200px 1fr;
-      gap: 1.2rem;
+      grid-template-columns: 56px 200px 1fr;
+      gap: 1rem;
       align-items: center;
     }
     @media (max-width: 700px) {
-      .cg-pullquote { grid-template-columns: 1fr; gap: 0.4rem; }
+      .cg-pullquote { grid-template-columns: 56px 1fr; gap: 0.4rem; }
+      .cg-pullquote .cg-pq-meta { grid-column: 1 / -1; }
     }
+    .cg-pq-avatar {
+      width: 52px; height: 52px; border-radius: 50%;
+      object-fit: cover; background: var(--paper-light);
+      border: 2px solid var(--rule);
+      transition: border-color 0.3s;
+    }
+    .cg-pullquote[data-p="Visionary"]   .cg-pq-avatar { border-color: var(--visionary); }
+    .cg-pullquote[data-p="Skeptic"]     .cg-pq-avatar { border-color: var(--skeptic); }
+    .cg-pullquote[data-p="Synthesizer"] .cg-pq-avatar { border-color: var(--synth); }
+    .cg-pullquote[data-p="Archivist"]   .cg-pq-avatar { border-color: var(--archivist); }
+    .cg-pq-avatar.empty { visibility: hidden; }
     .cg-pullquote[data-p="Visionary"]   { border-left-color: var(--visionary); }
     .cg-pullquote[data-p="Skeptic"]     { border-left-color: var(--skeptic); }
     .cg-pullquote[data-p="Synthesizer"] { border-left-color: var(--synth); }
@@ -1580,6 +1602,18 @@
     }
     .chronicle-section .cog-panel-content::before,
     .chronicle-section .cog-panel-content::after { content: none; }
+    .chronicle-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      object-fit: cover; background: var(--paper-light);
+      border: 1.5px solid var(--rule);
+      flex-shrink: 0;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+    .chronicle-avatar[data-p="Visionary"]   { border-color: var(--visionary); }
+    .chronicle-avatar[data-p="Skeptic"]     { border-color: var(--skeptic); }
+    .chronicle-avatar[data-p="Synthesizer"] { border-color: var(--synth); }
+    .chronicle-avatar[data-p="Archivist"]   { border-color: var(--archivist); }
     .chronicle-glyph {
       grid-column: 1;
       grid-row: 1 / span 2;
@@ -1870,6 +1904,7 @@
       <span class="count" id="constellation-count">0 glyphs</span>
     </div>
     <div class="cg-pullquote" id="cg-pullquote">
+      <img id="cg-pq-avatar" class="cg-pq-avatar empty" alt="" aria-hidden="true">
       <div class="cg-pq-meta">
         <span class="cg-pq-label">Leading citizen</span>
         <span id="cg-pq-leader" class="cg-pq-leader">—</span>
@@ -1936,6 +1971,7 @@
       <!-- Floating tooltip — populated on glyph hover with the full utterance. -->
       <div class="cg-tooltip" id="cg-tooltip" aria-hidden="true">
         <div class="cg-tt-head">
+          <img id="cg-tt-avatar" class="cg-tt-avatar" alt="" aria-hidden="true">
           <span class="persona-tag" id="cg-tt-persona" data-p="Visionary">—</span>
           <span class="cg-tt-meta">
             <span id="cg-tt-sender">—</span> · clk <span id="cg-tt-clock">—</span> · <span id="cg-tt-time">—</span>
@@ -2230,6 +2266,7 @@
     consensusLockPersona: $("consensus-lock-persona"),
     cgTooltip: $("cg-tooltip"),
     cgTtPersona: $("cg-tt-persona"),
+    cgTtAvatar: $("cg-tt-avatar"),
     cgTtSender: $("cg-tt-sender"),
     cgTtClock: $("cg-tt-clock"),
     cgTtTime: $("cg-tt-time"),
@@ -3107,6 +3144,14 @@
       els.cgTooltip.setAttribute("data-p", persona);
       els.cgTtPersona.setAttribute("data-p", persona);
       els.cgTtPersona.textContent = persona;
+      if (els.cgTtAvatar && persona !== "—") {
+        const want = `img/${persona.toLowerCase()}.png`;
+        if (!els.cgTtAvatar.getAttribute("src") || !els.cgTtAvatar.getAttribute("src").endsWith(want)) {
+          els.cgTtAvatar.src = want;
+          els.cgTtAvatar.alt = `${persona} portrait`;
+        }
+        els.cgTtAvatar.setAttribute("data-p", persona);
+      }
       els.cgTtSender.textContent = shortSender(d.sender || "");
       els.cgTtClock.textContent = d.clock || "—";
       const ts = parseInt(d.ts, 10);
@@ -5038,6 +5083,7 @@
     const wrap = document.getElementById("cg-pullquote");
     const leaderEl = document.getElementById("cg-pq-leader");
     const textEl = document.getElementById("cg-pq-text");
+    const avatarEl = document.getElementById("cg-pq-avatar");
     if (!wrap || !leaderEl || !textEl) return;
     if (!leader || !app.recentStanzas.length) {
       wrap.removeAttribute("data-p");
@@ -5045,7 +5091,21 @@
       leaderEl.textContent = "—";
       textEl.classList.add("empty");
       textEl.textContent = "Once a citizen speaks, the leading persona's most recent utterance will appear here.";
+      if (avatarEl) {
+        avatarEl.classList.add("empty");
+        avatarEl.removeAttribute("src");
+      }
       return;
+    }
+    // Persona avatar matches the leader. Only swap src on persona change
+    // to avoid re-fetching the (multi-MB) PNG every refresh tick.
+    if (avatarEl) {
+      const want = `img/${leader.toLowerCase()}.png`;
+      if (!avatarEl.getAttribute("src") || !avatarEl.getAttribute("src").endsWith(want)) {
+        avatarEl.src = want;
+        avatarEl.alt = `${leader} portrait`;
+      }
+      avatarEl.classList.remove("empty");
     }
     // Find the most recent stanza authored by the leading persona
     let lastByLeader = null;
@@ -5149,6 +5209,13 @@
     // via adoptAilangState(); applying JS EWMA here would double-shift.
     // The pure-JS applyUtteranceToSentiment is intentionally not called —
     // see commit history if you need to restore a JS fallback.
+    //
+    // Re-run renderSentiment so updateLeaderPullquote can see the just-
+    // appended stanza. adoptAilangState fires renderSentiment BEFORE
+    // recordStanza in broadcastStanza, so without this call the pullquote
+    // would lag a full cycle behind (or stay empty on the very first
+    // stanza). Cheap — renderSentiment is just attribute writes.
+    renderSentiment();
   }
   function resetRecentStanzas() { app.recentStanzas = []; }
 
@@ -5170,6 +5237,16 @@
     const model = meta.model || panel.dataset.model || "";
     const provider = panel.dataset.provider || "";
     const scoreStr = panel.dataset.score || "";
+
+    // Avatar — the portrait the user picked for this persona. Sits to
+    // the left of the procedural glyph so each chronicle row reads as
+    // "[portrait] [signature] Persona · meta".
+    const avatar = document.createElement("img");
+    avatar.className = "chronicle-avatar";
+    avatar.setAttribute("data-p", persona);
+    avatar.src = `img/${persona.toLowerCase()}.png`;
+    avatar.alt = `${persona} portrait`;
+    panel.insertBefore(avatar, title);
 
     // Mini-glyph: same persona theme + seed as constellation
     const wrap = document.createElement("div");
