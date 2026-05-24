@@ -1131,6 +1131,10 @@
       max-height: 50vh;
       overflow-y: auto;
     }
+    /* The HTML `hidden` attribute sets display:none — BUT an explicit
+       `display: flex` above wins specificity, so the panel stayed
+       visible after toggle. Re-assert hidden's intent here. */
+    .revisions-list[hidden] { display: none; }
     .revision-card {
       border: 1px solid var(--rule);
       border-left: 4px solid var(--ink);
