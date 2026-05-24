@@ -2508,8 +2508,22 @@
     }
     // Seed the AILANG-side commons state. Persist in sessionStorage so
     // a reload picks up where it left off within the same tab.
+    //
+    // Caches before 2026-05-24 may hold the "function () { ... }" string
+    // that initialStateJson() returned under the v0.20.1 0-arg bug. We
+    // validate the persisted value before reuse — if it's not real JSON
+    // starting with {, discard it and re-seed. This auto-heals broken
+    // caches on the first visit after this deploy.
     const persisted = sessionStorage.getItem("commons_ailang_state");
-    if (persisted) {
+    const persistedOk = typeof persisted === "string"
+      && persisted.length > 0
+      && persisted.trim().startsWith("{")
+      && (() => { try { JSON.parse(persisted); return true; } catch (_) { return false; } })();
+    if (persisted && !persistedOk) {
+      console.warn("[commons] discarding corrupt persisted state (pre-fix cache); re-seeding");
+      sessionStorage.removeItem("commons_ailang_state");
+    }
+    if (persistedOk) {
       app.ailang = { repl, ready: true, stateJson: persisted };
     } else {
       const seedRes = window.ailangCall(AILANG_ADAPTER, "initialStateJson", "");
