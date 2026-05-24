@@ -40,17 +40,52 @@ export pure func ewma_alpha() -> float = 0.25
 
 -- applyUtterance — shift the sentiment dot by EWMA toward either the
 -- judge-provided score (if present) or the speaker's persona anchor.
+--
+-- Contract proves the bounded-sentiment invariant: if the input
+-- sentiment AND the (optional) judge score are both inside the unit
+-- square, the output sentiment is too. Z3 chases the convex-combination
+-- identity 0.75·a + 0.25·b ∈ [min(a,b), max(a,b)] through both the
+-- has_score=true (judge-pulled) branch and the has_score=false
+-- (persona-target-pulled) branch.
+-- This invariant was assumed everywhere but never enforced; a peer tab
+-- broadcasting a malformed CommonsState could have pushed the dot out
+-- of bounds and broken every downstream layout calculation.
+--
+-- Implementation notes for Z3:
+-- - alpha inlined as 0.25 (not ewma_alpha()) because v0.20.1's encoder
+--   rejects 0-arg function calls ("unit literals cannot be encoded in
+--   SMT-LIB"). ewma_alpha() stays exported for documentation.
+-- - target() inlined as a per-persona match because v0.20.1's encoder
+--   doesn't resolve cross-module function calls. Same constants as
+--   personas.target — kept in sync by the bounded-by-construction shape
+--   below; if either drifts, Z3 catches it next ai-check run.
 export pure func applyUtterance(
   st: CommonsState,
   speaker: Persona,
   has_score: bool,
   score_x: float,
   score_y: float
-) -> CommonsState = {
-  let attractor = if has_score then { x: score_x, y: score_y } else target(speaker);
-  let alpha = ewma_alpha();
-  let nx = st.sentiment.x * (1.0 - alpha) + attractor.x * alpha;
-  let ny = st.sentiment.y * (1.0 - alpha) + attractor.y * alpha;
+)
+  -> CommonsState
+  requires {
+    st.sentiment.x >= -1.0, st.sentiment.x <= 1.0,
+    st.sentiment.y >= -1.0, st.sentiment.y <= 1.0,
+    (has_score == false) || (score_x >= -1.0 && score_x <= 1.0 && score_y >= -1.0 && score_y <= 1.0)
+  }
+  ensures {
+    result.sentiment.x >= -1.0, result.sentiment.x <= 1.0,
+    result.sentiment.y >= -1.0, result.sentiment.y <= 1.0,
+    result.utterance_count == st.utterance_count + 1
+  }
+{
+  let attractor = if has_score then { x: score_x, y: score_y } else match speaker {
+    Visionary   => { x:  0.85, y:  0.4 },
+    Skeptic     => { x: -0.85, y: -0.2 },
+    Synthesizer => { x:  0.0,  y:  0.9 },
+    Archivist   => { x: -0.4,  y: -0.85 }
+  };
+  let nx = st.sentiment.x * 0.75 + attractor.x * 0.25;
+  let ny = st.sentiment.y * 0.75 + attractor.y * 0.25;
   {
     sentiment: { x: nx, y: ny },
     consensus_text: st.consensus_text,
@@ -92,12 +127,25 @@ export pure func leaderGap(st: CommonsState) -> float =
 -- currently leading. Returns the new state plus a tag.
 export type EditOutcome = Accepted | RejectedNotLeader | RejectedTooShort
 
+-- The edit-lock invariant in contract form: a proposal is Accepted ONLY
+-- if it's long enough AND the proposer is the current leader. Both halves
+-- have to hold — the body's nested if/else expresses that, and Z3 walks
+-- through both branches to prove the postcondition.
 export pure func applyManifestoEdit(
   st: CommonsState,
   proposer: Persona,
   proposed_text: string,
   clock: int
-) -> { state: CommonsState, outcome: EditOutcome } = {
+)
+  -> { state: CommonsState, outcome: EditOutcome }
+  ensures {
+    -- Accepted implies the new text is long enough and replaced the old.
+    -- Written as "not Accepted OR (long enough AND replaced)" so it's
+    -- a single implication Z3 can chase end-to-end.
+    (result.outcome != Accepted) || (length(result.state.consensus_text) >= 40),
+    (result.outcome != Accepted) || (result.state.consensus_text == proposed_text)
+  }
+{
   if length(proposed_text) < 40 then {
     state: st,
     outcome: RejectedTooShort

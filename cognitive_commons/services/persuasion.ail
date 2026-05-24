@@ -32,11 +32,16 @@ export pure func judge_prompt(topic: string, speaker: Persona, utterance: string
   "${topic_line}${axes}\nSpeaker positioned as: ${speaker_label}.\nUtterance: \"${utterance}\"\nScore honestly — a Visionary can write something critical, and vice versa. The score reflects the TEXT, not the speaker's label.\nReply ONLY with strict JSON: {\"x\": <number>, \"y\": <number>}"
 }
 
--- Clamp into [-1, +1].
-pure func clamp(v: float) -> float =
+-- Clamp into [-1, +1]. The ensures clause makes the bound a load-bearing
+-- invariant — judgeUtterance's own ensures (and consensus.applyUtterance's
+-- bounded-sentiment proof) both rely on it.
+pure func clamp(v: float) -> float
+  ensures { result >= -1.0, result <= 1.0 }
+{
   if v < -1.0 then -1.0
   else if v > 1.0 then 1.0
   else v
+}
 
 -- judgeUtterance — issue the judge LLM call, parse + clamp.
 --

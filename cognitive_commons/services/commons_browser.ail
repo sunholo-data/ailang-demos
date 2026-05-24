@@ -11,7 +11,7 @@
 module cognitive_commons/services/commons_browser
 
 import std/json (encode, decode, jo, kv, js, jb, jnum, getString, getNumber, getObject, asString, asNumber)
-import std/string (length)
+import std/string (length, substring)
 import std/math (intToFloat)
 import std/result (Result, Ok, Err)
 import std/option (Some, None, getOrElse)
@@ -135,7 +135,16 @@ export func defaultPromptFor(persona_name: string) -> string = {
 -- (module_registry_prelude.go injects UnitValue for 0-arg calls), but
 -- we're pinned to v0.20.1 until v0.21.0's std/stream migration lands.
 -- JS callers pass any string (e.g. "").
-export func initialStateJson(_seed: string) -> string =
+--
+-- Contract: output must be a non-trivial JSON object literal. Runtime-
+-- enforced (Z3 can't reason about strings). Catches the failure class
+-- where this function silently returned "function () { ... }" — a
+-- length-10+ string that doesn't start with '{' would have failed this
+-- on the very first call instead of poisoning sessionStorage and
+-- breaking every subsequent speak.
+export func initialStateJson(_seed: string) -> string
+  ensures { length(result) > 10, substring(result, 0, 1) == "{" }
+{
   encode(stateToJson({
     sentiment: { x: 0.0, y: 0.0 },
     consensus_text: "",
@@ -143,6 +152,7 @@ export func initialStateJson(_seed: string) -> string =
     consensus_clock: 0,
     utterance_count: 0
   }))
+}
 
 -- speakJson — JSON-in / JSON-out orchestrator.
 --
@@ -167,6 +177,14 @@ export func initialStateJson(_seed: string) -> string =
 --     "judge_ok": true, "score": {"x":..,"y":..},
 --     "state": {<stateJson>} }
 --   { "ok": false, "error": "<message>" }
+-- Contract: every speakJson return value MUST be a JSON object literal.
+-- Both branches (ok:true with the full stanza, and ok:false with an
+-- error message) construct objects via encode(jo([...])), so this is
+-- structurally guaranteed by the body. Adding it as an ensures clause
+-- makes the guarantee load-bearing and runtime-checked — if any future
+-- branch is added that returns something else (or returns the function
+-- value, as the 0-arg WASM bug did to initialStateJson), the contract
+-- fires immediately instead of silently corrupting JS-side state.
 export func speakJson(
   state_json: string,
   persona_name: string,
@@ -175,7 +193,10 @@ export func speakJson(
   recent_dialogue: string,
   clock: int,
   region: string
-) -> string ! {AI} = {
+)
+  -> string ! {AI}
+  ensures { length(result) > 10, substring(result, 0, 1) == "{" }
+{
   let _region = region;  -- retained for parity with future !{DOM,Msg} flows
   match parsePersona(persona_name) {
     Err(e) => encode(jo([kv("ok", jb(false)), kv("error", js("bad persona: ${e}"))])),

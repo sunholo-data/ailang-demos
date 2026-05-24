@@ -20,11 +20,20 @@ export type Persona =
 export type Point = { x: float, y: float }
 
 -- Persona's preferred sentiment — the corner of the plane they pull toward.
-export pure func target(p: Persona) -> Point = match p {
-  Visionary   => { x:  0.85, y:  0.4 },
-  Skeptic     => { x: -0.85, y: -0.2 },
-  Synthesizer => { x:  0.0,  y:  0.9 },
-  Archivist   => { x: -0.4,  y: -0.85 }
+-- The four points are hand-picked to live inside the unit square so the
+-- EWMA in applyUtterance (consensus.ail) stays bounded forever. The
+-- ensures clause makes that invariant load-bearing: Z3 verifies it at
+-- compile time, and every downstream contract that assumes "target is
+-- bounded" can rely on it without re-proving.
+export pure func target(p: Persona) -> Point
+  ensures { result.x >= -1.0, result.x <= 1.0, result.y >= -1.0, result.y <= 1.0 }
+{
+  match p {
+    Visionary   => { x:  0.85, y:  0.4 },
+    Skeptic     => { x: -0.85, y: -0.2 },
+    Synthesizer => { x:  0.0,  y:  0.9 },
+    Archivist   => { x: -0.4,  y: -0.85 }
+  }
 }
 
 -- Human-readable label.
