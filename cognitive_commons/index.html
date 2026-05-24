@@ -517,6 +517,17 @@
     .tl-event.kind-MessageSent { background: var(--sun-teal); }
     .tl-event.kind-MessageReceived { background: var(--sun-purple); }
     .tl-event.kind-BudgetExceeded { background: var(--sun-orange); }
+    /* Manifesto outcome accents on PatchApplied events. ev-accepted gets
+       a teal cap (the manifesto landed); ev-rejected gets a thin red
+       outline (the edit was dropped). Persona color goes through the
+       data-p attribute so the dominant signal is still "what kind of
+       event" — outcome is the secondary signal you see on hover. */
+    .tl-event.ev-accepted::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -3px;
+      height: 3px; background: var(--sun-teal); border-radius: 0 0 1px 1px;
+    }
+    .tl-event.ev-rejected { outline: 1px dashed var(--sun-red); outline-offset: 1px; }
+    .tl-event { position: relative; }
 
     .timeline-cursor {
       position: absolute;
@@ -1084,6 +1095,71 @@
       text-transform: uppercase;
       color: var(--sun-purple);
       font-weight: 700;
+    }
+    /* Revisions disclosure — every Accepted manifesto edit becomes one
+       card here. Click the toggle to expand the list (newest first);
+       each card shows editor, timestamp, and the full revision text. */
+    .revisions-toggle {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      background: transparent;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 0.2rem 0.55rem;
+      cursor: pointer;
+      margin-left: 0.6rem;
+    }
+    .revisions-toggle:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
+    .revisions-toggle:disabled { cursor: default; opacity: 0.5; }
+    .revisions-list {
+      margin-top: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+    .revision-card {
+      border: 1px solid var(--rule);
+      border-left: 4px solid var(--ink);
+      border-radius: 3px;
+      padding: 0.55rem 0.8rem;
+      background: var(--paper-light);
+    }
+    .revision-card[data-p="Visionary"]   { border-left-color: var(--visionary); }
+    .revision-card[data-p="Skeptic"]     { border-left-color: var(--skeptic); }
+    .revision-card[data-p="Synthesizer"] { border-left-color: var(--synth); }
+    .revision-card[data-p="Archivist"]   { border-left-color: var(--archivist); }
+    .revision-head {
+      display: flex;
+      gap: 0.55rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.04em;
+      color: var(--ink-mute);
+      margin-bottom: 0.25rem;
+    }
+    .revision-editor {
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: 0.06em;
+    }
+    .revision-card[data-p="Visionary"]   .revision-editor { color: var(--visionary); }
+    .revision-card[data-p="Skeptic"]     .revision-editor { color: var(--skeptic); }
+    .revision-card[data-p="Synthesizer"] .revision-editor { color: var(--synth); }
+    .revision-card[data-p="Archivist"]   .revision-editor { color: var(--archivist); }
+    .revision-text {
+      margin: 0;
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      color: var(--ink);
+      white-space: pre-wrap;
     }
     .consensus-lock {
       font-family: var(--font-mono);
@@ -1822,8 +1898,10 @@
         edit lock: <span id="consensus-lock-persona" data-p="">—</span>
       </span>
       <span class="consensus-meta" id="consensus-meta">no edits yet</span>
+      <button id="revisions-toggle" class="revisions-toggle" disabled aria-expanded="false">No revisions yet</button>
     </div>
     <p class="consensus-text" id="consensus-text">Once a citizen speaks, this section will hold a 100-200 word collective statement on the topic. <strong>The rule of the commons:</strong> only the persona currently leading the sentiment dot (closest to its corner) is allowed to replace the draft. Other citizens must first shift sentiment toward their corner to earn the pen — so the doc evolves through actual rhetorical wins, not just by speaking last.</p>
+    <div id="revisions-list" class="revisions-list" hidden></div>
   </section>
 
   <section class="activate" id="activation-banner">
@@ -2307,6 +2385,7 @@
     sentiment: { x: 0, y: 0 },// commons sentiment (derived from utterance history)
     sentimentTrail: [],       // recent sentiment positions for visual trail
     recentStanzas: [],        // [{persona, sender, clock, text, ts}] for AI history
+    manifestoRevisions: [],   // [{ts, clock, editor, text}] — every Accepted working-statement edit
     glyphByKey: new Map(),    // (sender|clock) → glyph path-d for chronicle beautifier
     tsByKey: new Map(),       // (sender|clock) → ts_ms for chronicle relative time
     cost: { input: 0, output: 0, dollars: 0, calls: 0 },
@@ -2345,6 +2424,8 @@
     consensusText: $("consensus-text"),
     consensusMeta: $("consensus-meta"),
     consensusLockPersona: $("consensus-lock-persona"),
+    revisionsToggle: $("revisions-toggle"),
+    revisionsList: $("revisions-list"),
     cgTooltip: $("cg-tooltip"),
     cgTtPersona: $("cg-tt-persona"),
     cgTtAvatar: $("cg-tt-avatar"),
@@ -2558,6 +2639,8 @@
     // silent JS fallback would defeat the whole point of the demo.
     setAilangStatus("loading", "Loading AILANG WASM runtime + 5 modules…");
     initConstellationCollapse();
+    restoreManifestoRevisions();
+    if (els.revisionsToggle) els.revisionsToggle.addEventListener("click", toggleRevisions);
     updateConstellationOverlay();
     initAilang().then(() => {
       setAilangStatus("ready", "AILANG ready · sentiment + judge + edit-lock run in .ail modules");
@@ -3158,10 +3241,91 @@
   // editor from a CommonsState object that AILANG produced (either this
   // tab's own speakJson result, or a peer tab's broadcast). Suppresses
   // the JS-side EWMA so we don't double-apply sentiment math.
+  // captureRevision — record one Accepted manifesto edit as a history
+  // entry. Persisted to sessionStorage so it survives a refresh. Bounded
+  // at 50 most recent (the older ones still exist in the IndexedDB
+  // event log if you want a full audit trail via Replay session).
+  function captureRevision(state) {
+    if (!state || !state.consensus_text || state.consensus_text.length < 40) return;
+    const last = app.manifestoRevisions[app.manifestoRevisions.length - 1];
+    if (last && last.text === state.consensus_text) return;  // dedupe back-to-back
+    app.manifestoRevisions.push({
+      ts: Date.now(),
+      clock: state.consensus_clock || 0,
+      editor: state.consensus_editor || "—",
+      text: state.consensus_text,
+    });
+    if (app.manifestoRevisions.length > 50) app.manifestoRevisions.shift();
+    try { sessionStorage.setItem("commons_manifesto_revisions", JSON.stringify(app.manifestoRevisions)); } catch (_) {}
+    updateRevisionsUi();
+  }
+
+  function updateRevisionsUi() {
+    const btn = els.revisionsToggle;
+    const list = els.revisionsList;
+    if (!btn || !list) return;
+    const n = app.manifestoRevisions.length;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.disabled = n === 0;
+    btn.textContent = n === 0 ? "No revisions yet" : `Revisions (${n}) ${expanded ? "▴" : "▾"}`;
+    if (!expanded) { list.hidden = true; return; }
+    list.hidden = false;
+    list.innerHTML = "";
+    // Newest first
+    for (let i = app.manifestoRevisions.length - 1; i >= 0; i--) {
+      const r = app.manifestoRevisions[i];
+      const card = document.createElement("div");
+      card.className = "revision-card";
+      if (r.editor) card.setAttribute("data-p", r.editor);
+      const head = document.createElement("div");
+      head.className = "revision-head";
+      const editor = document.createElement("span");
+      editor.className = "revision-editor";
+      editor.textContent = r.editor || "—";
+      const clock = document.createElement("span");
+      clock.textContent = "clk " + (r.clock || "—");
+      const time = document.createElement("span");
+      time.textContent = new Date(r.ts).toLocaleString();
+      head.appendChild(editor); head.appendChild(clock); head.appendChild(time);
+      const body = document.createElement("p");
+      body.className = "revision-text";
+      body.textContent = r.text;
+      card.appendChild(head); card.appendChild(body);
+      list.appendChild(card);
+    }
+  }
+
+  function toggleRevisions() {
+    const btn = els.revisionsToggle;
+    if (!btn || btn.disabled) return;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", expanded ? "false" : "true");
+    updateRevisionsUi();
+  }
+
+  function restoreManifestoRevisions() {
+    try {
+      const raw = sessionStorage.getItem("commons_manifesto_revisions");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        app.manifestoRevisions = parsed.filter(r => r && r.text && r.text.length >= 40);
+        updateRevisionsUi();
+      }
+    } catch (_) {}
+  }
+
   function adoptAilangState(s) {
     if (!s) return;
+    // Capture a revision IF the working statement changed AND is non-empty.
+    // Captured before lastAilangState is updated so the change-detection
+    // works on the first speak too (lastAilangState may be a restored
+    // snapshot with the SAME text — we skip the dedupe in that case via
+    // captureRevision's own check).
+    const textChanged = s.consensus_text && (!app.lastAilangState || s.consensus_text !== app.lastAilangState.consensus_text);
+    if (textChanged) captureRevision(s);
     // Render the rolling consensus statement (with edit-lock display)
-    adoptConsensusFromState(s, { flash: !!(s.consensus_text && (!app.lastAilangState || s.consensus_text !== app.lastAilangState.consensus_text)) });
+    adoptConsensusFromState(s, { flash: !!textChanged });
     app.lastAilangState = s;
     if (s.sentiment && typeof s.sentiment.x === "number") {
       app.sentiment.x = s.sentiment.x;
@@ -3206,7 +3370,12 @@
       lastQuote: text, lastSpokeTs: ts,
     });
     refreshRoster();
-    pushTimelineEvent({ kind: "PatchApplied", clock, sender: app.senderId, ts });
+    pushTimelineEvent({
+      kind: "PatchApplied", clock, sender: app.senderId, ts,
+      persona, text, model: app.aiModel || "", provider: app.aiProvider || "",
+      score, outcome: outcomeInfo ? outcomeInfo.outcome : null,
+      retried: !!(outcomeInfo && outcomeInfo.retried),
+    });
     refreshStats();
     renderTimeline();
   }
@@ -3245,7 +3414,13 @@
       lastQuote: payload.text, lastSpokeTs: ts,
     });
     refreshRoster();
-    pushTimelineEvent({ kind: "PatchApplied", clock, sender: fromSender, ts });
+    pushTimelineEvent({
+      kind: "PatchApplied", clock, sender: fromSender, ts,
+      persona, text: payload.text || "", model: payload.model || "", provider: payload.provider || "",
+      score: payload.score || null,
+      outcome: remoteOutcomeInfo ? remoteOutcomeInfo.outcome : null,
+      retried: !!(remoteOutcomeInfo && remoteOutcomeInfo.retried),
+    });
     refreshStats();
     renderTimeline();
   }
@@ -4097,7 +4272,25 @@
     lastN.forEach((ev, i) => {
       const t = document.createElement("div");
       t.className = "tl-event kind-" + (ev.kind || "Unknown");
-      t.title = `${ev.kind} @ clk ${ev.clock || "?"}`;
+      if (ev.persona) t.dataset.p = ev.persona;
+      if (ev.outcome === "Accepted") t.classList.add("ev-accepted");
+      else if (ev.outcome && ev.outcome.startsWith("Rejected")) t.classList.add("ev-rejected");
+      // Multi-line tooltip (newlines render as \n in title attr on most
+      // browsers). Honors what's actually present on the event — older
+      // bare PatchApplied entries fall back to the previous compact form.
+      const lines = [`${ev.kind || "Unknown"} @ clk ${ev.clock || "?"}`];
+      if (ev.persona)   lines.push(`Persona: ${ev.persona}`);
+      if (ev.text)      lines.push(`Said: "${String(ev.text).slice(0, 120)}${ev.text.length > 120 ? "…" : ""}"`);
+      if (ev.score && isFinite(ev.score.x) && isFinite(ev.score.y)) {
+        const sign = (n) => (n >= 0 ? "+" : "") + n.toFixed(2);
+        lines.push(`Judge: ${sign(ev.score.x)}, ${sign(ev.score.y)}`);
+      }
+      if (ev.outcome) {
+        lines.push(`Manifesto: ${ev.outcome}${ev.retried ? " (retried)" : ""}`);
+      }
+      if (ev.model)    lines.push(`Model: ${ev.provider ? ev.provider + "/" : ""}${ev.model}`);
+      if (ev.ts)       lines.push(`Time: ${new Date(ev.ts).toLocaleTimeString()}`);
+      t.title = lines.join("\n");
       track.appendChild(t);
     });
     // Cursor at the end (live)
