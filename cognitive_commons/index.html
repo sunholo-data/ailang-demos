@@ -1163,49 +1163,67 @@
     .active-strip {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 0.6rem 2rem;
+      padding: 0.9rem 2rem;
       border-bottom: 1px solid var(--rule);
       background: var(--paper-light);
       display: flex;
       align-items: center;
-      gap: 0.8rem;
+      gap: 0.9rem;
       font-family: var(--font-mono);
-      font-size: 0.78rem;
+      font-size: 0.85rem;
+      border-left: 8px solid var(--rule);
+      transition: border-left-color 0.3s, background 0.3s;
     }
+    /* Persona-tinted accent so users can see at a glance which citizen
+       this tab IS. The wide left border + faint background wash makes
+       the persona the most prominent thing on the strip. */
+    .active-strip[data-p="Visionary"]   { border-left-color: var(--visionary);   background: linear-gradient(to right, color-mix(in srgb, var(--visionary) 9%, var(--paper-light)) 0%, var(--paper-light) 45%); }
+    .active-strip[data-p="Skeptic"]     { border-left-color: var(--skeptic);     background: linear-gradient(to right, color-mix(in srgb, var(--skeptic) 9%, var(--paper-light)) 0%, var(--paper-light) 45%); }
+    .active-strip[data-p="Synthesizer"] { border-left-color: var(--synth);       background: linear-gradient(to right, color-mix(in srgb, var(--synth) 9%, var(--paper-light)) 0%, var(--paper-light) 45%); }
+    .active-strip[data-p="Archivist"]   { border-left-color: var(--archivist);   background: linear-gradient(to right, color-mix(in srgb, var(--archivist) 9%, var(--paper-light)) 0%, var(--paper-light) 45%); }
     .active-dot {
       width: 10px; height: 10px; border-radius: 50%;
       background: var(--sun-teal);
       animation: pulse 1.6s ease-in-out infinite;
     }
     .active-left, .active-right {
-      display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+      display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;
     }
     .active-right { margin-left: auto; }
     .active-label { color: var(--ink-mute); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .active-label.role-prefix { font-size: 0.7rem; font-weight: 600; }
     .active-mono { color: var(--ink); font-weight: 500; }
     .active-sep { color: var(--rule); }
-    .active-btn { padding: 0.3rem 0.6rem; font-size: 0.65rem; }
+    .active-btn { padding: 0.35rem 0.7rem; font-size: 0.7rem; }
+    .active-btn.primary {
+      background: var(--ink);
+      color: var(--paper-light);
+      border-color: var(--ink);
+      font-weight: 600;
+    }
+    .active-btn.primary:hover { background: var(--sun-red); border-color: var(--sun-red); }
 
     /* Persona switcher in the active strip — styled to look like a chip
-       but it's a real <select>. Tint reflects the current persona. */
+       but it's a real <select>. Tint reflects the current persona. The
+       bigger size + display font makes the role visible at a glance.
+       This is the page's primary "you are: X" affordance. */
     .active-persona-select {
       appearance: none;
       -webkit-appearance: none;
-      padding: 0.18rem 1.5rem 0.18rem 0.5rem;
+      padding: 0.4rem 1.8rem 0.4rem 0.85rem;
       background-color: var(--ink);
       background-image: linear-gradient(45deg, transparent 50%, var(--paper-light) 50%),
                         linear-gradient(135deg, var(--paper-light) 50%, transparent 50%);
-      background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
-      background-size: 5px 5px, 5px 5px;
+      background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+      background-size: 6px 6px, 6px 6px;
       background-repeat: no-repeat;
       color: var(--paper-light);
       border: none;
-      border-radius: 2px;
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      border-radius: 3px;
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
       cursor: pointer;
     }
     .active-persona-select:focus {
@@ -1744,7 +1762,7 @@
   <section class="active-strip" id="active-strip" style="display:none">
     <div class="active-dot"></div>
     <div class="active-left">
-      <span class="active-label">Active as</span>
+      <span class="active-label role-prefix">You are</span>
       <select id="active-persona-select" class="active-persona-select" aria-label="Switch persona">
         <option value="auto">Auto (from tab ID)</option>
         <option value="Visionary">Visionary</option>
@@ -1752,12 +1770,11 @@
         <option value="Synthesizer">Synthesizer</option>
         <option value="Archivist">Archivist</option>
       </select>
+      <button id="active-show-prompt" class="active-btn primary" title="Jump to and focus your system-prompt editor">Edit prompt</button>
       <span class="active-sep">·</span>
       <span id="active-provider" class="active-mono">anthropic</span>
       <span class="active-sep">·</span>
       <span id="active-model" class="active-mono">model</span>
-      <span class="active-sep">·</span>
-      <button id="active-show-prompt" class="ghost active-btn">Show prompt</button>
     </div>
     <div class="active-right">
       <span class="active-label">This tab</span>
@@ -3898,21 +3915,18 @@
       if (typeof refreshOnboardingPanel === "function") refreshOnboardingPanel();
     });
 
-    // "Show prompt" — toggles the inline prompt-peek strip
+    // "Edit prompt" — one-click jump to the prompt textarea for this
+    // tab's persona. Used to open an inline peek panel + a second click
+    // to scroll down; the user said both steps were too much. Now goes
+    // straight to the editor and focuses it.
     if (els.activeShowPrompt) {
       els.activeShowPrompt.addEventListener("click", () => {
-        const open = els.activePromptPeek && els.activePromptPeek.style.display !== "none";
-        if (open) {
-          els.activePromptPeek.style.display = "none";
-          els.activeShowPrompt.textContent = "Show prompt";
-        } else {
-          if (app.persona && els.appPeekPersonaLabel && els.appPeekPrompt) {
-            els.appPeekPersonaLabel.textContent = `${app.persona}'s prompt (this tab):`;
-            els.appPeekPrompt.textContent = activePrompt(app.persona);
-          }
-          els.activePromptPeek.style.display = "block";
-          els.activeShowPrompt.textContent = "Hide prompt";
-        }
+        if (!app.persona) return;
+        const block = document.querySelector(`.prompt-block[data-persona="${app.persona}"]`);
+        if (!block) return;
+        block.scrollIntoView({ behavior: "smooth", block: "center" });
+        const ta = block.querySelector("textarea");
+        if (ta) setTimeout(() => ta.focus(), 400);
       });
     }
     if (els.appPeekEdit) {
@@ -5057,6 +5071,10 @@
       }
       els.activePersonaSelect.setAttribute("data-p", app.persona || "");
     }
+    // Mirror the persona onto the strip itself so the colored left
+    // border + faint background wash kick in — the "you are X" cue
+    // that the user said was missing at first glance.
+    if (els.activeStrip) els.activeStrip.setAttribute("data-p", app.persona || "");
     if (els.activeProvider) els.activeProvider.textContent = app.aiProvider || "—";
     if (els.activeModel)    els.activeModel.textContent = app.aiModel || "—";
     if (els.activeCost)     els.activeCost.textContent = fmtMoney(app.cost.dollars);
