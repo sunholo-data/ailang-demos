@@ -47,6 +47,7 @@ pure func stateToJson(st: CommonsState) -> Json = jo([
   kv("consensus_editor", js(st.consensus_editor)),
   kv("consensus_clock", jnum(intToFloat(st.consensus_clock))),
   kv("utterance_count", jnum(intToFloat(st.utterance_count))),
+  kv("editor_streak", jnum(intToFloat(st.editor_streak))),
   kv("leader", js(label(currentLeader(st)))),
   kv("leader_gap", jnum(leaderGap(st)))
 ])
@@ -86,7 +87,10 @@ pure func parseState(obj: Json) -> CommonsState = {
     consensus_text: strField(obj, "consensus_text"),
     consensus_editor: strField(obj, "consensus_editor"),
     consensus_clock: intField(obj, "consensus_clock"),
-    utterance_count: intField(obj, "utterance_count")
+    utterance_count: intField(obj, "utterance_count"),
+    -- Missing in pre-streak persisted states; intField returns 0 as
+    -- the safe default (= "no incumbent advantage yet").
+    editor_streak: intField(obj, "editor_streak")
   }
 }
 
@@ -155,7 +159,8 @@ export func initialStateJson(_seed: string) -> string
     consensus_text: "",
     consensus_editor: "",
     consensus_clock: 0,
-    utterance_count: 0
+    utterance_count: 0,
+    editor_streak: 0
   }))
 }
 

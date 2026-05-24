@@ -20,12 +20,16 @@ import std/list (length as listLength, filter, any)
 import std/math (intToFloat)
 
 -- The full state of the commons.
+-- editor_streak: how many CONSECUTIVE Accepted edits the current editor
+--   has landed. Used by currentLeader to amplify hysteresis (a persona
+--   editing N in a row is harder to displace than a one-time editor).
 export type CommonsState = {
   sentiment: Point,
   consensus_text: string,
   consensus_editor: string,    -- persona-label of the last accepted editor; "" if none
   consensus_clock: int,        -- Lamport clock at the time of last accepted edit
-  utterance_count: int
+  utterance_count: int,
+  editor_streak: int           -- consecutive Accepted edits by consensus_editor; 0 if none
 }
 
 -- Initial state: dot at origin, empty working statement.
@@ -34,11 +38,15 @@ export pure func initial_state() -> CommonsState = {
   consensus_text: "",
   consensus_editor: "",
   consensus_clock: 0,
-  utterance_count: 0
+  utterance_count: 0,
+  editor_streak: 0
 }
 
 -- EWMA weight per utterance — how strongly each speaker pulls the dot.
-export pure func ewma_alpha() -> float = 0.25
+-- Lowered from 0.25 to 0.12 so the dot doesn't swing all the way over
+-- on a single new speaker. Takes ~3-4 same-persona stanzas to clearly
+-- establish a lead now, instead of one-and-done.
+export pure func ewma_alpha() -> float = 0.12
 
 -- applyUtterance — shift the sentiment dot by EWMA toward either the
 -- judge-provided score (if present) or the speaker's persona anchor.
@@ -89,14 +97,17 @@ export pure func applyUtterance(
     Synthesizer => { x:  0.0,  y:  0.9 },
     Archivist   => { x: -0.4,  y: -0.85 }
   };
-  let nx = st.sentiment.x * 0.75 + attractor.x * 0.25;
-  let ny = st.sentiment.y * 0.75 + attractor.y * 0.25;
+  -- alpha = 0.12 inlined (see ewma_alpha). 0.88 + 0.12 = 1, still a
+  -- convex combination so the bounded-sentiment proof still holds.
+  let nx = st.sentiment.x * 0.88 + attractor.x * 0.12;
+  let ny = st.sentiment.y * 0.88 + attractor.y * 0.12;
   {
     sentiment: { x: nx, y: ny },
     consensus_text: st.consensus_text,
     consensus_editor: st.consensus_editor,
     consensus_clock: st.consensus_clock,
-    utterance_count: st.utterance_count + 1
+    utterance_count: st.utterance_count + 1,
+    editor_streak: st.editor_streak
   }
 }
 
@@ -109,16 +120,35 @@ export pure func distance(a: Point, b: Point) -> float = {
 
 -- currentLeader — the persona whose target is nearest to the commons
 -- sentiment. Uses squared distance.
+--
+-- Hysteresis: the persona who last successfully edited the manifesto
+-- (consensus_editor) gets a distance discount, so leadership doesn't
+-- flip purely because the latest speaker happened to land on the other
+-- side of the unit square. The discount grows with editor_streak —
+-- the longer a persona has been editing, the harder they are to
+-- displace. Cap at 30% so a persistently-leading citizen still loses
+-- if they drift far enough off-target.
 export pure func currentLeader(st: CommonsState) -> Persona = {
   let dv = distance(st.sentiment, target(Visionary));
   let ds = distance(st.sentiment, target(Skeptic));
   let dy_ = distance(st.sentiment, target(Synthesizer));
   let da = distance(st.sentiment, target(Archivist));
-  let best_vs = if dv <= ds then Visionary else Skeptic;
-  let best_d_vs = if dv <= ds then dv else ds;
-  let best_vsy = if best_d_vs <= dy_ then best_vs else Synthesizer;
-  let best_d_vsy = if best_d_vs <= dy_ then best_d_vs else dy_;
-  if best_d_vsy <= da then best_vsy else Archivist
+  -- Hysteresis multiplier for the incumbent editor: 0.85 baseline
+  -- (15% closer), tightening to 0.70 (30% closer) after 4+ consecutive
+  -- successful edits. Anyone else gets multiplier 1.0 (no discount).
+  let bonus = if st.editor_streak >= 4 then 0.70
+              else if st.editor_streak >= 2 then 0.78
+              else if st.editor_streak >= 1 then 0.85
+              else 1.0;
+  let dvh = if st.consensus_editor == "Visionary"   then dv * bonus else dv;
+  let dsh = if st.consensus_editor == "Skeptic"     then ds * bonus else ds;
+  let dyh = if st.consensus_editor == "Synthesizer" then dy_ * bonus else dy_;
+  let dah = if st.consensus_editor == "Archivist"   then da * bonus else da;
+  let best_vs = if dvh <= dsh then Visionary else Skeptic;
+  let best_d_vs = if dvh <= dsh then dvh else dsh;
+  let best_vsy = if best_d_vs <= dyh then best_vs else Synthesizer;
+  let best_d_vsy = if best_d_vs <= dyh then best_d_vs else dyh;
+  if best_d_vsy <= dah then best_vsy else Archivist
 }
 
 -- Squared distance from the dot to the leader's corner (for display
@@ -245,13 +275,20 @@ export pure func applyManifestoEdit(
       state: st,
       outcome: RejectedTooDifferent
     } else {
+      -- Trailing-window leadership input: bump the streak if the same
+      -- persona edited the previous accepted edit, reset to 1 otherwise.
+      -- currentLeader's hysteresis discount scales with this streak.
+      let new_streak = if label(proposer) == st.consensus_editor
+                       then st.editor_streak + 1
+                       else 1;
       {
         state: {
           sentiment: st.sentiment,
           consensus_text: proposed_text,
           consensus_editor: label(proposer),
           consensus_clock: clock,
-          utterance_count: st.utterance_count
+          utterance_count: st.utterance_count,
+          editor_streak: new_streak
         },
         outcome: Accepted
       }
@@ -266,5 +303,6 @@ export pure func resetConsensus(st: CommonsState) -> CommonsState = {
   consensus_text: "",
   consensus_editor: "",
   consensus_clock: 0,
-  utterance_count: st.utterance_count
+  utterance_count: st.utterance_count,
+  editor_streak: 0
 }

@@ -1857,6 +1857,119 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* PERSONA CARD GRID — replaces the persona dropdown in the
+       onboarding panel. Live preview of who you'll be, click to pick.
+       The native persona-select element stays in the DOM but hidden,
+       driven by these cards via JS — JS sync code that reads .value or
+       listens to 'change' keeps working unchanged. */
+    .persona-cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.4rem;
+      margin-top: 0.3rem;
+      /* Reset fieldset defaults so it lays out like a plain grid */
+      border: 0;
+      padding: 0;
+      min-inline-size: 0;
+    }
+    /* Visually-hidden label for screen readers (used by the
+       <legend>Pick your persona</legend>) */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0);
+      white-space: nowrap; border: 0;
+    }
+    .persona-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.3rem;
+      background: var(--paper-light);
+      border: 2px solid var(--rule);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.18s, background 0.18s, transform 0.18s;
+      font: inherit;
+    }
+    .persona-card:hover { border-color: var(--ink); transform: translateY(-1px); }
+    .persona-card:focus-visible {
+      outline: 2px solid var(--sun-red);
+      outline-offset: 2px;
+    }
+    .persona-card-radio {
+      /* Visually hidden but still focusable for keyboard nav + screen
+         readers. Modern :has() drives the selected-state styling. */
+      position: absolute;
+      width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0);
+      white-space: nowrap; border: 0;
+    }
+    .persona-card:has(.persona-card-radio:checked) {
+      border-color: currentColor;
+      background: color-mix(in srgb, currentColor 10%, var(--paper-light));
+    }
+    .persona-card:has(.persona-card-radio:focus-visible) {
+      outline: 2px solid var(--sun-red);
+      outline-offset: 2px;
+    }
+    /* The "live" persona marker: when Auto is selected, highlight which
+       persona the tab actually resolved to (so users see "Auto" picked
+       but ALSO see "Visionary is the live one"). Small colored dot on
+       the avatar's edge. */
+    .persona-card--live {
+      position: relative;
+    }
+    .persona-card--live::after {
+      content: "";
+      position: absolute;
+      top: 0.35rem;
+      right: 0.35rem;
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px var(--paper-light);
+    }
+    .persona-card[data-p="Visionary"]   { color: var(--visionary); }
+    .persona-card[data-p="Skeptic"]     { color: var(--skeptic); }
+    .persona-card[data-p="Synthesizer"] { color: var(--synth); }
+    .persona-card[data-p="Archivist"]   { color: var(--archivist); }
+    .persona-card[data-p="auto"]        { color: var(--ink-mute); }
+    .persona-card img {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid currentColor;
+    }
+    .persona-card-icon {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--paper-light);
+      border: 1.5px dashed var(--ink-mute);
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--ink-mute);
+    }
+    .persona-card-name {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink);
+      font-weight: 600;
+      text-align: center;
+    }
+    @media (max-width: 700px) {
+      .persona-cards { grid-template-columns: repeat(5, 1fr); gap: 0.25rem; }
+      .persona-card img, .persona-card-icon { width: 32px; height: 32px; }
+      .persona-card-name { font-size: 0.55rem; }
+    }
+
     .small-mute { color: var(--ink-mute); font-size: 0.75rem; }
     .empty-state {
       padding: 2rem 1rem;
@@ -1938,7 +2051,38 @@
         </div>
         <div>
           <label for="persona-select">Persona</label>
-          <select id="persona-select">
+          <fieldset class="persona-cards" id="persona-cards">
+            <legend class="sr-only">Pick your persona</legend>
+            <label class="persona-card" data-p="auto">
+              <input type="radio" name="persona-choice" value="auto" class="persona-card-radio" checked>
+              <span class="persona-card-icon">?</span>
+              <span class="persona-card-name">Auto</span>
+            </label>
+            <label class="persona-card" data-p="Visionary">
+              <input type="radio" name="persona-choice" value="Visionary" class="persona-card-radio">
+              <img src="img/visionary.png" alt="" aria-hidden="true">
+              <span class="persona-card-name">Visionary</span>
+            </label>
+            <label class="persona-card" data-p="Skeptic">
+              <input type="radio" name="persona-choice" value="Skeptic" class="persona-card-radio">
+              <img src="img/skeptic.png" alt="" aria-hidden="true">
+              <span class="persona-card-name">Skeptic</span>
+            </label>
+            <label class="persona-card" data-p="Synthesizer">
+              <input type="radio" name="persona-choice" value="Synthesizer" class="persona-card-radio">
+              <img src="img/synthesizer.png" alt="" aria-hidden="true">
+              <span class="persona-card-name">Synthesizer</span>
+            </label>
+            <label class="persona-card" data-p="Archivist">
+              <input type="radio" name="persona-choice" value="Archivist" class="persona-card-radio">
+              <img src="img/archivist.png" alt="" aria-hidden="true">
+              <span class="persona-card-name">Archivist</span>
+            </label>
+          </fieldset>
+          <!-- Hidden <select> stays as the JS source of truth — every
+               other handler in this page reads .value or listens to
+               'change' on it, so the cards just drive this element. -->
+          <select id="persona-select" hidden>
             <option value="auto">Auto (from tab ID)</option>
             <option value="Visionary">Visionary</option>
             <option value="Skeptic">Skeptic</option>
@@ -4373,6 +4517,17 @@
       // Keep both selects in sync (one in banner, one in active strip)
       if (els.personaSelect && els.personaSelect.value !== v) els.personaSelect.value = v;
       if (els.activePersonaSelect && els.activePersonaSelect.value !== v) els.activePersonaSelect.value = v;
+      // Sync the radio cards too. If the resolved persona doesn't match
+      // the dropdown value (e.g., "auto" resolves to "Visionary"),
+      // highlight the resolved persona so the user can see which card
+      // is "live".
+      const resolved = (v === "auto" && app.persona) ? app.persona : v;
+      document.querySelectorAll('.persona-card-radio').forEach((r) => {
+        r.checked = (r.value === v);
+      });
+      document.querySelectorAll('.persona-card').forEach((c) => {
+        c.classList.toggle('persona-card--live', c.dataset.p === resolved);
+      });
       addToRoster(app.senderId, app.persona, window.CognitiveOS.debugSnapshot().clock);
       refreshRoster();
       markActivePromptBlock();
@@ -4380,6 +4535,26 @@
       if (typeof refreshOnboardingPanel === "function") refreshOnboardingPanel();
     };
     els.personaSelect.addEventListener("change", (e) => onPersonaChange(e.target.value));
+    // Wire the new card grid — each radio drives onPersonaChange.
+    // Native <input type=radio> means keyboard arrow-nav between cards
+    // and screen-reader semantics work without extra ARIA glue.
+    document.querySelectorAll('.persona-card-radio').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.checked) onPersonaChange(e.target.value);
+      });
+    });
+    // Boot-time sync: paint the resolved persona onto the cards so the
+    // grid reflects the just-restored state (sessionStorage persona or
+    // auto-from-tab-ID), not the "Auto" default.
+    const initialValue = els.personaSelect.value || (sessionStorage.getItem("commons_persona") ? app.persona : "auto");
+    document.querySelectorAll('.persona-card-radio').forEach((r) => {
+      r.checked = (r.value === initialValue);
+    });
+    if (app.persona) {
+      document.querySelectorAll('.persona-card').forEach((c) => {
+        c.classList.toggle('persona-card--live', c.dataset.p === app.persona);
+      });
+    }
     if (els.activePersonaSelect) {
       els.activePersonaSelect.addEventListener("change", (e) => onPersonaChange(e.target.value));
     }
