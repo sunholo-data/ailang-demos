@@ -2727,6 +2727,22 @@
     }
     if (persistedOk) {
       app.ailang = { repl, ready: true, stateJson: persisted };
+      // Render the restored state on boot so the user sees the prior
+      // working statement, sentiment dot, and leader — instead of an
+      // empty manifesto until the next compose cycle. {flash:false}
+      // suppresses the green "new text" highlight (this isn't new, it's
+      // a restore).
+      try {
+        const restored = JSON.parse(persisted);
+        adoptConsensusFromState(restored, { flash: false });
+        if (restored.sentiment && typeof restored.sentiment.x === "number") {
+          app.sentiment = { x: restored.sentiment.x, y: restored.sentiment.y };
+          renderSentiment();
+        }
+        app.lastAilangState = restored;
+      } catch (e) {
+        console.warn("[commons] persisted state render skipped", e);
+      }
     } else {
       const seedRes = window.ailangCall(AILANG_ADAPTER, "initialStateJson", "");
       const seed = seedRes && seedRes.success ? aiCoerceString(seedRes.result) : null;
