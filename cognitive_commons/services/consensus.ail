@@ -57,10 +57,13 @@ export pure func ewma_alpha() -> float = 0.25
 -- - alpha inlined as 0.25 (not ewma_alpha()) because v0.20.1's encoder
 --   rejects 0-arg function calls ("unit literals cannot be encoded in
 --   SMT-LIB"). ewma_alpha() stays exported for documentation.
--- - target() inlined as a per-persona match because v0.20.1's encoder
---   doesn't resolve cross-module function calls. Same constants as
---   personas.target — kept in sync by the bounded-by-construction shape
---   below; if either drifts, Z3 catches it next ai-check run.
+-- - target() inlined as a per-persona match because, when called as
+--   target(speaker), the SMT encoder reports `unknown constant target
+--   (Persona)` and the proof fails. Inlining the same constants here
+--   lets Z3 walk through each branch directly. Kept in sync with
+--   personas.target by the bounded-by-construction shape below; if
+--   either drifts, ai-check on personas.ail still verifies its bound
+--   and applyUtterance's proof catches a divergence next run.
 export pure func applyUtterance(
   st: CommonsState,
   speaker: Persona,
@@ -162,7 +165,18 @@ export pure func requiredPreservation(st: CommonsState) -> float =
 -- not [], so the guard never fired. Result: the very first manifesto
 -- got RejectedTooDifferent because preserved=0/1=0.0 < required. Now
 -- guards on the input string's length directly.
-export pure func preservationRatio(previous: string, proposed: string) -> float = {
+export pure func preservationRatio(previous: string, proposed: string) -> float
+  ensures {
+    -- The promise we just had to backfill: empty previous text MUST
+    -- return 1.0 so the first manifesto draft is always allowed
+    -- (subject to the leader + length checks in applyManifestoEdit).
+    -- Plus the obvious range bound — Z3 chases both through the
+    -- if/else structure of the body.
+    length(previous) > 0 || result == 1.0,
+    result >= 0.0,
+    result <= 1.0
+  }
+{
   if length(previous) == 0 then 1.0
   else {
     let prev_words = split(toLower(previous), " ");
