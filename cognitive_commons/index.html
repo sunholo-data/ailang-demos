@@ -3358,8 +3358,13 @@
       [-1, 1],[0, 1],[1, 1],
     ];
     const r = size * 0.45;
-    const N = 4 + ((seed >> 20) % 4);              // 4-7 segments
-    let lastIdx = (seed >> 6) % 9;
+    // Signed `>>` on a uint32 seed produces negative values when bit 31
+    // is set, and JS's % preserves that sign — so lastIdx could be in
+    // [-8, 8], crashing the grid[lastIdx] lookup ~50% of the time.
+    // (`>>> 0` would also work but changes seeds for already-rendered
+    // panels; safe-positive modulo only changes the negative half.)
+    const N = 4 + ((seed >> 20) % 4 + 4) % 4;       // 4-7 segments
+    let lastIdx = ((seed >> 6) % 9 + 9) % 9;
     let d = "M " + (grid[lastIdx][0] * r).toFixed(2) + " " + (grid[lastIdx][1] * r).toFixed(2);
     for (let i = 0; i < N; i++) {
       const step = 1 + (((seed >> (i * 4 + 2)) & 7));
