@@ -704,6 +704,32 @@
     .constellation-rubric .cg-collapse:hover { color: var(--ink); border-color: var(--ink); }
     .constellation-section.collapsed .constellation-wrap,
     .constellation-section.collapsed .cg-pullquote { display: none; }
+
+    /* TWO-COLUMN THEATER — constellation (left) | chronicle (right).
+       Both sections live inside .theater on desktop; collapses to one
+       column on narrow viewports so the demo still reads on tablets.
+       Inner sections drop their own page margins so the wrapper owns
+       horizontal layout. */
+    .theater {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem 2rem 1.5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+    .theater > .constellation-section,
+    .theater > .chronicle-section {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+    @media (max-width: 1024px) {
+      .theater {
+        grid-template-columns: 1fr;
+      }
+    }
     .constellation-rubric .cg-zoom button:hover {
       background: var(--rule-soft);
       color: var(--ink);
@@ -1793,6 +1819,7 @@
     })();
   </script>
 
+  <section class="theater">
   <section class="constellation-section">
     <div class="constellation-rubric">
       <span>
@@ -1929,6 +1956,7 @@
         </div>
       </div>
     </div>
+  </section>
   </section>
 
   <main>
