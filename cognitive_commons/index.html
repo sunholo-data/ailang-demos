@@ -903,8 +903,63 @@
       padding: 1.5rem 2rem;
       border-bottom: 1px solid var(--rule);
       background: linear-gradient(180deg, rgba(231, 60, 23, 0.06), rgba(231, 60, 23, 0));
+      display: flex;
+      align-items: flex-start;
+      gap: 1.8rem;
     }
     .activate.compact { display: none; }
+    .activate-body { flex: 1; min-width: 0; }
+    /* Hero avatar — large preview of the resolved persona so the user
+       knows who they're about to be BEFORE they hit Test & Activate.
+       Lives at the top-right of the onboarding panel; collapses below
+       the body on narrow viewports. */
+    .activate-hero {
+      width: 180px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .activate-hero-avatar {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--paper-light);
+      border: 4px solid var(--rule);
+      box-shadow: 0 6px 20px rgba(60, 40, 20, 0.10);
+      transition: border-color 0.4s, opacity 0.3s;
+    }
+    .activate[data-p="Visionary"]   .activate-hero-avatar { border-color: var(--visionary); }
+    .activate[data-p="Skeptic"]     .activate-hero-avatar { border-color: var(--skeptic); }
+    .activate[data-p="Synthesizer"] .activate-hero-avatar { border-color: var(--synth); }
+    .activate[data-p="Archivist"]   .activate-hero-avatar { border-color: var(--archivist); }
+    .activate-hero-avatar.empty { opacity: 0.25; }
+    .activate-hero-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      text-align: center;
+    }
+    .activate-hero-persona {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.15rem;
+      color: var(--ink);
+      text-align: center;
+    }
+    .activate[data-p="Visionary"]   .activate-hero-persona { color: var(--visionary); }
+    .activate[data-p="Skeptic"]     .activate-hero-persona { color: var(--skeptic); }
+    .activate[data-p="Synthesizer"] .activate-hero-persona { color: var(--synth); }
+    .activate[data-p="Archivist"]   .activate-hero-persona { color: var(--archivist); }
+    @media (max-width: 820px) {
+      .activate { flex-direction: column-reverse; align-items: stretch; }
+      .activate-hero { flex-direction: row; width: 100%; gap: 0.8rem; }
+      .activate-hero-avatar { width: 80px; height: 80px; border-width: 3px; }
+    }
     .activate-headline {
       font-family: var(--font-display);
       font-weight: 500;
@@ -1826,6 +1881,13 @@
         <button id="banner-skip" class="ghost">Save without testing</button>
       </div>
     </div>
+    <!-- Hero avatar — large preview of the persona this tab will become.
+         Updates live as the user changes the Persona dropdown. -->
+    <div class="activate-hero" id="activate-hero">
+      <img id="activate-hero-avatar" class="activate-hero-avatar empty" alt="" aria-hidden="true">
+      <div class="activate-hero-label">You will speak as</div>
+      <div class="activate-hero-persona" id="activate-hero-persona">—</div>
+    </div>
   </section>
 
   <section class="active-strip" id="active-strip" style="display:none">
@@ -2276,6 +2338,8 @@
     modelInput: $("model-input"),
     aiStatus: $("ai-status"),
     activationBanner: $("activation-banner"),
+    activateHeroAvatar: $("activate-hero-avatar"),
+    activateHeroPersona: $("activate-hero-persona"),
     topicInput: $("topic-input"),
     topicHelp: $("topic-help"),
     consensusText: $("consensus-text"),
@@ -4564,6 +4628,19 @@
         : "— auto-picked from your tab's ID. Override with the Persona dropdown above, or edit the prompt below.";
     }
     els.onboardingPrompt.value = activePrompt(app.persona);
+    // Hero avatar — lives on the right side of the activation banner.
+    // Updates live so as users change the Persona dropdown they see a
+    // big preview of who they're about to be.
+    if (els.activationBanner) els.activationBanner.setAttribute("data-p", app.persona);
+    if (els.activateHeroAvatar) {
+      const want = `img/${app.persona.toLowerCase()}.png`;
+      if (!els.activateHeroAvatar.getAttribute("src") || !els.activateHeroAvatar.getAttribute("src").endsWith(want)) {
+        els.activateHeroAvatar.src = want;
+        els.activateHeroAvatar.alt = `${app.persona} portrait`;
+      }
+      els.activateHeroAvatar.classList.remove("empty");
+    }
+    if (els.activateHeroPersona) els.activateHeroPersona.textContent = app.persona;
   }
 
   function buildPromptEditor() {
