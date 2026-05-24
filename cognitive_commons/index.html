@@ -2572,15 +2572,33 @@
         && p.indexOf('AXIS DEFINITIONS') !== -1;
   }
 
+  // Schema for the judge response. Gemini's responseMimeType:json without
+  // a schema lets the model return ANY JSON shape (often {"score":{"x":..,"y":..}}
+  // or just prose-with-numbers), which makes AILANG's getNumber("x") return
+  // None — and the judge collapses to (0,0). Passing this schema as
+  // responseSchema forces Gemini to emit exactly {x: number, y: number}.
+  const JUDGE_RESPONSE_SCHEMA = {
+    type: "object",
+    properties: {
+      x: { type: "number" },
+      y: { type: "number" },
+    },
+    required: ["x", "y"],
+  };
+
   // Pick provider+key+model for an AILANG-issued std/ai call. Prefer free
   // OpenRouter for judge calls when an OpenRouter key exists on this
   // origin (shared with the BYO-key demo) — regardless of author config.
   function getRouteForPrompt(prompt) {
     const isJudge = looksLikeJudgePrompt(prompt);
     if (isJudge) {
-      const orKey = localStorage.getItem(KEY_PREFIX + "openrouter");
+      // KEY_PREFIX was never defined — used to be "ailang-step-byo-key-"
+      // before we standardized on the <provider>-api-key convention. This
+      // silently routed every judge call to the fallback author provider.
+      // Fix: use the same keyForProvider helper as the rest of the page.
+      const orKey = localStorage.getItem(keyForProvider("openrouter"));
       if (orKey && orKey.startsWith("sk-or-")) {
-        return { provider: "openrouter", key: orKey, model: JUDGE_FREE_MODEL, free: true, role: "judge" };
+        return { provider: "openrouter", key: orKey, model: JUDGE_FREE_MODEL, free: true, role: "judge", isJudge: true };
       }
     }
     if (app.aiOn && app.aiProvider && app.aiKey) {
@@ -2590,6 +2608,7 @@
         model: app.aiModel || PROVIDER_DEFAULT_MODEL[app.aiProvider],
         free: false,
         role: isJudge ? "judge-fallback" : "author",
+        isJudge,
       };
     }
     return null;
@@ -2600,6 +2619,11 @@
     if (!cfg) {
       return JSON.stringify({ error: "no provider configured" });
     }
+    // For judge calls on Gemini, force the response shape with a schema so
+    // x/y survive AILANG's getNumber extraction. Without this Gemini was
+    // returning {score:{x,y}} or similar and the judge silently fell back
+    // to (0,0), making every chronicle chip read +0.00, +0.00.
+    const responseSchema = (cfg.isJudge && cfg.provider === "gemini") ? JUDGE_RESPONSE_SCHEMA : null;
     let result;
     switch (cfg.provider) {
       case "anthropic":
@@ -2611,11 +2635,17 @@
           "HTTP-Referer": location.origin, "X-Title": "AILANG Cognitive Commons",
         }); break;
       case "gemini":
-        result = await callGemini("Reply with strict JSON only.", prompt, cfg.key, cfg.model); break;
+        result = await callGemini("Reply with strict JSON only.", prompt, cfg.key, cfg.model, responseSchema); break;
       default:
         return JSON.stringify({ error: "unknown provider: " + cfg.provider });
     }
     if (result && result.usage) trackCost(result.usage);
+    if (cfg.isJudge) {
+      // Surface judge raw response so users debugging "scores always 0"
+      // can see what the provider actually returned.
+      console.log(`[commons] judge response (${cfg.provider}/${cfg.model}):`,
+                  String((result && result.raw) || "").slice(0, 240));
+    }
     return (result && result.raw) || "";
   }
 
@@ -4573,23 +4603,29 @@
     setButtonBusy(btn, true, "Calling " + app.aiProvider + "…");
     setAiStatus("warn", `Testing ${app.aiProvider} · ${app.aiModel || "(default model)"} — this should take a few seconds…`);
     try {
-      const { elapsedMs } = await testConnection();
+      const { elapsedMs, raw } = await testConnection();
       app.aiTested = true;
       setButtonBusy(btn, false, "Test & Activate citizen");
       flashButton(btn, "success", `✓ Activated in ${elapsedMs.toFixed(0)}ms`, "Test & Activate citizen", 1800);
-      setAiStatus("on", `✓ ${app.aiProvider} · ${app.aiModel} responded in ${elapsedMs.toFixed(0)}ms — citizen activated.`);
+      // Show the actual response text so users see concrete proof the AI
+      // is reachable — not just an opaque elapsed-ms number. Trim and clip
+      // so a chatty model that ignores "reply with just OK" doesn't blow
+      // out the status row.
+      const responseText = String(raw || "").trim().replace(/\s+/g, " ").slice(0, 120);
+      const responseSuffix = responseText ? ` · reply: "${responseText}"` : "";
+      setAiStatus("on", `✓ ${app.aiProvider} · ${app.aiModel} responded in ${elapsedMs.toFixed(0)}ms${responseSuffix}`);
       setTimeout(() => setBannerCompact(true), 900);
       updateConstellationOverlay();
-      // Kick off the first stanza immediately so users see a response within
-      // a few seconds instead of waiting 7–17s for the boot-time cadence timer.
-      // Reset the auto-cadence timer so the next tick is paced from "now"
-      // rather than from boot — predictable cadence post-activation.
+      // Kick off the first real stanza immediately so users see their
+      // citizen speak in its persona voice — not just a synthetic "OK"
+      // probe. Reset the auto-cadence timer so the next tick is paced
+      // from "now" rather than from boot for predictable cadence.
       if (app.ailang && app.ailang.ready && !app.inReplay) {
         setTimeout(() => {
           if (!app.callInFlight) composeAndBroadcast();
           pauseCompose();
           scheduleCompose();
-        }, 1200);
+        }, 600);
       }
     } catch (e) {
       app.aiTested = false;
@@ -4603,6 +4639,12 @@
 
   async function runSpeakNow() {
     if (app.callInFlight) {
+      // Visible feedback — the previous "console.log only" message meant
+      // users clicking Speak Now during the post-activation auto-fire saw
+      // nothing happen and concluded the button was broken.
+      const btn = els.composeNow;
+      flashButton(btn, "failed", "already composing…", "Speak now (this tab)", 1400);
+      setAiStatus("warn", "Already composing — wait for the current stanza to land.");
       console.log("[commons] Speak now ignored — call already in flight");
       return;
     }
@@ -4752,20 +4794,22 @@
     return { raw, usage };
   }
 
-  async function callGemini(system, userPrompt, key, model) {
+  async function callGemini(system, userPrompt, key, model, responseSchema) {
     const m = model || PROVIDER_DEFAULT_MODEL.gemini;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(key)}`;
+    const generationConfig = {
+      maxOutputTokens: 600,
+      temperature: 0.9,
+      responseMimeType: "application/json",
+    };
+    if (responseSchema) generationConfig.responseSchema = responseSchema;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: system }] },
-        generationConfig: {
-          maxOutputTokens: 600,
-          temperature: 0.9,
-          responseMimeType: "application/json",
-        },
+        generationConfig,
       }),
     });
     if (!resp.ok) throw new Error("Gemini " + resp.status + ": " + (await resp.text()).slice(0, 200));
