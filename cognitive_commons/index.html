@@ -1114,6 +1114,15 @@
     }
     .revisions-toggle:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
     .revisions-toggle:disabled { cursor: default; opacity: 0.5; }
+    /* Strong visual difference when expanded so users can SEE the state
+       changed after clicking — the arrow alone was too subtle and the
+       user kept thinking their close-click hadn't registered. */
+    .revisions-toggle[aria-expanded="true"] {
+      background: var(--ink);
+      color: var(--paper-light);
+      border-color: var(--ink);
+    }
+    .revisions-toggle[aria-expanded="true"]:hover { background: var(--sun-red); border-color: var(--sun-red); }
     .revisions-list {
       margin-top: 0.7rem;
       display: flex;
@@ -3258,10 +3267,13 @@
   // editor from a CommonsState object that AILANG produced (either this
   // tab's own speakJson result, or a peer tab's broadcast). Suppresses
   // the JS-side EWMA so we don't double-apply sentiment math.
+  // Cap on retained manifesto revisions. Tuned down from 50 — the user
+  // asked us to "limit how many we keep". Older revisions still live in
+  // the IndexedDB event log; this is just what we surface in the panel.
+  const MAX_REVISIONS = 25;
+
   // captureRevision — record one Accepted manifesto edit as a history
-  // entry. Persisted to sessionStorage so it survives a refresh. Bounded
-  // at 50 most recent (the older ones still exist in the IndexedDB
-  // event log if you want a full audit trail via Replay session).
+  // entry. Persisted to sessionStorage so it survives a refresh.
   function captureRevision(state) {
     if (!state || !state.consensus_text || state.consensus_text.length < 40) return;
     const last = app.manifestoRevisions[app.manifestoRevisions.length - 1];
@@ -3272,7 +3284,7 @@
       editor: state.consensus_editor || "—",
       text: state.consensus_text,
     });
-    if (app.manifestoRevisions.length > 50) app.manifestoRevisions.shift();
+    while (app.manifestoRevisions.length > MAX_REVISIONS) app.manifestoRevisions.shift();
     try { sessionStorage.setItem("commons_manifesto_revisions", JSON.stringify(app.manifestoRevisions)); } catch (_) {}
     updateRevisionsUi();
   }
@@ -3284,7 +3296,13 @@
     const n = app.manifestoRevisions.length;
     const expanded = btn.getAttribute("aria-expanded") === "true";
     btn.disabled = n === 0;
-    btn.textContent = n === 0 ? "No revisions yet" : `Revisions (${n}) ${expanded ? "▴" : "▾"}`;
+    // Use explicit "show"/"hide" verbs (not just up/down arrows) so the
+    // state change is obvious. The toggle also gets a dark-on-light vs
+    // light-on-dark CSS swap via aria-expanded — between the two, the
+    // open/closed state is hard to miss.
+    btn.textContent = n === 0
+      ? "No revisions yet"
+      : (expanded ? `Hide revisions (${n})` : `Show revisions (${n})`);
     if (!expanded) { list.hidden = true; return; }
     list.hidden = false;
     list.innerHTML = "";
@@ -3326,7 +3344,16 @@
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        app.manifestoRevisions = parsed.filter(r => r && r.text && r.text.length >= 40);
+        const cleaned = parsed.filter(r => r && r.text && r.text.length >= 40);
+        // Enforce MAX_REVISIONS on restore too — sessions that pre-date
+        // the cap could have larger arrays sitting in sessionStorage.
+        // Slice from the END so we keep the most recent.
+        app.manifestoRevisions = cleaned.slice(-MAX_REVISIONS);
+        // Persist the trimmed list so the next restore doesn't have to
+        // re-trim, and the storage doesn't grow unbounded.
+        if (cleaned.length > MAX_REVISIONS) {
+          try { sessionStorage.setItem("commons_manifesto_revisions", JSON.stringify(app.manifestoRevisions)); } catch (_) {}
+        }
         updateRevisionsUi();
       }
     } catch (_) {}
