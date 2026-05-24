@@ -1059,6 +1059,20 @@
     }
     .activate-status.on { color: var(--sun-teal); font-weight: 600; }
     .activate-status.warn { color: var(--sun-orange); }
+    .activate-status.error { color: var(--sun-rust); }
+    .activate-status.loading { color: var(--sun-amber, var(--sun-orange)); }
+    .activate-status.loading::before {
+      content: "";
+      display: inline-block;
+      width: 0.7em; height: 0.7em;
+      margin-right: 0.45em;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      vertical-align: -0.1em;
+      animation: status-spin 0.8s linear infinite;
+    }
+    @keyframes status-spin { to { transform: rotate(360deg); } }
 
     /* ONBOARDING — assigned persona + editable system prompt in the banner */
     .onboarding-persona {
@@ -1997,8 +2011,8 @@
        through the AILANG cognitive_commons modules for sentiment EWMA,
        persuasion judge, and the leader edit-lock. Optional — the demo
        degrades to the original pure-JS sentiment path if WASM fails). -->
-  <script src="wasm/wasm_exec.js"></script>
-  <script src="wasm/ailang-repl.js"></script>
+  <script src="../wasm/wasm_exec.js"></script>
+  <script src="../wasm/ailang-repl.js"></script>
 
   <script>
   // ===========================================================================
@@ -2430,9 +2444,9 @@
     bootLog("phase", "initAilang start");
     const repl = new AilangREPL();
     try {
-      await repl.init("wasm/ailang.wasm");
+      await repl.init("../wasm/ailang.wasm");
     } catch (e) {
-      throw new Error("WASM binary fetch (wasm/ailang.wasm): " + (e && e.message || e));
+      throw new Error("WASM binary fetch (../wasm/ailang.wasm): " + (e && e.message || e));
     }
     bootLog("ok", "WASM binary loaded", "ailang version: " + (repl.getVersion ? repl.getVersion() : "(unknown)"));
 
@@ -2778,6 +2792,7 @@
     }
     app.callInFlight = true;
     const persona = app.persona;
+    setAiStatus("loading", `Composing ${persona} stanza via ${app.aiProvider} · ${app.aiModel}…`);
     ailangSpeak(persona).then((reply) => {
       if (!reply || !reply.text) {
         setAiStatus("warn", "AILANG returned no text — see browser console.");
@@ -4474,6 +4489,17 @@
       flashButton(btn, "success", `✓ Activated in ${elapsedMs.toFixed(0)}ms`, "Test & Activate citizen", 1800);
       setAiStatus("on", `✓ ${app.aiProvider} · ${app.aiModel} responded in ${elapsedMs.toFixed(0)}ms — citizen activated.`);
       setTimeout(() => setBannerCompact(true), 900);
+      // Kick off the first stanza immediately so users see a response within
+      // a few seconds instead of waiting 7–17s for the boot-time cadence timer.
+      // Reset the auto-cadence timer so the next tick is paced from "now"
+      // rather than from boot — predictable cadence post-activation.
+      if (app.ailang && app.ailang.ready && !app.inReplay) {
+        setTimeout(() => {
+          if (!app.callInFlight) composeAndBroadcast();
+          pauseCompose();
+          scheduleCompose();
+        }, 1200);
+      }
     } catch (e) {
       app.aiTested = false;
       setButtonBusy(btn, false, "Test & Activate citizen");
