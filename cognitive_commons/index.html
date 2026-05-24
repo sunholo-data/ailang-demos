@@ -1186,6 +1186,24 @@
       background: var(--sun-teal);
       animation: pulse 1.6s ease-in-out infinite;
     }
+    /* Persona avatar at the left of the active-strip — the most
+       prominent "you are X" cue on the page. Tinted ring inherits
+       the persona color so it reads at-a-glance even when the image
+       hasn't loaded yet. */
+    .active-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--paper-light);
+      border: 2px solid var(--rule);
+      flex-shrink: 0;
+      transition: border-color 0.3s;
+    }
+    .active-strip[data-p="Visionary"]   .active-avatar { border-color: var(--visionary); }
+    .active-strip[data-p="Skeptic"]     .active-avatar { border-color: var(--skeptic); }
+    .active-strip[data-p="Synthesizer"] .active-avatar { border-color: var(--synth); }
+    .active-strip[data-p="Archivist"]   .active-avatar { border-color: var(--archivist); }
     .active-left, .active-right {
       display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;
     }
@@ -1760,6 +1778,7 @@
   </section>
 
   <section class="active-strip" id="active-strip" style="display:none">
+    <img id="active-avatar" class="active-avatar" alt="" aria-hidden="true">
     <div class="active-dot"></div>
     <div class="active-left">
       <span class="active-label role-prefix">You are</span>
@@ -2222,6 +2241,7 @@
     cgZoomReset: $("cg-zoom-reset"),
     constellation: $("constellation"),
     activeStrip: $("active-strip"),
+    activeAvatar: $("active-avatar"),
     activePersonaSelect: $("active-persona-select"),
     activeProvider: $("active-provider"),
     activeModel: $("active-model"),
@@ -5075,6 +5095,17 @@
     // border + faint background wash kick in — the "you are X" cue
     // that the user said was missing at first glance.
     if (els.activeStrip) els.activeStrip.setAttribute("data-p", app.persona || "");
+    // Swap the avatar image to match. Maps persona name to the file
+    // shipped under cognitive_commons/img/. We only set src once per
+    // persona change to avoid re-fetching the (large-ish) PNG on every
+    // refreshActiveStripInfo call.
+    if (els.activeAvatar && app.persona) {
+      const want = `img/${app.persona.toLowerCase()}.png`;
+      if (!els.activeAvatar.getAttribute("src") || !els.activeAvatar.getAttribute("src").endsWith(want)) {
+        els.activeAvatar.src = want;
+        els.activeAvatar.alt = `${app.persona} portrait`;
+      }
+    }
     if (els.activeProvider) els.activeProvider.textContent = app.aiProvider || "—";
     if (els.activeModel)    els.activeModel.textContent = app.aiModel || "—";
     if (els.activeCost)     els.activeCost.textContent = fmtMoney(app.cost.dollars);

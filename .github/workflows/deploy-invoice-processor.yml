@@ -435,6 +435,8 @@ jobs:
           cp cognitive_commons/services/*.ail _site/cognitive_commons/services/
           # Cognitive OS browser JS (cog/ host layer)
           cp -r cognitive_commons/cog _site/cognitive_commons/cog
+          # Persona avatar images
+          cp -r cognitive_commons/img _site/cognitive_commons/img
           # invoice_processor_wasm/js symlink (ailang-wrapper) is already
           # under _site/ via the rsync of invoice_processor_wasm/ above.
           echo "Copied cognitive_commons demo"
