@@ -17,7 +17,7 @@ module linkedin/services/sketch_leaderboard
 import std/io (println)
 import std/fs (listDir, isDir, fileExists, readFile, writeFile, mkdirAll)
 import std/string (length, intToStr, replace, join, replaceMany, substring)
-import std/list (length as listLength, map, filter, sortBy, concat as listConcat)
+import std/list (length as listLength, map, mapE, filter, sortBy, concat as listConcat)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/json (decode, getString, getInt)
@@ -91,7 +91,7 @@ export func sketchListEntries(t: Topic) -> [LeaderboardEntry] ! {FS} {
   let dir = sketchTopicDir(t);
   if isDir(dir) then {
     let subdirs = listDir(dir);
-    let entries = map(\sd. readSketchEntry(t, sd), subdirs);
+    let entries = mapE(\sd. readSketchEntry(t, sd), subdirs);
     flattenSomes(entries)
   } else []
 }

@@ -32,7 +32,7 @@ import std/json (encode, decode, getString, getArray, getObject,
 import std/option (Some, None, getOrElse, isSome)
 import std/result (Ok, Err)
 import std/string (length, substring, find, split, join, trim, contains, startsWith, intToStr)
-import std/list (length as listLength, map, filter, foldl, nth)
+import std/list (length as listLength, map, mapE, filter, foldl, nth)
 
 -- LinkedIn API client comes from the sunholo/linkedin registry package.
 -- See ailang.toml dependencies.
@@ -308,7 +308,7 @@ func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
 -- Bundles every published post (title + body + LinkedIn URL) with its
 -- comments, ready for the website to render as a thread feed.
 func linkedinBuildFeedJson(states: [PostState], allComments: [LinkedInComment]) -> string ! {Declassify, FS} {
-  let entries = map(\s. linkedinBuildPostEntry(s, allComments), states);
+  let entries = mapE(\s. linkedinBuildPostEntry(s, allComments), states);
   encode(ja(entries))
 }
 
@@ -331,7 +331,10 @@ func linkedinBuildPostEntry(state: PostState, allComments: [LinkedInComment]) ->
   -- IFC gate: cross the declassification boundary once, here. From this
   -- point on the demo works with PublicComment (no <pii> label), which is
   -- safe to serialise into the public feed JSON.
-  let mineSafe = map(\c. linkedinSanitiseComment(c), mineRaw);
+  -- mapE because linkedinSanitiseComment carries ! {Declassify}; the
+  -- pure `map` rejects effectful lambdas under the stricter effect-row
+  -- checker introduced in the current AILANG release.
+  let mineSafe = mapE(\c. linkedinSanitiseComment(c), mineRaw);
   -- Split top-level comments from replies. The package returns a flat list;
   -- we thread it for the website (one level deep — LinkedIn's UI cap).
   let topLevel = filter(\c. length(c.parentCommentUrn) == 0, mineSafe);
@@ -406,7 +409,7 @@ func linkedinOutputComments(comments: [LinkedInComment], jsonMode: bool) -> () !
     -- Cross the declassification gate before publishing. The package's
     -- linkedinCommentsToJson refuses to accept PII-labelled LinkedInComment
     -- values; we must convert through linkedinSanitiseComment first.
-    let public = map(\c. linkedinSanitiseComment(c), comments);
+    let public = mapE(\c. linkedinSanitiseComment(c), comments);
     println(linkedinCommentsToJson(public))
   }
   else {
