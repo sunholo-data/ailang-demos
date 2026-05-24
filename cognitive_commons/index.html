@@ -2512,7 +2512,7 @@
     if (persisted) {
       app.ailang = { repl, ready: true, stateJson: persisted };
     } else {
-      const seedRes = window.ailangCall(AILANG_ADAPTER, "initialStateJson");
+      const seedRes = window.ailangCall(AILANG_ADAPTER, "initialStateJson", "");
       const seed = seedRes && seedRes.success ? aiCoerceString(seedRes.result) : null;
       app.ailang = { repl, ready: true, stateJson: seed };
       if (seed) sessionStorage.setItem("commons_ailang_state", seed);

@@ -127,7 +127,15 @@ export func defaultPromptFor(persona_name: string) -> string = {
 
 -- Return an initial state as a JSON string. JS uses this as the seed
 -- before the first speak() call.
-export func initialStateJson() -> string =
+--
+-- The `_seed` parameter is a workaround for a v0.20.1 bug: 0-arg WASM
+-- exports return the FunctionValue instead of invoking the function,
+-- so initialStateJson() came back as "function () { ... }" and broke
+-- the JS-side JSON parse on first boot. Fixed upstream in newer AILANG
+-- (module_registry_prelude.go injects UnitValue for 0-arg calls), but
+-- we're pinned to v0.20.1 until v0.21.0's std/stream migration lands.
+-- JS callers pass any string (e.g. "").
+export func initialStateJson(_seed: string) -> string =
   encode(stateToJson({
     sentiment: { x: 0.0, y: 0.0 },
     consensus_text: "",
