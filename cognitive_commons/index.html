@@ -691,6 +691,19 @@
       cursor: pointer;
       font-family: var(--font-mono);
     }
+    .constellation-rubric .cg-collapse {
+      padding: 0.2rem 0.55rem;
+      font-size: 0.6rem;
+      background: transparent;
+      color: var(--ink-soft);
+      border: 1px solid var(--rule);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      margin-left: 0.5rem;
+    }
+    .constellation-rubric .cg-collapse:hover { color: var(--ink); border-color: var(--ink); }
+    .constellation-section.collapsed .constellation-wrap,
+    .constellation-section.collapsed .cg-pullquote { display: none; }
     .constellation-rubric .cg-zoom button:hover {
       background: var(--rule-soft);
       color: var(--ink);
@@ -1789,6 +1802,7 @@
           <button id="cg-zoom-reset" title="Reset zoom">reset</button>
           <button id="cg-zoom-in" title="Zoom in (or scroll-wheel)">+</button>
         </span>
+        <button id="cg-collapse" class="cg-collapse" title="Collapse the constellation view">collapse</button>
       </span>
       <span class="count" id="constellation-count">0 glyphs</span>
     </div>
@@ -2193,6 +2207,8 @@
     cgGlyphs: null,
     cgLabels: null,
     cgEmpty: $("cg-empty"),
+    cgCollapse: $("cg-collapse"),
+    constellationSection: document.querySelector(".constellation-section"),
     constellationCount: $("constellation-count"),
     composeNow: $("compose-now"),
     invite: $("invite"),
@@ -2358,8 +2374,11 @@
     // we surface that loudly instead of falling back to JS, because a
     // silent JS fallback would defeat the whole point of the demo.
     setAilangStatus("loading", "Loading AILANG WASM runtime + 5 modules…");
+    initConstellationCollapse();
+    updateConstellationOverlay();
     initAilang().then(() => {
       setAilangStatus("ready", "AILANG ready · sentiment + judge + edit-lock run in .ail modules");
+      updateConstellationOverlay();
     }).catch(e => {
       showBootError("AILANG WASM init failed", e);
       setAilangStatus("error", "✗ AILANG failed to load: " + (e && e.message || e) +
@@ -3163,6 +3182,7 @@
     if (els.constellationCount) {
       els.constellationCount.textContent = app.glyphIndex + " glyph" + (app.glyphIndex === 1 ? "" : "s");
     }
+    updateConstellationOverlay();
   }
 
   // -------------------------------------------------------------------------
@@ -3349,6 +3369,61 @@
     if (els.constellationCount) els.constellationCount.textContent = "0 glyphs";
     app.glyphIndex = 0;
     app.prevGlyph = null;
+    updateConstellationOverlay();
+  }
+
+  // Pick the right overlay message based on actual state. Called whenever
+  // any of the upstream signals change: AILANG ready, API key entered,
+  // test passed, first glyph placed. Was previously a static "Add an API
+  // key…" message that didn't update once a key WAS added, leaving users
+  // staring at confusing text after a successful activation.
+  function updateConstellationOverlay() {
+    if (!els.cgEmpty) return;
+    if (app.glyphIndex > 0) {
+      els.cgEmpty.classList.add("hide");
+      return;
+    }
+    els.cgEmpty.classList.remove("hide");
+    if (!app.ailang || !app.ailang.ready) {
+      els.cgEmpty.textContent = "Loading AILANG runtime…";
+      return;
+    }
+    if (!app.aiOn || !app.aiProvider || !app.aiKey) {
+      els.cgEmpty.textContent = "Add an API key above to activate this tab. Your citizen will join and start placing glyphs.";
+      return;
+    }
+    if (!app.aiTested) {
+      els.cgEmpty.textContent = "Click “Test & Activate” above so your citizen can join the commons.";
+      return;
+    }
+    els.cgEmpty.textContent = "Citizen activated. Waiting for the first stanza…";
+  }
+
+  // Collapse / expand the constellation card. Persists per-tab in
+  // sessionStorage so a refresh remembers the user's choice. The intent
+  // is to let people who want to focus on the rolling consensus text
+  // hide the (visually busy) constellation without losing it.
+  function setConstellationCollapsed(collapsed) {
+    if (!els.constellationSection || !els.cgCollapse) return;
+    if (collapsed) {
+      els.constellationSection.classList.add("collapsed");
+      els.cgCollapse.textContent = "expand";
+      els.cgCollapse.title = "Show the constellation view";
+    } else {
+      els.constellationSection.classList.remove("collapsed");
+      els.cgCollapse.textContent = "collapse";
+      els.cgCollapse.title = "Hide the constellation view";
+    }
+    try { sessionStorage.setItem("commons_constellation_collapsed", collapsed ? "1" : "0"); } catch (_) {}
+  }
+  function initConstellationCollapse() {
+    if (!els.cgCollapse) return;
+    els.cgCollapse.addEventListener("click", () => {
+      const isCollapsed = els.constellationSection.classList.contains("collapsed");
+      setConstellationCollapsed(!isCollapsed);
+    });
+    const stored = (() => { try { return sessionStorage.getItem("commons_constellation_collapsed"); } catch (_) { return null; } })();
+    if (stored === "1") setConstellationCollapsed(true);
   }
 
   function buildStanzaTitle(persona, sender, clock, ts, model) {
@@ -4422,6 +4497,7 @@
     app.aiKey = key;
     app.aiModel = effectiveModel;
     setAiStatus("on", `Active · ${provider} · ${effectiveModel} · click Done to collapse.`);
+    updateConstellationOverlay();
     // On boot only, auto-collapse if everything is valid (so returning users
     // skip the banner). Mid-edit we only refresh info, never toggle visibility.
     if (ctx.source === "boot") setBannerCompact(true);
@@ -4503,6 +4579,7 @@
       flashButton(btn, "success", `✓ Activated in ${elapsedMs.toFixed(0)}ms`, "Test & Activate citizen", 1800);
       setAiStatus("on", `✓ ${app.aiProvider} · ${app.aiModel} responded in ${elapsedMs.toFixed(0)}ms — citizen activated.`);
       setTimeout(() => setBannerCompact(true), 900);
+      updateConstellationOverlay();
       // Kick off the first stanza immediately so users see a response within
       // a few seconds instead of waiting 7–17s for the boot-time cadence timer.
       // Reset the auto-cadence timer so the next tick is paced from "now"
