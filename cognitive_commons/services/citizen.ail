@@ -44,6 +44,7 @@ import cognitive_commons/services/consensus
   , applyUtterance
   , applyManifestoEdit
   , currentLeader
+  , requiredPreservation
   , RejectedTooShort
   )
 import cognitive_commons/services/persuasion (JudgeScore, judgeUtterance)
@@ -132,8 +133,20 @@ export pure func compose_user_prompt(
     then "TOPIC OF DEBATE: \"${topic}\"\nEverything below is in service of arguing THIS topic. Stay on topic.\n\n"
     else "";
   let dialogue_block = conversation_block(recent_dialogue);
+  -- Preservation guidance scales with how dominantly the proposer leads.
+  -- A barely-leading proposer must keep most of the prior text; a
+  -- dominant one can rewrite freely. Telling the AI the threshold up
+  -- front lets it author within budget instead of getting rejected
+  -- and burning a retry. requiredPreservation returns a fraction in
+  -- [0, 0.6] — we display it as a rounded percent.
+  let preserve_pct = requiredPreservation(st) * 100.0;
+  let preserve_int = floatToInt(preserve_pct);
+  let proposer_is_leader = label(proposer) == leader_label;
+  let preserve_block = if proposer_is_leader && length(st.consensus_text) > 0
+    then "\nPRESERVATION RULE — applies because you are the leader: your manifesto edit MUST keep at least ${show(preserve_int)}% of the unique words in the current working statement above. Drop too many and your edit is rejected as too different (the existing text stands; your stanza still counts, but you don't get the pen this cycle). Add new clauses freely; just don't wholesale rewrite. The threshold scales with your dominance — barely-leading citizens must preserve more, decisively-leading ones can replace more.\n"
+    else "";
   let manifesto_block = if length(st.consensus_text) > 0
-    then "\nTHE COMMONS' CURRENT WORKING STATEMENT (locked to ${leader_label}):\n\"\"\"\n${st.consensus_text}\n\"\"\"\n"
+    then "\nTHE COMMONS' CURRENT WORKING STATEMENT (locked to ${leader_label}):\n\"\"\"\n${st.consensus_text}\n\"\"\"\n${preserve_block}"
     else "\nTHE COMMONS' CURRENT WORKING STATEMENT: (empty — the first leader gets to draft it)\n";
   let proposer_label = label(proposer);
   let s = st.sentiment;

@@ -1688,6 +1688,23 @@
       border-radius: 2px;
       word-break: break-all;
     }
+    .chronicle-section .outcome-tag {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.02em;
+      padding: 0.05rem 0.35rem;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .chronicle-section .outcome-tag.outcome-accepted {
+      color: #2c7a7b;                              /* same teal as score-tag */
+      background: rgba(44, 122, 123, 0.12);
+      font-weight: 600;
+    }
+    .chronicle-section .outcome-tag.outcome-rejected {
+      color: var(--sun-red);
+      background: rgba(231, 60, 23, 0.10);
+    }
     .chronicle-section .score-tag {
       font-family: var(--font-mono);
       font-size: 0.62rem;
@@ -2762,12 +2779,40 @@
   // The recent_dialogue parameter is back to carrying only the dialogue
   // lines — AILANG's compose_user_prompt wraps them with the
   // conversation-aware instructions via its helper functions.
-  async function ailangSpeak(persona) {
+  // Format one stanza's dialogue line. Includes the judge verdict and
+  // the manifesto outcome so the AI on subsequent cycles can see WHAT
+  // its prior moves accomplished (or didn't). The user's instruction:
+  // "the rejection needs to go into the chat history as well as the
+  // judges' verdicts" — these annotations make that visible.
+  function formatDialogueLine(i, s) {
+    const tag = [];
+    if (s.judgeScore && isFinite(s.judgeScore.x) && isFinite(s.judgeScore.y)) {
+      tag.push(`judge ${s.judgeScore.x.toFixed(2)},${s.judgeScore.y.toFixed(2)}`);
+    }
+    if (s.manifestoOutcome && s.manifestoOutcome !== "Accepted") {
+      if (s.manifestoOutcome === "RejectedTooDifferent" && s.preservation) {
+        const a = Math.round(s.preservation.actual * 100);
+        const r = Math.round(s.preservation.required * 100);
+        tag.push(`manifesto rejected — too different (kept ${a}%, needed ${r}%)`);
+      } else {
+        tag.push(`manifesto ${s.manifestoOutcome.replace(/([A-Z])/g, ' $1').trim().toLowerCase()}`);
+      }
+    } else if (s.manifestoOutcome === "Accepted") {
+      tag.push("manifesto accepted");
+    }
+    const suffix = tag.length ? ` [${tag.join("; ")}]` : "";
+    return `${i + 1}. ${s.persona} said: "${s.text}"${suffix}`;
+  }
+
+  async function ailangSpeak(persona, retryHint) {
     if (!app.ailang || !app.ailang.ready) return null;
     const personaPrompt = activePrompt(persona);
     const topic = (els.topicInput && els.topicInput.value) || "";
-    const recent = (app.recentStanzas || []).slice(-HISTORY_WINDOW)
-      .map((s, i) => `${i + 1}. ${s.persona} said: "${s.text}"`).join("\n");
+    // Build dialogue lines with verdicts + outcomes baked in. On a retry,
+    // prepend the system feedback so the AI can self-correct without
+    // a separate API contract change.
+    const lines = (app.recentStanzas || []).slice(-HISTORY_WINDOW).map(formatDialogueLine);
+    const recent = retryHint ? `${retryHint}\n${lines.join("\n")}` : lines.join("\n");
     const clock = Date.now() & 0x7fffffff;
     const region = "manifesto";
     if (typeof window.ailangCallAsync !== "function") {
@@ -2787,12 +2832,16 @@
     app.ailang.stateJson = JSON.stringify(parsed.state);
     sessionStorage.setItem("commons_ailang_state", app.ailang.stateJson);
     return {
-      text:    parsed.utterance,
-      glyph:   parsed.glyph,
-      state:   parsed.state,
-      score:   parsed.score,
-      judgeOk: parsed.judge_ok,
-      outcome: parsed.manifesto_outcome,
+      text:                  parsed.utterance,
+      glyph:                 parsed.glyph,
+      state:                 parsed.state,
+      score:                 parsed.score,
+      judgeOk:               parsed.judge_ok,
+      outcome:               parsed.manifesto_outcome,
+      manifestoProposed:     parsed.manifesto_proposed || "",
+      requiredPreservation:  parsed.required_preservation || 0,
+      actualPreservation:    parsed.actual_preservation || 0,
+      leaderDominance:       parsed.leader_dominance || 0,
     };
   }
 
@@ -2958,25 +3007,18 @@
     app.callInFlight = true;
     const persona = app.persona;
     setAiStatus("loading", `Composing ${persona} stanza via ${app.aiProvider} · ${app.aiModel}…`);
-    ailangSpeak(persona).then((reply) => {
+    composeWithRetry(persona).then((reply) => {
       if (!reply || !reply.text) {
         setAiStatus("warn", "AILANG returned no text — see browser console.");
         return;
       }
-      // Pass the score regardless of judgeOk so the chronicle shows a
-      // chip on every stanza. When judge fails (no judge-routing key OR
-      // provider rejected the call), the score is (0,0) from
-      // commons_browser's fallback path and beautifyPanel's existing
-      // chip renderer just labels it neutrally. Previously this was
-      // null-gated, so chronicles showed NO chip whenever the judge
-      // call fell through — the user's "we lost the judge visible
-      // score" feedback this turn.
       const judgeScore = reply.score || null;
-      broadcastStanza(persona, reply.text, reply.glyph, reply.state, judgeScore);
+      broadcastStanza(persona, reply.text, reply.glyph, reply.state, judgeScore, reply);
       const sLabel = reply.judgeOk && judgeScore
         ? `judge ${judgeScore.x.toFixed(2)}, ${judgeScore.y.toFixed(2)}`
         : "judge: unavailable (no routing key?)";
-      setAiStatus("on", `Active · ${app.aiProvider} · ${app.aiModel} · ${sLabel} · ${new Date().toLocaleTimeString()}.`);
+      const retryNote = reply.retried ? " · retried" : "";
+      setAiStatus("on", `Active · ${app.aiProvider} · ${app.aiModel} · ${sLabel}${retryNote} · ${new Date().toLocaleTimeString()}.`);
     }).catch((e) => {
       console.error("[commons] AILANG speak failed:", e);
       setAiStatus("error", "✗ AILANG speak failed: " + (e.message || "").slice(0, 200));
@@ -2985,19 +3027,48 @@
     });
   }
 
+  // composeWithRetry — wraps ailangSpeak with the single-retry policy.
+  // If the AI's manifesto is rejected as too different from the prior
+  // working statement, we IMMEDIATELY call back with a feedback hint
+  // baked into recent_dialogue ("you only kept X%, you need Y%"). The
+  // second attempt's result is used regardless of outcome — no second
+  // retry. The rejection (and the eventual outcome) become part of the
+  // dialogue history that future cycles see, so the AI learns even if
+  // the retry also fails.
+  async function composeWithRetry(persona) {
+    const first = await ailangSpeak(persona);
+    if (!first || first.outcome !== "RejectedTooDifferent") return first;
+    const actualPct = Math.round((first.actualPreservation || 0) * 100);
+    const requiredPct = Math.round((first.requiredPreservation || 0) * 100);
+    const hint = `[SYSTEM FEEDBACK — RETRY] Your previous manifesto edit was rejected as too different. You preserved ${actualPct}% of the unique words in the current working statement; you need at least ${requiredPct}%. The existing manifesto still stands. Try again — keep more of the prior wording (you can still add or rephrase clauses), don't wholesale rewrite.\n`;
+    console.log(`[commons] retry — preserved ${actualPct}%, needed ${requiredPct}%`);
+    const second = await ailangSpeak(persona, hint);
+    if (second) second.retried = true;
+    return second || first;
+  }
+
   // broadcastStanza — applies the patch locally (emits to the event log) and
   // gossips to other tabs. The optional glyph (AI-authored SVG path-d) lives
   // in fields[2] of the patch — canonical_dom ignores it but the event log
   // captures it for replay determinism.
-  function broadcastStanza(persona, text, glyph, ailangState, score) {
+  function broadcastStanza(persona, text, glyph, ailangState, score, outcomeInfo) {
     const ts = Date.now();
     if (ailangState) adoptAilangState(ailangState);
-    renderLocalStanza(persona, text, glyph, score);
+    renderLocalStanza(persona, text, glyph, score, outcomeInfo);
+    // Outcome details carried in the broadcast payload so PEER tabs
+    // can render the same chronicle chip + dialogue annotation.
+    const outcomePayload = outcomeInfo ? {
+      manifesto_outcome: outcomeInfo.outcome || null,
+      required_preservation: outcomeInfo.requiredPreservation || 0,
+      actual_preservation: outcomeInfo.actualPreservation || 0,
+      retried: !!outcomeInfo.retried,
+    } : null;
     const payload = JSON.stringify({
       kind: "Stanza", persona, text, glyph: glyph || "", ts,
       provider: app.aiProvider || "", model: app.aiModel || "",
       ailang_state: ailangState || null,
       score: score || null,
+      outcome: outcomePayload,
     });
     try { window.CognitiveOS._sendDirect(COMMONS_MAILBOX, payload); }
     catch (e) { console.warn("[commons] send failed", e); }
@@ -3030,7 +3101,7 @@
     try { sessionStorage.setItem("commons_ailang_state", JSON.stringify(s)); } catch (_) {}
   }
 
-  function renderLocalStanza(persona, text, glyph, score) {
+  function renderLocalStanza(persona, text, glyph, score, outcomeInfo) {
     hideEmpty();
     const clock = window.CognitiveOS.debugSnapshot().clock + 1;
     const ts = Date.now();
@@ -3046,9 +3117,9 @@
     } catch (e) {
       console.warn("[commons] patch failed", e);
     }
-    annotatePanel(app.senderId, glyph, app.aiProvider, app.aiModel, score);
+    annotatePanel(app.senderId, glyph, app.aiProvider, app.aiModel, score, outcomeInfo);
     renderGlyph(persona, app.senderId, clock, text, glyph, score);
-    recordStanza(persona, app.senderId, clock, text, ts);
+    recordStanza(persona, app.senderId, clock, text, ts, score, outcomeInfo);
     // Remember self in the roster — last quote + spoke-ts shown for this tab
     rosterRemember(app.senderId, {
       persona, provider: app.aiProvider, model: app.aiModel,
@@ -3078,9 +3149,16 @@
         fields: [title, payload.text, payload.glyph || ""],
       }, { remoteClock: clock });
     } catch (e) { console.warn("[commons] remote patch failed", e); }
-    annotatePanel(fromSender, payload.glyph, payload.provider, payload.model, payload.score);
+    // Peer's outcome details (manifesto outcome + preservation %), if any.
+    const remoteOutcomeInfo = payload.outcome ? {
+      outcome: payload.outcome.manifesto_outcome || "",
+      requiredPreservation: payload.outcome.required_preservation || 0,
+      actualPreservation: payload.outcome.actual_preservation || 0,
+      retried: !!payload.outcome.retried,
+    } : null;
+    annotatePanel(fromSender, payload.glyph, payload.provider, payload.model, payload.score, remoteOutcomeInfo);
     renderGlyph(persona, fromSender, clock, payload.text, payload.glyph, payload.score);
-    recordStanza(persona, fromSender, clock, payload.text, ts);
+    recordStanza(persona, fromSender, clock, payload.text, ts, payload.score, remoteOutcomeInfo);
     // Enrich the roster with the remote tab's last quote + model
     rosterRemember(fromSender, {
       persona, provider: payload.provider, model: payload.model,
@@ -3094,7 +3172,7 @@
 
   // Tag the last panel with sender / glyph / provider / model data attrs so
   // beautifyPanel can show them without re-parsing the title string.
-  function annotatePanel(senderFull, glyph, provider, model, score) {
+  function annotatePanel(senderFull, glyph, provider, model, score, outcomeInfo) {
     const region = document.querySelector('[data-cog-region="manifesto"]');
     if (!region) return;
     const panels = region.querySelectorAll(".cog-panel");
@@ -3106,6 +3184,16 @@
     if (model)    last.dataset.model = model;
     if (score && isFinite(score.x) && isFinite(score.y)) {
       last.dataset.score = `${score.x.toFixed(2)},${score.y.toFixed(2)}`;
+    }
+    // Outcome details for the chronicle chip — beautifyPanel reads these
+    // datasets and renders the manifesto verdict next to the judge chip.
+    if (outcomeInfo) {
+      if (outcomeInfo.outcome)            last.dataset.outcome = outcomeInfo.outcome;
+      if (outcomeInfo.retried)            last.dataset.retried = "1";
+      if (outcomeInfo.outcome === "RejectedTooDifferent") {
+        last.dataset.preserveActual   = String(outcomeInfo.actualPreservation || 0);
+        last.dataset.preserveRequired = String(outcomeInfo.requiredPreservation || 0);
+      }
     }
   }
 
@@ -4775,14 +4863,17 @@
     setButtonBusy(btn, true, `AILANG → ${app.aiProvider}…`);
     setAiStatus("warn", `AILANG composing via ${app.aiProvider} · ${app.aiModel}…`);
     try {
-      const reply = await ailangSpeak(app.persona);
+      // Go through composeWithRetry so the manual Speak Now path gets the
+      // same retry-on-RejectedTooDifferent behavior as auto-fire.
+      const reply = await composeWithRetry(app.persona);
       if (!reply || !reply.text) {
         setAiStatus("warn", "AILANG returned no text — see browser console.");
         flashButton(btn, "failed", "No text in reply", "Speak now (this tab)", 2500);
         return;
       }
-      broadcastStanza(app.persona, reply.text, reply.glyph, reply.state);
-      setAiStatus("on", `Active · ${app.aiProvider} · ${app.aiModel} · AILANG · ${new Date().toLocaleTimeString()}.`);
+      broadcastStanza(app.persona, reply.text, reply.glyph, reply.state, reply.score || null, reply);
+      const retryNote = reply.retried ? " · retried" : "";
+      setAiStatus("on", `Active · ${app.aiProvider} · ${app.aiModel} · AILANG${retryNote} · ${new Date().toLocaleTimeString()}.`);
       flashButton(btn, "success", "✓ Spoke!", "Speak now (this tab)", 1400);
     } catch (e) {
       const msg = (e && e.message) || String(e);
@@ -5202,8 +5293,20 @@
   // ===========================================================================
   // RECENT STANZAS — feed back to the AI as context
   // ===========================================================================
-  function recordStanza(persona, sender, clock, text, ts) {
-    app.recentStanzas.push({ persona, sender, clock, text, ts });
+  function recordStanza(persona, sender, clock, text, ts, judgeScore, outcomeInfo) {
+    // judgeScore + outcomeInfo become part of the dialogue history we
+    // feed back to AILANG next cycle — see formatDialogueLine().
+    // outcomeInfo carries: { outcome, requiredPreservation, actualPreservation, retried }
+    const preservation = outcomeInfo && outcomeInfo.outcome === "RejectedTooDifferent"
+      ? { required: outcomeInfo.requiredPreservation, actual: outcomeInfo.actualPreservation }
+      : null;
+    app.recentStanzas.push({
+      persona, sender, clock, text, ts,
+      judgeScore: judgeScore || null,
+      manifestoOutcome: outcomeInfo ? outcomeInfo.outcome : null,
+      retried: !!(outcomeInfo && outcomeInfo.retried),
+      preservation,
+    });
     if (app.recentStanzas.length > 32) app.recentStanzas.shift();
     // Sentiment math runs in AILANG (cognitive_commons/services/consensus.ail)
     // via adoptAilangState(); applying JS EWMA here would double-shift.
@@ -5286,7 +5389,29 @@
         scoreTag = ` · <span class="score-tag" title="Judge score on the sentiment plane">judge ${sign(sx)}, ${sign(sy)} (${dom})</span>`;
       }
     }
-    metaEl.innerHTML = `<span>${senderShort}</span> · clk ${clock} · <span class="ts-relative" data-ts="${ts}">${relTime(ts)}</span>${modelTag}${scoreTag}`;
+    // Manifesto outcome chip — reads annotatePanel's datasets. Shows the
+    // edit-lock verdict (accepted / rejected reason). RejectedTooDifferent
+    // includes the actual vs required preservation %, so users can see
+    // why the rejection fired and what would have satisfied the contract.
+    let outcomeTag = "";
+    const outcome = panel.dataset.outcome;
+    const retried = panel.dataset.retried === "1";
+    if (outcome) {
+      const retryMark = retried ? " (retried)" : "";
+      if (outcome === "Accepted") {
+        outcomeTag = ` · <span class="outcome-tag outcome-accepted" title="Manifesto edit landed">manifesto accepted${retryMark}</span>`;
+      } else if (outcome === "RejectedTooDifferent") {
+        const actual = parseFloat(panel.dataset.preserveActual || "0");
+        const required = parseFloat(panel.dataset.preserveRequired || "0");
+        const a = Math.round(actual * 100), r = Math.round(required * 100);
+        outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — too different from prior text">manifesto rejected — kept ${a}%, needed ${r}%${retryMark}</span>`;
+      } else if (outcome === "RejectedNotLeader") {
+        outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — not leader">not leading${retryMark}</span>`;
+      } else if (outcome === "RejectedTooShort") {
+        outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — too short">manifesto too short${retryMark}</span>`;
+      }
+    }
+    metaEl.innerHTML = `<span>${senderShort}</span> · clk ${clock} · <span class="ts-relative" data-ts="${ts}">${relTime(ts)}</span>${modelTag}${scoreTag}${outcomeTag}`;
     title.appendChild(chip);
     title.appendChild(metaEl);
     panel.dataset.beautified = "1";

@@ -22,11 +22,15 @@ import cognitive_commons/services/consensus
   ( CommonsState
   , currentLeader
   , leaderGap
+  , leaderDominance
+  , requiredPreservation
+  , preservationRatio
   , applyUtterance
   , applyManifestoEdit
   , Accepted
   , RejectedNotLeader
   , RejectedTooShort
+  , RejectedTooDifferent
   )
 import cognitive_commons/services/citizen (compose)
 import cognitive_commons/services/persuasion (judgeUtterance)
@@ -173,7 +177,7 @@ export func initialStateJson(_seed: string) -> string
 -- Returns JSON shaped as:
 --   { "ok": true, "speaker": "Visionary",
 --     "utterance": "...", "glyph": "...",
---     "manifesto_outcome": "Accepted" | "RejectedNotLeader" | "RejectedTooShort",
+--     "manifesto_outcome": "Accepted" | "RejectedNotLeader" | "RejectedTooShort" | "RejectedTooDifferent",
 --     "judge_ok": true, "score": {"x":..,"y":..},
 --     "state": {<stateJson>} }
 --   { "ok": false, "error": "<message>" }
@@ -218,16 +222,29 @@ export func speakJson(
               else { state: st1, outcome: RejectedTooShort };
             let st2 = edit.state;
             let outcome_label = match edit.outcome {
-              Accepted          => "Accepted",
-              RejectedNotLeader => "RejectedNotLeader",
-              RejectedTooShort  => "RejectedTooShort"
+              Accepted             => "Accepted",
+              RejectedNotLeader    => "RejectedNotLeader",
+              RejectedTooShort     => "RejectedTooShort",
+              RejectedTooDifferent => "RejectedTooDifferent"
             };
+            -- Diagnostic info for JS: required preservation threshold
+            -- (scaled by leader dominance) and the ratio the proposed
+            -- manifesto actually achieved. JS uses these to render the
+            -- rejection in the chronicle ("kept 14%, needed 40%") and
+            -- to build the single-retry feedback prompt.
+            let required_preserve = requiredPreservation(st1);
+            let proposed_for_ratio = if length(reply.manifesto) >= 40 then reply.manifesto else "";
+            let actual_preserve = preservationRatio(st1.consensus_text, proposed_for_ratio);
             encode(jo([
               kv("ok", jb(true)),
               kv("speaker",  js(label(p))),
               kv("utterance", js(reply.text)),
               kv("glyph",    js(reply.glyph)),
+              kv("manifesto_proposed", js(reply.manifesto)),
               kv("manifesto_outcome", js(outcome_label)),
+              kv("required_preservation", jnum(required_preserve)),
+              kv("actual_preservation", jnum(actual_preserve)),
+              kv("leader_dominance", jnum(leaderDominance(st1))),
               kv("judge_ok", jb(score.has)),
               kv("score", jo([kv("x", jnum(score.x)), kv("y", jnum(score.y))])),
               kv("state", stateToJson(st2))

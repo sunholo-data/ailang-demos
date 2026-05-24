@@ -15,7 +15,9 @@ module cognitive_commons/services/consensus
 
 import cognitive_commons/types/personas (Persona, Point, target, label, all_personas, Visionary, Skeptic, Synthesizer, Archivist)
 import std/result (Result, Ok, Err)
-import std/string (length)
+import std/string (length, split, toLower)
+import std/list (length as listLength, filter, any)
+import std/math (intToFloat)
 
 -- The full state of the commons.
 export type CommonsState = {
@@ -121,11 +123,56 @@ export pure func currentLeader(st: CommonsState) -> Persona = {
 export pure func leaderGap(st: CommonsState) -> float =
   distance(st.sentiment, target(currentLeader(st)))
 
+-- leaderDominance — how firmly is the current leader in front?
+-- 1.0 = the dot sits exactly on the leader's target corner (decisive
+-- mandate). 0.0 = the dot is at the "worst-case" gap from any persona
+-- (~0.85 squared, which is roughly what you get at the origin where
+-- all four personas pull equally).
+-- Used by applyManifestoEdit to scale the required text-preservation
+-- threshold: dominant leaders get more freedom to rewrite (they've
+-- earned it), barely-leading ones must preserve more of the prior
+-- working statement.
+export pure func leaderDominance(st: CommonsState) -> float = {
+  let gap = leaderGap(st);
+  let max_gap = 0.85;
+  if gap >= max_gap then 0.0
+  else (max_gap - gap) / max_gap
+}
+
+-- requiredPreservation — fraction of previous-text words a leader's
+-- proposed edit MUST keep, scaled inversely by their dominance.
+-- A barely-leading proposer (dominance ≈ 0) must keep ~60% of the
+-- existing words; a fully-dominant one (dominance = 1) has no
+-- preservation floor at all — rewrite freely.
+-- The 0.6 cap exists so even at zero dominance there's always room
+-- for new ideas; otherwise the manifesto would freeze.
+export pure func requiredPreservation(st: CommonsState) -> float =
+  0.6 * (1.0 - leaderDominance(st))
+
+-- preservationRatio — fraction of unique words in `previous` that
+-- also appear in `proposed`. Asymmetric on purpose: we measure how
+-- much of the old text survived, not how similar the two strings
+-- look overall. 1.0 = nothing dropped, 0.0 = wholesale rewrite.
+-- Case-insensitive, whitespace-tokenised (good enough for the demo).
+-- Empty previous text trivially returns 1.0 — the leader can write
+-- the first draft from scratch.
+export pure func preservationRatio(previous: string, proposed: string) -> float = {
+  let prev_words = split(toLower(previous), " ");
+  let new_words = split(toLower(proposed), " ");
+  let preserved = filter(\w. any(\x. x == w, new_words), prev_words);
+  let total = listLength(prev_words);
+  if total == 0 then 1.0
+  else intToFloat(listLength(preserved)) / intToFloat(total)
+}
+
 -- applyManifestoEdit — the edit-lock gate.
 --
--- The proposed edit is accepted ONLY if the proposer matches the persona
--- currently leading. Returns the new state plus a tag.
-export type EditOutcome = Accepted | RejectedNotLeader | RejectedTooShort
+-- The proposed edit is accepted ONLY if (a) the proposer matches the
+-- persona currently leading, (b) the text is long enough (≥ 40 chars),
+-- AND (c) it preserves enough of the prior working statement — where
+-- "enough" is scaled by how dominantly the proposer leads.
+-- Returns the new state plus a tag describing why it landed or didn't.
+export type EditOutcome = Accepted | RejectedNotLeader | RejectedTooShort | RejectedTooDifferent
 
 -- The edit-lock invariant in contract form: a proposal is Accepted ONLY
 -- if it's long enough AND the proposer is the current leader. Both halves
@@ -155,15 +202,22 @@ export pure func applyManifestoEdit(
       state: st,
       outcome: RejectedNotLeader
     } else {
-      {
-        state: {
-          sentiment: st.sentiment,
-          consensus_text: proposed_text,
-          consensus_editor: label(proposer),
-          consensus_clock: clock,
-          utterance_count: st.utterance_count
-        },
-        outcome: Accepted
+      let required = requiredPreservation(st);
+      let preserved = preservationRatio(st.consensus_text, proposed_text);
+      if preserved < required then {
+        state: st,
+        outcome: RejectedTooDifferent
+      } else {
+        {
+          state: {
+            sentiment: st.sentiment,
+            consensus_text: proposed_text,
+            consensus_editor: label(proposer),
+            consensus_clock: clock,
+            utterance_count: st.utterance_count
+          },
+          outcome: Accepted
+        }
       }
     }
   }
