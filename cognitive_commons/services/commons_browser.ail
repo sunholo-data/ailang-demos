@@ -25,6 +25,7 @@ import cognitive_commons/services/consensus
   , leaderDominance
   , requiredPreservation
   , preservationRatio
+  , wordCount
   , applyUtterance
   , applyManifestoEdit
   , Accepted
@@ -217,9 +218,11 @@ export func speakJson(
             -- landed upstream (commit ad84b68d).
             let score = unpack_judge_score(judgeUtterance(topic, p, reply.text));
             let st1 = applyUtterance(st_in, p, score.has, score.x, score.y);
-            let edit = if length(reply.manifesto) >= 40
-              then applyManifestoEdit(st1, p, reply.manifesto, clock)
-              else { state: st1, outcome: RejectedTooShort };
+            -- No more JS-side short-circuit on length. applyManifestoEdit
+            -- now checks leadership FIRST, so a non-leader returning an
+            -- empty manifesto (as instructed) gets RejectedNotLeader
+            -- instead of the misleading RejectedTooShort label.
+            let edit = applyManifestoEdit(st1, p, reply.manifesto, clock);
             let st2 = edit.state;
             let outcome_label = match edit.outcome {
               Accepted             => "Accepted",
@@ -235,6 +238,15 @@ export func speakJson(
             let required_preserve = requiredPreservation(st1);
             let proposed_for_ratio = if length(reply.manifesto) >= 40 then reply.manifesto else "";
             let actual_preserve = preservationRatio(st1.consensus_text, proposed_for_ratio);
+            -- Word-count metadata so the "manifesto accepted" chip can
+            -- show how much actually changed ("kept 60%, +12 words" or
+            -- "first draft, 80 words"). prev_manifesto_words is the
+            -- count BEFORE this edit; new_manifesto_words is the count
+            -- of the landed text (== 0 if not Accepted, since old text
+            -- stands in that case — but we still report what the AI
+            -- proposed so users can see the size of attempted rewrites).
+            let prev_words = wordCount(st1.consensus_text);
+            let proposed_words = wordCount(reply.manifesto);
             encode(jo([
               kv("ok", jb(true)),
               kv("speaker",  js(label(p))),
@@ -245,6 +257,8 @@ export func speakJson(
               kv("required_preservation", jnum(required_preserve)),
               kv("actual_preservation", jnum(actual_preserve)),
               kv("leader_dominance", jnum(leaderDominance(st1))),
+              kv("prev_manifesto_words", jnum(intToFloat(prev_words))),
+              kv("proposed_manifesto_words", jnum(intToFloat(proposed_words))),
               kv("judge_ok", jb(score.has)),
               kv("score", jo([kv("x", jnum(score.x)), kv("y", jnum(score.y))])),
               kv("state", stateToJson(st2))

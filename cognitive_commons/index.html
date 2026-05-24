@@ -2952,17 +2952,30 @@
     if (s.judgeScore && isFinite(s.judgeScore.x) && isFinite(s.judgeScore.y)) {
       tag.push(`judge ${s.judgeScore.x.toFixed(2)},${s.judgeScore.y.toFixed(2)}`);
     }
-    if (s.manifestoOutcome && s.manifestoOutcome !== "Accepted") {
-      if (s.manifestoOutcome === "RejectedTooDifferent" && s.preservation) {
-        const a = Math.round(s.preservation.actual * 100);
-        const r = Math.round(s.preservation.required * 100);
-        tag.push(`manifesto rejected — too different (kept ${a}%, needed ${r}%)`);
+    if (s.manifestoOutcome === "Accepted") {
+      if (s.acceptedInfo) {
+        if (s.acceptedInfo.prevWords === 0) {
+          tag.push(`manifesto accepted — first draft, ${s.acceptedInfo.newWords} words`);
+        } else {
+          const delta = s.acceptedInfo.newWords - s.acceptedInfo.prevWords;
+          const sign = delta >= 0 ? "+" : "";
+          const kept = Math.round(s.acceptedInfo.kept * 100);
+          tag.push(`manifesto accepted — kept ${kept}%, ${sign}${delta} words`);
+        }
       } else {
-        tag.push(`manifesto ${s.manifestoOutcome.replace(/([A-Z])/g, ' $1').trim().toLowerCase()}`);
+        tag.push("manifesto accepted");
       }
-    } else if (s.manifestoOutcome === "Accepted") {
-      tag.push("manifesto accepted");
+    } else if (s.manifestoOutcome === "RejectedTooDifferent" && s.preservation) {
+      const a = Math.round(s.preservation.actual * 100);
+      const r = Math.round(s.preservation.required * 100);
+      tag.push(`manifesto rejected — too different (kept ${a}%, needed ${r}%)`);
+    } else if (s.manifestoOutcome === "RejectedTooShort") {
+      tag.push("manifesto rejected — too short");
     }
+    // RejectedNotLeader is skipped on purpose: a non-leader's empty
+    // manifesto is the INSTRUCTED behavior (citizen.ail tells them so).
+    // Annotating it just confirms what the AI already knows from its
+    // own prompt's edit-lock block — pure noise.
     const suffix = tag.length ? ` [${tag.join("; ")}]` : "";
     return `${i + 1}. ${s.persona} said: "${s.text}"${suffix}`;
   }
@@ -3005,6 +3018,8 @@
       requiredPreservation:  parsed.required_preservation || 0,
       actualPreservation:    parsed.actual_preservation || 0,
       leaderDominance:       parsed.leader_dominance || 0,
+      prevManifestoWords:    parsed.prev_manifesto_words || 0,
+      proposedManifestoWords: parsed.proposed_manifesto_words || 0,
     };
   }
 
@@ -3224,6 +3239,8 @@
       manifesto_outcome: outcomeInfo.outcome || null,
       required_preservation: outcomeInfo.requiredPreservation || 0,
       actual_preservation: outcomeInfo.actualPreservation || 0,
+      prev_manifesto_words: outcomeInfo.prevManifestoWords || 0,
+      proposed_manifesto_words: outcomeInfo.proposedManifestoWords || 0,
       retried: !!outcomeInfo.retried,
     } : null;
     const payload = JSON.stringify({
@@ -3403,6 +3420,8 @@
       outcome: payload.outcome.manifesto_outcome || "",
       requiredPreservation: payload.outcome.required_preservation || 0,
       actualPreservation: payload.outcome.actual_preservation || 0,
+      prevManifestoWords: payload.outcome.prev_manifesto_words || 0,
+      proposedManifestoWords: payload.outcome.proposed_manifesto_words || 0,
       retried: !!payload.outcome.retried,
     } : null;
     annotatePanel(fromSender, payload.glyph, payload.provider, payload.model, payload.score, remoteOutcomeInfo);
@@ -3448,6 +3467,13 @@
       if (outcomeInfo.outcome === "RejectedTooDifferent") {
         last.dataset.preserveActual   = String(outcomeInfo.actualPreservation || 0);
         last.dataset.preserveRequired = String(outcomeInfo.requiredPreservation || 0);
+      }
+      if (outcomeInfo.outcome === "Accepted") {
+        last.dataset.prevWords     = String(outcomeInfo.prevManifestoWords || 0);
+        last.dataset.proposedWords = String(outcomeInfo.proposedManifestoWords || 0);
+        // For Accepted, we ALSO have actualPreservation — interesting
+        // signal (how much of the prior text the accepted edit kept).
+        last.dataset.preserveActual = String(outcomeInfo.actualPreservation || 0);
       }
     }
   }
@@ -5582,9 +5608,18 @@
   function recordStanza(persona, sender, clock, text, ts, judgeScore, outcomeInfo) {
     // judgeScore + outcomeInfo become part of the dialogue history we
     // feed back to AILANG next cycle — see formatDialogueLine().
-    // outcomeInfo carries: { outcome, requiredPreservation, actualPreservation, retried }
+    // outcomeInfo carries:
+    //   { outcome, requiredPreservation, actualPreservation,
+    //     prevManifestoWords, proposedManifestoWords, retried }
     const preservation = outcomeInfo && outcomeInfo.outcome === "RejectedTooDifferent"
       ? { required: outcomeInfo.requiredPreservation, actual: outcomeInfo.actualPreservation }
+      : null;
+    const acceptedInfo = outcomeInfo && outcomeInfo.outcome === "Accepted"
+      ? {
+          prevWords: outcomeInfo.prevManifestoWords || 0,
+          newWords: outcomeInfo.proposedManifestoWords || 0,
+          kept: outcomeInfo.actualPreservation || 0,
+        }
       : null;
     app.recentStanzas.push({
       persona, sender, clock, text, ts,
@@ -5592,6 +5627,7 @@
       manifestoOutcome: outcomeInfo ? outcomeInfo.outcome : null,
       retried: !!(outcomeInfo && outcomeInfo.retried),
       preservation,
+      acceptedInfo,
     });
     if (app.recentStanzas.length > 32) app.recentStanzas.shift();
     // Sentiment math runs in AILANG (cognitive_commons/services/consensus.ail)
@@ -5685,14 +5721,34 @@
     if (outcome) {
       const retryMark = retried ? " (retried)" : "";
       if (outcome === "Accepted") {
-        outcomeTag = ` · <span class="outcome-tag outcome-accepted" title="Manifesto edit landed">manifesto accepted${retryMark}</span>`;
+        // Tell users what landed: word counts + how much of prior text
+        // was preserved. For the first draft (prevWords=0) we just show
+        // the new size; for subsequent edits we show "kept X%, +/- N
+        // words vs prior".
+        const prevW     = parseInt(panel.dataset.prevWords || "0", 10);
+        const newW      = parseInt(panel.dataset.proposedWords || "0", 10);
+        const preserved = parseFloat(panel.dataset.preserveActual || "0");
+        let detail;
+        if (prevW === 0) {
+          detail = `first draft · ${newW} words`;
+        } else {
+          const delta = newW - prevW;
+          const sign  = delta >= 0 ? "+" : "";
+          const keptPct = Math.round(preserved * 100);
+          detail = `kept ${keptPct}% · ${sign}${delta} words (${newW} total)`;
+        }
+        outcomeTag = ` · <span class="outcome-tag outcome-accepted" title="Manifesto edit landed">manifesto accepted — ${detail}${retryMark}</span>`;
       } else if (outcome === "RejectedTooDifferent") {
         const actual = parseFloat(panel.dataset.preserveActual || "0");
         const required = parseFloat(panel.dataset.preserveRequired || "0");
         const a = Math.round(actual * 100), r = Math.round(required * 100);
         outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — too different from prior text">manifesto rejected — kept ${a}%, needed ${r}%${retryMark}</span>`;
       } else if (outcome === "RejectedNotLeader") {
-        outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — not leader">not leading${retryMark}</span>`;
+        // Don't render anything: non-leaders are INSTRUCTED to leave the
+        // manifesto field empty in citizen.ail's prompt. Their stanza is
+        // valid; they just weren't holding the edit lock. Showing a red
+        // "rejected" chip here was reading as failure for normal behavior.
+        outcomeTag = "";
       } else if (outcome === "RejectedTooShort") {
         outcomeTag = ` · <span class="outcome-tag outcome-rejected" title="Manifesto edit rejected — too short">manifesto too short${retryMark}</span>`;
       }

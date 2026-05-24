@@ -152,6 +152,14 @@ export pure func leaderDominance(st: CommonsState) -> float = {
 export pure func requiredPreservation(st: CommonsState) -> float =
   0.6 * (1.0 - leaderDominance(st))
 
+-- wordCount — naive whitespace-split count; treats empty as 0.
+-- Used by JS to render "manifesto accepted — N words (+/- M vs prior)"
+-- in the chronicle chip so users see the size of each landed edit.
+export pure func wordCount(s: string) -> int = {
+  if length(s) == 0 then 0
+  else listLength(split(s, " "))
+}
+
 -- preservationRatio — fraction of unique words in `previous` that
 -- also appear in `proposed`. Asymmetric on purpose: we measure how
 -- much of the old text survived, not how similar the two strings
@@ -216,31 +224,36 @@ export pure func applyManifestoEdit(
     (result.outcome != Accepted) || (result.state.consensus_text == proposed_text)
   }
 {
-  if length(proposed_text) < 40 then {
+  -- Order matters for the user-visible chip: non-leaders are INSTRUCTED
+  -- to leave the manifesto field empty (citizen.ail tells them so in the
+  -- system prompt). Checking leadership first means non-leaders get
+  -- RejectedNotLeader instead of the misleading RejectedTooShort —
+  -- which the chronicle UI then hides entirely (expected behavior, not
+  -- a failure). Leaders who DO try get the targeted reason: TooShort
+  -- (didn't write enough) or TooDifferent (rewrote too much).
+  let leader = currentLeader(st);
+  if label(proposer) != label(leader) then {
+    state: st,
+    outcome: RejectedNotLeader
+  } else if length(proposed_text) < 40 then {
     state: st,
     outcome: RejectedTooShort
   } else {
-    let leader = currentLeader(st);
-    if label(proposer) != label(leader) then {
+    let required = requiredPreservation(st);
+    let preserved = preservationRatio(st.consensus_text, proposed_text);
+    if preserved < required then {
       state: st,
-      outcome: RejectedNotLeader
+      outcome: RejectedTooDifferent
     } else {
-      let required = requiredPreservation(st);
-      let preserved = preservationRatio(st.consensus_text, proposed_text);
-      if preserved < required then {
-        state: st,
-        outcome: RejectedTooDifferent
-      } else {
-        {
-          state: {
-            sentiment: st.sentiment,
-            consensus_text: proposed_text,
-            consensus_editor: label(proposer),
-            consensus_clock: clock,
-            utterance_count: st.utterance_count
-          },
-          outcome: Accepted
-        }
+      {
+        state: {
+          sentiment: st.sentiment,
+          consensus_text: proposed_text,
+          consensus_editor: label(proposer),
+          consensus_clock: clock,
+          utterance_count: st.utterance_count
+        },
+        outcome: Accepted
       }
     }
   }
