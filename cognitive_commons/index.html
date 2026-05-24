@@ -5090,6 +5090,14 @@
         els.activePersonaSelect.value = desired;
       }
       els.activePersonaSelect.setAttribute("data-p", app.persona || "");
+      // In Auto mode, the dropdown text used to read "Auto (from tab ID)"
+      // which left users guessing which persona they actually were. Bake
+      // the resolved persona into the option text so the visible chip
+      // reads "Auto · Archivist" instead.
+      const autoOpt = els.activePersonaSelect.querySelector('option[value="auto"]');
+      if (autoOpt && app.persona) {
+        autoOpt.textContent = `Auto · ${app.persona}`;
+      }
     }
     // Mirror the persona onto the strip itself so the colored left
     // border + faint background wash kick in — the "you are X" cue
