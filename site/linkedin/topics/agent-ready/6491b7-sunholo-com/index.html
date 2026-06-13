@@ -13,7 +13,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../ailang-logo.svg">
 <meta name="description" content="An AILANG sketch of sunholo.com — what an AI sees, where AILANG fits.">
 <meta property="og:title" content="AILANG × sunholo.com">
-<meta property="og:description" content="agent-ready sketch for sunholo.com — AI-readiness 5/10.">
+<meta property="og:description" content="agent-ready sketch for sunholo.com — AI-readiness 1/10.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
@@ -100,7 +100,17 @@
   .sk-readiness-num {
     color: var(--primary); font-family: var(--font-mono); font-weight: 700;
   }
-  .sk-domain { font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-input); padding: 1px 8px; border-radius: 4px; font-weight: 600; font-size: 0.92em; letter-spacing: 0.01em; }
+  /* Site domain emphasis in the §1 headline + §3 pretext. */
+  .sk-domain {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.92em;
+    letter-spacing: 0.01em;
+  }
   .sk-radar-text p { margin: 0 0 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
   .sk-rank-callout {
     display: inline-flex; align-items: center; gap: 10px;
@@ -153,6 +163,26 @@
     font-family: var(--font-mono); font-size: 12px;
     background: var(--bg-input); color: var(--text-secondary);
     padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
+  }
+  /* Anchor-link chips — clickable, with the AILANG accent colour. */
+  a.sk-chip-link {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary-faded);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  a.sk-chip-link::before {
+    content: "↗"; margin-right: 6px; opacity: 0.6;
+  }
+  a.sk-chip-link:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+  }
+  /* Page-skeleton chip — small coral count + section kind name. */
+  .sk-chip .sk-kind-count {
+    color: var(--primary); font-weight: 700;
+    margin-right: 5px;
+    font-variant-numeric: tabular-nums;
   }
   /* Extraction stats line at bottom of §2 (filled by step 4) */
   .sk-extract-stats {
@@ -303,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -318,13 +361,48 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.55; overflow-x: auto;
-    white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -336,7 +414,7 @@
     background: rgba(0,0,0,0.4); padding: 16px; border-radius: 8px;
     font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
     color: var(--ai-orange); margin: 0 0 20px;
-    overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin;
+    overflow-x: auto; white-space: pre;
   }
   .sk-guarantee ul.translations {
     list-style: none; padding: 0; margin: 0 0 20px;
@@ -414,7 +492,7 @@
     <div class="meta">
       <span><span class="sk-avatar"></span>MO</span>
       <span class="topic-tag">agent-ready</span>
-      <span>generated 2026-05-14</span>
+      <span>generated 2026-06-13</span>
     </div>
   </section>
 
@@ -433,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-50 25,15 -86,50"
+        <polygon points="0,-10 8,5 -60,35"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -442,23 +520,49 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">sunholo.com</span> scored <span class="sk-readiness-num">5/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
+        <h2><span class="sk-domain">sunholo.com</span> scored <span class="sk-readiness-num">1/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means sunholo.com is already strong there; low means AILANG could meaningfully help.</p>
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the agent-ready leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why agent-ready scored 5/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint.</li>
+    <div class="sk-why"><strong>Why agent-ready scored 1/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
 <li class="no">Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.</li>
 <li class="ok">Page references an MCP endpoint such as /mcp/ or /mcp/sse.</li>
-<li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+<li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li>
+<li class="no">Page mentions webhooks, callback URLs, or event subscriptions — the most agent-callable backend pattern.</li>
+<li class="no">Page documents rate limits, throttling, or 429 handling — agents need to know how to back off.</li>
+<li class="no">Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.</li>
+<li class="no">Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.</li>
+<li class="no">Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.</li>
+<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li>
+<li class="no">Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.</li>
+<li class="no">Page mentions x402 (Coinbase's signed crypto payment payloads) or Cloudflare's pay-per-crawl (crawler-price header for AI-crawler monetisation). Both revive HTTP 402 for agents — Cloudflare joined the x402 Foundation, so they're one umbrella signal.</li>
+<li class="no">Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.</li>
+<li class="no">Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on sunholo.com</p>
-    <h2 class="sk-prom-audience">Enterprise organizations and AI developers seeking production-grade infrastructure and document intelligence solutions.</h2>
-    <blockquote class="sk-prom-narrative">Sunholo provides enterprise AI engineering and infrastructure services focused on modularity and interoperability. Through its Multivac platform and AILANG programming language, the company offers tools for document parsing, agent orchestration, and verified AI execution, emphasizing production-ready systems that utilize emerging protocols like MCP and A2A to ensure technical longevity.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Multivac Platform</span> <span class="sk-chip">Model Context Protocol (MCP)</span> <span class="sk-chip">Agent-to-Agent (A2A)</span> <span class="sk-chip">AILANG Programming Language</span> <span class="sk-chip">RAG</span> <span class="sk-chip">Document Intelligence</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">10</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ai-engineer.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/ai-engineer.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ailang-logo.svg" target="_blank" rel="noopener" title="AILANG Logo"><img src="https://www.sunholo.com/ailang-logo.svg" alt="AILANG Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" target="_blank" rel="noopener" title="AILANG Parse - Universal Document Parsing"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" alt="AILANG Parse - Universal Document Parsing" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" target="_blank" rel="noopener" title="AILANG Parse"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" alt="AILANG Parse" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Services</span> <span class="sk-chip" title="list item">Case Studies</span> <span class="sk-chip" title="list item">Demos</span> <span class="sk-chip" title="list item">AILANG Parse</span> <span class="sk-chip" title="list item">Vision</span> <span class="sk-chip" title="list item">Talks</span> <span class="sk-chip" title="list item">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="list item">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="list item">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="list item">Production deployment and scaling</span> <span class="sk-chip" title="list item">Native MCP & A2A protocol support</span> <span class="sk-chip" title="list item">Event-driven microservice architecture</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+    <h2 class="sk-prom-audience">Enterprises seeking production-grade AI systems and document intelligence solutions.</h2>
+    <blockquote class="sk-prom-narrative">Sunholo provides enterprise AI engineering services and a platform (Multivac) using protocols like MCP and A2A for building interoperable systems. Their SaaS offering, AILANG Parse, extracts data directly from Office XML documents. They emphasize production deployment, code verification, and document processing optimizations.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">MCP (Model Context Protocol)</span> <span class="sk-chip">A2A (Agent-to-Agent Protocol)</span> <span class="sk-chip">AILANG</span> <span class="sk-chip">Multivac</span> <span class="sk-chip">OfficeDocBench</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on sunholo.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">37</span> headings</span><span class="stat"><span class="num">10</span> images</span><span class="stat"><span class="num">8</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">23</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">14</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">1</span> header</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">11</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">37</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">AI Systems Designed to Last</span> <span class="sk-chip" title="extracted heading">Our Services</span> <span class="sk-chip" title="extracted heading">AI Engineering</span> <span class="sk-chip" title="extracted heading">Your AI Platform</span> <span class="sk-chip" title="extracted heading">AILANG: Trustworthy AI Code</span> <span class="sk-chip" title="extracted heading"> The Protocol Revolution</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">10</span> images</p><div class="sk-img-strip"><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ai-engineer.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/ai-engineer.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/sunholo-logo.svg" target="_blank" rel="noopener" title="Sunholo Logo"><img src="https://www.sunholo.com/sunholo-logo.svg" alt="Sunholo Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/ailang-logo.svg" target="_blank" rel="noopener" title="AILANG Logo"><img src="https://www.sunholo.com/ailang-logo.svg" alt="AILANG Logo" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" target="_blank" rel="noopener" title="AILANG Parse - Universal Document Parsing"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-hero.svg" alt="AILANG Parse - Universal Document Parsing" loading="lazy"></a><a class="sk-img-thumb" href="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" target="_blank" rel="noopener" title="AILANG Parse"><img src="https://www.sunholo.com/images/case-studies/ailang-parse-logo.svg" alt="AILANG Parse" loading="lazy"></a></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">8</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Services">Services</span> <span class="sk-chip" title="Case Studies">Case Studies</span> <span class="sk-chip" title="Demos">Demos</span> <span class="sk-chip" title="AILANG Parse">AILANG Parse</span> <span class="sk-chip" title="Vision">Vision</span> <span class="sk-chip" title="Talks">Talks</span> <span class="sk-chip" title="Agentic AI: orchestration, cognitive architecture, tool use">Agentic AI: orchestration, cognitive architecture, tool use</span> <span class="sk-chip" title="Protocol integration: MCP, A2A, OpenAPI">Protocol integration: MCP, A2A, OpenAPI</span> <span class="sk-chip" title="Multi-model: Claude, Gemini, GPT, and open-source">Multi-model: Claude, Gemini, GPT, and open-source</span> <span class="sk-chip" title="Production deployment and scaling">Production deployment and scaling</span> <span class="sk-chip" title="Native MCP & A2A protocol support">Native MCP & A2A protocol support</span> <span class="sk-chip" title="Event-driven microservice architecture">Event-driven microservice architecture</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">23</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://www.sunholo.com/index.html" target="_blank" rel="noopener" title="https://www.sunholo.com/index.html">Sunholo</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/ailang-parse/" target="_blank" rel="noopener" title="https://www.sunholo.com/ailang-parse/">Try it free</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/ai-engineering.html" target="_blank" rel="noopener" title="https://www.sunholo.com/ai-engineering.html">Learn More</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/ai-platform.html" target="_blank" rel="noopener" title="https://www.sunholo.com/ai-platform.html">Learn More</a> <a class="sk-chip sk-chip-link" href="https://ailang.sunholo.com" target="_blank" rel="noopener" title="https://ailang.sunholo.com">Try AILANG</a> <a class="sk-chip sk-chip-link" href="https://storage.googleapis.com/sunholo-public-podcasts/The_Protocol_Wars__Why_Your_Custom_AI_Is_Failing_and_How_New_St.mp4" target="_blank" rel="noopener" title="https://storage.googleapis.com/sunholo-public-podcasts/The_Protocol_Wars__Why_Your_Custom_AI_Is_Failing_and_How_New_St.mp4">Listen to Podcast</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/case-study-ailang-parse.html" target="_blank" rel="noopener" title="https://www.sunholo.com/case-study-ailang-parse.html">AILANG Parse
+SaaSDocument AI
+AILANG's First SaaS: Universal Document Parsing
+Stop parsing photos of your documents. Read Office XML directly -- track changes, merged cells, and comments preserved. Free in-browser demo, no account required.
+ 93.9% OfficeDocBench Free in-browser</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/case-study-aitana.html" target="_blank" rel="noopener" title="https://www.sunholo.com/case-study-aitana.html">Aitana
+Legal TechGreen Energy
+AI Platform for Green Energy Legal Work
+Reduced contract research time from weeks to days with extreme RAG capabilities and multi-channel AI assistants.
+ Weeks → Days Higher Quality</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/case-study-enterprise-ai.html" target="_blank" rel="noopener" title="https://www.sunholo.com/case-study-enterprise-ai.html">Global Manufacturer
+Enterprise AIManufacturing
+Enterprise AI Platform: Chatbot to Production in 16 Weeks
+AI assistant with Microsoft 365 integration and multi-model intelligence -- serving 12,000+ employees across 40+ countries.
+ 16 Weeks 12,000+ Staff</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/case-study-document-processing.html" target="_blank" rel="noopener" title="https://www.sunholo.com/case-study-document-processing.html">Document Extraction at Scale
+Document AIAutomation
+Document Processing: 48x Faster
+Optimized pipeline reduced processing from 16 hours to 20 minutes with improved accuracy.
+ 48x Faster 10x Savings</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/ailang-demos/extractor.html" target="_blank" rel="noopener" title="https://www.sunholo.com/ailang-demos/extractor.html">Document Extractor</a> <a class="sk-chip sk-chip-link" href="https://www.sunholo.com/ailang-demos/docparse.html" target="_blank" rel="noopener" title="https://www.sunholo.com/ailang-demos/docparse.html">DocParse</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 [Image: Sunholo Logo]
 
@@ -856,19 +960,19 @@ LinkedIn
   <!-- ─── §3 AILANG × your business ─── -->
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
-    <p class="sk-score-pretext"><span class="sk-domain">sunholo.com</span> scored <strong>5/10</strong> on agent-ready. AILANG opportunity is therefore <strong>5/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
+    <p class="sk-score-pretext"><span class="sk-domain">sunholo.com</span> scored <strong>1/10</strong> on agent-ready. AILANG opportunity is therefore <strong>9/10</strong>. Here's where it would land first.</p>
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
   pricing.ail catalogue.ail
--- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre></article>
-<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
-  requires { qty > 0, qty <= 10 }
-  ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre></article>
-<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
--- MCP client query the language directly:
---   stdlib_search "URL encoding"
---   submit_feedback "..."</pre></article></div>
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -887,14 +991,29 @@ LinkedIn
     <div class="sk-breakdown open" id="sk-breakdown">
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
-        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
-<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
+<tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
+<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
+<tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
+<tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
+<tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
+<tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
 <tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
+<tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
+<tr><td>Cross-runtime / deployment portability</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change</td></tr>
+<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
         </tbody>
       </table>
     </div>
