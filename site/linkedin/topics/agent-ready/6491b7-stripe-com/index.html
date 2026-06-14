@@ -100,7 +100,17 @@
   .sk-readiness-num {
     color: var(--primary); font-family: var(--font-mono); font-weight: 700;
   }
-  .sk-domain { font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-input); padding: 1px 8px; border-radius: 4px; font-weight: 600; font-size: 0.92em; letter-spacing: 0.01em; }
+  /* Site domain emphasis in the §1 headline + §3 pretext. */
+  .sk-domain {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: var(--bg-input);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.92em;
+    letter-spacing: 0.01em;
+  }
   .sk-radar-text p { margin: 0 0 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.55; }
   .sk-rank-callout {
     display: inline-flex; align-items: center; gap: 10px;
@@ -153,6 +163,26 @@
     font-family: var(--font-mono); font-size: 12px;
     background: var(--bg-input); color: var(--text-secondary);
     padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border);
+  }
+  /* Anchor-link chips — clickable, with the AILANG accent colour. */
+  a.sk-chip-link {
+    text-decoration: none;
+    color: var(--primary);
+    border-color: var(--primary-faded);
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  a.sk-chip-link::before {
+    content: "↗"; margin-right: 6px; opacity: 0.6;
+  }
+  a.sk-chip-link:hover {
+    background: var(--primary-faded);
+    border-color: var(--primary);
+  }
+  /* Page-skeleton chip — small coral count + section kind name. */
+  .sk-chip .sk-kind-count {
+    color: var(--primary); font-weight: 700;
+    margin-right: 5px;
+    font-variant-numeric: tabular-nums;
   }
   /* Extraction stats line at bottom of §2 (filled by step 4) */
   .sk-extract-stats {
@@ -303,14 +333,27 @@
     font-size: 14px; color: var(--text-secondary);
   }
   .sk-score-pretext strong { color: var(--text-primary); font-weight: 600; }
-  .sk-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 720px) { .sk-cards { grid-template-columns: 1fr; } }
+  /* Single-column stack so the code blocks have full width and don't
+     have to wrap awkwardly. Three cards per topic — vertical scroll
+     is fine. */
+  .sk-cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .sk-card {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 22px;
-    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px; padding: 24px 26px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: 18px 28px;
+    align-items: start;
     min-width: 0;
   }
+  /* On narrower screens drop the side-by-side and stack rationale
+     over the code block. */
+  @media (max-width: 720px) {
+    .sk-card { grid-template-columns: 1fr; padding: 20px 20px; gap: 14px; }
+  }
+  /* The h3 spans both columns at the top. */
+  .sk-card h3 { grid-column: 1 / -1; }
+  .sk-card .sk-card-docs { grid-column: 1 / -1; }
   .sk-card pre { min-width: 0; max-width: 100%; }
   .sk-card h3 {
     margin: 0; font-size: 16px; font-weight: 700;
@@ -318,13 +361,48 @@
   }
   .sk-card .rationale { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
   .sk-card pre {
-    margin: 0; padding: 14px;
+    margin: 0; padding: 12px 14px;
     background: var(--bg-code); color: #e2e8f0;
     border-radius: 8px;
-    font-family: var(--font-mono); font-size: 12px;
-    line-height: 1.55; overflow-x: auto;
-    white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin;
+    font-family: var(--font-mono); font-size: 11.5px;
+    line-height: 1.55;
+    /* Wrap long lines so nothing gets visually clipped in narrow cards.
+       pre-wrap preserves indentation; overflow-wrap: anywhere is the
+       gentlest "wrap inside a token" rule — only kicks in when a single
+       token (like a quoted vendor/model string) would itself overflow. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    /* Belt-and-braces: if the engine still can't wrap something, scroll
+       horizontally rather than visually crop. */
+    overflow-x: auto;
+    /* Visible thin scrollbar on macOS/WebKit when overflow does occur. */
+    scrollbar-width: thin;
   }
+  .sk-card pre::-webkit-scrollbar { height: 5px; }
+  .sk-card pre::-webkit-scrollbar-thumb { background: rgba(231,60,23,0.45); border-radius: 3px; }
+  .sk-card pre code { background: transparent; padding: 0; color: inherit; }
+  /* Inline syntax highlighting — mirrors the homepage `.ll-code` palette
+     so the sketch's primitive snippets read with the same colour grammar
+     as the demo's headline code blocks. Token classes are emitted by
+     sketch_features.ail directly into the code string. */
+  .sk-card pre .k { color: #93c5fd; }                       /* keyword */
+  .sk-card pre .c { color: #94a3b8; font-style: italic; }   /* comment */
+  .sk-card pre .s { color: #fcd34d; }                       /* string  */
+  .sk-card pre .e { color: #f97316; font-weight: 600; }     /* effect / flag */
+  /* Deep-link into AILANG docs for this primitive — bottom-right of
+     each card so readers can dig past the snippet. */
+  .sk-card-docs {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+    color: var(--primary); text-decoration: none;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    border-bottom: 1px solid rgba(231, 60, 23, 0.30);
+    padding-bottom: 1px;
+    justify-self: end;
+    transition: border-color 0.15s;
+  }
+  .sk-card-docs:hover { border-bottom-color: var(--primary); }
 
   /* ─── §4 Guarantee panel ─── */
   .sk-guarantee {
@@ -336,7 +414,7 @@
     background: rgba(0,0,0,0.4); padding: 16px; border-radius: 8px;
     font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
     color: var(--ai-orange); margin: 0 0 20px;
-    overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin;
+    overflow-x: auto; white-space: pre;
   }
   .sk-guarantee ul.translations {
     list-style: none; padding: 0; margin: 0 0 20px;
@@ -414,7 +492,7 @@
     <div class="meta">
       <span><span class="sk-avatar"></span>MO</span>
       <span class="topic-tag">agent-ready</span>
-      <span>generated 2026-05-14</span>
+      <span>generated 2026-06-14</span>
     </div>
   </section>
 
@@ -433,7 +511,7 @@
         <line x1="0" y1="0" x2="86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <line x1="0" y1="0" x2="-86.6" y2="50" stroke="var(--sketch-radar-axis)" stroke-width="0.5"/>
         <!-- Data polygon (populated by renderer) -->
-        <polygon points="0,-20 8,5 -86,50"
+        <polygon points="0,-20 0,0 -43,25"
                  fill="rgba(231, 60, 23, 0.18)" stroke="var(--primary)" stroke-width="1.5"/>
         <!-- Axis labels at radius ~112. Widened viewBox accommodates the
              full label widths ("portable", "agent-ready"). -->
@@ -442,27 +520,43 @@
         <text x="-98" y="62" text-anchor="end" dominant-baseline="hanging" font-family="JetBrains Mono" font-size="11" fill="var(--text-secondary)">portable</text>
       </svg>
       <div class="sk-radar-text">
-        <h2><span class="sk-domain">stripe.com</span> scored <span class="sk-readiness-num">2/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means you're already strong in that area; low means AILANG could meaningfully help.</p>
+        <h2><span class="sk-domain">stripe.com</span> scored <span class="sk-readiness-num">2/10</span> on agent-ready.</h2><p>The radar shows AILANG-readiness across three commercial concerns. High means stripe.com is already strong there; low means AILANG could meaningfully help.</p>
         <div class="sk-rank-callout" hidden id="sk-rank-callout"><span>Your rank on the agent-ready leaderboard:</span><span class="rank-num" id="sk-rank-num">#…</span><a href="../">view leaderboard ↗</a></div>
       </div>
     </div>
-    <div class="sk-why"><strong>Why agent-ready scored 2/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint.</li>
+    <div class="sk-why"><strong>Why agent-ready scored 2/10</strong><ul><li class="no">Page references /.well-known/agent.json — the A2A agent card discovery endpoint. Worth only 1pt: it's bleeding-edge (A2A protocol new in 2026), no commercial site has adopted it yet — keep it as a moonshot bonus, not a baseline expectation.</li>
 <li class="no">Page references /openapi.json, /openapi.yaml, or an OpenAPI schema URL.</li>
 <li class="no">Page references an MCP endpoint such as /mcp/ or /mcp/sse.</li>
-<li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
+<li class="ok">Page links to public API documentation, Swagger UI, or ReDoc.</li>
+<li class="no">Page mentions webhooks, callback URLs, or event subscriptions — the most agent-callable backend pattern.</li>
+<li class="ok">Page documents rate limits, throttling, or 429 handling — agents need to know how to back off.</li>
+<li class="no">Page references Server-Sent Events, text/event-stream, or a streaming endpoint — agents that read incrementally land here.</li>
+<li class="no">Page mentions a sandbox, test mode, or test environment — lets agents practise against fake state before touching production.</li>
+<li class="ok">Page documents OAuth, JWT, bearer tokens, API keys, or access tokens — agents can't call the API without knowing how to authenticate.</li>
+<li class="no">Page mentions idempotency, idempotency-key, or idempotent requests — agents need this to retry safely.</li>
+<li class="no">Page mentions AG-UI (Agent-User Interaction Protocol) — streams 16 typed lifecycle/text/tool/state events from agent backend to frontend over SSE or WebSocket.</li>
+<li class="no">Page mentions x402 (Coinbase's signed crypto payment payloads) or Cloudflare's pay-per-crawl (crawler-price header for AI-crawler monetisation). Both revive HTTP 402 for agents — Cloudflare joined the x402 Foundation, so they're one umbrella signal.</li>
+<li class="no">Page mentions AP2 (Agent Payments Protocol) — Google + Mastercard + 60 orgs. Cryptographically signed Mandates (Intent + Cart) authorise agents to spend on a user's behalf with price/timing/condition bounds.</li>
+<li class="no">Page mentions UTCP (Universal Tool Calling Protocol) — MCP alternative. Tools described in a JSON UTCPManual, called via their native protocols (HTTP/gRPC/CLI).</li></ul><p style="margin: 10px 0 0;"><a href="#sk-breakdown">Full breakdown ↓</a> · <a href="https://github.com/sunholo-data/ailang-demos/blob/main/linkedin/design/scoring-rubric.md">View rubric ↗</a></p></div>
   </section>
 
   <!-- ─── §2 What an AI sees (promoted) ─── -->
   <section class="sk-section sk-prom">
     <p class="sk-section-label">§2 · what an AI sees on stripe.com</p>
-    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to enterprises, seeking financial infrastructure and payment processing.</h2>
-    <blockquote class="sk-prom-narrative">Stripe provides financial infrastructure that enables businesses to accept payments, manage subscriptions, and provide embedded commerce services. It supports global operations with tools for tax compliance, fraud prevention, and business incorporation, catering to agile startups and large-scale enterprises across 135+ currencies.</blockquote>
-    <div class="sk-chips"><span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">Payment gateway</span> <span class="sk-chip">Stripe Connect</span> <span class="sk-chip">Stripe Billing</span> <span class="sk-chip">API</span> <span class="sk-chip">Merchant account</span></div>
-    <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">39</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">39</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="list item">Products</span> <span class="sk-chip" title="list item">Solutions</span> <span class="sk-chip" title="list item">Developers</span> <span class="sk-chip" title="list item">Resources</span> <span class="sk-chip" title="list item">Pricing</span> <span class="sk-chip" title="list item">Sign in</span> <span class="sk-chip" title="list item">Sign inSign in</span> <span class="sk-chip" title="list item">Contact sales</span> <span class="sk-chip" title="list item">Lovable grows into a vibe-coding juggernaut with Stripe.
-Read Lovable's story</span> <span class="sk-chip" title="list item">Runway protects developer time with no-code solutions from Stripe.
-Read Runway's story</span> <span class="sk-chip" title="list item">Supabase delivers its backend-as-a-service to 150 countries with Stripe.
-Read Supabase's story</span> <span class="sk-chip" title="list item">Linear partners with Stripe to handle billing and payments.
-Read Linear's story</span></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
+    <h2 class="sk-prom-audience">Businesses of all sizes, from startups to enterprises, looking to manage payments and financial operations.</h2>
+    <blockquote class="sk-prom-narrative">Stripe provides financial infrastructure to grow revenue by accepting payments, offering financial services, and implementing custom revenue models. It supports businesses of all sizes with tools for online and in-person transactions, global currencies, and scalable billing for various business models, including AI applications and SaaS platforms.</blockquote>
+    <div class="sk-chips"><span class="sk-chip">Payments</span> <span class="sk-chip">Financial infrastructure</span> <span class="sk-chip">Billing</span> <span class="sk-chip">Stablecoins</span> <span class="sk-chip">Crypto</span> <span class="sk-chip">SaaS platforms</span></div>
+    <div class="sk-extract-header"><h3>What AILANG Parse sees on stripe.com</h3><p>Structural extraction — the same content an AI agent would consume from this page.</p></div><div class="sk-extract-stats"><span class="stat"><span class="num">39</span> headings</span><span class="stat"><span class="num">0</span> images</span><span class="stat"><span class="num">4</span> lists</span><span class="stat"><span class="num">0</span> tables</span><span class="stat"><span class="num">105</span> links</span><span class="path path-docparse">HTML parsing by <a href="https://www.sunholo.com/ailang-parse" target="_blank" rel="noopener">AILANG Parse</a></span></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">23</span> sections — page skeleton</p><div class="sk-chips"><span class="sk-chip" title="section.kind = header"><span class="sk-kind-count">5</span> headers</span> <span class="sk-chip" title="section.kind = nav"><span class="sk-kind-count">1</span> nav</span> <span class="sk-chip" title="section.kind = main"><span class="sk-kind-count">1</span> main</span> <span class="sk-chip" title="section.kind = section"><span class="sk-kind-count">15</span> sections</span> <span class="sk-chip" title="section.kind = footer"><span class="sk-kind-count">1</span> footer</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">39</span> headings</p><div class="sk-chips"><span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services, and implement custom revenue models—from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Financial infrastructure to grow your revenue.Accept payments, offer financial services, and implement custom revenue models—from your first transaction to your billionth.</span> <span class="sk-chip" title="extracted heading">Flexible solutions for every business model.</span> <span class="sk-chip" title="extracted heading">The backbone of global commerce</span> <span class="sk-chip" title="extracted heading">Powering businesses of all sizes.</span> <span class="sk-chip" title="extracted heading">Transform your enterprise with agile financial infrastructure</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">4</span> list items</p><div class="sk-chips"><span class="sk-chip" title="Products">Products</span> <span class="sk-chip" title="Solutions">Solutions</span> <span class="sk-chip" title="Developers">Developers</span> <span class="sk-chip" title="Resources">Resources</span> <span class="sk-chip" title="Pricing">Pricing</span> <span class="sk-chip" title="Sign in">Sign in</span> <span class="sk-chip" title="Sign inSign in">Sign inSign in</span> <span class="sk-chip" title="Contact sales">Contact sales</span> <span class="sk-chip" title="Lovable grows into a vibe-coding juggernaut with Stripe.
+Read Lovable’s story">Lovable grows into a vibe-coding juggernaut with Stripe.
+Read Lovable’s story</span> <span class="sk-chip" title="Runway protects developer time with no-code solutions from Stripe.
+Read Runway’s story">Runway protects developer time with no-code solutions from Stripe.
+Read Runway’s story</span> <span class="sk-chip" title="Supabase delivers its backend-as-a-service to 150 countries with Stripe.
+Read Supabase’s story">Supabase delivers its backend-as-a-service to 150 countries with Stripe.
+Read Supabase’s …</span> <span class="sk-chip" title="Linear partners with Stripe to handle billing and payments.
+Read Linear’s story">Linear partners with Stripe to handle billing and payments.
+Read Linear’s story</span></div></div><div class="sk-extract-row"><p class="sk-extract-row-label"><span class="num">105</span> links</p><div class="sk-chips"><a class="sk-chip sk-chip-link" href="https://dashboard.stripe.com/login/oauth/google/init" target="_blank" rel="noopener" title="https://dashboard.stripe.com/login/oauth/google/init">Sign up with Google</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/sessions/2026?utm_medium=owned-surfaces&utm_source=9cb9&utm_campaign=GLOBAL_4301&utm_content=8a70&utm_term=5a728d3d167c" target="_blank" rel="noopener" title="https://stripe.com/sessions/2026?utm_medium=owned-surfaces&utm_source=9cb9&utm_campaign=GLOBAL_4301&utm_content=8a70&utm_term=5a728d3d167c">Watch now</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/hertz" target="_blank" rel="noopener" title="https://stripe.com/customers/hertz">Read the story</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/urbn" target="_blank" rel="noopener" title="https://stripe.com/customers/urbn">Read the story</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/instacart" target="_blank" rel="noopener" title="https://stripe.com/customers/instacart">Read the story</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/le-monde" target="_blank" rel="noopener" title="https://stripe.com/customers/le-monde">Read the story</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/startups#application" target="_blank" rel="noopener" title="https://stripe.com/startups#application">Stripe Startups program.
+Access financial benefits, a focused community, and expert resources to help you grow your business.
+Apply now</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/guides/best-practices-for-launching-and-scaling-platform-payments" target="_blank" rel="noopener" title="https://stripe.com/guides/best-practices-for-launching-and-scaling-platform-payments">Read the guide</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/guides/introduction-to-monetizing-payments" target="_blank" rel="noopener" title="https://stripe.com/guides/introduction-to-monetizing-payments">Read the guide</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/guides/introduction-to-risk-management" target="_blank" rel="noopener" title="https://stripe.com/guides/introduction-to-risk-management">Read the guide</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/mindbody" target="_blank" rel="noopener" title="https://stripe.com/customers/mindbody">Read the story</a> <a class="sk-chip sk-chip-link" href="https://stripe.com/customers/jobber" target="_blank" rel="noopener" title="https://stripe.com/customers/jobber">Read the story</a></div></div><details class="sk-extract-details"><summary>Show the full extract — what AILANG Parse pulled from this page</summary><pre class="sk-extract-md">
 *Header:*
 - Products
 - Solutions
@@ -473,7 +567,7 @@ Read Linear's story</span></div></div><details class="sk-extract-details"><summa
 
 [Start now](https://dashboard.stripe.com/register)
 
-[Contact sales](/en-dk/contact/sales)
+[Contact sales](/contact/sales)
 
 Back
 
@@ -482,9 +576,9 @@ Back
 
 Global GDP running on Stripe:
 
-# Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.
+# Financial infrastructure to grow your revenue.Accept payments, offer financial services, and implement custom revenue models—from your first transaction to your billionth.
 
-# Financial infrastructure to grow your revenue.Accept payments, offer financial services and implement custom revenue models – from your first transaction to your billionth.
+# Financial infrastructure to grow your revenue.Accept payments, offer financial services, and implement custom revenue models—from your first transaction to your billionth.
 
 [Get started](https://dashboard.stripe.com/register)
 
@@ -492,11 +586,11 @@ Global GDP running on Stripe:
 
 ## Flexible solutions for every business model.
 
-Grow your business with a comprehensive set of payments and financial tools⁠ – designed to work individually or together.
+Grow your business with a comprehensive set of payments and financial tools⁠—⁠designed to work individually or together.
 
 Grow your business with the most comprehensive set of payments and financial tools.
 
-Accept and optimise payments globally – online and in person
+Accept and optimize payments globally—online and in person
 
 Enable any billing model
 
@@ -504,51 +598,23 @@ Pro Plan
 Billed monthly
 
 Tokens
-DKK 0.07 per 1,000 units
+$0.01 per 1,000 units
 
 Usage meter
 
 Tokens used in the last 30 days
 
-Monetise through agentic commerce
+Monetize through agentic commerce
 
-Create a card issuing programme
+Create a card issuing program
 
 Access borderless money movement with stablecoins and crypto
 
 Embed payments in your platform
 
-The internet economy conference
+Building the economic infrastructure for AI
 
-[Watch on demand](https://stripe.com/sessions/2026?utm_medium=owned-surfaces&amp;utm_source=9cb9&amp;utm_campaign=GLOBAL_4301&amp;utm_content=8a70&amp;utm_term=5a728d3d167c)
-
-Patrick
-Collison
-
-Stripe
-
-Co-founder and CEO
-
-Kate
-Royer
-
-Shopify
-
-Chief of Staff
-
-Ginger
-Baker
-
-Meta
-
-VP, Product Management, Fintech and Payments
-
-John
-Collison
-
-Stripe
-
-Co-founder and President
+[Watch now](https://stripe.com/sessions/2026?utm_medium=owned-surfaces&amp;utm_source=9cb9&amp;utm_campaign=GLOBAL_4301&amp;utm_content=8a70&amp;utm_term=5a728d3d167c)
 
 ## The backbone of global commerce
 
@@ -556,7 +622,7 @@ Co-founder and President
 
 currencies and payment methods supported
 
-US$1.9tn
+$1.9T
 
 in payments volume processed in 2025
 
@@ -572,7 +638,7 @@ active subscriptions managed on Stripe Billing
 
 currencies and payment methods supported
 
-US$1.9tn
+$1.9T
 
 in payments volume processed in 2025
 
@@ -591,13 +657,13 @@ Run your business on a reliable platform that adapts to your needs.
 *Header:*
 ### Transform your enterprise with agile financial infrastructure
 
-[Stripe for enterprises](/en-dk/enterprise)
+[Stripe for enterprises](/enterprise)
 
-50% of Fortune 100 companies have used Stripe to grow their businesses – from expanding internationally to reimagining the customer experience.
+50% of Fortune 100 companies have used Stripe to grow their businesses—from expanding internationally to reimagining the customer experience.
 
 Hertz unifies commerce with Stripe.
 
-[Read the story](/en-dk/customers/hertz)
+[Read the story](/customers/hertz)
 
 160
 
@@ -609,13 +675,13 @@ locations globally
 
 Products used
 
-Payments, Terminal, Connect, Radar and Stripe Sigma
+Payments, Terminal, Connect, Radar, and Stripe Sigma
 
-[Read the story](/en-dk/customers/hertz)
+[Read the story](/customers/hertz)
 
 URBN consolidates $5 billion in online and in-store revenue onto Stripe.
 
-[Read the story](/en-dk/customers/urbn)
+[Read the story](/customers/urbn)
 
 5+
 
@@ -627,13 +693,13 @@ store locations
 
 Products used
 
-Payments, Terminal, Connect, Stripe Sigma, Radar and Link
+Payments, Terminal, Connect, Stripe Sigma, Radar, and Link
 
-[Read the story](/en-dk/customers/urbn)
+[Read the story](/customers/urbn)
 
 Instacart powers online grocery delivery with Stripe.
 
-[Read the story](/en-dk/customers/instacart)
+[Read the story](/customers/instacart)
 
 600K+
 
@@ -645,13 +711,13 @@ retail partners across nearly 100K stores
 
 Products used
 
-Payments, Connect, Data Pipeline and Issuing
+Payments, Connect, Data Pipeline, and Issuing
 
-[Read the story](/en-dk/customers/instacart)
+[Read the story](/customers/instacart)
 
 Le Monde improves local and international payments with Stripe.
 
-[Read the story](/en-dk/customers/le-monde)
+[Read the story](/customers/le-monde)
 
 100%
 
@@ -663,61 +729,61 @@ to implement and go live
 
 Products used
 
-Payments, Stripe Sigma and Radar
+Payments, Stripe Sigma, and Radar
 
-[Read the story](/en-dk/customers/le-monde)
+[Read the story](/customers/le-monde)
 
-Realise value faster with dedicated experts
+Realize value faster with dedicated experts
 
 #### Professional services.
 
 Get tailored guidance from Stripe on implementation, complex integrations, or major migrations.
 
-[View services](/en-dk/professional-services)
+[View services](/professional-services)
 
 #### Stripe-certified experts.
 
 Work with a Stripe consulting partner that can integrate and deploy Stripe solutions on your behalf.
 
-[View partners](/en-dk/partners)
+[View partners](/partners)
 
 #### Support plans.
 
 Receive ongoing assistance and day-to-day support for technical questions with tiered plans based on your needs.
 
-[View plans](/en-dk/support-plans)
+[View plans](/support-plans)
 
 *Header:*
 ### Build a foundation for your startup that enables faster growth
 
-[Stripe for startups](/en-dk/startups)
+[Stripe for startups](/startups)
 
-From stablecoin pioneers to 78% of the Forbes AI 50, Stripe helps startups build what's next on easy-to-integrate financial infrastructure.
+From stablecoin pioneers to 78% of the Forbes AI 50, Stripe helps startups build what’s next on easy-to-integrate financial infrastructure.
 
 - Lovable grows into a vibe-coding juggernaut with Stripe.
-Read Lovable's story
+Read Lovable’s story
 - Runway protects developer time with no-code solutions from Stripe.
-Read Runway's story
+Read Runway’s story
 - Supabase delivers its backend-as-a-service to 150 countries with Stripe.
-Read Supabase's story
+Read Supabase’s story
 - Linear partners with Stripe to handle billing and payments.
-Read Linear's story
-- ElevenLabs grows into a US$3bn AI audio leader with Stripe.
+Read Linear’s story
+- ElevenLabs grows into a $3B AI audio leader with Stripe.
 Watch the video
 - Browserbase offers usage-based billing for an AI agent browser with Stripe.
-Read Browserbase's story
+Read Browserbase’s story
 - Decagon decreases support costs by 65% with Stripe-integrated agents.
-Read Decagon's story
+Read Decagon’s story
 
-#### Stripe Startups programme.
+#### Stripe Startups program.
 
 Access financial benefits, a focused community, and expert resources to help you grow your business.
 
 Apply now
 
-[Stripe Startups programme.
+[Stripe Startups program.
 Access financial benefits, a focused community, and expert resources to help you grow your business.
-Apply now](/en-dk/startups#application)
+Apply now](/startups#application)
 
 #### Stripe Atlas.
 
@@ -727,12 +793,12 @@ Start your company
 
 [Stripe Atlas.
 Incorporate and get everything you need to fundraise, bank, and accept payments in two business days.
-Start your company](/en-dk/atlas)
+Start your company](/atlas)
 
 *Header:*
 ### Make your SaaS platform a complete financial operating system
 
-[Stripe for platforms](/en-dk/use-cases/platforms)
+[Stripe for platforms](/use-cases/platforms)
 
 From the Fortune 100 to the Forbes Cloud 100, vertical SaaS platforms use Stripe to expand their product offerings with embedded payments and financial services.
 
@@ -740,27 +806,27 @@ From the Fortune 100 to the Forbes Cloud 100, vertical SaaS platforms use Stripe
 
 Launch and scale payments products with lower operational overhead using embedded components and no-code tools.
 
-[Read the guide](/en-dk/guides/best-practices-for-launching-and-scaling-platform-payments)
+[Read the guide](/guides/best-practices-for-launching-and-scaling-platform-payments)
 
 #### Grow new lines of revenue.
 
-Monetise platform transactions – including payments, card interchange and financing fees.
+Monetize platform transactions—including payments, card interchange, and financing fees.
 
-[Read the guide](/en-dk/guides/introduction-to-monetizing-payments)
+[Read the guide](/guides/introduction-to-monetizing-payments)
 
 #### Manage platform risk.
 
-Stay ahead of global regulations with tools for compliance, credit risk, fraud prevention and account security.
+Stay ahead of global regulations with tools for compliance, credit risk, fraud prevention, and account security.
 
-[Read the guide](/en-dk/guides/introduction-to-risk-management)
+[Read the guide](/guides/introduction-to-risk-management)
 
-With Stripe, we have a global technology partner to help our customers – from Canadian yoga studios to British boxing classes – keep growing and evolving in a new wellness world.
+With Stripe, we have a global technology partner to help our customers—from Canadian yoga studios to British boxing classes—keep growing and evolving in a new wellness world.
 
 Kurtis Moyer,
 
 Lead Product Manager of Payments, Mindbody
 
-[Read the story](/en-dk/customers/mindbody)
+[Read the story](/customers/mindbody)
 
 Without Stripe, it would have taken significant time and engineering effort to offer these resources to our customers. The financial infrastructure Stripe offers is incredibly valuable to Jobber, and we look forward to seeing what comes next.
 
@@ -768,7 +834,7 @@ Laura Collinson,
 
 Director of Fintech, Jobber
 
-[Read the story](/en-dk/customers/jobber)
+[Read the story](/customers/jobber)
 
 Stripe makes the subscriptions and payment piece really easy for everyone involved. And that helps us make it easy for writers and other creators to do the work they want to do on Substack and get paid for it.
 
@@ -776,7 +842,7 @@ Seth McMillan,
 
 Engineering Manager, Substack
 
-[Read the story](/en-dk/customers/substack)
+[Read the story](/customers/substack)
 
 Stripe offers an enterprise-grade infrastructure that puts our customers on the cutting edge of modern payments technology. The combination of Terminal and Connect is a powerful integrated solution.
 
@@ -784,7 +850,7 @@ Dax Dasilva,
 
 Founder and CEO, Lightspeed
 
-[Read the story](/en-dk/customers/lightspeed-terminal)
+[Read the story](/customers/lightspeed-terminal)
 
 ## Reliable, extensible infrastructure for every stack.
 
@@ -792,11 +858,11 @@ Adapt Stripe to your business needs with flexible integration options.
 
 [View developer docs](https://docs.stripe.com/development)
 
-[View Stripe's GitHub](https://github.com/stripe)
+[View Stripe’s GitHub](https://github.com/stripe)
 
 ### Connect to existing systems.
 
-Orchestrate payments across multiple processors, build custom workflows, and connect to third parties using APIs, partner apps or pre-built integrations.
+Orchestrate payments across multiple processors, build custom workflows, and connect to third parties using APIs, partner apps, or prebuilt integrations.
 
 ### Scale with confidence.
 
@@ -818,9 +884,9 @@ transactions per minute
 
 With AI-powered support, rich documentation, and built-in debugging tools, you can quickly get started with the best option for your business.
 
-#### Don't code?
+#### Don’t code?
 
-Set up billing, take in-person payments, or share a payment link – right from the Stripe Dashboard, no code required.
+Set up billing, take in-person payments, or share a payment link—right from the Stripe Dashboard, no code required.
 
 [Explore no-code](https://docs.stripe.com/no-code)
 
@@ -832,34 +898,34 @@ Browse our directory of platforms that integrate Stripe with website-building to
 
 #### Build your own integration.
 
-Use our SDKs, APIs, MCP server and AI developer tools to build and maintain your own integration with Stripe.
+Use our SDKs, APIs, MCP server, and AI developer tools to build and maintain your own integration with Stripe.
 
 [Get started](https://docs.stripe.com/development)
 
 *Header:*
-## What's happening
+## What’s happening
 
 See the latest from Stripe.
 
-### Businesses on Stripe generated US$1.9tn in 2025.
+### Businesses on Stripe generated $1.9T in 2025.
 
-Our annual letter explores the trends defining the internet economy – including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.
+Our annual letter explores the trends defining the internet economy—including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.
 
-[Read the letter](/en-dk/annual-updates/2025)
+[Read the letter](/annual-updates/2025)
 
 ### 150K+ users have their best day ever on Stripe.
 
-From Black Friday through Cyber Monday 2025, Stripe processed more than US$40bn for businesses while maintaining a 99.9999% uptime.
+From Black Friday through Cyber Monday 2025, Stripe processed more than $40B for businesses while maintaining a 99.9999% uptime.
 
-[See the numbers](/en-dk/newsroom/news/bfcm2025)
+[See the numbers](/newsroom/news/bfcm2025)
 
-### Tidemark's vertical and SMB SaaS benchmark report.
+### Tidemark’s vertical and SMB SaaS benchmark report.
 
-Learn what's driving growth in vertical SaaS in 2025 – going multiproduct, embedding fintech and integrating AI into the core of their products.
+Learn what’s driving growth in vertical SaaS in 2025—going multiproduct, embedding fintech, and integrating AI into the core of their products.
 
-[Get the data](/en-dk/lp/vertical-saas-benchmark-2025?utm_medium=owned-surfaces&amp;utm_source=33d6&amp;utm_campaign=GLOBAL_4250&amp;utm_content=819a&amp;utm_term=a6a6d7b23e01)
+[Get the data](/lp/vertical-saas-benchmark-2025?utm_medium=owned-surfaces&amp;utm_source=33d6&amp;utm_campaign=GLOBAL_4250&amp;utm_content=819a&amp;utm_term=a6a6d7b23e01)
 
-### Shopify's Tobi Lütke sits down with John Collison.
+### Shopify’s Tobi Lütke sits down with John Collison.
 
 Hear them discuss the choices that shaped Shopify and Stripe, the future of commerce, and their advice for founders.
 
@@ -869,30 +935,32 @@ Hear them discuss the choices that shaped Shopify and Stripe, the future of comm
 
 New regulations mean new opportunities. Read how Stripe can help you process payments outside of the iOS and Android app stores, giving you more control and helping grow your revenue.
 
-[Learn how](/en-dk/use-cases/in-app-payments)
+[Learn how](/use-cases/in-app-payments)
 
 ### Crypto.com partners with Stripe to enable better crypto payments.
 
 Learn how the partnership can help you tap into a new global customer base by letting customers pay with their crypto balance directly at checkout.
 
-[View announcement](/en-dk/customers/crypto-com-spotlight)
+[View announcement](/customers/crypto-com-spotlight)
 
 ### Make your products shoppable through AI platforms.
 
 Find out how the Agentic Commerce Protocol (ACP) allows any business to accept purchases from AI platforms without requiring any major technical changes.
 
-[Read more](/en-dk/blog/introducing-our-agentic-commerce-solutions)
+[Read more](/blog/introducing-our-agentic-commerce-solutions)
 
 ### How leading retailers unify customer experiences and drive growth.
 
-Get insights into how other brands have unified their online and in-store experiences and optimised their checkouts for a seamless shopping experience.
+Get insights into how other brands have unified their online and in-store experiences and optimized their checkouts for a seamless shopping experience.
 
-[Get the report](/en-dk/lp/how-retailers-drive-growth)
+[Get the report](/lp/how-retailers-drive-growth)
 
-Item 1 of 8: Businesses on Stripe generated US$1.9tn in 2025.
+Item 1 of 8: Businesses on Stripe generated $1.9T in 2025.
 
-- Businesses on Stripe generated US$1.9tn in 2025.Our annual letter explores the trends defining the internet economy – including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.Read the letter
-- 150K+ users have their best day ever on Stripe.From Black Friday through Cyber Monday 2025, Strip</pre></details>
+- Businesses on Stripe generated $1.9T in 2025.Our annual letter explores the trends defining the internet economy—including steeper growth for newer businesses, faster international expansion, stablecoin progress, agentic commerce, and more.Read the letter
+- 150K+ users have their best day ever on Stripe.From Black Friday through Cyber Monday 2025, Stripe processed more than $40B for businesses while maintaining a 99.9999% uptime.See the numbers
+- Tidemark’s vertical and SMB SaaS benchmark report.Learn what’s driving growth in vertical SaaS in 2025—going multiproduct, embedding fintech, and integrating AI into the core of their products.Get the data
+- Shopify’s Tobi Lütke sits down with John Collison.Hear them discuss the choices that shaped Shopify and Stripe, the f</pre></details>
   </section>
 
   <!-- ─── Page-preview screenshot of the source URL ─── -->
@@ -918,18 +986,18 @@ Item 1 of 8: Businesses on Stripe generated US$1.9tn in 2025.
   <section class="sk-section">
     <p class="sk-section-label">§3 · AILANG × your business</p>
     <p class="sk-score-pretext"><span class="sk-domain">stripe.com</span> scored <strong>2/10</strong> on agent-ready. AILANG opportunity is therefore <strong>8/10</strong>. Here's where it would land first.</p>
-    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api --port 8092 --mcp-http \
+    <div class="sk-cards"><article class="sk-card"><h3>REST + MCP + A2A + OpenAPI in one command</h3><p class="rationale">ailang serve-api takes your typed AILANG functions and exposes them as REST endpoints, MCP tools, A2A skills, and OpenAPI 3.1 docs simultaneously. One module, four agent surfaces.</p><pre>ailang serve-api <span class="e">--port</span> <span class="s">8092</span> <span class="e">--mcp-http</span> \
   pricing.ail catalogue.ail
--- POST /api/pricing/quote, MCP at /mcp/,
--- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</pre></article>
-<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre>func placeOrder(item: SKU, qty: int) -> Receipt
-  requires { qty > 0, qty <= 10 }
-  ensures  { result.total > 0.0 }
--- the MCP server exposes this with its contract intact.</pre></article>
-<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre>-- The AILANG docs MCP server lets Claude / Cursor / any
--- MCP client query the language directly:
---   stdlib_search "URL encoding"
---   submit_feedback "..."</pre></article></div>
+<span class="c">-- POST /api/pricing/quote, MCP at /mcp/,</span>
+<span class="c">-- A2A at /.well-known/agent.json, OpenAPI at /api/_meta/redoc.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/serve-api" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>Contract-verified tool calls</h3><p class="rationale">Every tool an agent can call has a contract. Bounds, refusal paths, type signatures — proven before the agent ever sees it. The agent cannot exceed the tool's declared authority.</p><pre><span class="k">func</span> placeOrder(item: SKU, qty: <span class="k">int</span>) -&gt; Receipt
+  <span class="k">requires</span> { qty &gt; 0, qty &lt;= 10 }
+  <span class="k">ensures</span>  { result.total &gt; 0.0 }
+<span class="c">-- the MCP server exposes this with its contract intact.</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/contracts" target="_blank" rel="noopener">→ AILANG docs</a></article>
+<article class="sk-card"><h3>An MCP server for your own docs and tools</h3><p class="rationale">Generate an MCP server from your typed AILANG functions; the docs MCP exposes a submit_feedback tool so agents can flag issues back to the maintainer. The language and its consumers stay on the same wire.</p><pre><span class="c">-- The AILANG docs MCP server lets Claude / Cursor / any</span>
+<span class="c">-- MCP client query the language directly:</span>
+<span class="c">--   stdlib_search "URL encoding"</span>
+<span class="c">--   submit_feedback "..."</span></pre><a class="sk-card-docs" href="https://ailang.sunholo.com/docs/guides/agent-mcp" target="_blank" rel="noopener">→ AILANG docs</a></article></div>
   </section>
 
   <!-- ─── §4 Guarantee ─── -->
@@ -948,14 +1016,29 @@ Item 1 of 8: Businesses on Stripe generated US$1.9tn in 2025.
     <div class="sk-breakdown open" id="sk-breakdown">
       <table>
         <thead><tr><th>Signal</th><th>Topic</th><th>Result</th><th>Points</th><th>AILANG primitive</th></tr></thead>
-        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates A2A agent cards automatically</td></tr>
+        <tbody><tr><td>agent.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>ailang serve-api generates A2A agent cards automatically — bonus if you're an early adopter</td></tr>
 <tr><td>openapi.json referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api generates OpenAPI 3.1 from Hindley-Milner type signatures</td></tr>
 <tr><td>MCP endpoint referenced</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api --mcp-http exposes typed functions as MCP tools</td></tr>
 <tr><td>Public API docs linked</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>ailang serve-api hosts Swagger + ReDoc at /api/_meta/ by default</td></tr>
-<tr><td>Named LLM provider mentioned</td><td>privacy</td><td class="sig-ok">✓</td><td>1/2</td><td>std/ai + IFC labels — track and declassify customer data crossing the provider boundary</td></tr>
+<tr><td>Webhooks documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang serve-api handles webhooks as typed handler functions with effect-tracked side effects</td></tr>
+<tr><td>Rate limits documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>Capability budgets — Net @limit=N is the symmetric server-side primitive for what agents see as rate limits</td></tr>
+<tr><td>Streaming / SSE endpoint</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>std/stream — ssePost and Stream effect handle event-source endpoints with typed event types</td></tr>
+<tr><td>Sandbox / test environment offered</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>ailang --ai-stub plus mock effect handlers — deterministic, capability-scoped fakes for any effect, including Net and AI</td></tr>
+<tr><td>Authentication documented</td><td>agent-ready</td><td class="sig-ok">✓</td><td>2/2</td><td>std/jwt for verification, IFC labels (string<api-key> / string<token>) to keep credentials out of public sinks at the type level</td></tr>
+<tr><td>Idempotency keys documented</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/2</td><td>Pure functions are idempotent by construction; requires/ensures contracts express idempotence as a static guarantee</td></tr>
+<tr><td>AG-UI streaming protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>std/stream — the AG-UI event lifecycle (RUN_STARTED → TEXT_MESSAGE_CONTENT → TOOL_CALL_RESULT → RUN_FINISHED) is a textbook sum type. ADTs + exhaustive pattern matching make every event-type branch a compile error to skip.</td></tr>
+<tr><td>HTTP 402 agent payments (x402 / pay-per-crawl)</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Net @endpoint-scoped capability budgets bound payment destinations; requires { amount <= budget } gates the payload; IFC labels keep the signed payment key out of public sinks. Same primitives cover x402 payload signing and Cloudflare's crawler-price negotiation.</td></tr>
+<tr><td>AP2 Agent Payments Protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Mandates ARE contracts. requires { intent.price <= mandate.maxPrice } + ensures { cart.total <= intent.price } is a one-to-one translation of an Intent/Cart Mandate into AILANG. Z3 can verify the bounds at compile time.</td></tr>
+<tr><td>UTCP tool-calling protocol</td><td>agent-ready</td><td class="sig-no">✗</td><td>0/1</td><td>Typed function signatures are the manifest. ailang serve-api emits the same metadata as a UTCPManual (name, input/output schema, native endpoint) — direct-call discovery without a proxy server.</td></tr>
+<tr><td>End-to-end encryption documented</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>IFC labels (string<sealed>) force decryption to flow through a typed boundary; the compiler refuses to publish sealed values without explicit declassification</td></tr>
+<tr><td>Compliance certifications cited</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>requires/ensures contracts express machine-verifiable claims; capability budgets bound audit-trail effects; effect rows leave nothing un-declared</td></tr>
+<tr><td>Data minimisation language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row, so "doesn't sell" becomes a type-system-enforceable claim, not a marketing one</td></tr>
 <tr><td>Third-party domains restrained</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Capability scoping — each Net call declares its endpoint in the effect row</td></tr>
 <tr><td>Data residency / on-prem language</td><td>privacy</td><td class="sig-no">✗</td><td>0/2</td><td>Three-runtime deploy — same module runs in WASM (browser), Cloud Run, and native CLI</td></tr>
 <tr><td>Single-vendor LLM language</td><td>portable</td><td class="sig-ok">○</td><td>2/2</td><td>std/ai multi-provider — switch from Anthropic to Gemini to OpenAI without rewriting</td></tr>
+<tr><td>Multiple AI providers cited</td><td>portable</td><td class="sig-ok">✓</td><td>2/2</td><td>std/ai — one Step API across Anthropic, OpenAI, Gemini, OpenRouter, Ollama, and custom-package providers</td></tr>
+<tr><td>Cross-runtime / deployment portability</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>Effect handlers as runtime adapters — same .ail runs as WASM in the browser, a Cloud Run container, and a native CLI; only the handlers change</td></tr>
+<tr><td>BYO key / model-agnostic</td><td>portable</td><td class="sig-no">✗</td><td>0/2</td><td>AILANG WASM — the full interpreter ships as a browser bundle, so caller-held keys (BYOK), offline apps, and embedded demos all work client-side</td></tr>
         </tbody>
       </table>
     </div>
