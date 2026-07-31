@@ -1146,7 +1146,24 @@ async function dispatchBrowserTool(name, args) {
       return 'Note saved: ' + title;
     }
     case 'getSlideContext': {
-      // Try to read slide content from iframe
+      // Preferred: the presenter tells us what's on the projector. Works across
+      // origins, which the iframe read below never can.
+      if (presenterCtx.active && presenterCtx.slide) {
+        const d = presenterCtx.deck || {};
+        const s = presenterCtx.slide || {};
+        // index < 0 means this deck isn't slide-based (an interactive explorer) —
+        // the presenter sends the whole view instead of one slide.
+        const where = s.index >= 0
+          ? 'Slide: ' + (s.index + 1) + '/' + (s.total || '?') + (s.title ? ' — ' + s.title : '')
+          : 'View: ' + (s.title || '(interactive)');
+        return [
+          'Talk: ' + (presenterCtx.title || presenterCtx.talk),
+          'Section: ' + (d.label || '?'),
+          where,
+          'Content: ' + (s.text || '(no text captured)'),
+        ].join('\n');
+      }
+      // Fallback: slides loaded into our own iframe from the same origin.
       try {
         const frame = $.slideFrame;
         if (frame && frame.contentDocument) {
@@ -1154,8 +1171,8 @@ async function dispatchBrowserTool(name, args) {
           const body = (frame.contentDocument.body?.innerText || '').substring(0, 1000);
           return 'Slide title: ' + title + '\nContent: ' + body;
         }
-      } catch (e) { /* cross-origin */ }
-      return 'No slide context available (no presentation loaded or cross-origin restriction).';
+      } catch (e) { /* cross-origin — expected unless the deck is served from here */ }
+      return 'No slide context available (no presentation loaded, and no presenter connected).';
     }
     case 'audienceQuestion': {
       const q = args.question || '';
@@ -1166,6 +1183,9 @@ async function dispatchBrowserTool(name, args) {
       const stored = JSON.parse(localStorage.getItem('copresenter-questions') || '[]');
       stored.push(entry);
       localStorage.setItem('copresenter-questions', JSON.stringify(stored));
+      // Also hand it to the presenter's talk log, so questions the model heard
+      // and questions typed by hand end up in the same markdown export.
+      reportToPresenter('q', ctx ? q + ' (' + ctx + ')' : q);
       return 'Question logged: ' + q;
     }
     case 'webFetch': {
@@ -1356,6 +1376,59 @@ function loadConfig() {
   // Auto-load slides if URL is saved
   const savedUrl = localStorage.getItem('copresenter-slide-url');
   if (savedUrl) loadSlides(savedUrl);
+}
+
+// ── Presenter bridge ──
+// The sunholo.com presenter can drive this window instead of us loading its
+// slides in an iframe. It sends the deck + slide currently on the projector,
+// which is the only way to know: reading the iframe's contentDocument fails
+// the moment the slides are on another origin (that's why getSlideContext
+// used to return "no slide context available"). Nothing here is required —
+// the standalone slide-URL flow still works exactly as before.
+const presenterCtx = { active: false, origin: null, talk: '', title: '', deck: null, slide: null, updatedAt: 0 };
+
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+
+  if (d.type === 'presenter-hello') {
+    // Answer on the sender's own origin, not '*' — this window holds an API key.
+    try { e.source.postMessage({ type: 'copresenter-ready' }, e.origin); } catch {}
+    presenterCtx.active = true;
+    presenterCtx.origin = e.origin;
+    return;
+  }
+
+  if (d.type === 'presenter-context') {
+    if (presenterCtx.origin && e.origin !== presenterCtx.origin) return;
+    presenterCtx.active = true;
+    presenterCtx.origin = e.origin;
+    presenterCtx.talk = d.talk || '';
+    presenterCtx.title = d.title || '';
+    presenterCtx.deck = d.deck || null;
+    presenterCtx.slide = d.slide || null;
+    presenterCtx.updatedAt = Date.now();
+    // Hide the "paste a presentation URL" placeholder — we're being driven.
+    if ($.slidesPlaceholder && $.slideFrame && !$.slideFrame.src) {
+      $.slidesPlaceholder.innerHTML =
+        '<div style="text-align:center;opacity:.8">Driven by the presenter<br>' +
+        '<span style="font-family:var(--mono);font-size:11px;opacity:.7"></span></div>';
+      const sub = $.slidesPlaceholder.querySelector('span');
+      if (sub) sub.textContent = presenterCtx.title;
+    }
+    addTraceEvent('slide.change', {
+      deck: presenterCtx.deck ? presenterCtx.deck.label : '',
+      slide: presenterCtx.slide ? presenterCtx.slide.index + 1 : '',
+      title: presenterCtx.slide ? presenterCtx.slide.title : '',
+    });
+  }
+});
+
+// Push a question the model logged back to the presenter, so it lands in the
+// talk log alongside the ones typed by hand.
+function reportToPresenter(kind, text) {
+  if (!window.opener || window.opener.closed || !presenterCtx.origin) return;
+  try { window.opener.postMessage({ type: 'copresenter-entry', kind, text }, presenterCtx.origin); } catch {}
 }
 
 // ── Slides ──
