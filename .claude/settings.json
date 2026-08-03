@@ -10,7 +10,8 @@
       "Bash(docparse --version)",
       "Bash(docparse /tmp/ailang-sketch-input.html --output-dir /tmp/ailang-sketch-out)",
       "Bash(.claude/skills/rubric-audit/scripts/:*)",
-      "Skill(rubric-audit)"
+      "Skill(rubric-audit)",
+      "Bash(xargs -I {} kill -9 {})"
     ],
     "additionalDirectories": [
       "/Users/mark/.claude/skills",

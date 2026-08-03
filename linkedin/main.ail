@@ -63,7 +63,7 @@ import linkedin/services/linkedin_content_loader (
   linkedinLoadPost, linkedinLoadAllPosts
 )
 
-export func main() -> () ! {IO @limit=200, FS @limit=150, Net @limit=30, Env} {
+export func main() -> () ! {IO @limit=200, FS @limit=150, Net @limit=30, Env, Declassify} {
   let args = getArgs();
   match args {
     [] => linkedinShowUsage(),
@@ -91,7 +91,7 @@ func linkedinShowUsage() -> () ! {IO} {
   println("  ailang-linkedin comments --json | ailang messages send")
 }
 
-func linkedinDispatch(cmd: string, rest: [string]) -> () ! {IO, FS, Net, Env} {
+func linkedinDispatch(cmd: string, rest: [string]) -> () ! {IO, FS, Net, Env, Declassify} {
   if cmd == "list" then linkedinCmdList()
   else if cmd == "post" then linkedinCmdPost(rest)
   else if cmd == "comments" then linkedinCmdComments(rest)
@@ -228,7 +228,7 @@ func linkedinDoImagePublishWithAlt(post: MarketingPost, token: string, orgUrn: s
   }
 }
 
-func linkedinDoImagePublishWithBytes(post: MarketingPost, token: string, orgUrn: string, imgBytes: bytes) -> () ! {IO, Net} {
+func linkedinDoImagePublishWithBytes(post: MarketingPost, token: string, orgUrn: string, imgBytes: bytes) -> () ! {IO, FS, Net} {
   println("→ Uploading ${intToStr(bytesLength(imgBytes))} bytes to LinkedIn...");
   match linkedinUploadImage(token, orgUrn, imgBytes) {
     Err(e) => println("Image upload failed: ${e}"),
@@ -256,7 +256,7 @@ func linkedinAfterPublish(slug: string, result: PostResult) -> () ! {IO, FS} {
 
 -- === comments command ===
 
-func linkedinCmdComments(args: [string]) -> () ! {IO, FS, Net, Env} {
+func linkedinCmdComments(args: [string]) -> () ! {IO, FS, Net, Env, Declassify} {
   let jsonMode = linkedinHasFlag("--json", args);
   let filteredArgs = filter(\a. a == "--json" == false, args);
   match filteredArgs {
@@ -271,7 +271,7 @@ func linkedinHasFlag(flag: string, args: [string]) -> bool =
     a :: rest => if a == flag then true else linkedinHasFlag(flag, rest)
   }
 
-func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env} {
+func linkedinFetchAllComments(jsonMode: bool) -> () ! {IO, FS, Net, Env, Declassify} {
   let states = linkedinLoadState();
   if listLength(states) == 0 then {
     -- --json must always emit valid JSON, even when there are no posts.
@@ -372,7 +372,7 @@ func linkedinThreadComment(c: PublicComment, allReplies: [PublicComment]) -> Jso
   ])
 }
 
-func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Net, Env} {
+func linkedinFetchPostComments(slug: string, jsonMode: bool) -> () ! {IO, FS, Net, Env, Declassify} {
   let states = linkedinLoadState();
   let postUrn = linkedinFindUrnForSlug(slug, states);
   if length(postUrn) == 0 then {
