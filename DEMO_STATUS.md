@@ -2,7 +2,7 @@
 
 Public showcase: https://www.sunholo.com/ailang-demos/
 
-Audited checkout: `af18c03ddb818f55d87870484d789d72d2cdaff0`, plus the local repairs from this audit. Changes are **not deployed**. Remote main at audit time was `d2ff2e029d3c0d986b6f1eb34304e0aed430bb8d` (75 commits ahead); reconcile these changes before publishing.
+Audited checkout: `af18c03ddb818f55d87870484d789d72d2cdaff0`, plus the local repairs from this audit. Deployment follow-up: fixes reconciled with remote main; the LinkedIn `FS` annotation is restored for the pinned compiler. Deployment is tracked in GitHub Actions. Remote main at audit time was `d2ff2e029d3c0d986b6f1eb34304e0aed430bb8d` (75 commits ahead at the original audit).
 
 ## Results
 

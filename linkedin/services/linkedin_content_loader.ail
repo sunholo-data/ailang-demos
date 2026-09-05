@@ -133,7 +133,7 @@ func linkedinFindHashtagLine(lines: [string]) -> string =
     }
   }
 
-func linkedinIsHashtagLine(line: string) -> bool {
+func linkedinIsHashtagLine(line: string) -> bool ! {FS} {
   let idx = find(line, "#AI");
   idx >= 0
 }
