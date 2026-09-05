@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AILANG Demos</title>
 <link rel="icon" type="image/svg+xml" href="ailang-logo.svg">
-<meta name="description" content="AILANG demos: document intelligence, streaming, voice agents, and contract-verified AI tools">
+<meta name="description" content="AILANG demos: information-flow security, document intelligence, streaming, voice agents, and contract-verified AI tools">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -123,6 +123,7 @@
   <span class="header-sep"></span>
   <span class="header-subtitle">Demo Hub</span>
   <nav class="header-nav">
+    <a href="leak_lab/">Leak Lab</a>
     <a href="document-intelligence/">Documents</a>
     <a href="streaming/">Streaming</a>
     <a href="website_builder/">Builder</a>
@@ -158,7 +159,7 @@
       </a>
     </div>
     <h1><span class="accent">AI</span>LANG Demos</h1>
-    <p class="subtitle">Document intelligence, streaming protocols, and contract-verified AI agents</p>
+    <p class="subtitle">Information-flow security, document intelligence, streaming, and contract-verified AI agents</p>
     <div class="hero-tags">
       <span class="tag tag--wasm">WebAssembly</span>
       <span class="tag tag--streaming">Streaming</span>
@@ -172,6 +173,10 @@
     </p>
 
     <nav class="hub-nav">
+      <a href="leak_lab/" class="hub-nav-link hub-nav--linkedin">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+        Can you make it leak?
+      </a>
       <a href="document-intelligence/" class="hub-nav-link hub-nav--docs">
         <svg viewBox="0 0 24 24" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         Document Intelligence
@@ -194,6 +199,16 @@
       </a>
     </nav>
   </section>
+
+  <!-- Information-flow challenge -->
+  <div class="section" id="leak-lab">
+    <div class="section-intro">
+      <div class="section-intro-title">Can you make it leak?</div>
+      <p class="section-intro-desc">One secret. One public boundary. Try seven experiments, edit the AILANG, and watch the real compiler trace what can cross. Discover why hiding data is different from authorising its release.</p>
+      <a href="leak_lab/" class="section-intro-cta">Enter the leak lab &rarr;</a>
+      <div class="section-intro-stats" style="margin-top:16px"><span class="tag tag--wasm">Browser compiler</span><span class="tag tag--contracts">Information-flow labels</span><span class="tag tag--formats">No API key</span></div>
+    </div>
+  </div>
 
   <!-- Document Intelligence -->
   <div class="section">

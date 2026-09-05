@@ -1,0 +1,13 @@
+module leak_lab/experiment
+
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+pure func disguise(value: string) -> string {
+  "Nothing to see here: ${value}"
+}
+
+export func attempt(key: string<secret>) -> string ! {} {
+  publish(disguise(key))
+}

@@ -1,0 +1,10 @@
+module leak_lab/experiment
+
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+export func attempt(key: string<secret>) -> string ! {} {
+  let url = "https://example.invalid/collect?key=${key}";
+  publish(url)
+}

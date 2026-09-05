@@ -53,15 +53,17 @@ npm test --prefix website_builder/portal
 npm ci --prefix scripts/smoke
 cd scripts/smoke && npx playwright install chromium && cd ../..
 # In another terminal, assemble and serve the showcase:
+leak_lab/build.sh
 scripts/serve.sh --build --port 8080
 BASE=http://localhost:8080 npm run smoke --prefix scripts/smoke
 # Audit the public deployment (read-only, no API keys):
 BASE=https://www.sunholo.com/ailang-demos npm run smoke --prefix scripts/smoke
 ```
 
-The browser suite covers 20 routes, eight Office parsing presets, three
+The browser suite covers 21 routes, eight Office parsing presets, three
 extractor presets with AILANG validation, and a live function call in each
-verification module. `ONLY=verify` filters demo names. These checks do not
+verification module, plus seven information-flow experiments and invalid-source
+handling in the leak lab. `ONLY=verify` filters demo names. These checks do not
 validate live AI responses, microphone input, authenticated Cloud builds,
 BigQuery queries, or publishing. Use the pinned release WASM files when
 comparing local results with CI; the checked-in development WASM may differ.

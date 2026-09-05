@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try to move a secret across a public boundary. A real AILANG compiler checks every experiment in your browser.">
+  <title>Can you make it leak? — AILANG</title>
+  <link rel="icon" type="image/svg+xml" href="../ailang-logo.svg">
+  <link rel="stylesheet" href="../shared/design-system.css"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="lab-header"><a href="../" class="brand"><img src="../ailang-logo.svg" width="30" height="30" alt="">AILANG <span>Demo lab</span></a><a href="https://ailang.sunholo.com/docs/guides/ifc-labels">How information-flow labels work</a></header>
+  <main>
+    <section class="intro"><div><h1>Can you make<br>it leak?</h1><p class="lead">One secret. One public boundary.<br>Try to get the first past the second.</p></div><div class="intro-note"><span class="sample-key">DEMO-KEY-7K3P</span><p>A fictional key, shown for illustration. You’re testing the path a <code>secret</code>-labelled value could take—not guessing a password.</p><p>No API key. No model judging your answer. Every verdict comes from AILANG’s compiler in your browser.</p></div></section>
+    <section class="workspace" aria-label="Leak challenge">
+      <aside class="attempts"><h2>Choose an experiment</h2><p>Start with a leak attempt. Then explore what authority changes.</p><div id="scenarios" class="scenario-list"></div><div class="progress"><span id="progress">0 of 7 examples checked</span><div class="progress-track"><div id="progressBar"></div></div></div></aside>
+      <section class="experiment"><div class="experiment-heading"><div><h2 id="experimentTitle">Print the key</h2><p id="experimentAction">Send it straight to public output.</p></div><button id="reset" class="quiet" type="button">Reset example</button></div>
+        <div class="flow" id="flow" data-state="idle" aria-label="Flow from secret input to a checked public boundary"><div><span class="flow-label">Input</span><strong>Secret-labelled value</strong><code>string&lt;secret&gt;</code></div><div class="boundary"><span id="boundaryIcon" aria-hidden="true">?</span><span id="route">Direct transfer</span></div><div><span class="flow-label">Public output</span><strong>Rejects secret data</strong><code>string{not secret}</code></div></div>
+        <div class="editor-heading"><label for="source">Edit the AILANG experiment</label><span id="edited">Original example</span></div>
+        <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="editorHint" maxlength="16000"></textarea>
+        <div class="run-row"><button id="check" class="primary" disabled type="button">Loading compiler…</button><span id="editorHint">⌘ / Ctrl + Enter to check</span><button id="download" class="quiet" type="button">Download .ail</button></div>
+        <p class="runtime" id="runtime" role="status">Loading an isolated AILANG v0.35.0 compiler…</p>
+      </section>
+      <section class="verdict" aria-labelledby="verdictTitle" aria-live="polite" aria-atomic="true"><div id="verdictMark" class="verdict-mark" aria-hidden="true">?</div><h2 id="verdictTitle">The boundary is waiting.</h2><p id="verdictSummary">Check the example to see whether the compiler permits this data flow.</p><div id="explanation" class="explanation" hidden></div><details id="diagnosticPanel" hidden open><summary>Compiler diagnostics</summary><pre id="diagnostics"></pre></details><p class="execution-note">Static analysis only. Experiments are never executed and no key is transmitted.</p></section>
+    </section>
+    <section class="lessons"><div><h2>The label travels with the data.</h2><p>Formatting a string, calling a helper, or wrapping a value in a record does not automatically make it public. The compiler tracks the label to the restricted output.</p></div><div><h2>Authority is not sanitisation.</h2><p><code>Declassify</code> explicitly permits lowering a label. A gate that returns the original secret can pass this check. Its implementation still needs review and appropriate contracts.</p></div><div><h2>Know what a pass means.</h2><p>This is single-module, explicit-flow analysis. It does not prove freedom from every prompt injection, implicit flow, or cross-module leak. Editing away the policy is changing the rules, not defeating them.</p></div></section>
+    <details class="technical"><summary>What actually runs here?</summary><p>A Web Worker runs a WASM build pinned to AILANG v0.35.0. The bridge parses and type-checks your source, then invokes <code>types.CheckModuleIFC</code>—the same information-flow pass used by the CLI. The stock browser module loader currently omits that pass, so this demo calls it explicitly. No JavaScript pattern matcher decides whether an attack is blocked.</p><p>Only single-module experiments containing function declarations, without imports or top-level values, are supported. Syntax errors, type errors, compiler failures and timeouts are reported separately from an information-flow rejection. The worker is disposable so a difficult experiment cannot keep the page frozen.</p><a href="https://github.com/sunholo-data/ailang-demos/tree/main/leak_lab">Source and reproducible CLI checks</a></details>
+  </main><footer><a href="../">Back to the demo hub</a><span>Built with AILANG · Synthetic data only</span></footer>
+  <script type="module" src="app.js"></script>
+</body></html>

@@ -1,0 +1,10 @@
+module leak_lab/experiment
+
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+export func attempt(key: string<secret>) -> string ! {} {
+  let package = { message: key, category: "support" };
+  publish(package.message)
+}

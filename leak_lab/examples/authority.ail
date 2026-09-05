@@ -1,0 +1,14 @@
+module leak_lab/experiment
+
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+-- Deliberately dangerous: permission to declassify is not redaction.
+func release(key: string<secret>) -> string<public> ! {Declassify} {
+  key
+}
+
+export func attempt(key: string<secret>) -> string ! {Declassify} {
+  publish(release(key))
+}

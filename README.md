@@ -5,7 +5,7 @@
 <h1 align="center">AILANG Demos</h1>
 
 <p align="center">
-  <strong>AI website builder, document intelligence, streaming protocols, and contract-verified AI agents</strong><br>
+  <strong>Information-flow security, AI website builder, document intelligence, and streaming agents</strong><br>
   Built with <a href="https://ailang.sunholo.com/">AILANG</a> — a pure functional language with algebraic effects, contracts, and first-class AI.
 </p>
 
@@ -32,6 +32,10 @@ This isn't AI generating boilerplate. AILANG's type system, algebraic effects, a
 ---
 
 ## Demos
+
+### Can you make it leak?
+
+[Try the leak lab](https://www.sunholo.com/ailang-demos/leak_lab/) — edit seven AILANG experiments and test whether secret-labelled data can cross a public boundary. Real browser-side compiler diagnostics show explicit flow tracking and the difference between declassification authority and sanitisation. No API key required. [Build and technical notes](leak_lab/README.md).
 
 ### Document Intelligence
 
@@ -361,6 +365,10 @@ demos/
 ├── ecommerce/                   # Ecommerce vertical demo
 │   ├── main.ail                 # AI product recommendations
 │   └── services/                # Shared services (auth, BigQuery, AI)
+├── leak_lab/                    # Browser information-flow challenge (AILANG v0.35.0)
+│   ├── examples/                # Seven editable secret-flow experiments
+│   ├── compiler/                # Pinned Go/WASM bridge and regression tests
+│   └── upstream/                # Module loader IFC fix with tests
 ├── cognitive_commons/           # Multi-tab AI debating society (AILANG WASM)
 │   ├── index.html               # UI shell (constellation, chronicle, onboarding)
 │   ├── types/personas.ail       # Persona ADT, targets, default prompts

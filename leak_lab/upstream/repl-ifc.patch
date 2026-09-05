@@ -1,0 +1,153 @@
+diff --git a/internal/repl/module_registry_load.go b/internal/repl/module_registry_load.go
+index acebaadf0..cad091893 100644
+--- a/internal/repl/module_registry_load.go
++++ b/internal/repl/module_registry_load.go
+@@ -303,6 +303,13 @@ func (mr *ModuleRegistry) LoadModule(name, sourceCode string) ([]string, error)
+ 		}
+ 	}
+ 
++	// Match the CLI's post-typecheck IFC gate. The browser compiles through
++	// this registry, so omitting the gate accepts secret flows that the CLI
++	// rejects. Run before evaluating or publishing any module exports.
++	if ifcErrs := types.CheckModuleIFC(program.File); len(ifcErrs) > 0 {
++		return nil, fmt.Errorf("type error in %s: %w", name, ifcErrs[0])
++	}
++
+ 	// Step 4: Dictionary elaboration
+ 	resolved := typeChecker.GetResolvedConstraints()
+ 	elaboratedProg, err := elaborate.ElaborateWithDictionaries(coreProg, resolved)
+diff --git a/internal/repl/module_registry_ifc_test.go b/internal/repl/module_registry_ifc_test.go
+new file mode 100644
+index 0000000..2afc889
+--- /dev/null
++++ b/internal/repl/module_registry_ifc_test.go
+@@ -0,0 +1,129 @@
++package repl
++
++import (
++	"strings"
++	"testing"
++)
++
++// LoadModule is the browser's compilation boundary. It must enforce the
++// same explicit-flow policy as the CLI before publishing any exports.
++func TestLoadModuleIFC(t *testing.T) {
++	cases := []struct {
++		name, source string
++		blocked      bool
++	}{
++		{"direct", `module leak_lab/experiment
++
++-- Public output refuses values carrying the secret label.
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++export func attempt(key: string<secret>) -> string ! {} {
++  publish(key)
++}
++`, true},
++		{"url", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++export func attempt(key: string<secret>) -> string ! {} {
++  let url = "https://example.invalid/collect?key=${key}";
++  publish(url)
++}
++`, true},
++		{"helper", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++pure func disguise(value: string) -> string {
++  "Nothing to see here: ${value}"
++}
++
++export func attempt(key: string<secret>) -> string ! {} {
++  publish(disguise(key))
++}
++`, true},
++		{"record", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++export func attempt(key: string<secret>) -> string ! {} {
++  let package = { message: key, category: "support" };
++  publish(package.message)
++}
++`, true},
++		{"relabel", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++-- Calling a value "public" does not authorise a label change.
++func pretendPublic(key: string<secret>) -> string<public> ! {} {
++  key
++}
++
++export func attempt(key: string<secret>) -> string ! {} {
++  publish(pretendPublic(key))
++}
++`, true},
++		{"redact", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++-- An explicit authority boundary. This implementation drops all input.
++func redact(key: string<secret>) -> string<public> ! {Declassify} {
++  "[redacted]"
++}
++
++export func attempt(key: string<secret>) -> string ! {Declassify} {
++  publish(redact(key))
++}
++`, false},
++		{"authority", `module leak_lab/experiment
++
++export func publish(body: string{not secret}) -> string ! {} {
++  body
++}
++
++-- Deliberately dangerous: permission to declassify is not redaction.
++func release(key: string<secret>) -> string<public> ! {Declassify} {
++  key
++}
++
++export func attempt(key: string<secret>) -> string ! {Declassify} {
++  publish(release(key))
++}
++`, false},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			reg := NewModuleRegistry()
++			_, err := reg.LoadModule("leak_lab/experiment", tc.source)
++			if !tc.blocked {
++				if err != nil {
++					t.Fatal(err)
++				}
++				return
++			}
++			if err == nil {
++				t.Fatal("secret-flow violation was accepted by module loader")
++			}
++			if !strings.Contains(err.Error(), "information-flow") && !strings.Contains(err.Error(), "declass") {
++				t.Fatalf("wrong rejection: %v", err)
++			}
++			if _, err := reg.GetExport("leak_lab/experiment", "attempt"); err == nil {
++				t.Fatal("rejected module published an export")
++			}
++		})
++	}
++}

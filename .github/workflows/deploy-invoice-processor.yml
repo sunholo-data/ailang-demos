@@ -12,6 +12,7 @@ on:
       - 'streaming/**'
       - 'co-presenter/**'
       - 'cognitive_commons/**'
+      - 'leak_lab/**'
       - 'site/**'
       - 'website_builder/**'
       - 'linkedin/data/comments.json'
@@ -348,6 +349,15 @@ jobs:
           echo "Built website_builder/portal/dist:"
           ls -lh dist/
 
+      - name: Setup Go for isolated leak checker
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: leak_lab/compiler/go.mod
+          cache-dependency-path: leak_lab/compiler/go.sum
+
+      - name: Build and test leak checker
+        run: leak_lab/build.sh
+
       - name: Assemble site
         run: |
           set -euo pipefail
@@ -426,6 +436,11 @@ jobs:
           cp -r invoice_processor_wasm/ailang/pkg/sunholo/ailang_parse/docparse/services _site/website_builder/ailang/docparse/services
           # pkg/sunholo/a2ui/components is imported by docparse/services/a2ui_formatter.
           cp -r invoice_processor_wasm/ailang/pkg _site/website_builder/ailang/pkg
+
+          # Leak lab: own pinned compiler; existing shared WASM stays unchanged.
+          mkdir -p _site/leak_lab
+          cp leak_lab/*.html leak_lab/*.css leak_lab/*.js _site/leak_lab/
+          cp -r leak_lab/wasm leak_lab/examples _site/leak_lab/
 
           # Co-Presenter
           mkdir -p _site/co-presenter

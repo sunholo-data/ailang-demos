@@ -1,0 +1,10 @@
+module leak_lab/experiment
+
+-- Public output refuses values carrying the secret label.
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+export func attempt(key: string<secret>) -> string ! {} {
+  publish(key)
+}

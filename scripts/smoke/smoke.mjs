@@ -40,6 +40,7 @@ const DEMOS = [
   { name: 'ecommerce', kind: 'static', url: '/ecommerce/' },
   { name: 'linkedin', kind: 'static', url: '/linkedin/' },
   ...['agent-ready', 'privacy', 'portable'].map(topic => ({ name: `linkedin/${topic}`, kind: 'static', url: `/linkedin/topics/${topic}/` })),
+  { name: 'leak_lab', kind: 'wasm', url: '/leak_lab/' },
   { name: 'extractor',          kind: 'wasm',   url: '/extractor.html' },
   { name: 'streaming/claude_chat',       kind: 'wasm',   url: '/streaming/claude_chat/' },
   { name: 'streaming/gemini_live',       kind: 'wasm',   url: '/streaming/gemini_live/' },
@@ -115,6 +116,22 @@ for (const demo of DEMOS.filter(d => !process.env.ONLY || d.name.includes(proces
         }
         return { ready: false, error: 'timeout waiting for __demoReady' };
       }, { timeoutMs: READY_TIMEOUT_MS, readySelector: demo.readySelector, readyText: demo.readyText });
+
+      if (state.ready && demo.name === 'leak_lab') {
+        for (const [id, expected] of [['direct','blocked'], ['url','blocked'], ['helper','blocked'], ['record','blocked'], ['relabel','blocked'], ['redact','allowed'], ['authority','allowed']]) {
+          await page.locator(`[data-scenario="${id}"]`).click();
+          await page.locator('#check').click();
+          await page.waitForFunction(() => !document.querySelector('#check').disabled, null, { timeout: READY_TIMEOUT_MS });
+          const status = await page.locator('.verdict').getAttribute('data-status');
+          if (status !== expected) throw new Error(`${id}: expected ${expected}, got ${status}: ${await page.locator('#diagnostics').textContent()}`);
+          console.log(`    IFC ${id}: ${status}`);
+        }
+        await page.locator('#source').fill('this is not AILANG');
+        await page.locator('#check').click();
+        await page.waitForFunction(() => document.querySelector('.verdict').dataset.status === 'invalid', null, { timeout: READY_TIMEOUT_MS });
+        await page.locator('#reset').click();
+        if (await page.locator('#edited').textContent() !== 'Original example') throw new Error('Reset failed');
+      }
 
       if (state.ready && demo.name === 'extractor') {
         for (const preset of ['invoice', 'contract', 'resume']) {

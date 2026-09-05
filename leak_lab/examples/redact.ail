@@ -1,0 +1,14 @@
+module leak_lab/experiment
+
+export func publish(body: string{not secret}) -> string ! {} {
+  body
+}
+
+-- An explicit authority boundary. This implementation drops all input.
+func redact(key: string<secret>) -> string<public> ! {Declassify} {
+  "[redacted]"
+}
+
+export func attempt(key: string<secret>) -> string ! {Declassify} {
+  publish(redact(key))
+}

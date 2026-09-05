@@ -133,6 +133,9 @@ mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
+# Leak lab uses an isolated, newer compiler. Build with leak_lab/build.sh.
+ln -sfn "$REPO_ROOT/leak_lab" "$SITE/leak_lab"
+
 # Cognitive Commons — multi-tab debating society
 # Browser demo references ../wasm/ (the top-level symlink at $SITE/wasm)
 # and ../invoice_processor_wasm/js/ailang-wrapper.js. The latter is the
@@ -235,6 +238,7 @@ ln -sf "$REPO_ROOT/streaming/safe_agent/services/business_browser.ail" \
 echo ""
 echo "Site assembled. Serving at http://localhost:$PORT/"
 echo "  Hub:       http://localhost:$PORT/"
+echo "  Leak Lab:  http://localhost:$PORT/leak_lab/"
 echo "  Extractor: http://localhost:$PORT/extractor.html"
 echo "  DocParse:  http://localhost:$PORT/docparse.html"
 echo "  Ecommerce: http://localhost:$PORT/ecommerce/"

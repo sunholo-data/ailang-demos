@@ -41,3 +41,7 @@ Thumbs.db
 benchmarks/
 firebase-debug.log
 .ailang/state/
+
+# Leak lab compiler artifact (built from its pinned Go module in CI)
+/leak_lab/wasm/*.wasm
+/leak_lab/wasm/wasm_exec.js

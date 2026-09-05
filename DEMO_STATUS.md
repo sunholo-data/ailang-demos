@@ -4,7 +4,16 @@ Public showcase: https://www.sunholo.com/ailang-demos/
 
 Audited checkout: `af18c03ddb818f55d87870484d789d72d2cdaff0`, plus the local repairs from this audit. Deployment follow-up: fixes reconciled with remote main; the LinkedIn `FS` annotation is restored for the pinned compiler. Deployment is tracked in GitHub Actions. Remote main at audit time was `d2ff2e029d3c0d986b6f1eb34304e0aed430bb8d` (75 commits ahead at the original audit).
 
-## Results
+## Leak lab addition
+
+The showcase now includes **Can you make it leak?**, linked from the homepage
+header, main navigation, featured section and README. The expanded local browser
+suite passes **21/21** routes, including seven IFC scenarios and invalid-source
+handling. Desktop/mobile layouts and failed-download recovery also pass. The lab
+uses its own pinned v0.35.0 compiler; the existing demos retain v0.20.1.
+See [the build and upstream fix notes](leak_lab/README.md).
+
+## Original audit results
 
 - **30/30** CLI checks pass using pinned AILANG **v0.20.1**, after installing the locked dependencies and repairing symlinks. No skips.
 - **20/20** local browser routes pass using the **v0.20.1 release WASM**. Includes functional checks below.
