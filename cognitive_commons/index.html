@@ -2868,7 +2868,9 @@
     { name: "cognitive_commons/services/commons_browser", path: "services/commons_browser.ail" },
   ];
   const AILANG_ADAPTER = "cognitive_commons/services/commons_browser";
-  const AILANG_EXTRA_STDLIBS = ["std/dom", "std/cognition", "std/io"];
+  // DOM and cognition are bridged by cog/host.js; the .ail modules do not
+  // import them, and the pinned WASM REPL does not bundle these stdlibs.
+  const AILANG_EXTRA_STDLIBS = ["std/io"];
 
   // Normalise the WASM-returned value — strings come through with type tag
   // appended ("..." :: string), and may need quote-stripping.

@@ -20,6 +20,7 @@ on:
       - '.ailang-version'
       - 'scripts/check_demos.sh'
       - 'scripts/codegen/**'
+      - 'scripts/smoke/**'
       - '.github/workflows/deploy-invoice-processor.yml'
   workflow_dispatch:
 
@@ -48,6 +49,9 @@ jobs:
       - name: Run website builder server tests
         working-directory: website_builder/portal
         run: npm test
+
+      - name: Test WASM result wrapper
+        run: node --test scripts/smoke/wrapper.test.mjs
 
       - name: Resolve AILANG version
         id: ailang_version
@@ -88,7 +92,7 @@ jobs:
         run: ailang lock
 
       - name: Type-check all demo entry points
-        run: scripts/check_demos.sh
+        run: scripts/check_demos.sh --verbose
 
   deploy:
     needs: test
@@ -382,7 +386,7 @@ jobs:
           # Ecommerce landing page + screenshot
           mkdir -p _site/ecommerce/img
           cp ecommerce/browser/index.html _site/ecommerce/
-          cp ecommerce/img/ecommerce-dashboard-ui.png _site/ecommerce/img/
+          cp ecommerce/img/*.png _site/ecommerce/img/
           # Streaming shared assets
           mkdir -p _site/streaming/shared
           cp streaming/shared/audio-worklet.js _site/streaming/shared/

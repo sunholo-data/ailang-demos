@@ -276,13 +276,13 @@ class AilangEngine {
   }
 
   /**
-   * Parse an AILANG result string.
+   * Preserve typed WASM values and parse legacy result strings.
    * Strips type annotations, unescapes quoted strings.
-   * @param {string} resultString
-   * @returns {string} Cleaned result
+   * @param {*} resultString
+   * @returns {*} Cleaned result
    */
   _parseResult(resultString) {
-    if (!resultString) return resultString;
+    if (typeof resultString !== "string") return resultString;
 
     let cleaned = resultString;
 

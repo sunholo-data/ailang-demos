@@ -40,3 +40,30 @@ chmod +x ~/.claude/hooks/waiting_alert_*.sh ~/.claude/hooks/session_end_speak.sh
 
 - `serve.sh` — Local dev server for browser demos
 - `check_demos.sh` — Type-check every demo entry point with `ailang check`. Runs in CI. Use `--verbose` to see failure details or `--only <substring>` to filter.
+
+## Showcase regression checks
+
+Use the CLI release in `.ailang-version` (currently v0.20.1), then run
+`ailang lock` to install package dependencies before `scripts/check_demos.sh --verbose`.
+Missing entry points fail the check rather than silently skipping.
+
+```bash
+node --test scripts/smoke/wrapper.test.mjs
+npm test --prefix website_builder/portal
+npm ci --prefix scripts/smoke
+cd scripts/smoke && npx playwright install chromium && cd ../..
+# In another terminal, assemble and serve the showcase:
+scripts/serve.sh --build --port 8080
+BASE=http://localhost:8080 npm run smoke --prefix scripts/smoke
+# Audit the public deployment (read-only, no API keys):
+BASE=https://www.sunholo.com/ailang-demos npm run smoke --prefix scripts/smoke
+```
+
+The browser suite covers 20 routes, eight Office parsing presets, three
+extractor presets with AILANG validation, and a live function call in each
+verification module. `ONLY=verify` filters demo names. These checks do not
+validate live AI responses, microphone input, authenticated Cloud builds,
+BigQuery queries, or publishing. Use the pinned release WASM files when
+comparing local results with CI; the checked-in development WASM may differ.
+
+See [the September 2026 audit](../DEMO_STATUS.md) for findings and remaining limits.

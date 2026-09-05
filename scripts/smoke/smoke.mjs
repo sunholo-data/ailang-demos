@@ -13,13 +13,14 @@
 // Usage:
 //   node scripts/smoke/smoke.mjs              # uses BASE=http://localhost:8080
 //   BASE=http://localhost:3000 node ...       # custom base URL
+//   ONLY=docparse node ...                  # filter demo names
 //   FAIL_FAST=1 node ...                      # stop on first failure
 //
 // Exits non-zero if any demo fails to boot or logs a page error.
 
 import { chromium } from 'playwright';
 
-const BASE = process.env.BASE || 'http://localhost:8080';
+const BASE = (process.env.BASE || 'http://localhost:8080').replace(/\/+$/, '');
 const READY_TIMEOUT_MS = 30000;
 const FAIL_FAST = process.env.FAIL_FAST === '1';
 
@@ -28,8 +29,19 @@ const FAIL_FAST = process.env.FAIL_FAST === '1';
 // without console errors (no boot phase).
 const DEMOS = [
   { name: 'hub',                kind: 'static', url: '/' },
+  { name: 'document-intelligence', kind: 'static', url: '/document-intelligence/' },
+  { name: 'streaming', kind: 'static', url: '/streaming/' },
+  { name: 'docparse', kind: 'wasm', url: '/docparse.html', readySelector: '#statusDot.ready' },
+  { name: 'verify', kind: 'wasm', url: '/verify.html', readySelector: '#wasmDot.ready' },
+  { name: 'contracts-ai', kind: 'static', url: '/contracts-ai.html' },
+  { name: 'cognitive_commons', kind: 'wasm', url: '/cognitive_commons/', readySelector: '#ailang-status[data-kind="ready"]' },
+  { name: 'co-presenter', kind: 'wasm', url: '/co-presenter/', readySelector: '#statusLabel', readyText: 'Ready' },
+  { name: 'website_builder', kind: 'static', url: '/website_builder/' },
+  { name: 'ecommerce', kind: 'static', url: '/ecommerce/' },
+  { name: 'linkedin', kind: 'static', url: '/linkedin/' },
+  ...['agent-ready', 'privacy', 'portable'].map(topic => ({ name: `linkedin/${topic}`, kind: 'static', url: `/linkedin/topics/${topic}/` })),
   { name: 'extractor',          kind: 'wasm',   url: '/extractor.html' },
-  { name: 'streaming/claude_chat',       kind: 'static', url: '/streaming/claude_chat/' },
+  { name: 'streaming/claude_chat',       kind: 'wasm',   url: '/streaming/claude_chat/' },
   { name: 'streaming/gemini_live',       kind: 'wasm',   url: '/streaming/gemini_live/' },
   { name: 'streaming/safe_agent',        kind: 'wasm',   url: '/streaming/safe_agent/' },
   { name: 'streaming/voice_docparse',    kind: 'wasm',   url: '/streaming/voice_docparse/' },
@@ -38,11 +50,9 @@ const DEMOS = [
 
 // Console/page-error messages we tolerate. Each demo legitimately logs some
 // noise that isn't a smoke-test signal:
-//   - 404 on optional shared scripts (nav.js may be absent on the streaming hub)
 //   - Gemini API errors when no API key is configured (expected in headless)
 //   - Cross-origin font preconnect warnings
 const IGNORE_PATTERNS = [
-  /nav\.js/i,
   /favicon/i,
   /preconnect/i,
   /api key/i,
@@ -64,7 +74,7 @@ const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext();
 const results = [];
 
-for (const demo of DEMOS) {
+for (const demo of DEMOS.filter(d => !process.env.ONLY || d.name.includes(process.env.ONLY))) {
   const page = await ctx.newPage();
   const issues = [];
 
@@ -94,15 +104,63 @@ for (const demo of DEMOS) {
       outcome = `FAIL (HTTP ${resp ? resp.status() : '?'})`;
     } else if (demo.kind === 'wasm') {
       // Wait for either ready or error signal
-      const state = await page.evaluate(async (timeoutMs) => {
+      const state = await page.evaluate(async ({ timeoutMs, readySelector, readyText }) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
+          const indicator = readySelector && document.querySelector(readySelector);
+          if (indicator && (!readyText || indicator.textContent.trim() === readyText)) return { ready: true };
           if (window.__demoReady === true) return { ready: true };
           if (window.__demoError) return { ready: false, error: window.__demoError };
           await new Promise((r) => setTimeout(r, 100));
         }
         return { ready: false, error: 'timeout waiting for __demoReady' };
-      }, READY_TIMEOUT_MS);
+      }, { timeoutMs: READY_TIMEOUT_MS, readySelector: demo.readySelector, readyText: demo.readyText });
+
+      if (state.ready && demo.name === 'extractor') {
+        for (const preset of ['invoice', 'contract', 'resume']) {
+          await page.locator(`[data-demo="${preset}"]`).click();
+          await page.locator('#extractBtn').click();
+          await page.locator('#results .result-success, #results .result-error').waitFor({ timeout: READY_TIMEOUT_MS });
+          if (await page.locator('#results .result-error').count()) throw new Error(await page.locator('#results').innerText());
+          console.log(`    validated ${preset} demo data in AILANG`);
+        }
+        await page.locator('#clearBtn').click();
+        if (await page.locator('#documentInput').inputValue()) throw new Error('Clear All left document text');
+      }
+      if (state.ready && demo.name === 'verify') {
+        for (const [module, func, expected] of [
+          ['verify_showcase', 'clampPrice', '250'],
+          ['billing', 'taxRate', '2100'],
+          ['access_policy', 'roleWeight', '100'],
+          ['scheduling', 'roomCapacity', '20'],
+        ]) {
+          await page.locator(`.module-chip[data-module="${module}"]`).click();
+          await page.locator(`.verify-step[data-function="${func}"]`).click();
+          await page.locator('#tryitRunBtn').click();
+          await page.locator('#tryitResult.visible').waitFor({ timeout: READY_TIMEOUT_MS });
+          const value = (await page.locator('#tryitResultValue').textContent()).split(' :: ')[0].trim();
+          if (value !== expected) throw new Error(`${module}.${func}: expected ${expected}, got ${value}`);
+          console.log(`    executed ${module}.${func} = ${value}`);
+        }
+      }
+
+      if (state.ready && demo.name === 'docparse') {
+        const presets = page.locator('.demo-file:not([data-file$=".pdf"])');
+        for (let i = 0; i < await presets.count(); i++) {
+          const preset = presets.nth(i);
+          const name = await preset.textContent();
+          await preset.click();
+          await page.waitForFunction(() => {
+            const status = document.querySelector('#status')?.textContent || '';
+            return status === 'Done' || status.startsWith('Error:');
+          }, null, { timeout: READY_TIMEOUT_MS });
+          const status = await page.locator('#status').textContent();
+          if (status !== 'Done') throw new Error(`${name}: ${status}`);
+          const stats = await page.locator('.doc-stats').textContent();
+          if (!/[1-9]\d* blocks/.test(stats)) throw new Error(`${name}: no parsed blocks (${stats})`);
+          console.log(`    parsed ${name}: ${stats}`);
+        }
+      }
 
       if (state.ready) {
         outcome = issues.length ? `FAIL (boot ok but ${issues.length} error(s))` : 'PASS';

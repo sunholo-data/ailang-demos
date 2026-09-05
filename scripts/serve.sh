@@ -91,18 +91,22 @@ done
 ln -s "$REPO_ROOT/wasm" "$SITE/wasm"
 
 # WASM demos (rename index.html → extractor.html)
-# Use symlinks for css/, js/, ailang/, assets/ so edits are live
-for item in css js ailang assets; do
+# Use symlinks for css/, js/, assets/ so edits are live
+for item in css js assets; do
   [ -e "$REPO_ROOT/invoice_processor_wasm/$item" ] && \
     ln -s "$REPO_ROOT/invoice_processor_wasm/$item" "$SITE/$item"
 done
+# Keep generated module links and vendoring inside _site. Linking this directory
+# to the checkout would rewrite tracked relative links as machine-specific paths.
+mkdir -p "$SITE/ailang"
+cp -R "$REPO_ROOT/invoice_processor_wasm/ailang/." "$SITE/ailang/"
+
 # sunholo-logo.svg may already exist from site/ copy — use -sf
 [ -e "$REPO_ROOT/invoice_processor_wasm/sunholo-logo.svg" ] && \
   [ ! -e "$SITE/sunholo-logo.svg" ] && \
   ln -s "$REPO_ROOT/invoice_processor_wasm/sunholo-logo.svg" "$SITE/sunholo-logo.svg"
-# Demo-specific AILANG module alongside WASM runtime
-[ -f "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" ] && \
-  ln -sf "$REPO_ROOT/invoice_processor_wasm/wasm/invoice_processor.ail" "$SITE/wasm/"
+# wasm/invoice_processor.ail is already a portable relative symlink.
+# Do not rewrite it through the _site/wasm symlink into the source tree.
 # Copy HTML files (rename index → extractor)
 cp "$REPO_ROOT/invoice_processor_wasm/index.html" "$SITE/extractor.html"
 for f in docparse.html verify.html contracts-ai.html; do

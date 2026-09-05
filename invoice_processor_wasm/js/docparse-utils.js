@@ -39,6 +39,13 @@ export function getMimeType(filename) {
  * @returns {Promise<{blocks: object[], metadata: object}>}
  */
 export async function parseDocumentFile(file, { callFn, apiKey, onProgress, JSZip, geminiModel }) {
+  // A failed WASM call must not be reported as a successful empty document.
+  const invoke = callFn;
+  callFn = (name, ...args) => {
+    const result = invoke(name, ...args);
+    if (!result?.success) throw new Error(`${name}: ${result?.error || "AILANG call failed"}`);
+    return result;
+  };
   const progress = onProgress || (() => {});
   const model = geminiModel || 'gemini-2.5-flash';
 

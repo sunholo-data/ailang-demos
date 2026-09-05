@@ -96,8 +96,9 @@ for entry in "${ENTRIES[@]}"; do
     continue
   fi
   if [[ ! -e "$entry" ]]; then
-    printf "%-55s %s\n" "$entry" "SKIP (missing)"
-    skip=$((skip + 1))
+    printf "%-55s %s\n" "$entry" "FAIL (missing)"
+    fail=$((fail + 1))
+    failed_entries+=("$entry")
     continue
   fi
 
