@@ -4,6 +4,11 @@ A browser-only AILANG compiler challenge: try five forbidden secret flows,
 then compare two explicitly authorised declassifications. Edit and download
 any example. No API keys, model calls, or real secrets are involved.
 
+The live compiler panel reports readiness only after a real WASM self-check.
+Every check displays the compiler version and measured compilation time, with
+an expandable raw compiler response. This is static compilation of AILANG
+source; the example functions are not executed.
+
 **[Open the live demo](https://www.sunholo.com/ailang-demos/leak_lab/)** · [All demos](https://www.sunholo.com/ailang-demos/)
 
 ## Build and run

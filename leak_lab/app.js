@@ -17,6 +17,7 @@ function clearVerdict() {
   $('verdictMark').textContent = '?'; $('boundaryIcon').textContent = '?';
   document.querySelector('.verdict').dataset.status = 'idle'; $('flow').dataset.state = 'idle';
   $('explanation').hidden = true; $('diagnosticPanel').hidden = true;
+  $('compilerReceipt').hidden = true; $('responsePanel').hidden = true;
 }
 function select(scenario) {
   if (busy) return;
@@ -28,13 +29,16 @@ function select(scenario) {
 }
 function controls() {
   checkButton.disabled = !loaded || busy;
-  checkButton.textContent = busy ? 'Checking flow…' : loaded ? 'Check this flow' : 'Loading compiler…';
+  checkButton.textContent = busy ? 'AILANG is checking…' : loaded ? 'Check with AILANG' : 'Loading compiler…';
   $('source').readOnly = busy; $('reset').disabled = busy;
   for (const b of list.children) b.disabled = busy;
 }
 function fail(message) {
   clearTimeout(deadline); busy = false; loaded = false; pending = null; worker?.terminate(); controls();
   $('runtime').textContent = message;
+  $('compilerTitle').textContent = 'AILANG compiler unavailable';
+  $('compilerState').textContent = message;
+  $('compilerReceipt').hidden = true; $('responsePanel').hidden = true;
   $('verdictTitle').textContent = 'The check could not finish.';
   $('verdictSummary').textContent = 'This is a compiler or runtime failure, not a blocked leak. Use Retry compiler to start a fresh worker.';
   document.querySelector('.verdict').dataset.status = 'error';
@@ -46,6 +50,8 @@ function startCompiler() {
   worker?.terminate(); loaded = false; busy = false; pending = null; controls();
   delete window.__demoError; window.__demoReady = false;
   $('runtime').textContent = 'Loading isolated AILANG v0.35.0 compiler…';
+  $('compilerTitle').textContent = 'Loading the AILANG compiler…';
+  $('compilerState').textContent = 'Downloading WebAssembly, then checking a known forbidden flow.';
   worker = new Worker('./worker.js');
   deadline = setTimeout(() => fail('Compiler loading timed out. Check your connection, then retry.'), 60000);
   worker.onerror = event => { event.preventDefault(); fail(event.message || 'Compiler worker failed.'); };
@@ -67,10 +73,12 @@ function startCompiler() {
     if (request.selfTest) {
       if (data.result.status !== 'blocked') return fail('Compiler self-check failed: a known secret leak was not rejected.');
       window.__demoReady = true;
+      $('compilerTitle').textContent = 'AILANG is running in your browser.';
+      $('compilerState').textContent = `Compiler ${data.result.version} loaded. Secret-flow self-check passed.`;
       $('runtime').textContent = 'AILANG v0.35.0 · Secret-flow self-check passed · Runs locally';
       return;
     }
-    showResult(data.result, request);
+    showResult(data.result, request, data.durationMs);
   };
 }
 function check() {
@@ -82,12 +90,18 @@ function check() {
   }
   busy = true; controls();
   pending = { id: ++serial, original: source === originals[selected.id], scenario: selected };
-  $('verdictTitle').textContent = 'Checking the boundary…';
+  $('compilerReceipt').hidden = true; $('responsePanel').hidden = true;
+  $('verdictTitle').textContent = 'AILANG is checking your source…';
   $('verdictSummary').textContent = 'Parsing, type-checking, then tracing information flow.';
   deadline = setTimeout(() => fail('The experiment exceeded the 10-second limit. The worker was stopped.'), 10000);
   worker.postMessage({ type: 'check', id: serial, source });
 }
-function showResult(result, request) {
+function showResult(result, request, durationMs) {
+  const measured = Number.isFinite(durationMs);
+  $('compilerReceipt').hidden = !measured;
+  $('compilerReceipt').textContent = measured ? `Checked by AILANG ${result.version} in ${durationMs.toFixed(1)} ms on this device.` : '';
+  $('responsePanel').hidden = !measured;
+  $('compilerResponse').textContent = measured ? JSON.stringify(result, null, 2) : '';
   const status = result.status;
   document.querySelector('.verdict').dataset.status = status; $('flow').dataset.state = status;
   const blocked = status === 'blocked', allowed = status === 'allowed';

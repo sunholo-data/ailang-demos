@@ -16,7 +16,9 @@ onmessage = async ({ data }) => {
   try {
     await boot;
     if (data.type !== 'check') return;
+    const started = performance.now();
     const result = JSON.parse(self.ailangLeakCheck(data.source));
-    postMessage({ type: 'result', id: data.id, result });
+    const durationMs = performance.now() - started;
+    postMessage({ type: 'result', id: data.id, result, durationMs });
   } catch (error) { postMessage({ type: 'error', error: error.message }); }
 };
