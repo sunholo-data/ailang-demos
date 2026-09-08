@@ -28,7 +28,7 @@ import ecommerce/services/ga4_queries (
 --   FS @limit=10   - Max 10 file reads (getDefaultProject ~5 + getAccessToken ~3 + buffer)
 --   Net @limit=20  - Max 20 API calls (auth + queries)
 
-export func main() -> () ! {IO @limit=100, FS @limit=30, Net @limit=20} {
+export func main() -> () ! {IO @limit=100, FS @limit=30, Net @limit=20, Env} {
   println("=== AILANG BigQuery GA4 Ecommerce Demo ===");
   println("");
   println("Detecting GCP project from gcloud config...");

@@ -552,7 +552,7 @@ func doSendStdinTurn(line: string, conn: StreamConn, sessionDir: string, pcmPath
 -- Event Handling — Single-prompt (onEvent + runEventLoop)
 -- ============================================================
 
-func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process} =
+func handleEvent(event: StreamEvent, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {Env, FS, IO, Process, Stream} =
   match event {
     Message(msg) => match decode(msg) {
       Ok(json) => handleJsonMessage(json, conn, prompt, sessionDir, allowedPath, turnDonePath, isGoogleAi),
@@ -624,7 +624,7 @@ func handleJsonMessageInteractive(json: Json, conn: StreamConn, prompt: string, 
 
 -- Single-prompt mode: disconnect after turn complete
 -- Dispatch order: serverContent before usageMetadata (Gemini 3.1 sends both together)
-func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {IO, FS, Stream, Process} =
+func handleJsonMessage(json: Json, conn: StreamConn, prompt: string, sessionDir: string, allowedPath: string, turnDonePath: string, isGoogleAi: bool) -> bool ! {Env, FS, IO, Process, Stream} =
   match getObject(json, "setupComplete") {
     Some(_) => handleSetupComplete(conn, prompt, isGoogleAi),
     None => match getObject(json, "sessionResumptionUpdate") {
@@ -753,7 +753,7 @@ func handleUsageMetadata(um: Json, sessionDir: string) -> bool ! {FS} {
 }
 
 -- Handle toolCall: dispatch to ambient tools (extended set)
-func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {IO, FS, Stream, Process} {
+func handleToolCall(tc: Json, conn: StreamConn, sessionDir: string, allowedPath: string) -> bool ! {Env, FS, IO, Process, Stream} {
   let transcriptPath = "${sessionDir}/transcript.jsonl";
   match getArray(tc, "functionCalls") {
     Some(calls) => {
@@ -1041,8 +1041,12 @@ func sendCompletedToolResponse(conn: StreamConn, sessionDir: string, pendingDir:
     kv("result", js(truncResult))
   ]))}\n");
 
-  -- Clean up pending files
-  exec("rm", ["-f", pendingPath, resultPath, donePath])
+  -- Clean up pending files. Cleanup failure is non-fatal: the .done file is
+  -- gone either way, so a stale pending file is only wasted disk, not a replay.
+  match exec("rm", ["-f", pendingPath, resultPath, donePath]) {
+    Ok(_) => (),
+    Err(_) => ()
+  }
 }
 
 -- Send a macOS notification when an async tool completes.

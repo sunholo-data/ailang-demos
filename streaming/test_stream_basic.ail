@@ -1,9 +1,32 @@
 module streaming/test_stream_basic
 
--- std/stream post-fix verification suite
--- Tests auto-unwrapping of Ok(StreamConn(id)) and convenience wrappers
+-- std/stream verification suite
+--
+-- connect/transmit return Result[_, StreamErrorKind]; every call site matches
+-- on it explicitly. An earlier revision of this suite relied on Ok(StreamConn)
+-- being auto-unwrapped into a bare StreamConn, which the stdlib no longer does
+-- (and should not: a failed connect is a value the caller has to handle).
 import std/stream (connect, transmit, onEvent, runEventLoop, disconnect, status, defaultConfig, withStream, withSSE, sseConnect)
 import std/string (startsWith)
+
+let echoUrl = "wss://ws.postman-echo.com/raw"
+
+-- Connect, hand the live connection to `body`, then always disconnect.
+-- A failed connect is reported and the test is skipped rather than crashing.
+func withConnection(label: string, cfg: {headers: [{name: string, value: string}]},
+                    body: (StreamConn) -> () ! {IO, Stream}) -> () ! {IO, Stream} =
+  match connect(echoUrl, cfg) {
+    Ok(conn) => {
+      body(conn);
+      disconnect(conn);
+      println("  PASS");
+      println("")
+    },
+    Err(e) => {
+      println("  FAIL: connect: ${e}");
+      println("")
+    }
+  }
 
 -- ============================================================================
 -- Test 1: defaultConfig
@@ -17,59 +40,45 @@ func testDefaultConfig() -> () ! {IO} {
 }
 
 -- ============================================================================
--- Test 2: connect + disconnect (auto-unwrap test)
+-- Test 2: connect + disconnect
 -- ============================================================================
 func testConnect() -> () ! {IO, Stream} {
   println("[Test 2] connect + disconnect...");
-  let cfg = defaultConfig(());
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  connect(): ${conn}");
-  disconnect(conn);
-  println("  disconnect(): OK (auto-unwrapped Ok(StreamConn))");
-  println("  PASS");
-  println("")
+  withConnection("connect", defaultConfig(()), \conn. {
+    println("  connect(): Ok(${conn})")
+  })
 }
 
 -- ============================================================================
--- Test 3: status (previously crashed — now auto-unwraps)
+-- Test 3: status
 -- ============================================================================
 func testStatus() -> () ! {IO, Stream} {
-  println("[Test 3] status (was broken, now fixed)...");
-  let cfg = defaultConfig(());
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  let st = status(conn);
-  println("  status(): ${st}");
-  disconnect(conn);
-  println("  PASS");
-  println("")
+  println("[Test 3] status...");
+  withConnection("status", defaultConfig(()), \conn. {
+    println("  status(): ${status(conn)}")
+  })
 }
 
 -- ============================================================================
--- Test 4: onEvent + runEventLoop (auto-unwrap test)
+-- Test 4: onEvent + runEventLoop
 -- ============================================================================
 func testOnEvent() -> () ! {IO, Stream} {
-  println("[Test 4] onEvent + runEventLoop (was broken, now fixed)...");
-  let cfg = defaultConfig(());
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-
-  -- NOTE: can't transmit yet (Text/Bin constructors missing)
-  -- Just register handler and see what events arrive (Opened event)
-  onEvent(conn, \event. {
-    println("  Event: ${event}");
-    false  -- stop after first event
-  });
-  runEventLoop(conn);
-  disconnect(conn);
-  println("  PASS");
-  println("")
+  println("[Test 4] onEvent + runEventLoop...");
+  withConnection("onEvent", defaultConfig(()), \conn. {
+    onEvent(conn, \event. {
+      println("  Event: ${event}");
+      false  -- stop after first event
+    });
+    runEventLoop(conn)
+  })
 }
 
 -- ============================================================================
--- Test 5: withStream (previously BROKEN — now fixed)
+-- Test 5: withStream
 -- ============================================================================
 func testWithStream() -> () ! {IO, Stream} {
-  println("[Test 5] withStream (was broken, now fixed)...");
-  let result = withStream("wss://ws.postman-echo.com/raw", \event. {
+  println("[Test 5] withStream...");
+  let result = withStream(echoUrl, \event. {
     println("  withStream event: ${event}");
     false
   });
@@ -79,37 +88,39 @@ func testWithStream() -> () ! {IO, Stream} {
 }
 
 -- ============================================================================
--- Test 6: Error handling
+-- Test 6: Error handling — a bad URL must surface as Err, not as a crash
 -- ============================================================================
 func testBadUrl() -> () ! {IO, Stream} {
   println("[Test 6] Connect to bad URL...");
-  let cfg = defaultConfig(());
-  let result = connect("wss://this-will-fail.invalid/ws", cfg);
-  println("  Error result: ${result}");
-  println("  PASS");
+  match connect("wss://this-will-fail.invalid/ws", defaultConfig(())) {
+    Ok(conn) => {
+      disconnect(conn);
+      println("  FAIL: expected Err from an unresolvable host")
+    },
+    Err(e) => {
+      println("  Err as expected: ${e}");
+      println("  PASS")
+    }
+  };
   println("")
 }
 
 -- ============================================================================
--- Test 7: transmit (KNOWN BUG — Text/Bin constructors not exported)
+-- Test 7: transmit
 -- ============================================================================
 func testTransmit() -> () ! {IO, Stream} {
   println("[Test 7] transmit with plain string...");
-  let cfg = defaultConfig(());
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connected: ${conn}");
-  let sendResult = transmit(conn, "Hello from AILANG!");
-  println("  transmit() returned: ${sendResult}");
-
-  -- Listen for echo
-  onEvent(conn, \event. {
-    println("  Echo event: ${event}");
-    false
-  });
-  runEventLoop(conn);
-  disconnect(conn);
-  println("  PASS");
-  println("")
+  withConnection("transmit", defaultConfig(()), \conn. {
+    match transmit(conn, "Hello from AILANG!") {
+      Ok(_) => println("  transmit(): Ok"),
+      Err(e) => println("  transmit(): Err ${e}")
+    };
+    onEvent(conn, \event. {
+      println("  Echo event: ${event}");
+      false
+    });
+    runEventLoop(conn)
+  })
 }
 
 -- ============================================================================
@@ -117,12 +128,9 @@ func testTransmit() -> () ! {IO, Stream} {
 -- ============================================================================
 func testHeaders() -> () ! {IO, Stream} {
   println("[Test 8] Config with custom headers...");
-  let cfg = {headers: [{name: "X-Custom", value: "ailang-test"}]};
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connect with headers: ${conn}");
-  disconnect(conn);
-  println("  PASS");
-  println("")
+  withConnection("headers", {headers: [{name: "X-Custom", value: "ailang-test"}]}, \conn. {
+    println("  Connected with headers: ${conn}")
+  })
 }
 
 -- ============================================================================
@@ -130,32 +138,25 @@ func testHeaders() -> () ! {IO, Stream} {
 -- ============================================================================
 func testEchoRoundTrip() -> () ! {IO, Stream} {
   println("[Test 9] Full echo round-trip...");
-  let cfg = defaultConfig(());
-  let conn = connect("wss://ws.postman-echo.com/raw", cfg);
-  println("  Connected: ${conn}");
-
-  -- Send after connection opens
-  let sr = transmit(conn, "AILANG echo test 123");
-  println("  Sent: ${sr}");
-
-  -- Listen for events — stop as soon as we see a Message (the echo)
-  -- NOTE: can't track mutable count in pure AILANG closures
-  onEvent(conn, \event. {
-    println("  Event: ${event}");
-    -- Stop when we get a Message (the echo), keep going on Opened
-    not (startsWith(show(event), "Message"))
-  });
-  runEventLoop(conn);
-  disconnect(conn);
-  println("  PASS");
-  println("")
+  withConnection("echo", defaultConfig(()), \conn. {
+    match transmit(conn, "AILANG echo test 123") {
+      Ok(_) => println("  Sent: Ok"),
+      Err(e) => println("  Sent: Err ${e}")
+    };
+    -- Stop as soon as a Message (the echo) arrives; keep going on Opened.
+    onEvent(conn, \event. {
+      println("  Event: ${event}");
+      not (startsWith(show(event), "Message"))
+    });
+    runEventLoop(conn)
+  })
 }
 
 -- ============================================================================
 -- Main
 -- ============================================================================
 export func main() -> () ! {IO, Stream} {
-  println("=== std/stream Post-Fix Verification ===");
+  println("=== std/stream Verification ===");
   println("");
 
   testDefaultConfig();
@@ -166,13 +167,9 @@ export func main() -> () ! {IO, Stream} {
   testBadUrl();
   testTransmit();
   testHeaders();
-
-  -- Test 9: Full echo round-trip (send + receive message back)
   testEchoRoundTrip();
 
   println("=== Summary ===");
-  println("  ALL CORE FUNCTIONS WORKING");
   println("  connect, disconnect, status, transmit, onEvent, runEventLoop, withStream");
-  println("  Minor: transmit returns Ok(<*eval.UnitValue>) — show() of unit looks raw");
   println("")
 }

@@ -170,7 +170,7 @@ pure func takeFrom(startIdx: int, currentIdx: int, lines: [string]) -> [string] 
 -- ============================================================
 -- Searches a notes directory (default ~/Notes or configurable) for keyword matches.
 
-func handleSearchNotes(argsJson: string, allowedPath: string) -> Result[string, string] ! {FS, Process} {
+func handleSearchNotes(argsJson: string, allowedPath: string) -> Result[string, string] ! {FS, Process, Env} {
   match decode(argsJson) {
     Ok(json) => {
       let keyword = getOrElse(getString(json, "keyword"), "");

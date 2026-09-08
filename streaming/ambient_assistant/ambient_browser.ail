@@ -138,7 +138,7 @@ func handleEvent(event: StreamEvent, conn: StreamConn) -> bool ! {Stream, IO} =
       true
     },
     Closed(code, reason) => {
-      println(encode(jo([kv("type", js("closed")), kv("code", jnum(code)), kv("reason", js(reason))])));
+      println(encode(jo([kv("type", js("closed")), kv("code", jnum(intToFloat(code))), kv("reason", js(reason))])));
       false
     },
     StreamError(e) => {

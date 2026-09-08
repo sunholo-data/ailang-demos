@@ -41,7 +41,7 @@ import ecommerce/services/ga4_queries (
 -- - 3 analytics queries
 -- FS @limit=10 covers: getDefaultProject (~5 ops) + getAccessToken (~3 ops) + buffer
 -- Any deviation is a bug that the budget will catch
-export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5} {
+export func main() -> () ! {IO @limit=30, FS @limit=30, Net @limit=5, Env} {
   println("=== Trusted Analytics Pipeline ===");
   println("");
   println("Budget Contract: Net @limit=5 (1 auth + 3 queries + 1 buffer)");

@@ -26,7 +26,7 @@ import std/net (httpRequest)
 import pkg/sunholo/gcp_auth/token (getAccessToken)
 import pkg/sunholo/gcp_auth/project (getDefaultProject)
 
-export func main() -> () ! {IO @limit=100, Stream @limit=200, Net @limit=5, Env} {
+export func main() -> () ! {IO @limit=100, Stream @limit=200, Net @limit=5, Env, FS} {
   println("=== Gemini SSE Streaming Test ===");
   println("Protocol: SSE (POST with ?alt=sse)");
   println("");
