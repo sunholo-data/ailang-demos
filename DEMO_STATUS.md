@@ -4,6 +4,57 @@ Public showcase: https://www.sunholo.com/ailang-demos/
 
 Audited checkout: `af18c03ddb818f55d87870484d789d72d2cdaff0`, plus the local repairs from this audit. Deployment follow-up: fixes reconciled with remote main; the LinkedIn `FS` annotation is restored for the pinned compiler. Deployment is tracked in GitHub Actions. Remote main at audit time was `d2ff2e029d3c0d986b6f1eb34304e0aed430bb8d` (75 commits ahead at the original audit).
 
+## Toolchain move to v0.35.2 — 8 September 2026
+
+`.ailang-version` now pins **v0.35.2** (was v0.20.1). The whole repo type-checks
+and boots on the current release; there is no longer a demo that only compiles
+under an old compiler.
+
+Verified against the downloaded **v0.35.2 release binary and WASM**, not a local
+dev build:
+
+| Suite | Result |
+|---|---|
+| `scripts/check_demos.sh` | **32/32** (was 23/32 on v0.35.2 before this work) |
+| Browser routes (`scripts/smoke`) | **21/21** on v0.35.2 WASM |
+| Discord offline integration | 4/4 suites |
+| LinkedIn | 18/18 pure tests, 58/58 rubric assertions |
+| Website Builder portal | 118/118 (43 server + 75 preview) |
+| WASM wrapper regression | 8/8 |
+
+What had to change, and why:
+
+- **A spurious `! {FS}` on `linkedinIsHashtagLine` was removed.** It was added on
+  5 Sep to satisfy v0.20.1, which inferred an effect for a pure `find` call. The
+  function is pure string matching; v0.35 types it correctly, and the annotation
+  propagated a phantom `FS` up the call chain.
+- **Genuine missing effects were declared** on `test_sse`, `bigquery_demo`,
+  `trusted_analytics_demo` and `handleSearchNotes` (which reaches `getEnvOr`),
+  and `Env` propagated through ambient's `handleToolCall`/`handleJsonMessage`/
+  `handleEvent`.
+- **`jnum` takes a float.** Four `jnum(code)` sites on WebSocket close codes
+  became `jnum(intToFloat(code))`, matching the idiom already used elsewhere in
+  the same files.
+- **`connect` returns `Result[StreamConn, StreamErrorKind]`.**
+  `streaming/test_stream_basic.ail` was a suite asserting that `Ok(StreamConn)`
+  auto-unwrapped; it was rewritten to match on the Result at every call site.
+- **`exec`'s `Result` may no longer be dropped** as a function's tail
+  expression; ambient's cleanup `exec("rm", ...)` now matches explicitly.
+- **`co-presenter/` was renamed `co_presenter/`** so the directory matches its
+  `module co_presenter/co_presenter` declaration (MOD010). The published URL
+  stays `/co-presenter/` — `serve.sh` and the deploy workflow map source to site
+  path explicitly.
+- **The WASM type-check budget is raised to 15s by the host.** v0.35 enforces a
+  2s *wall-clock* budget per module, which the larger modules (docparse's
+  `tex_parser`, `ambient_browser`, `co_presenter`) exceed on slower machines.
+  Both shared loaders now call `ailangSetTypeCheckBudget` when it exists. It is
+  set in the demo loaders rather than in `wasm/ailang-repl.js`, because CI
+  overwrites that vendored file from the release tarball on every deploy.
+
+Known gap: `leak_lab/wasm/` is gitignored and built by `leak_lab/build.sh` from
+its own pinned v0.35.0 compiler, so the leak lab route fails a local smoke run
+until that script has been run once.
+
 ## Leak lab addition
 
 The showcase now includes **Can you make it leak?**, linked from the homepage
