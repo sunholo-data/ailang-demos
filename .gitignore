@@ -45,3 +45,10 @@ firebase-debug.log
 # Leak lab compiler artifact (built from its pinned Go module in CI)
 /leak_lab/wasm/*.wasm
 /leak_lab/wasm/wasm_exec.js
+
+# Per-developer speak voice preference (read by session_end_speak.sh hook)
+.ailang_voice
+
+# Package lock holds machine-absolute sibling paths; regenerate with `ailang lock`.
+# CI regenerates it too (see deploy workflows), so it is never relied on in git.
+/discord/ailang.lock
