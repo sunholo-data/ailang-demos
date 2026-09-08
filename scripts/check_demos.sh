@@ -32,7 +32,7 @@ fi
 
 # Relax strict module-name ↔ file-path matching. Several demos are loaded in
 # the browser under a different module name than their repo path (e.g.
-# co-presenter/, wasm/invoice_processor.ail). Type/effect checking still runs.
+# co_presenter/, wasm/invoice_processor.ail). Type/effect checking still runs.
 export AILANG_RELAX_MODULES=1
 
 # Demo entry points. Relative to repo root. Keep in sync with CLAUDE.md.
@@ -73,7 +73,7 @@ ENTRIES=(
   discord/main.ail
   discord/api.ail
   # Co-presenter (browser-only, but should still type-check)
-  co-presenter/co_presenter.ail
+  co_presenter/co_presenter.ail
   # Cognitive Commons — multi-agent debating society. CLI smoke test exercises
   # consensus + personas without any AI calls; browser shell adds DOM/Msg/Cog
   # effects + provider-routed AI via citizen.ail.

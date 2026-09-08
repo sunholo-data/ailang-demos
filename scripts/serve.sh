@@ -207,9 +207,9 @@ ln -sf "$REPO_ROOT/streaming/ambient_assistant/ambient_browser.ail" \
 
 # Co-Presenter
 mkdir -p "$SITE/co-presenter"
-ln -sf "$REPO_ROOT/co-presenter/index.html" "$SITE/co-presenter/index.html"
+ln -sf "$REPO_ROOT/co_presenter/index.html" "$SITE/co-presenter/index.html"
 mkdir -p "$SITE/ailang/co_presenter"
-ln -sf "$REPO_ROOT/co-presenter/co_presenter.ail" "$SITE/ailang/co_presenter/co_presenter.ail"
+ln -sf "$REPO_ROOT/co_presenter/co_presenter.ail" "$SITE/ailang/co_presenter/co_presenter.ail"
 
 # Claude Chat AILANG modules (SSE demo)
 mkdir -p "$SITE/ailang/streaming/claude_chat/types"

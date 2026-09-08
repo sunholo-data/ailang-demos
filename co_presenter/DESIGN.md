@@ -116,7 +116,7 @@ If a backend proxy is available (e.g., the sidecar pattern from website_builder)
 ## File Structure
 
 ```
-co-presenter/
+co_presenter/
 ├── DESIGN.md                  ← this file
 ├── co_presenter.ail           ← AILANG module (fork of ambient_browser.ail)
 ├── index.html                 ← standalone co-presenter UI

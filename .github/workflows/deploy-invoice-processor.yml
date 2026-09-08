@@ -10,7 +10,7 @@ on:
       - 'ecommerce/**'
       - 'verify_demo/**'
       - 'streaming/**'
-      - 'co-presenter/**'
+      - 'co_presenter/**'
       - 'cognitive_commons/**'
       - 'leak_lab/**'
       - 'site/**'
@@ -319,7 +319,7 @@ jobs:
           # absolute symlink that's invalid in CI), then copy the real file.
           rm -rf invoice_processor_wasm/ailang/co_presenter
           mkdir -p invoice_processor_wasm/ailang/co_presenter
-          cp co-presenter/co_presenter.ail \
+          cp co_presenter/co_presenter.ail \
             invoice_processor_wasm/ailang/co_presenter/
           echo "Copied streaming modules"
 
