@@ -1,0 +1,3 @@
+module repros/reserved_parameter
+-- Expected: concise reserved-keyword diagnostic identifying the parameter.
+export pure func echo(channel: string) -> string = channel

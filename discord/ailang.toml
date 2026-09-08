@@ -1,0 +1,12 @@
+[package]
+name = "sunholo/discord_demo"
+version = "0.1.0"
+edition = "1"
+ailang = ">=0.35.0"
+description = "Local Discord activity CLI and MCP demo using AILANG protocol packages"
+[dependencies]
+"sunholo/discord" = { path = "../../ailang-packages/packages/discord" }
+"sunholo/agui" = { path = "../../ailang-packages/packages/agui" }
+"sunholo/a2ui" = { path = "../../ailang-packages/packages/a2ui" }
+[effects]
+max = ["IO", "FS", "Net", "Env", "Clock"]

@@ -1,0 +1,39 @@
+module api
+import std/json (Json)
+import service (doctor, listChannels, readChannel, syncChannel, activity, sendText, createDraft, submitDraft, submitAction)
+
+@route("GET", "/discord/doctor")
+@mcp_name("discord_doctor")
+export func discordDoctor() -> Json ! {FS, Net, Env} = doctor()
+
+@route("GET", "/discord/channels")
+@mcp_name("discord_channels")
+export func discordChannels() -> Json ! {FS, Net, Env} = listChannels()
+
+@route("POST", "/discord/read")
+@mcp_name("discord_read")
+export func discordRead(channelId: string, limit: int, before: string, after: string) -> Json ! {FS, Net, Env} = readChannel(channelId, limit, before, after)
+
+@route("POST", "/discord/sync")
+@mcp_name("discord_sync")
+export func discordSync(channelId: string, maxPages: int) -> Json ! {FS, Net, Env} = syncChannel(channelId, maxPages)
+
+@route("POST", "/discord/activity")
+@mcp_name("discord_activity")
+export func discordActivity(channelId: string, userId: string, since: string) -> Json ! {FS, Env, Clock} = activity(channelId, userId, since)
+
+@route("POST", "/discord/send")
+@mcp_name("discord_send")
+export func discordSend(channelId: string, text: string, replyTo: string) -> Json ! {FS, Net, Env, Clock} = sendText(channelId, text, replyTo)
+
+@route("POST", "/discord/draft")
+@mcp_name("discord_draft")
+export func discordDraft(channelId: string, text: string, replyTo: string) -> Json ! {FS, Env, Clock} = createDraft(channelId, text, replyTo)
+
+@route("POST", "/discord/submit")
+@mcp_name("discord_submit")
+export func discordSubmit(draftId: string, revision: int, text: string) -> Json ! {FS, Net, Env, Clock} = submitDraft(draftId, revision, text)
+
+@route("POST", "/discord/action")
+@mcp_name("discord_action")
+export func discordAction(raw: string) -> Json ! {FS, Net, Env, Clock} = submitAction(raw)

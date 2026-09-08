@@ -1,0 +1,60 @@
+module main
+
+import std/io (println, exit)
+import std/env (getArgs)
+import std/fs (readFileResult)
+import std/json (Json, getBool, encode)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/string (stringToInt)
+import service (doctor, listChannels, readChannel, syncChannel, activity, sendText, createDraft, submitDraft, submitAction, fail)
+import protocol (exampleEvents, draftEvents)
+import pkg/sunholo/agui/events (jsonLines, validateRun)
+
+func option(args: [string], flag: string, fallback: string) -> string = match args {
+  [] => fallback, key :: rest => if key == flag then match rest {[] => fallback, value :: _ => value} else option(rest, flag, fallback)
+}
+func number(args: [string], flag: string, fallback: int) -> int =
+  match stringToInt(option(args, flag, "${fallback}")) {Some(n) => n, None => -1}
+
+func known(flags: [string], name: string) -> bool = match flags {[] => false, x :: rest => x == name || known(rest, name)}
+func allowed(cmd: string) -> [string] =
+  if cmd == "read" then ["--channel", "--limit", "--before", "--after"]
+  else if cmd == "sync" then ["--channel", "--pages"]
+  else if cmd == "activity" then ["--channel", "--user", "--since", "--since-id"]
+  else if cmd == "send" then ["--channel", "--text"]
+  else if cmd == "reply" || cmd == "draft" || cmd == "review" then ["--channel", "--text", "--message"]
+  else if cmd == "submit" then ["--draft", "--revision", "--text"]
+  else if cmd == "action" then ["--file"] else []
+func validOptions(args: [string], flags: [string], seen: [string]) -> bool = match args {
+  [] => true, name :: rest => if not known(flags, name) || known(seen, name) then false else match rest {
+    [] => false, _ :: tail => validOptions(tail, flags, name :: seen)
+  }
+}
+
+func output(value: Json) -> () ! {IO} {
+  println(encode(value));
+  if getOrElse(getBool(value, "ok"), false) then () else exit(1)
+}
+
+export func main() -> () ! {IO, FS, Net, Env, Clock} = match getArgs() {
+  [] => usage(), cmd :: args =>
+    if not validOptions(args, allowed(cmd), []) then output(fail("usage", "Unknown, duplicate or incomplete option; use help"))
+    else if cmd == "reply" && option(args, "--message", "") == "" then output(fail("usage", "reply requires --message ID"))
+    else if cmd == "activity" && option(args, "--since", "") != "" && option(args, "--since-id", "") != "" then output(fail("usage", "Use only one since filter"))
+    else if cmd == "doctor" then output(doctor())
+    else if cmd == "channels" then output(listChannels())
+    else if cmd == "read" then output(readChannel(option(args, "--channel", ""), number(args, "--limit", 50), option(args, "--before", ""), option(args, "--after", "")))
+    else if cmd == "sync" then output(syncChannel(option(args, "--channel", ""), number(args, "--pages", 5)))
+    else if cmd == "activity" then output(activity(option(args, "--channel", ""), option(args, "--user", ""), option(args, "--since", option(args, "--since-id", ""))))
+    else if cmd == "send" || cmd == "reply" then output(sendText(option(args, "--channel", ""), option(args, "--text", ""), option(args, "--message", "")))
+    else if cmd == "draft" then output(createDraft(option(args, "--channel", ""), option(args, "--text", ""), option(args, "--message", "")))
+    else if cmd == "submit" then output(submitDraft(option(args, "--draft", ""), number(args, "--revision", 1), option(args, "--text", "")))
+    else if cmd == "action" then match readFileResult(option(args, "--file", "")) {Err(_) => output(fail("input", "Cannot read action file")), Ok(raw) => output(submitAction(raw))}
+    else if cmd == "review" then println(jsonLines(draftEvents(option(args, "--channel", ""), option(args, "--text", ""), option(args, "--message", ""))))
+    else if cmd == "protocol-demo" then match validateRun(exampleEvents()) {Err(e) => output(fail("protocol", e)), Ok(_) => println(jsonLines(exampleEvents()))}
+    else if cmd == "help" || cmd == "--help" then usage()
+    else output(fail("usage", "Unknown command; use help"))
+}
+
+func usage() -> () ! {IO} = println("AILANG Discord CLI\n  doctor | channels\n  read --channel ID [--limit 50] [--before ID | --after ID]\n  sync --channel ID [--pages 5]\n  activity --channel ID [--user ID] [--since yesterday|DATE|ID]\n  send --channel ID --text TEXT\n  reply --channel ID --message ID --text TEXT\n  draft --channel ID --text TEXT [--message ID]\n  submit --draft ID --revision 1 --text TEXT\n  action --file action.json\n  review --channel ID --text TEXT [--message ID] (AG-UI JSONL)\n  protocol-demo | mcp\nConfiguration: DISCORD_CONFIG, DISCORD_BOT_TOKEN or DISCORD_TOKEN_FILE, DISCORD_STATE_DIR")

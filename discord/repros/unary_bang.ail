@@ -1,0 +1,3 @@
+module repros/unary_bang
+-- ailang prompt says !condition and not condition both work.
+export pure func negate(x: bool) -> bool = !x

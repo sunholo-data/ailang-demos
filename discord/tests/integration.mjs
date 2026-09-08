@@ -1,0 +1,98 @@
+import assert from 'node:assert/strict';
+import {spawn, spawnSync} from 'node:child_process';
+import {mkdtempSync, writeFileSync, readFileSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import readline from 'node:readline';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+import {EventSchemas} from '@ag-ui/core';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const state = mkdtempSync(path.join(tmpdir(), 'ailang-discord-test-'));
+const config = path.join(state, 'config.json');
+const channelId = '345678901234567890', userId = '234567890123456789';
+writeFileSync(config, JSON.stringify({guild_id:'123456789012345678',user_id:userId,channels:[channelId],write_channels:[],enable_writes:false}));
+const env = {...process.env, DISCORD_CONFIG:config, DISCORD_STATE_DIR:state, DISCORD_BOT_TOKEN:'', DISCORD_TOKEN_FILE:''};
+function cli(args, status=0) {
+  const p=spawnSync(path.join(root,'ailang-discord'),args,{cwd:root,env,encoding:'utf8',timeout:30000});
+  assert.equal(p.status,status, `${args.join(' ')}\n${p.stdout}\n${p.stderr}`);
+  return p.stdout.trim();
+}
+const schema = name => JSON.parse(readFileSync(path.join(root,'tests/schemas',name),'utf8'));
+const ajv = new Ajv2020({strict:false,allErrors:true}); addFormats(ajv);
+ajv.addSchema(schema('common_types.json'));
+ajv.addSchema(schema('catalog.json'), 'https://a2ui.org/specification/v0_9/catalog.json');
+const validateSurface=ajv.compile(schema('server_to_client.json'));
+const validateAction=ajv.compile(schema('client_to_server.json'));
+function validateOperations(operations) {
+  for(const op of operations) assert.ok(validateSurface(op),JSON.stringify(validateSurface.errors));
+  const components=operations.find(x=>x.updateComponents).updateComponents.components;
+  const ids=new Set(components.map(c=>c.id)); assert.ok(ids.has('root'));
+  for(const c of components) for(const id of [...(Array.isArray(c.children)?c.children:[]),...(c.child?[c.child]:[])]) assert.ok(ids.has(id), `dangling child ${id}`);
+}
+let child;
+try {
+  const core=spawnSync('ailang',['run','--entry','main','--caps','IO','--no-print','tests/core.ail'],{cwd:root,env,encoding:'utf8',timeout:30000});
+  assert.equal(core.status,0,core.stdout+core.stderr);
+  const body=JSON.parse(core.stdout.split('\n').find(x=>x.startsWith('{')));
+  assert.deepEqual(body.allowed_mentions,{parse:[],replied_user:false});
+  assert.equal(body.enforce_nonce,true);
+  console.log('PASS AILANG core checks and outgoing mention policy');
+  const events=cli(['protocol-demo']).split('\n').map(JSON.parse);
+  for(const e of events) EventSchemas.parse(e);
+  const ops=JSON.parse(events.find(e=>e.type==='TOOL_CALL_RESULT'&&e.toolCallId==='draft-1').content).a2ui_operations;
+  validateOperations(ops);
+  console.log('PASS independent AG-UI SDK and upstream A2UI schemas');
+  assert.equal(JSON.parse(cli(['doctor'],1)).error.kind,'authentication');
+  assert.equal(JSON.parse(cli(['send','--channel',channelId,'--text','no send'],1)).error.kind,'policy');
+  assert.equal(JSON.parse(cli(['read','--channel','999'],1)).error.kind,'policy');
+  assert.equal(JSON.parse(cli(['send','--channel',channelId,'--text','x','--dry-run'],1)).error.kind,'usage');
+  assert.equal(JSON.parse(cli(['reply','--channel',channelId,'--text','x'],1)).error.kind,'usage');
+  const realEvents=cli(['review','--channel',channelId,'--text','Real stored draft']).split('\n').map(JSON.parse);
+  for(const e of realEvents) EventSchemas.parse(e);
+  validateOperations(JSON.parse(realEvents.find(e=>e.type==='TOOL_CALL_RESULT').content).a2ui_operations);
+  const draft=JSON.parse(cli(['draft','--channel',channelId,'--text','Hello']));
+  assert.equal(draft.ok,true);validateOperations(draft.a2ui_operations);
+  const d=draft.data;
+  assert.equal(JSON.parse(cli(['submit','--draft',d.id,'--revision','2','--text','Hello'],1)).error.kind,'state');
+  const action={version:'v0.9.1',action:{name:'submitDraft',surfaceId:`draft-${d.id}`,sourceComponentId:'submit',timestamp:'2026-09-08T09:00:00Z',context:{draftId:d.id,revision:1,text:'Edited'}}};
+  assert.ok(validateAction(action),JSON.stringify(validateAction.errors));
+  const actionFile=path.join(state,'action.json');writeFileSync(actionFile,JSON.stringify(action));
+  assert.equal(JSON.parse(cli(['action','--file',actionFile],1)).error.kind,'policy');
+  action.action.surfaceId='wrong';writeFileSync(actionFile,JSON.stringify(action));
+  assert.equal(JSON.parse(cli(['action','--file',actionFile],1)).error.kind,'protocol');
+  const message=(id,author,content,reply='',mentions=[])=>({id,channel_id:channelId,author:{id:author,username:'fixture'},timestamp:'2026-09-08T09:00:00Z',content,message_reference:{message_id:reply},mentions:mentions.map(id=>({id}))});
+  writeFileSync(path.join(state,`channel-${channelId}.json`),JSON.stringify({complete:true,cursor:"1003",before:"",target:"",messages:[message('1001',userId,'My message'),message('1002','999','A reply','1001'),message('1003','999','Mention','',[userId])]}));
+  const activity=JSON.parse(cli(['activity','--channel',channelId,'--user',userId]));
+  assert.equal(activity.data.matches.length,2);assert.equal(activity.data.context.length,3);
+  assert.ok(activity.data.matches[0].url.includes('/123456789012345678/'));
+  assert.equal(JSON.parse(cli(['activity','--channel',channelId,'--since','2026-09-09'])).data.matches.length,0);
+  assert.equal(JSON.parse(cli(['activity','--channel',channelId,'--since','2026-09-08'])).data.matches.length,2);
+  assert.equal(JSON.parse(cli(['activity','--channel',channelId,'--since','nonsense'],1)).error.kind,'validation');
+  assert.equal(JSON.parse(cli(['activity','--since','2026-09-08'])).channels[0].data.matches.length,2);
+  console.log('PASS local drafts, stale actions, policy and cached activity');
+  child=spawn(path.join(root,'ailang-discord'),['mcp'],{cwd:root,env,stdio:['pipe','pipe','pipe']});
+  let logs='';child.stderr.on('data',x=>logs+=x);
+  const pending=new Map();let next=0;
+  const lines=readline.createInterface({input:child.stdout});
+  lines.on('line',line=>{let msg;try{msg=JSON.parse(line)}catch{throw new Error(`Non-JSON MCP stdout: ${line}`)};if(pending.has(msg.id)){pending.get(msg.id)(msg);pending.delete(msg.id)}});
+  function rpc(method,params={}){const id=++next;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error(`MCP timeout: ${method}\n${logs}`)),15000);pending.set(id,r=>{clearTimeout(timer);r.error?reject(new Error(JSON.stringify(r.error))):resolve(r.result)});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n')})}
+  await rpc('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'ailang-discord-tests',version:'1'}});
+  child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
+  const listed=await rpc('tools/list');
+  assert.deepEqual(listed.tools.map(t=>t.name).sort(),['discord_action','discord_activity','discord_channels','discord_doctor','discord_draft','discord_read','discord_send','discord_submit','discord_sync'].sort());
+  const called=await rpc('tools/call',{name:'discord_read',arguments:{channelId:'999',limit:50,before:'',after:''}});
+  assert.equal(JSON.parse(called.content[0].text).error.kind,'policy');
+  const drafts=await Promise.all([1,2].map(i=>rpc('tools/call',{name:'discord_draft',arguments:{channelId,text:`MCP draft ${i}`,replyTo:''}})));
+  for(const r of drafts) assert.equal(JSON.parse(r.content[0].text).ok,true,JSON.stringify(r));
+  const blocked=spawnSync(path.join(root,'ailang-discord'),['draft','--channel',channelId,'--text','blocked'],{cwd:root,env,encoding:'utf8',timeout:5000});
+  assert.equal(blocked.status,1);assert.match(blocked.stderr,/another writer/);
+  console.log('PASS exact MCP tool surface, concurrent requests and process lock');
+  child.stdin.end();
+  await new Promise(resolve=>child.once('exit',resolve)); child=null;
+  console.log('All offline integration checks passed. No live Discord API calls made.');
+} finally {
+  if(child) child.kill('SIGTERM');
+  rmSync(state,{recursive:true,force:true});
+}

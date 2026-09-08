@@ -33,6 +33,14 @@ This isn't AI generating boilerplate. AILANG's type system, algebraic effects, a
 
 ## Demos
 
+### Discord activity and agent tools
+
+[Local CLI and MCP demo](discord/README.md) — read configured Discord channels,
+sync activity for AI agents, and review/send replies through reusable AILANG
+packages. Includes AG-UI event replay, A2UI 0.9.1 review surfaces, independent
+protocol validation, and reproducible language-friction reports. Bot credentials
+are needed for live Discord access; the offline tests need none.
+
 ### Can you make it leak?
 
 [Try the leak lab](https://www.sunholo.com/ailang-demos/leak_lab/) — edit seven AILANG experiments and test whether secret-labelled data can cross a public boundary. Real browser-side compiler diagnostics show explicit flow tracking and the difference between declassification authority and sanitisation. No API key required. [Build and technical notes](leak_lab/README.md).

@@ -1,0 +1,57 @@
+module tests/core
+import std/io (println, exit)
+import std/json (Json, JArray, decode, encode, getString, getBool, getArray, jo, kv, js, ja)
+import std/option (Some, None, getOrElse)
+import std/result (Result, Ok, Err)
+import std/list (length as listLength, map)
+import pkg/sunholo/discord/client (DiscordMessage, validId, messagePath, messageBody, parseMessage, parseMessages, responseJson, messageJson)
+import pkg/sunholo/agui/events (RunStarted, RunFinished, ToolStart, ToolArgs, ToolEnd, ToolResult, TextContent, decodeEvent, encodeEvent, validateRun)
+import pkg/sunholo/a2ui/protocol_v091 (decodeAction)
+import service (newer, mergeMessages, advancePage)
+
+func check(value: bool, label: string) -> () ! {IO} = if value then println("PASS ${label}") else {println("FAIL ${label}"); exit(1)}
+pure func isError[a, b](r: Result[a, b]) -> bool = match r {Err(_) => true, Ok(_) => false}
+
+export func main() -> () ! {IO} {
+  check(validId("18446744073709551615"), "64-bit snowflake remains string");
+  check(not validId("123/../456") && not validId("0") && not validId("01"), "reject unsafe IDs");
+  check(newer("1000", "999"), "numeric ordering across ID length boundary");
+  check(isError(messagePath("123", {limit: 101, before: "", after: ""})), "limit validation");
+  check(isError(messagePath("123", {limit: 50, before: "111", after: "112"})), "exclusive cursors");
+  check(isError(messageBody("  ", "", "")), "empty messages rejected");
+  match messageBody("Hello @everyone", "111", "123") {Err(_) => check(false, "body"), Ok(raw) => {
+    check(match decode(raw) {Err(_) => false, Ok(_) => true}, "outgoing body valid JSON");
+    println(raw)
+  }};
+  check(isError(parseMessage(jo([]))), "malformed message rejected");
+  check(match parseMessages([]) {Ok(ms) => listLength(ms) == 0, Err(_) => false}, "empty page accepted");
+  check(match responseJson(429, [], "{\"retry_after\":1.5,\"global\":true,\"code\":0}") {Err(e) => e.kind == "rate_limit" && e.retryAfter == 1.5 && e.global, Ok(_) => false}, "rate limits retain fractional retry time");
+  check(match responseJson(403, [], "{\"message\":\"secret echoed by remote\"}") {Err(e) => e.kind == "permission" && e.message == "Discord HTTP 403", Ok(_) => false}, "error body redacted");
+  check(isError(responseJson(200, [], "not JSON")), "bad JSON rejected");
+  check(isError(validateRun([RunStarted("t", "r"), TextContent("missing", "x"), RunFinished("t", "r")])), "AG-UI orphan text rejected");
+  check(isError(validateRun([RunStarted("t", "r"), ToolStart("tool", "read"), ToolArgs("tool", "{}"), ToolEnd("tool"), RunFinished("t", "r")])), "tool end is not tool result");
+  check(match validateRun([RunStarted("t", "r"), ToolStart("tool", "read"), ToolArgs("tool", "{}"), ToolEnd("tool"), ToolResult("msg", "tool", "ok"), RunFinished("t", "r")]) {Ok(_) => true, Err(_) => false}, "complete tool lifecycle accepted");
+  check(match decodeEvent(encodeEvent(RunStarted("t", "r"))) {Ok(RunStarted(t, r)) => t == "t" && r == "r", _ => false}, "AG-UI round trip");
+  check(isError(decodeEvent("{\"type\":\"TOOL_CALL_ARGS\"}")), "missing event fields rejected");
+  check(isError(decodeAction("{\"version\":\"v0.8\",\"action\":{}}")), "A2UI version checked");
+  let initial = jo([kv("cursor", js("1000")), kv("messages", ja([]))]);
+  let page = syntheticPage(1200, 100);
+  match advancePage(initial, page) {
+    Err(_) => check(false, "first page"), Ok(s1) => {
+      check(getOrElse(getString(s1, "cursor"), "") == "1000" && getOrElse(getString(s1, "before"), "") == "1101", "bounded sync does not advance cursor prematurely");
+      match advancePage(s1, syntheticPage(1100, 100)) {
+        Err(_) => check(false, "second page"), Ok(s2) => match advancePage(s2, syntheticPage(1000, 1)) {
+          Err(_) => check(false, "last page"), Ok(s3) => {
+            check(getOrElse(getString(s3, "cursor"), "") == "1200" && getOrElse(getBool(s3, "complete"), false), "sync promotes frozen high-water cursor at history boundary");
+            check(listLength(getOrElse(getArray(s3, "messages"), [])) == 200, "all 200 unseen messages retained");
+            match advancePage(s3, syntheticPage(1201, 3)) {Err(_) => check(false, "next sync"), Ok(s4) => check(listLength(getOrElse(getArray(s4, "messages"), [])) == 201, "next cycle handles new arrivals without duplicates")}
+          }
+        }
+      }
+    }
+  };
+  println("Core checks complete")
+}
+
+func syntheticPage(id: int, count: int) -> [DiscordMessage] =
+  if count == 0 then [] else {id: "${id}", channelId: "123", authorId: "456", authorName: "test", content: "test", timestamp: "2026-09-08T09:00:00Z", replyTo: "", mentions: []} :: syntheticPage(id - 1, count - 1)

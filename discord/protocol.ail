@@ -1,0 +1,33 @@
+module protocol
+import std/json (Json, getBool, encode, jo, kv, js, ja, jint)
+import std/list (map)
+import std/clock (now)
+import std/option (getOrElse)
+import service (createDraft)
+import pkg/sunholo/agui/events (Event, RunError, RunStarted, RunFinished, TextStart, TextContent, TextEnd, ToolStart, ToolArgs, ToolEnd, ToolResult, StateSnapshot, Custom, eventJson, jsonLines, validateRun)
+import pkg/sunholo/a2ui/protocol_v091 (reviewSurface)
+
+-- Deterministic protocol fixture, explicitly simulated: no Discord call or model.
+export pure func exampleEvents() -> [Event] {
+  let surface = reviewSurface("draft-1001", "1001", 1, "Discord test channel", "Thanks, I will take a look.");
+  [RunStarted("discord-demo", "offline-1"),
+    ToolStart("read-1", "discord_read"), ToolArgs("read-1", "{\"channelId\":\"345678901234567890\",\"limit\":50}"), ToolEnd("read-1"),
+    ToolResult("result-1", "read-1", "{\"messages\":[],\"fixture\":true}"),
+    TextStart("assistant-1"), TextContent("assistant-1", "Offline protocol example: review this draft reply."), TextEnd("assistant-1"),
+    StateSnapshot(jo([kv("draftId", js("1001")), kv("revision", jint(1)), kv("status", js("draft"))]))]
+    ++ [ToolStart("draft-1", "discord_draft"), ToolArgs("draft-1", "{}"), ToolEnd("draft-1"),
+      ToolResult("draft-result-1", "draft-1", encode(jo([kv("a2ui_operations", ja(surface))]))) ]
+    ++ [RunFinished("discord-demo", "offline-1")]
+}
+
+-- Real application run serialized as AG-UI. This is a completed replay stream,
+-- not a claim of live HTTP/SSE support. No model is called; the caller supplies text.
+export func draftEvents(channelId: string, text: string, replyTo: string) -> [Event] ! {FS, Env, Clock} {
+  let runId = "draft-run-${now()}";
+  let result = createDraft(channelId, text, replyTo);
+  let start = [RunStarted("discord-review", runId), ToolStart("draft", "discord_draft"),
+    ToolArgs("draft", encode(jo([kv("channelId", js(channelId)), kv("text", js(text)), kv("replyTo", js(replyTo))]))),
+    ToolEnd("draft"), ToolResult("draft-result", "draft", encode(result))];
+  if getOrElse(getBool(result, "ok"), false) then start ++ [StateSnapshot(result), RunFinished("discord-review", runId)]
+  else start ++ [RunError(encode(result))]
+}

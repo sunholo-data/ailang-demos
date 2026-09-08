@@ -1,0 +1,6 @@
+.state/
+.ailang/
+node_modules/
+credentials*
+config.json
+*.tmp

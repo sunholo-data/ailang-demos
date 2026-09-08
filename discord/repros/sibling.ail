@@ -1,0 +1,2 @@
+module repros/sibling
+export pure func value() -> int = 1

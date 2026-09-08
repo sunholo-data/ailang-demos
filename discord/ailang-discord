@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Process launcher only: private state directory + cross-process writer lock.
+All Discord, policy, state content and protocol logic runs in AILANG.
+"""
+import fcntl
+import os
+import json
+import queue
+import threading
+from pathlib import Path
+import subprocess
+import sys
+
+root = Path(__file__).resolve().parent
+os.umask(0o077)
+env = os.environ.copy()
+state = Path(env.get('DISCORD_STATE_DIR', str(Path.home() / '.ailang' / 'discord'))).resolve()
+state.mkdir(mode=0o700, parents=True, exist_ok=True)
+env['DISCORD_STATE_DIR'] = str(state)
+env['DISCORD_CONFIG'] = str(Path(env.get('DISCORD_CONFIG', str(root / 'config.json'))).resolve())
+if env.get('DISCORD_TOKEN_FILE'):
+    env['DISCORD_TOKEN_FILE'] = str(Path(env['DISCORD_TOKEN_FILE']).resolve())
+args = sys.argv[1:]
+# An MCP process owns the lock for its lifetime. One writer process per state dir.
+# Requests within the MCP process are serialized by the transport relay below.
+mutating = bool(args) and args[0] in {'sync', 'draft', 'review', 'submit', 'action', 'send', 'reply', 'mcp'}
+lock = None
+if mutating:
+    lock = open(state / '.writer.lock', 'a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print('Discord state is in use by another writer/MCP process.', file=sys.stderr)
+        sys.exit(1)
+if args and args[0] == 'mcp':
+    cmd = ['ailang', 'serve-api', '--mcp', '--routes-only', '--no-feedback-tool',
+           '--caps', 'FS,Net,Env,Clock', 'api.ail']
+else:
+    cmd = ['ailang', 'run', '--entry', 'main', '--caps', 'IO,FS,Net,Env,Clock',
+           '--quiet', '--no-print', 'main.ail', *args]
+def mcp_relay():
+    # Preserve native AILANG MCP schemas/results. Only order requests; notifications
+    # (including cancellation) can still pass while an operation is in flight.
+    child = subprocess.Popen(cmd, cwd=root, env=env, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, text=True, bufsize=1)
+    requests = queue.Queue()
+    send_lock = threading.Lock()
+    answered = threading.Event()
+    current_id = [None]
+
+    def forward(line):
+        with send_lock:
+            child.stdin.write(line)
+            child.stdin.flush()
+
+    def read_input():
+        try:
+            for line in sys.stdin:
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    requests.put(line)
+                    continue
+                if 'id' in msg and 'method' in msg:
+                    requests.put(line)
+                else:
+                    forward(line)
+        finally:
+            requests.put(None)
+
+    def dispatch():
+        while True:
+            line = requests.get()
+            if line is None:
+                child.stdin.close()
+                return
+            try:
+                current_id[0] = json.loads(line).get('id')
+            except ValueError:
+                current_id[0] = None
+            answered.clear()
+            forward(line)
+            if current_id[0] is not None:
+                while not answered.wait(0.1):
+                    if child.poll() is not None:
+                        return
+
+    threading.Thread(target=read_input, daemon=True).start()
+    threading.Thread(target=dispatch, daemon=True).start()
+    try:
+        for line in child.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            try:
+                msg = json.loads(line)
+                if msg.get('id') == current_id[0] and ('result' in msg or 'error' in msg):
+                    answered.set()
+            except ValueError:
+                pass
+        return child.wait()
+    finally:
+        if child.poll() is None:
+            child.terminate()
+            child.wait()
+
+try:
+    sys.exit(mcp_relay() if args and args[0] == 'mcp' else subprocess.call(cmd, cwd=root, env=env))
+except KeyboardInterrupt:
+    sys.exit(130)

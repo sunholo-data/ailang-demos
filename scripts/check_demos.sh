@@ -69,6 +69,9 @@ ENTRIES=(
   verify_demo/verify_showcase.ail
   # LinkedIn
   linkedin/main.ail
+  # Discord has its own manifest and sibling path dependencies during development.
+  discord/main.ail
+  discord/api.ail
   # Co-presenter (browser-only, but should still type-check)
   co-presenter/co_presenter.ail
   # Cognitive Commons — multi-agent debating society. CLI smoke test exercises
@@ -102,7 +105,16 @@ for entry in "${ENTRIES[@]}"; do
     continue
   fi
 
-  output=$(ailang check "$entry" 2>&1)
+  if [[ "$entry" == discord/* ]]; then
+    if [[ ! -d "$REPO_ROOT/../ailang-packages/packages/discord" || ! -d "$REPO_ROOT/../ailang-packages/packages/agui" ]]; then
+      printf "%-55s %s\n" "$entry" "SKIP (requires sibling ailang-packages; see discord/README.md)"
+      skip=$((skip + 1))
+      continue
+    fi
+    output=$(cd "$REPO_ROOT/discord" && ailang check "${entry#discord/}" 2>&1)
+  else
+    output=$(ailang check "$entry" 2>&1)
+  fi
   status=$?
   # ailang check prints a stdlib version warning even on success; the real signal
   # is the "✓ No errors found!" line or a non-zero exit.

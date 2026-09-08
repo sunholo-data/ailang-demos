@@ -1,0 +1,4 @@
+module repros/relative_import
+-- Inside a manifest-bearing application, ./ targets pkg/repros/sibling.
+import ./sibling (value)
+export pure func main() -> int = value()

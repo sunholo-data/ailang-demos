@@ -1,0 +1,250 @@
+module service
+
+import std/env (getEnvOr)
+import std/fs (readFileResult, writeFileResult, renameFileResult, fileExists)
+import std/clock (now)
+import std/datetime (parseRFC3339, parseISODate)
+import std/json (Json, JArray, JObject, decode, encode, get, getString, getBool, getInt, getArray, getObject, getStringArrayStrict, jo, kv, js, ja, jb, jint)
+import std/option (Some, None, getOrElse)
+import std/result (Result, Ok, Err)
+import std/list (map, filter, foldl, length as listLength, take)
+import std/string (trim, length, split, join, startsWith)
+import pkg/sunholo/discord/client (DiscordError, DiscordMessage, DiscordChannel, identity, channels, readMessages, readMessage, sendMessage, validId, messageBody, messageJson, parseMessages, errorJson, problem)
+import pkg/sunholo/a2ui/protocol_v091 (reviewSurface, decodeAction)
+
+export type Config = {guildId: string, userId: string, channelIds: [string], writeChannels: [string], writes: bool}
+
+export pure func ok(value: Json) -> Json = jo([kv("ok", jb(true)), kv("data", value)])
+export pure func fail(kind: string, message: string) -> Json = jo([kv("ok", jb(false)), kv("error", errorJson(problem(kind, message)))])
+pure func apiFail(e: DiscordError) -> Json = jo([kv("ok", jb(false)), kv("error", errorJson(e))])
+
+pure func member(xs: [string], s: string) -> bool = match xs {[] => false, x :: rest => x == s || member(rest, s)}
+pure func validIds(xs: [string]) -> bool = match xs {[] => true, x :: rest => validId(x) && validIds(rest)}
+
+export func loadConfig() -> Result[Config, string] ! {FS, Env} {
+  let path = getEnvOr("DISCORD_CONFIG", "config.json");
+  match readFileResult(path) {
+    Err(_) => Err("Cannot read Discord config; copy config.example.json and set DISCORD_CONFIG"),
+    Ok(raw) => match decode(raw) {
+      Err(_) => Err("Config is not valid JSON"), Ok(j) => {
+        let guild = getOrElse(getString(j, "guild_id"), "");
+        let user = getOrElse(getString(j, "user_id"), "");
+        match getStringArrayStrict(j, "channels") {
+          None => Err("Config requires channels array of ID strings"), Some(ids) => match getStringArrayStrict(j, "write_channels") {
+            None => Err("Config requires write_channels array of ID strings"), Some(writes) =>
+              if not validId(guild) || not validId(user) || not validIds(ids) || not validIds(writes) then Err("Invalid ID in config")
+              else Ok({guildId: guild, userId: user, channelIds: ids, writeChannels: writes, writes: getOrElse(getBool(j, "enable_writes"), false)})
+          }
+        }
+      }
+    }
+  }
+}
+
+func token() -> Result[string, string] ! {Env, FS} {
+  let envToken = trim(getEnvOr("DISCORD_BOT_TOKEN", ""));
+  if envToken != "" then Ok(envToken)
+  else {
+    let path = getEnvOr("DISCORD_TOKEN_FILE", "");
+    if path == "" then Err("Set DISCORD_BOT_TOKEN or DISCORD_TOKEN_FILE (plain token, no JSON)")
+    else match readFileResult(path) {Err(_) => Err("Cannot read token file"), Ok(raw) => if trim(raw) == "" then Err("Empty token file") else Ok(trim(raw))}
+  }
+}
+
+func statePath(name: string) -> string ! {Env} = "${getEnvOr("DISCORD_STATE_DIR", ".state")}/${name}.json"
+
+func atomicWrite(path: string, value: Json) -> Result[(), string] ! {FS} =
+  match writeFileResult("${path}.tmp", encode(value)) {
+    Err(_) => Err("Cannot write local state"), Ok(_) => match renameFileResult("${path}.tmp", path) {Err(_) => Err("Cannot atomically replace local state"), Ok(_) => Ok(())}
+  }
+
+@allow_empty_ok("A new local cache has no data; malformed existing state is an error")
+func loadState(name: string) -> Result[Json, string] ! {FS, Env} {
+  let path = statePath(name);
+  if not fileExists(path) then Ok(jo([]))
+  else match readFileResult(path) {Err(_) => Err("Cannot read local state"), Ok(raw) => match decode(raw) {Err(_) => Err("Corrupt local state"), Ok(j) => if validState(name, j) then Ok(j) else Err("Invalid local state schema")}}
+}
+
+pure func validState(name: string, j: Json) -> bool = match j {
+  JObject(_) => if startsWith(name, "channel-") then
+    match getArray(j, "messages") {None => false, Some(_) => validCursor(j, "cursor") && validCursor(j, "before") && validCursor(j, "target")}
+    else true,
+  _ => false
+}
+pure func validCursor(j: Json, key: string) -> bool = match getString(j, key) {None => false, Some(v) => v == "" || validId(v)}
+
+export func doctor() -> Json ! {FS, Net, Env} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) => match token() {
+    Err(e) => fail("authentication", e), Ok(t) => match identity(t) {
+      Err(e) => apiFail(e), Ok(j) => ok(jo([kv("bot_id", js(getOrElse(getString(j, "id"), ""))),
+        kv("username", js(getOrElse(getString(j, "username"), ""))), kv("channels", ja(map(js, c.channelIds))),
+        kv("writes_enabled", jb(c.writes)), kv("note", js("Bot identity checked; channel access and Message Content Intent require a read test"))]))
+    }
+  }
+}
+
+export func listChannels() -> Json ! {FS, Net, Env} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) => match token() {Err(e) => fail("authentication", e), Ok(t) => match channels(t, c.guildId) {
+    Err(e) => apiFail(e), Ok(xs) => ok(ja(map(\ch. jo([kv("id", js(ch.id)), kv("name", js(ch.name)), kv("type", jint(ch.kind)), kv("configured", jb(member(c.channelIds, ch.id)))]), xs)))
+  }}
+}
+
+pure func sourceJson(m: DiscordMessage, guild: string) -> Json =
+  jo([kv("message", messageJson(m)), kv("url", js("https://discord.com/channels/${guild}/${m.channelId}/${m.id}"))])
+
+export func readChannel(channelId: string, limit: int, before: string, after: string) -> Json ! {FS, Net, Env} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) =>
+    if not member(c.channelIds, channelId) then fail("policy", "Channel is not configured for reads")
+    else match token() {Err(e) => fail("authentication", e), Ok(t) => match readMessages(t, channelId, {limit: limit, before: before, after: after}) {
+      Err(e) => apiFail(e), Ok(ms) => ok(jo([kv("messages", ja(map(\m. sourceJson(m, c.guildId), ms))),
+        kv("next_before", js(oldest(ms))), kv("page_full", jb(listLength(ms) == limit)),
+        kv("content_note", js("Empty text can mean non-text messages or missing Message Content Intent"))]))
+    }}
+}
+
+export pure func newer(a: string, b: string) -> bool = length(a) > length(b) || (length(a) == length(b) && a > b)
+export pure func oldest(ms: [DiscordMessage]) -> string = match ms {[] => "", m :: rest => foldl(\acc. \x. if newer(acc, x.id) then x.id else acc, m.id, rest)}
+pure func newest(ms: [DiscordMessage]) -> string = foldl(\acc. \m. if newer(m.id, acc) then m.id else acc, "", ms)
+
+-- A sync cycle freezes its newest boundary and walks backwards. On a bounded run,
+-- persist before+target and continue there next time; only promote the high-water
+-- cursor when the old cursor (or history end) is reached. New arrivals wait until
+-- the next completed cycle. Thus a burst larger than one page cannot be skipped.
+export func syncChannel(channelId: string, maxPages: int) -> Json ! {FS, Net, Env} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) =>
+    if channelId == "" then grouped(syncMany(c.channelIds, maxPages))
+    else if not member(c.channelIds, channelId) || not validId(channelId) then fail("policy", "Channel is not configured for reads")
+    else if maxPages < 1 || maxPages > 20 then fail("validation", "pages must be 1..20")
+    else match token() {Err(e) => fail("authentication", e), Ok(t) => match loadState("channel-${channelId}") {
+      Err(e) => fail("state", e), Ok(state) =>
+        syncPages(t, channelId, state, maxPages)
+    }}
+}
+
+export pure func advancePage(state: Json, page: [DiscordMessage]) -> Result[Json, string] {
+  let cursor = getOrElse(getString(state, "cursor"), "");
+  let target = getOrElse(getString(state, "target"), "");
+  match parseMessages(getOrElse(getArray(state, "messages"), [])) {
+    Err(_) => Err("Corrupt message cache"), Ok(cached) => {
+      let fresh = filter(\m. cursor == "" || newer(m.id, cursor), page);
+      let boundary = if target == "" then newest(page) else target;
+      let complete = listLength(page) < 100 || listLength(fresh) < listLength(page);
+      let merged = mergeMessages(cached, fresh);
+      Ok(jo([kv("cursor", js(if complete && boundary != "" then boundary else cursor)),
+        kv("before", js(if complete then "" else oldest(page))), kv("target", js(if complete then "" else boundary)),
+        kv("messages", ja(map(messageJson, merged))), kv("complete", jb(complete))]))
+    }
+  }
+}
+
+func syncPages(t: string, channelId: string, state: Json, remaining: int) -> Json ! {FS, Net, Env} {
+  let before = getOrElse(getString(state, "before"), "");
+  match readMessages(t, channelId, {limit: 100, before: before, after: ""}) {
+    Err(e) => apiFail(e), Ok(page) => match advancePage(state, page) {
+      Err(e) => fail("state", e), Ok(next) => match atomicWrite(statePath("channel-${channelId}"), next) {
+        Err(e) => fail("state", e), Ok(_) => {
+          let complete = getOrElse(getBool(next, "complete"), false);
+          if not complete && remaining > 1 then syncPages(t, channelId, next, remaining - 1)
+          else ok(jo([kv("channel_id", js(channelId)), kv("cached", jint(listLength(getOrElse(getArray(next, "messages"), [])))),
+            kv("complete", jb(complete)), kv("cursor", js(getOrElse(getString(next, "cursor"), ""))),
+            kv("next_before", js(getOrElse(getString(next, "before"), ""))),
+            kv("coverage", js("New-message history only; polling does not track deletions or edits to older messages"))]))
+        }
+      }
+    }
+  }
+}
+
+export pure func mergeMessages(cached: [DiscordMessage], fresh: [DiscordMessage]) -> [DiscordMessage] =
+  fresh ++ filter(\m. not member(map(\x. x.id, fresh), m.id), cached)
+
+export func activity(channelId: string, requestedUser: string, since: string) -> Json ! {FS, Env, Clock} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) =>
+    if channelId == "" then grouped(activityMany(c.channelIds, requestedUser, since))
+    else if not member(c.channelIds, channelId) then fail("policy", "Channel is not configured")
+    else {
+      let userId = if requestedUser == "" then c.userId else requestedUser;
+      let sinceId = if validId(since) then since else "";
+      let cutoff = if since == "" || sinceId != "" then Some(0) else if since == "yesterday" then Some(now() - 86400000) else match parseRFC3339(since) {Some(t) => Some(t), None => parseISODate(since)};
+      if not validId(userId) then fail("validation", "Invalid user ID")
+      else match cutoff {None => fail("validation", "since must be a message ID, yesterday, ISO date or RFC3339 timestamp"), Some(sinceMs) => match loadState("channel-${channelId}") {
+      Err(e) => fail("state", e), Ok(s) => match parseMessages(getOrElse(getArray(s, "messages"), [])) {
+        Err(e) => apiFail(e), Ok(ms) => {
+          let hits = filter(\m. (m.authorId == userId || member(m.mentions, userId)) && (sinceId == "" || newer(m.id, sinceId)) && getOrElse(parseRFC3339(m.timestamp), 0) >= sinceMs, ms);
+          let relatedIds = map(\m. m.replyTo, hits) ++ map(\m. m.id, hits);
+          let context = filter(\m. member(relatedIds, m.id) || (m.replyTo != "" && member(relatedIds, m.replyTo)), ms);
+          ok(jo([kv("matches", ja(map(\m. sourceJson(m, c.guildId), hits))), kv("context", ja(map(\m. sourceJson(m, c.guildId), context))),
+            kv("sync_complete", jb(getOrElse(getBool(s, "complete"), false))), kv("scope", js("Cached authorship/mentions and reply context; not personal Discord presence"))]))
+        }
+      }
+    }
+      }
+    }
+}
+
+export func sendText(channelId: string, text: string, replyTo: string) -> Json ! {FS, Net, Env, Clock} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) =>
+    if not c.writes || not member(c.writeChannels, channelId) || not member(c.channelIds, channelId) then fail("policy", "Enable writes and allow this channel in config")
+    else match token() {Err(e) => fail("authentication", e), Ok(t) => match sendMessage(t, channelId, text, replyTo, "${now()}") {
+      Err(e) => apiFail(e), Ok(m) => ok(sourceJson(m, c.guildId))
+    }}
+}
+
+export func createDraft(channelId: string, text: string, replyTo: string) -> Json ! {FS, Env, Clock} = match loadConfig() {
+  Err(e) => fail("config", e), Ok(c) =>
+    if not member(c.channelIds, channelId) then fail("policy", "Channel is not configured")
+    else match messageBody(text, replyTo, "") {
+      Err(e) => apiFail(e), Ok(_) => {
+        let id = "${now()}";
+        let draft = jo([kv("id", js(id)), kv("revision", jint(1)), kv("channel_id", js(channelId)), kv("reply_to", js(replyTo)), kv("text", js(text)), kv("status", js("draft"))]);
+        if fileExists(statePath("draft-${id}")) then fail("state", "Draft ID collision; retry creation")
+        else match atomicWrite(statePath("draft-${id}"), draft) {Err(e) => fail("state", e), Ok(_) => jo([kv("ok", jb(true)),
+          kv("data", draft), kv("a2ui_operations", ja(reviewSurface("draft-${id}", id, 1, "Discord channel ${channelId}", text)))])}
+      }
+    }
+}
+
+-- Persist 'sending' BEFORE HTTP. A crash/timeout leaves an uncertain outcome that
+-- cannot be retried automatically. Local launcher serializes writers across CLI/MCP.
+export func submitDraft(draftId: string, revision: int, text: string) -> Json ! {FS, Net, Env, Clock} =
+  if not validId(draftId) then fail("validation", "Invalid draft ID")
+  else match loadState("draft-${draftId}") {
+    Err(e) => fail("state", e), Ok(d) =>
+      if getOrElse(getString(d, "id"), "") != draftId || getOrElse(getInt(d, "revision"), 0) != revision || getOrElse(getString(d, "status"), "") != "draft" then fail("state", "Draft missing, stale, already sent or send outcome uncertain")
+      else {
+        let channelId = getOrElse(getString(d, "channel_id"), "");
+        let replyTo = getOrElse(getString(d, "reply_to"), "");
+        match loadConfig() {Err(e) => fail("config", e), Ok(c) =>
+          if not c.writes || not member(c.writeChannels, channelId) || not member(c.channelIds, channelId) then fail("policy", "Draft destination is not enabled for writes")
+          else match messageBody(text, replyTo, draftId) {Err(e) => apiFail(e), Ok(_) => match token() {
+            Err(e) => fail("authentication", e), Ok(t) => {
+              let sending = jo([kv("id", js(draftId)), kv("revision", jint(revision)), kv("channel_id", js(channelId)), kv("reply_to", js(replyTo)), kv("text", js(text)), kv("status", js("sending"))]);
+              match atomicWrite(statePath("draft-${draftId}"), sending) {
+                Err(e) => fail("state", e), Ok(_) => match sendMessage(t, channelId, text, replyTo, draftId) {
+                  Err(e) => apiFail(e), Ok(m) => {
+                    let sent = jo([kv("id", js(draftId)), kv("revision", jint(revision)), kv("status", js("sent")), kv("message", messageJson(m))]);
+                    match atomicWrite(statePath("draft-${draftId}"), sent) {Err(_) => fail("state", "Message sent but local receipt could not be saved; reconcile Discord before retry"), Ok(_) => ok(sourceJson(m, c.guildId))}
+                  }
+                }
+              }
+            }
+          }}
+        }
+      }
+  }
+
+export func submitAction(raw: string) -> Json ! {FS, Net, Env, Clock} = match decodeAction(raw) {
+  Err(e) => fail("protocol", e), Ok(a) => {
+    let id = getOrElse(getString(a.context, "draftId"), "");
+    if a.name != "submitDraft" || a.surfaceId != "draft-${id}" || a.sourceComponentId != "submit" then fail("protocol", "Action does not match the draft review surface")
+    else match getString(a.context, "text") {None => fail("protocol", "Missing draft text"), Some(text) => submitDraft(id, getOrElse(getInt(a.context, "revision"), 0), text)}
+  }
+}
+
+func syncMany(ids: [string], pages: int) -> [Json] ! {FS, Net, Env} = match ids {
+  [] => [], id :: rest => {let result = syncChannel(id, pages); result :: syncMany(rest, pages)}
+}
+func activityMany(ids: [string], userId: string, since: string) -> [Json] ! {FS, Env, Clock} = match ids {
+  [] => [], id :: rest => {let result = activity(id, userId, since); result :: activityMany(rest, userId, since)}
+}
+pure func grouped(results: [Json]) -> Json = jo([kv("ok", jb(foldl(\acc. \r. acc && getOrElse(getBool(r, "ok"), false), true, results))), kv("channels", ja(results))])
