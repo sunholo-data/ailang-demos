@@ -51,9 +51,30 @@ What had to change, and why:
   set in the demo loaders rather than in `wasm/ailang-repl.js`, because CI
   overwrites that vendored file from the release tarball on every deploy.
 
-Known gap: `leak_lab/wasm/` is gitignored and built by `leak_lab/build.sh` from
-its own pinned v0.35.0 compiler, so the leak lab route fails a local smoke run
-until that script has been run once.
+### Known gap: two compilers, one repo
+
+`leak_lab/wasm/` is gitignored and built by `leak_lab/build.sh` from its own Go
+module pinned to **v0.35.0**, so the leak lab route fails a local smoke run
+until that script has been run once. Everything else runs the shared
+`wasm/ailang.wasm` at **v0.35.2**.
+
+That split is deliberate, not neglect. In v0.35.2 `types.CheckModuleIFC` has one
+production call site — `internal/pipeline/pipeline_module_compile.go:235`, the
+CLI path. The browser path (`ailangLoadModule` → `WasmREPL.LoadModule` →
+`internal/repl/module_registry_load.go`) never calls it, so the shared WASM
+accepts modules the CLI rejects and publishes their exports. Loading
+`leak_lab/examples/direct.ail` through the v0.35.2 release WASM returns
+`success: true`; `ailang check` on the same file reports an information-flow
+violation. A lab about catching leaks cannot be built on a runtime that misses
+them, so it ships its own checker.
+
+**The intent is one AILANG install.** The fix is already written as
+`leak_lab/upstream/repl-ifc.patch` (the gate plus a 129-line test) and filed
+upstream as [ailang#1114](https://github.com/sunholo-data/ailang/issues/1114).
+When it lands, `leak_lab/compiler/` can be deleted, the lab moves to the shared
+runtime, and `.ailang-version` becomes the repo's single pin. Until then, do not
+bump `leak_lab/compiler/go.mod` in isolation — its verdicts are the demo's
+content, so any bump needs `go test ./...` and a leak lab smoke run.
 
 ## Leak lab addition
 
