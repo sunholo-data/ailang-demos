@@ -265,7 +265,21 @@ func runLiveSession(url: string, config: {headers: List[{name: string, value: st
       -- Post-session: play audio and show summary
       reportAudioOutput(pcmPath, wavPath);
       reportSummary(prompt, turnTextPath, turnUsagePath, transcriptPath);
-      println("")
+      println("");
+
+      -- Self-heal: a stale resumption handle (>2h old) makes the Live API close
+      -- the connection (close 1007 "Cannot find context snapshot corresponding
+      -- to the given handle ID") before any turn completes — silent failure with
+      -- no audio, no transcript response. Detect that signature (handle used +
+      -- no turnComplete) and retry once with a fresh session. The retry itself
+      -- has no handle, so it cannot recurse again.
+      let turnDone = if fileExists(turnDonePath) then readFile(turnDonePath) else "";
+      if length(handle) > 0 && turnDone != "1" then {
+        println("[speak] Resumption failed (stale handle) — retrying with a fresh session");
+        writeFile("${sessionDir}/session.handle", "");
+        runLiveSession(url, config, modelId, prompt, voice, "", sessionDir, toolsEnabled,
+          proactiveEnabled, affectiveEnabled, isGoogleAi, thinkingBudget, includeThoughts, noInterrupt)
+      } else ()
     },
     Err(e) => println("[Error] Connection failed: ${e}")
   }
