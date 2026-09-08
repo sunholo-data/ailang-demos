@@ -129,6 +129,15 @@ class GeminiLiveCore {
       const repl = new AilangREPL();
       await repl.init(this.config.wasmPath);
 
+      // AILANG v0.35+ enforces a wall-clock type-check budget per module
+      // (2s default). It is wall-clock, so the larger demo modules — docparse's
+      // tex_parser, ambient_browser, co_presenter — load fine on a fast machine
+      // and fail on a slow one. Raise it so the limit tracks genuinely
+      // pathological checking rather than the visitor's hardware.
+      if (typeof window.ailangSetTypeCheckBudget === 'function') {
+        window.ailangSetTypeCheckBudget(15000);
+      }
+
       // Import stdlib
       for (const lib of this.config.stdlibs) {
         repl.importModule(lib);
