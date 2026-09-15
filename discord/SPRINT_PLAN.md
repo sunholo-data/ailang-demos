@@ -76,7 +76,9 @@ for the full record:
   discord` 2/2, `npm test` 4/4 groups.
 - Core feedback extended with three new test-harness findings (string-blind stripper,
   broken forall property lowering #624 confirmation, float-binop dictionary error in
-  test bodies) in CORE_FEEDBACK.md; not sent.
+  test bodies) in CORE_FEEDBACK.md; the four harness reports were sent to core on
+  2026-09-15 via the canonical message store (inbox ailang-core; IDs in
+  CORE_FEEDBACK.md).
 - Still outstanding: live read/send/read-back (needs bot credential location, test
   channel, authorized message), browser/SSE integration, registry publication.
 

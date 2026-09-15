@@ -1,10 +1,22 @@
-# Prepared feedback for AILANG core
+# Feedback for AILANG core
 
-These reports have NOT been sent. Reproduced on AILANG v0.35.2-dirty,
+Delivery status:
+
+- **Test-harness findings (4 reports): SENT 2026-09-15** via `ailang messages`
+  to the canonical Firestore store (inbox `ailang-core`, from
+  `ailang-demos-discord`, Pub/Sub notification published). IDs:
+  `inbox_1789485974623_606ffb47` (string-aware stripper),
+  `inbox_1789485983321_c818644e` (forall properties #624),
+  `inbox_1789485984226_d0b46184` (float dictionary lookup),
+  `inbox_1789485985209_903af4be` (generators for imported types).
+  Note: the installed CLI renamed the store selection to
+  `AILANG_STORAGE_MESSAGING=gcp` (v1.0.0 rename; the skill's
+  `AILANG_MESSAGES_STORE` is rejected loudly — update the skill).
+- Earlier sections below: prepared, NOT sent. Reproduced on AILANG v0.35.2-dirty,
 commit a67b794313a1bf29567c285ebaa197be52675235, macOS arm64.
 Run the repro commands from `ailang-demos/discord`.
 
-## Test harness: stripper is not string-aware; unbalanced braces in strings corrupt the whole module's tests
+## Test harness: stripper is not string-aware; unbalanced braces in strings corrupt the whole module's tests [SENT: inbox_1789485974623_606ffb47]
 
 Found while retrofitting native tests (2026-09-15), on `build/package-authoring-followups`
 (AILANG dev + 427f1a00e). `internal/testing/source_strip.go: testAndPropertySkipRanges`
@@ -30,7 +42,7 @@ string literals as inert. Impact: cost a full debugging session; the failure poi
 unrelated tests and is invisible in the user's source. Workaround: keep JSON literals
 brace-balanced (`"{\"partial\":}"` is still invalid JSON).
 
-## Test harness: forall-style `properties [...]` never execute (confirms #624)
+## Test harness: forall-style `properties [...]` never execute (confirms #624) [SENT: inbox_1789485983321_c818644e]
 
 Confirmed on the same build: even the smallest forall property fails to lower.
 
@@ -52,7 +64,7 @@ round-trip laws (decode(encode(e)) == e).
 Impact on this work: both retrofitted packages rely on `ensures`-clause PBT for runtime
 property evidence and cannot express ADT round-trip laws as quantified properties.
 
-## Test harness: float binops in named test bodies fail dictionary lookup
+## Test harness: float binops in named test bodies fail dictionary lookup [SENT: inbox_1789485984226_d0b46184]
 
 Inside a `test "..." { ... }` body, any float comparison errors at runtime:
 
@@ -69,7 +81,7 @@ path. Workaround used: compare floats via contract clauses/properties instead, o
 through `show`-free integer projections. Suggestion: the named-test-body evaluation
 should reuse the standard evaluator's typeclass dictionary resolution.
 
-## Test harness: no property generator for imported types (Json/ADTs)
+## Test harness: no property generator for imported types (Json/ADTs) [SENT: inbox_1789485985209_903af4be]
 
 Contract-derived property cases need generators for every parameter type. Same-file
 records and ADTs derive fine, but imported types do not (`deriveNamedType` only sees

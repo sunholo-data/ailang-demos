@@ -65,7 +65,10 @@ Found while adding contracts/tests to both packages on
   Json-carrying ADT) parameters skip as `no_generator`, and module-level runs exit 1
   without `--allow-skips`. Same-file types generate fine.
 
-Full reports with repros: CORE_FEEDBACK.md (harness section). Not sent.
+Full reports with repros: CORE_FEEDBACK.md (harness section). Sent 2026-09-15 via
+`ailang messages` to inbox `ailang-core` on the canonical Firestore store:
+inbox_1789485974623_606ffb47, inbox_1789485983321_c818644e,
+inbox_1789485984226_d0b46184, inbox_1789485985209_903af4be.
 
 ## Working capabilities / resolved concerns
 - Result-returning FS writes and rename work for durable cursors and draft receipts.
