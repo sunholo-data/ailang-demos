@@ -26,6 +26,8 @@
 ## M4 — Integration and handoff
 - [x] Integration checks for CLI, MCP and protocol replay.
 - [x] README, package AGENT.md guides and demo check registration.
+- [x] Native package evidence retrofit: contracts, Net budgets and tests for
+  sunholo/discord and sunholo/agui; both pass `ailang pkg quality --strict`.
 - [ ] Live read/write/read-back in an explicitly selected test channel.
 - [x] Friction evidence and reports prepared for core.
 
@@ -51,6 +53,32 @@
 - Confirmed bug/diagnostic repros retained separately; expected failures do not run
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
+
+## Verification — 2026-09-15 (package evidence retrofit)
+
+Native tests, contracts and effect budgets added to both protocol packages
+(`build/package-authoring-followups` tooling; API unchanged except exporting
+`parseChannels` and `eventName`, both codec surfaces). See AGENT.md in each package
+for the full record:
+
+| Package | Native tests | Contract clauses | Net budgets | strict inventory |
+|---|---:|---:|---:|---|
+| sunholo/discord | 22 | 22 | 6 × `@limit=1` | 0 gaps (was 19) |
+| sunholo/agui | 13 | 8 | — (zero effects) | 0 gaps (was 8) |
+
+- `validate_package.sh` passes end-to-end on both packages (exit 0).
+- Contract-derived runtime properties: 19 runnable cases × 100 generated inputs pass
+  (18 discord + 1 agui); 10 skips are structural (no generator for imported `Json`,
+  and one out-of-contract requires filter on `digits`).
+- Z3 verify: discord 1 proved / 12 skipped with reasons; agui 8 skipped. 0
+  counterexamples, 0 unknown. Runtime properties carry the behavioral evidence.
+- Demo checks still green after the retrofit: `scripts/check_demos.sh --only
+  discord` 2/2, `npm test` 4/4 groups.
+- Core feedback extended with three new test-harness findings (string-blind stripper,
+  broken forall property lowering #624 confirmation, float-binop dictionary error in
+  test bodies) in CORE_FEEDBACK.md; not sent.
+- Still outstanding: live read/send/read-back (needs bot credential location, test
+  channel, authorized message), browser/SSE integration, registry publication.
 
 ## Resume
 
