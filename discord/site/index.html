@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AILANG Discord — AG-UI live demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.2rem; }
+  textarea { width: 100%; min-height: 4rem; font: inherit; }
+  button { font: inherit; padding: .4rem .9rem; cursor: pointer; }
+  #stream, #result { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin: 1rem 0; min-height: 2rem; white-space: pre-wrap; }
+  .status { color: #666; font-size: .85rem; }
+  .action { background: #eef; border: 1px solid #99f; border-radius: 8px; padding: .75rem; margin-top: .75rem; }
+  .err { color: #b00; }
+  code { background: #f4f4f4; padding: 0 .25rem; }
+</style>
+</head>
+<body>
+<h1>Discord draft review — live AG-UI over SSE</h1>
+<p class="status">POSTs a RunAgentInput to <code>/run</code>, renders the streamed AG-UI events, and posts the A2UI
+draft-review action back to <code>/action</code>. Offline by design: the run stores a draft; the action decides whether it sends.</p>
+<textarea id="msg" placeholder="Type the reply text for the draft…">AILANG live round-trip check — safe to delete</textarea>
+<button id="run">Run</button>
+<div id="stream" aria-live="polite"></div>
+<div id="action"></div>
+<div id="result" class="status"></div>
+<script>
+const streamEl = document.getElementById('stream');
+const actionEl = document.getElementById('action');
+const resultEl = document.getElementById('result');
+let draft = null;
+
+function line(text) { streamEl.textContent += text + '\n'; }
+
+async function run() {
+  streamEl.textContent = ''; actionEl.innerHTML = ''; resultEl.textContent = '';
+  draft = null;
+  const body = {
+    threadId: '1549868288002236417',
+    runId: 'browser-' + Date.now(),
+    messages: [{ role: 'user', id: 'u' + Date.now(), content: document.getElementById('msg').value }]
+  };
+  const res = await fetch('/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      for (const raw of frame.split('\n')) {
+        if (!raw.startsWith('data: ')) continue;
+        const payload = raw.slice(6);
+        if (payload === '[DONE]') { line('— stream complete —'); continue; }
+        handleEvent(JSON.parse(payload));
+      }
+    }
+  }
+}
+
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'RUN_STARTED': line(`▶ run ${ev.runId} on thread ${ev.threadId}`); break;
+    case 'TEXT_MESSAGE_CONTENT': line(ev.delta); break;
+    case 'TOOL_CALL_START': line(`⚙ tool ${ev.toolCallName} (${ev.toolCallId})`); break;
+    case 'TOOL_CALL_RESULT':
+      try {
+        const payload = JSON.parse(ev.content);
+        if (payload.ok && payload.a2ui_operations) { draft = payload.data; renderAction(draft); }
+        // payload.a2ui_operations sits at the top level; ids live under payload.data
+        line(`⚙ result: ${ev.content.slice(0, 120)}${ev.content.length > 120 ? '…' : ''}`);
+      } catch { line(`⚙ result: ${ev.content}`); }
+      break;
+    case 'STATE_SNAPSHOT': line(`📷 state: ${JSON.stringify(ev.snapshot).slice(0, 140)}`); break;
+    case 'RUN_FINISHED': line(`■ run finished`); break;
+    case 'RUN_ERROR': line(`✗ error: ${ev.message}`); break;
+  }
+}
+
+function renderAction(payload) {
+  const op = payload.a2ui_operations[0];
+  const surfaceId = (op.path && op.path[0] && op.path[0].updateCommands && op.path[0].updateCommands[0])
+    ? op.path[0].updateCommands[0].surfaceUpdate.surfaceId : null;
+  const id = payload.id;
+  actionEl.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.textContent = `Submit draft ${id} (revision ${revision})`;
+  btn.onclick = () => submit(id, revision);
+  actionEl.appendChild(btn);
+}
+
+async function submit(id, revision) {
+  const action = {
+    version: 'v0.9.1',
+    action: { name: 'submitDraft', surfaceId: `draft-${id}`, sourceComponentId: 'submit',
+      timestamp: new Date().toISOString(), context: { draftId: id, revision: revision, text: document.getElementById('msg').value } }
+  };
+  const res = await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) });
+  const out = await res.json();
+  resultEl.textContent = 'action → ' + JSON.stringify(out);
+  resultEl.className = 'status ' + (out.ok ? '' : 'err');
+}
+
+document.getElementById('run').onclick = run;
+</script>
+</body>
+</html>

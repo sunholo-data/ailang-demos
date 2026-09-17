@@ -54,6 +54,33 @@
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
 
+## Verification — 2026-09-17 (0.2.1 metadata + live SSE endpoint)
+
+- Metadata patch release `0.2.1` for both packages: ai_summary now covers the
+  0.2.0 features and agui's description names the input module (the registry
+  search blurb had shipped stale in 0.2.0). Code identical to 0.2.0; smoke
+  gates green; `ailang search discord` advertises the full feature set.
+- Live AG-UI HTTP/SSE endpoint (offline, token-free — the bot token has moved
+  to the daneel account, so no live Discord calls happen from this machine):
+  - `discord/ailang-discord-server`: stdlib-only HTTP host. POST /run streams
+    the AILANG `serve` step's JSONL as SSE data: frames; POST /action applies an
+    A2UI draft-review action; GET / serves the browser page; writer-flock rules
+    mirror the CLI launcher.
+  - AILANG `serve --file <run-input.json>`: decodes the RunAgentInput request
+    with the published sunholo/agui/input@0.2.x module, echoes the last user
+    message, creates a real stored draft (A2UI operations included) and emits a
+    validateRun-legal event stream. First in-demo consumer of the published
+    request codec.
+  - Browser page (`discord/site/index.html`): renderer for the streamed events
+    plus the action round-trip (submit button built from the draft surface).
+  - Integration suite extended to six groups; all pass offline: the SSE stream's
+    events are parsed and validated against @ag-ui/core, the run thread/runId
+    match the request, the draft payload carries schema-valid A2UI operations,
+    and the posted action reaches the structured policy gate (writes disabled,
+    no token — exactly the daneel-account deployment shape).
+- Remaining in the milestone: WASM renderer and an independent frontend test
+  against a deployed instance; Gateway streaming; thread/attachment richness.
+
 ## Verification — 2026-09-17 (0.2.0 package release)
 
 Feature release published after the 0.1.0 docs work:

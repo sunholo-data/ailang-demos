@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Live AG-UI HTTP/SSE endpoint for the Discord demo.
+
+Stdlib-only HTTP host: accepts a RunAgentInput POST (the request payload of
+the AG-UI protocol, decoded inside AILANG by the published sunholo/agui/input
+module), invokes the AILANG CLI `serve` step and streams the returned AG-UI
+JSONL as server-sent events. The browser page served at / renders the stream
+and posts an A2UI draft-review action back (renderer/action round-trip).
+
+Offline by design: the run creates a real stored draft for review and never
+touches the Discord network; the browser action decides whether to send.
+Process/state rules mirror ./ailang-discord (private state dir, writer flock).
+"""
+import fcntl
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import threading
+from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+root = Path(__file__).resolve().parent
+os.umask(0o077)
+env = os.environ.copy()
+state = Path(env.get('DISCORD_STATE_DIR', str(Path.home() / '.ailang' / 'discord'))).resolve()
+state.mkdir(mode=0o700, parents=True, exist_ok=True)
+env['DISCORD_STATE_DIR'] = str(state)
+env['DISCORD_CONFIG'] = str(Path(env.get('DISCORD_CONFIG', str(root / 'config.json'))).resolve())
+if env.get('DISCORD_TOKEN_FILE'):
+    env['DISCORD_TOKEN_FILE'] = str(Path(env['DISCORD_TOKEN_FILE']).resolve())
+
+PORT = int(env.get('DISCORD_SSE_PORT', '8089'))
+PAGE = Path(root / 'site' / 'index.html')
+
+
+def cli(*args):
+    """Run the AILANG CLI under the writer lock; returns (returncode, stdout)."""
+    lock = open(state / '.writer.lock', 'a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        child = subprocess.run(['ailang', 'run', '--entry', 'main', '--caps', 'IO,FS,Net,Env,Clock',
+                                '--quiet', '--no-print', 'main.ail', *args],
+                               cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        return child.returncode, child.stdout
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
+    def log_message(self, fmt, *a):
+        sys.stderr.write('[sse] ' + (fmt % a) + '\n')
+
+    def _read_body(self):
+        length = int(self.headers.get('content-length') or 0)
+        return self.rfile.read(length).decode('utf-8', 'replace') if length else ''
+
+    def do_GET(self):
+        if self.path == '/healthz':
+            body = b'ok'
+            self.send_response(200)
+            self.send_header('content-type', 'text/plain')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path in ('/', '/index.html'):
+            try:
+                body = PAGE.read_bytes()
+            except OSError:
+                body = b'missing site/index.html'
+            self.send_response(200)
+            self.send_header('content-type', 'text/html; charset=utf-8')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.send_header('content-length', '0')
+            self.end_headers()
+
+    def do_POST(self):
+        raw = self._read_body()
+        if self.path == '/run':
+            self.send_response(200)
+            self.send_header('content-type', 'text/event-stream; charset=utf-8')
+            self.send_header('cache-control', 'no-cache')
+            self.send_header('connection', 'close')
+            self.end_headers()
+            tmp = state / f'run-input-{os.getpid()}-{threading.get_ident()}.json'
+            tmp.write_text(raw, encoding='utf-8')
+            try:
+                code, out, _ = None, '', None
+                proc = subprocess.Popen(['ailang', 'run', '--entry', 'main', '--caps', 'IO,FS,Net,Env,Clock',
+                                         '--quiet', '--no-print', 'main.ail', 'serve', '--file', str(tmp)],
+                                        cwd=root, env=env, stdout=subprocess.PIPE, text=True, bufsize=1)
+                for line in proc.stdout:
+                    line = line.strip()
+                    if line:
+                        self.wfile.write(f'data: {line}\n\n'.encode('utf-8'))
+                        self.wfile.flush()
+                proc.wait(timeout=90)
+                self.wfile.write(b'data: [DONE]\n\n')
+                self.wfile.flush()
+            except Exception as e:  # stream broke; nothing to salvage
+                sys.stderr.write(f'[sse] run failed: {e}\n')
+            finally:
+                tmp.unlink(missing_ok=True)
+                self.close_connection = True
+        elif self.path == '/action':
+            tmp = state / f'action-{os.getpid()}-{threading.get_ident()}.json'
+            tmp.write_text(raw, encoding='utf-8')
+            try:
+                code, out = cli('action', '--file', str(tmp))
+                body = out.strip().encode('utf-8') or b'{"ok":false,"error":{"kind":"input","message":"empty response"}}'
+                self.send_response(200)
+                self.send_header('content-type', 'application/json')
+                self.send_header('content-length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            finally:
+                tmp.unlink(missing_ok=True)
+        else:
+            self.send_response(404)
+            self.send_header('content-length', '0')
+            self.end_headers()
+
+
+def main():
+    server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    print(f'AG-UI SSE server on http://127.0.0.1:{PORT} (state: {state})', file=sys.stderr, flush=True)
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

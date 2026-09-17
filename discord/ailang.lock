@@ -1,6 +1,6 @@
 {
   "ailang_version": "v0.39.4-10-g6f3a96683-dirty",
-  "generated_at": "2026-09-17T16:47:32.516425Z",
+  "generated_at": "2026-09-17T16:56:44.536316Z",
   "generator": "ailang lock v0.39.4-10-g6f3a96683-dirty",
   "packages": [
     {
@@ -31,7 +31,7 @@
       "name": "sunholo/agui",
       "path": "/Users/voightkampff/dev/sunholo-data/ailang-packages/packages/agui",
       "source": "path",
-      "version": "0.2.0"
+      "version": "0.2.1"
     },
     {
       "ailang": ">=0.35.0",
@@ -47,7 +47,7 @@
       "name": "sunholo/discord",
       "path": "/Users/voightkampff/dev/sunholo-data/ailang-packages/packages/discord",
       "source": "path",
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ],
   "schema": "ailang.lock/v1",
