@@ -54,6 +54,26 @@
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
 
+## Verification — 2026-09-17 (0.3.0 embeds)
+
+- `sunholo/discord@0.3.0` published: embed support — the fix for Discord's
+  wall-of-text failure mode (plain text loses layout, wraps raggedly, and caps
+  at 2000 chars; the Daneel help card in #daneel hit all three). `Embed` =
+  title/description/color/footer/fields; `validEmbed` enforces every Discord
+  limit (title 256, description 4096, 25 fields of 256/1024, total 6000,
+  content-or-embeds); `embedJson` omits empty keys; `sendMessageEmbeds` caps at
+  10 embeds per message, mentions suppressed.
+- Worked example: the Daneel help address book as an embed (title + 6 fields +
+  footer) — fits the 6000 budget, field layout survives. 28 native tests (was
+  24), 38 contract clauses, 0 gaps, smoke 15/15.
+- Consumer verification: registry-installed 0.3.0 builds the help embed and the
+  send body. Demo lock refreshed; demo checks 2/2.
+- Generator gap addendum for core: `fieldsFit([EmbedField])` derives (100-case
+  PBT) but `validEmbed(Embed)` — a record containing a list of records — skips
+  as no_generator (CORE_FEEDBACK.md addendum).
+- Remaining: wire Daneel's help output to sendMessageEmbeds (daneel account);
+  browser/SSE milestone unchanged; older unsent feedback reports.
+
 ## Verification — 2026-09-17 (0.2.1 metadata + live SSE endpoint)
 
 - Metadata patch release `0.2.1` for both packages: ai_summary now covers the

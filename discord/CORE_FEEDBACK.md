@@ -83,6 +83,12 @@ should reuse the standard evaluator's typeclass dictionary resolution.
 
 ## Test harness: no property generator for imported types (Json/ADTs) [SENT: inbox_1789485985209_903af4be]
 
+Addendum 2026-09-17: same-file ADTs derive, but a record containing a
+list-of-records field does not — `fieldsFit(fs: [EmbedField])` generates 100
+cases while `validEmbed(e: Embed)` (Embed has `fields: [EmbedField]`) skips as
+no_generator. Nested record-in-list-in-record appears to exhaust the derivation
+budget. Observed on the embed codec (sunholo/discord 0.3.0).
+
 Contract-derived property cases need generators for every parameter type. Same-file
 records and ADTs derive fine, but imported types do not (`deriveNamedType` only sees
 the same file). Every `ensures` on a function taking `std/json` `Json` — or an ADT
