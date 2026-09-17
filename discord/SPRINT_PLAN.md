@@ -74,6 +74,19 @@
 - Remaining: wire Daneel's help output to sendMessageEmbeds (daneel account);
   browser/SSE milestone unchanged; older unsent feedback reports.
 
+## Verification — 2026-09-17 (0.4.0 embed images + brand colors)
+
+- `sunholo/discord@0.4.0` published: embed `image` and `thumbnail` by URL —
+  Discord fetches the asset, so brand visuals need no multipart upload
+  (file uploads remain unmodeled; host the asset and embed by URL).
+- Worked example is now Sunholo-branded: accent 15154199 (Sunholo orange
+  #E73C17 per the brand guide at sunholo.com/assets.html) and the hosted
+  AILANG architectural study (assets/visuals/service-studies/v2/ailang.webp)
+  as image + thumbnail. SVG is not embed-renderable; WebP/PNG are.
+- 29 native tests (image/thumbnail URL objects, 2048 URL limit, brand
+  embed), 38 contracts, 0 gaps, smoke 15/15; consumer-verified from the
+  registry.
+
 ## Verification — 2026-09-17 (0.2.1 metadata + live SSE endpoint)
 
 - Metadata patch release `0.2.1` for both packages: ai_summary now covers the

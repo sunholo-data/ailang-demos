@@ -1,7 +1,7 @@
 {
-  "ailang_version": "v0.39.4-12-gce5eadae8-dirty",
-  "generated_at": "2026-09-17T18:34:14.923109Z",
-  "generator": "ailang lock v0.39.4-12-gce5eadae8-dirty",
+  "ailang_version": "v0.39.5-3-g7daa703ba-dirty",
+  "generated_at": "2026-09-17T18:48:36.544781Z",
+  "generator": "ailang lock v0.39.5-3-g7daa703ba-dirty",
   "packages": [
     {
       "ailang": ">=0.9.2",
@@ -35,7 +35,7 @@
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:a0a914607a85c42c29a6ccc3a1dce14fdd2eec0ad1dfbeb0eac65fe4654bc913",
+      "content_hash": "sha256:8c4fe979b7456e30b7e37449bad7a0ccb2cb8abdd908f6b6969050bf5fb6f1aa",
       "effects": [
         "IO",
         "Net"
@@ -47,7 +47,7 @@
       "name": "sunholo/discord",
       "path": "/Users/voightkampff/dev/sunholo-data/ailang-packages/packages/discord",
       "source": "path",
-      "version": "0.3.0"
+      "version": "0.4.0"
     }
   ],
   "schema": "ailang.lock/v1",
