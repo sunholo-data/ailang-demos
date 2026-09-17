@@ -107,8 +107,20 @@ docker run --rm -p 8089:8089 -e DISCORD_SSE_HOST=0.0.0.0 \
   ailang-discord-demo
 ```
 
-## Registering on the demo hub
+## Registering on the demo hub (two lines)
 
-Once the instance is reachable, add the nav link in `site/index.html`
-(`Discord → https://<deployment>/`) and redeploy the static site. The link is
-added at deploy time so the hub never points at a dead origin.
+The hub's static page (`site/discord/`) replays a recorded run through the WASM
+renderer with no server. To make it **fully interactive** — visitors typing on
+www.sunholo.com driving the real instance — set two things:
+
+1. On the Daneel server host: `DISCORD_SSE_ORIGIN=https://www.sunholo.com`
+   (the CORS opt-in; the token stays server-side regardless).
+2. In `site/discord/index.html`: set `const LIVE_URL = 'https://<daneel-host>'`.
+   The page then shows the live controls ("Run your own"), streams the real
+   run cross-origin, and the review card's Submit posts the action — the
+   policy gate on the server decides the send and returns the message link.
+
+Until `LIVE_URL` is set, the published page ships as the replay showcase and
+the action button explains the gate. The server's own page (`GET /`) is always
+the same experience same-origin. Redeploy the static site after setting the
+constant so the hub never points at a dead origin.
