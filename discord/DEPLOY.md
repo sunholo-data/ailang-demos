@@ -107,6 +107,48 @@ docker run --rm -p 8089:8089 -e DISCORD_SSE_HOST=0.0.0.0 \
   ailang-discord-demo
 ```
 
+## Cloud Run variant (Daneel's usual shape)
+
+The server is a plain HTTP container, so Cloud Run works directly. Two
+adjustments from the bare-metal runbook:
+
+1. **Token via Secret Manager, not a file.** The AILANG code accepts
+   `DISCORD_BOT_TOKEN` as an env var, so bind the secret at deploy time:
+
+   ```sh
+   echo -n "$DISCORD_BOT_TOKEN" | gcloud secrets create discord-bot-token --data-file=-
+
+   gcloud run deploy discord-demo \
+     --source discord/ \
+     --set-env-vars DISCORD_SSE_HOST=0.0.0.0,DISCORD_SSE_ORIGIN=https://www.sunholo.com \
+     --set-secrets DISCORD_BOT_TOKEN=discord-bot-token:latest \
+     --min-instances=1 --max-instances=1 \
+     --no-allow-unauthenticated=false
+   ```
+
+   (`token()` in `service.ail` reads `DISCORD_BOT_TOKEN` first, then
+   `DISCORD_TOKEN_FILE` — the container never touches a token file.)
+
+2. **Draft state must survive between requests.** The review round-trip keeps
+   drafts, cursors and the writer lock in `DISCORD_STATE_DIR`. Cloud Run scales
+   to zero by default and has an ephemeral filesystem, so either pin
+   `--min-instances=1 --max-instances=1` with a mounted volume for `/state`
+   (second-gen runtimes support volume mounts), or run the container on a small
+   always-on VM. Losing the state dir mid-review is not fatal — the visitor's
+   action ends at a structured `state` error and they re-run — but the
+   durability keeps the round-trip smooth.
+
+3. **TLS is free**: Cloud Run terminates HTTPS at the URL it issues
+   (`https://discord-demo-<hash>.run.app`); set that origin as `LIVE_URL` in
+   `site/discord/index.html` (or point the hub's `Discord` card at the
+   server's own page, which serves the same experience same-origin).
+
+Keep `--max-instances=1`: the writer flock is in-process, so a single instance
+is the concurrency model (all requests serialize; the queue absorbs bursts).
+Public access plus one instance plus the 64KB body cap is the intended
+public-demo posture; enable writes in `config.json` only when Daneel accepts
+that anyone reaching the URL can post to the configured channel.
+
 ## Registering on the demo hub (two lines)
 
 The hub's static page (`site/discord/`) replays a recorded run through the WASM
