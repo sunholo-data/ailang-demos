@@ -46,13 +46,20 @@ export pure func renderEvent(raw: string) -> string
 }
 
 -- Render the whole stream in order; used for replays and as the page's
--- one-shot path when the stream has already completed.
+-- one-shot path when the stream has already completed. Blank lines (e.g. a
+-- trailing newline in a recorded file) render nothing.
 export pure func renderAll(raws: [string]) -> string
 ensures { listLength(raws) != 0 || result == "" }
 {
   match raws {
     [] => "",
-    raw :: rest => "${renderEvent(raw)}${renderAll(rest)}"
+    raw :: rest => match raw {
+      "" => renderAll(rest),
+      _ => match renderEvent(raw) {
+        "" => renderAll(rest),
+        html => "${html}${renderAll(rest)}"
+      }
+    }
   }
 }
 

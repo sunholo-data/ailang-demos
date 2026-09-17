@@ -51,3 +51,9 @@ test "renderAll concatenates in order and renders nothing for empty input" {
   contains(renderAll([encode(jo([kv("type", js("RUN_STARTED")), kv("threadId", js("t")), kv("runId", js("r"))])),
                       encode(jo([kv("type", js("RUN_FINISHED"))]))]), "run finished")
 }
+
+test "renderAll skips blank lines from recorded files" {
+  renderAll([""]) == "" &&
+  renderAll([encode(jo([kv("type", js("RUN_FINISHED"))])), ""]) == renderEvent(encode(jo([kv("type", js("RUN_FINISHED"))]))) &&
+  not contains(renderAll([encode(jo([kv("type", js("RUN_FINISHED"))])), ""]), "unparseable")
+}

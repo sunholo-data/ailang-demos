@@ -80,9 +80,17 @@ fi
 # Any other site/*/ sub-pages — symlink for live editing
 for sub in "$REPO_ROOT"/site/*/; do
   name="$(basename "$sub")"
-  case "$name" in thumbnails|shared|linkedin) continue ;; esac
+  case "$name" in thumbnails|shared|linkedin|discord) continue ;; esac
   ln -sfn "$sub" "$SITE/$name"
 done
+
+# Discord demo — static page + recorded run; the renderer module is copied
+# from the demo's source of truth (single copy: tests compile discord/renderer.ail).
+if [ -d "$REPO_ROOT/site/discord" ]; then
+  mkdir -p "$SITE/discord"
+  cp "$REPO_ROOT"/site/discord/* "$SITE/discord/"
+  cp "$REPO_ROOT/discord/renderer.ail" "$SITE/discord/renderer.ail"
+fi
 
 # Thumbnails for hub page cards
 [ -d "$REPO_ROOT/site/thumbnails" ] && ln -s "$REPO_ROOT/site/thumbnails" "$SITE/thumbnails"
