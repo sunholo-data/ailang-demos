@@ -54,6 +54,34 @@
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
 
+## Verification — 2026-09-17 (live Discord validation)
+
+First live end-to-end round-trip, performed with a dedicated test bot after the
+package evidence retrofit. Bot "Daneel" (application user 1550164439481851914),
+sunholo guild 1162757114259853342, designated test channel #daneel
+(1549868288002236417). Token supplied via DISCORD_TOKEN_FILE (0600 file outside
+the repo); never printed. config.json stays gitignored (IDs only).
+
+- `channels`: bot lists all 16 guild channels; #daneel flagged configured.
+- `doctor`: identity checked (bot_id 1550164439481851914, username Daneel);
+  writes reported disabled at that point.
+- `read --channel 1549868288002236417 --limit 5`: five live messages with full
+  content (Message Content Intent confirmed ON), pagination cursor `next_before`
+  returned, one non-text message correctly surfaced with empty content plus the
+  documented content_note.
+- `send --channel 1549868288002236417 --text "AILANG live validation 2026-09-17
+  — safe to delete"` (explicitly authorized by the user): Ok, message ID
+  1550168468115169352, author Daneel, mentions empty (outgoing mention policy held).
+- Read-back `read --channel ... --limit 3`: the sent message returned first with
+  byte-identical content including the em dash, matching ID and timestamp.
+- `enable_writes` returned to false after the round-trip.
+- Lock refresh: `ailang lock` re-pinned path dependencies after the package
+  retrofit (content-hash warning observed and cleared).
+- No reply/draft live tests were performed this session; offer stands.
+- Remaining: browser/SSE integration, registry publication, remaining unsent
+  feedback items (unary bang, reserved-parameter diagnostics, relative imports,
+  MCP locking, Observatory storage).
+
 ## Verification — 2026-09-15 (package evidence retrofit)
 
 Native tests, contracts and effect budgets added to both protocol packages
