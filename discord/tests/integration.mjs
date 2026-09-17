@@ -124,6 +124,16 @@ try {
     const actionOut=await actionRes.json();
     assert.equal(actionOut.error.kind,'policy',JSON.stringify(actionOut));
     console.log('PASS renderer/action round-trip over HTTP');
+
+    // The page's WASM renderer assets must be reachable (allowlist-checked).
+    const rendererSrc = await (await fetch('http://127.0.0.1:18089/renderer.ail')).text();
+    assert.ok(rendererSrc.includes('export pure func renderEvent'), rendererSrc.slice(0, 80));
+    const repl = await (await fetch('http://127.0.0.1:18089/wasm/ailang-repl.js')).text();
+    assert.ok(repl.includes('AilangREPL'));
+    const wasm = await fetch('http://127.0.0.1:18089/wasm/ailang.wasm');
+    assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+    assert.ok((await wasm.arrayBuffer()).byteLength > 1000);
+    console.log('PASS WASM renderer assets served (AILANG renders in-page)');
   } finally {
     server.kill('SIGTERM');
   }

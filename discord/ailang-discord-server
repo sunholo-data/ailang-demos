@@ -76,6 +76,38 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('content-length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == '/renderer.ail':
+            try:
+                body = (root / 'renderer.ail').read_bytes()
+            except OSError:
+                body = b'missing renderer.ail'
+            self.send_response(200)
+            self.send_header('content-type', 'text/plain; charset=utf-8')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path.startswith('/wasm/') and self.path.count('/') == 2:
+            # Fixed allowlist only: the AILANG WASM runtime + its glue scripts.
+            names = {'/wasm/ailang.wasm': 'application/wasm',
+                     '/wasm/wasm_exec.js': 'text/javascript',
+                     '/wasm/ailang-repl.js': 'text/javascript'}
+            if self.path not in names:
+                self.send_response(404)
+                self.send_header('content-length', '0')
+                self.end_headers()
+                return
+            try:
+                body = (root.parent / 'wasm' / self.path[len('/wasm/'):]).read_bytes()
+            except OSError:
+                self.send_response(404)
+                self.send_header('content-length', '0')
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header('content-type', names[self.path])
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_response(404)
             self.send_header('content-length', '0')

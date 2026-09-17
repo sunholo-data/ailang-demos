@@ -78,6 +78,17 @@
     match the request, the draft payload carries schema-valid A2UI operations,
     and the posted action reaches the structured policy gate (writes disabled,
     no token — exactly the daneel-account deployment shape).
+- WASM renderer: `discord/renderer.ail` — a pure, self-contained AILANG module
+  (std-only, untrusted content escaped) that maps one AG-UI event JSON to an HTML
+  fragment and drafts to review cards with data-attribute action buttons;
+  `renderAll` covers replay. 6 native tests, all passing. The browser page loads
+  the repo's WASM interpreter (`wasm/ailang.wasm` via the existing AilangREPL
+  glue), installs the module with `ailangLoadModule`, self-checks it, and renders
+  each streamed frame with `ailangCall('renderer', 'renderEvent', …)`; a
+  JavaScript fallback with the identical contract keeps the demo alive if WASM
+  is unavailable. The server serves the renderer source and the WASM runtime
+  from a strict allowlist. Integration suite extended to seven groups (assets
+  served, renderEvent asserted via the CLI); all pass offline.
 - Remaining in the milestone: WASM renderer and an independent frontend test
   against a deployed instance; Gateway streaming; thread/attachment richness.
 
