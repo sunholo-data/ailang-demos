@@ -54,6 +54,29 @@
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
 
+## Verification — 2026-09-17 (registry publication)
+
+Both protocol packages published to the AILANG registry (immutable versions):
+
+- `sunholo/agui@0.1.0` and `sunholo/discord@0.1.0` → https://registry.ailang.sunholo.com
+- Before publishing, each package gained an offline `_smoke.ail` boot gate
+  (discord 12/12 checks, agui 10/10 checks) — the publish flow executes it
+  automatically ("✓ _smoke.ail passed"). Pure helpers in the smoke files carry
+  contracts and the smoke functions carry `@limit` IO budgets, so
+  `ailang pkg quality --strict` stays at 0 gaps (24 contract clauses for discord,
+  10 for agui).
+- Effect ceilings widened minimally to admit the smoke gate (discord
+  `[Net, IO]`, agui `[IO]`), documented in each AGENT.md; library surfaces
+  unchanged.
+- Consumer verification: a scratch package with `"sunholo/discord" = "0.1.0"`
+  and `"sunholo/agui" = "0.1.0"` registry deps resolved via `ailang lock`,
+  compiled and ran (`id-ok=true path-ok=true`, RUN_STARTED event encoded).
+- Demo re-checked after the lock refresh: `scripts/check_demos.sh --only
+  discord` 2/2. The demo keeps path dependencies for co-development.
+- Remaining: browser/SSE integration; four older unsent feedback reports
+  (unary bang, reserved-parameter diagnostics, relative imports, MCP locking,
+  Observatory storage).
+
 ## Verification — 2026-09-17 (live Discord validation)
 
 First live end-to-end round-trip, performed with a dedicated test bot after the
