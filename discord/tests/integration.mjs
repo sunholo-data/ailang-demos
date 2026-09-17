@@ -142,6 +142,18 @@ try {
   const wasmTest = spawnSync('node', [path.join(root, 'tests', 'wasm_renderer_test.cjs')], {encoding: 'utf8', timeout: 120000});
   assert.equal(wasmTest.status, 0, wasmTest.stdout + wasmTest.stderr);
   console.log(wasmTest.stdout.trim().split('\n').pop());
+
+  // ─── Slash commands: signed interactions round-trip (Ed25519, pynacl).
+  const py = spawnSync('python3', [path.join(root, 'tests', 'interactions_test.py')],
+    {encoding: 'utf8', timeout: 180000, env: {...process.env, DEMO_ROOT: path.join(root)}});
+  const pyLines = (py.stdout + py.stderr).split('\n').filter(l => l.startsWith('PASS') || l.startsWith('SKIP'));
+  if (pyLines[0] && pyLines[0].startsWith('SKIP')) {
+    console.log('SKIP slash-command interactions: pynacl not installed (install to cover)');
+  } else {
+    assert.equal(py.status, 0, py.stdout + py.stderr);
+    for (const l of pyLines) console.log(l);
+    console.log('PASS slash-command interactions: Ed25519 handshake end to end');
+  }
   console.log('All offline integration checks passed. No live Discord API calls made.');
 } finally {
   if(child) child.kill('SIGTERM');

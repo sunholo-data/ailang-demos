@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.request
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -146,6 +147,108 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('content-length', '0')
         self.end_headers()
 
+    def do_INTERACTIONS(self, raw):
+        """Discord Interactions Endpoint: verify Ed25519 (host-side, pynacl),
+        answer PING, defer commands, run the AILANG step, deliver a followup.
+        Generic: what a command DOES is the application's dispatch; this host
+        starts the demo agent flow with the interaction's text option."""
+        key = env.get('DISCORD_APP_PUBLIC_KEY', '').strip()
+        try:
+            import nacl.signing as _s  # noqa: F401  (capability probe)
+            have_nacl = True
+        except ImportError:
+            have_nacl = False
+        if not (have_nacl and key):
+            self.send_response(501)
+            self._cors()
+            self.send_header('content-type', 'application/json')
+            body = b'{"error":"interactions endpoint requires pynacl and DISCORD_APP_PUBLIC_KEY"}'
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        try:
+            from nacl.signing import VerifyKey
+            from nacl.exceptions import BadSignatureError
+            sig = self.headers.get('x-signature-ed25519', '')
+            ts = self.headers.get('x-signature-timestamp', '')
+            VerifyKey(bytes.fromhex(key)).verify(ts.encode() + raw.encode(), bytes.fromhex(sig))
+        except Exception as e:
+            sys.stderr.write(f'[interactions] signature verification failed: {e}\n')
+            self.send_response(401)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
+        try:
+            interaction = json.loads(raw)
+        except ValueError:
+            self.send_response(400)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
+        if interaction.get('type') == 1:
+            body = b'{"type":1}'
+            self.send_response(200)
+            self.send_header('content-type', 'application/json')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if interaction.get('type') == 2:
+            # Defer now (Discord's 3s window), then run the AILANG step and
+            # deliver the result as a followup via the interaction webhook.
+            self.send_response(200)
+            self.send_header('content-type', 'application/json')
+            body = b'{"type":5}'
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            threading.Thread(target=self._deferred_followup, args=(interaction, raw), daemon=True).start()
+            return
+        self.send_response(400)
+        self.send_header('content-length', '0')
+        self.end_headers()
+
+    def _deferred_followup(self, interaction):
+        """Run the AILANG agent step for a deferred slash command and deliver
+        the result (draft review embed) via the interaction webhook. Generic:
+        this host's agent step is the demo flow; other applications dispatch
+        their own command names to their own flows."""
+        app_id = str(interaction.get('application_id') or '')
+        itoken = str(interaction.get('token') or '')
+        text = ''
+        for opt in (interaction.get('data') or {}).get('options') or []:
+            if opt.get('name') == 'text':
+                text = str(opt.get('value') or '')
+        tmp = state / f'interaction-{os.getpid()}-{threading.get_ident()}.json'
+        tmp.write_text(json.dumps({'threadId': 'interactions',
+                                   'runId': 'ic-' + str(interaction.get('id', '')),
+                                   'messages': [{'role': 'user', 'id': 'ic', 'content': text}]}), encoding='utf-8')
+        try:
+            _code, out = cli('serve', '--file', str(tmp))
+            events = [json.loads(line) for line in out.strip().splitlines() if line.strip()]
+            deltas = ''.join(e.get('delta', '') for e in events if e.get('type') == 'TEXT_MESSAGE_CONTENT')
+            draft_id, has_ops = '', False
+            for e in events:
+                if e.get('type') == 'TOOL_CALL_RESULT':
+                    try:
+                        payload = json.loads(e.get('content', '{}'))
+                        if payload.get('ok'):
+                            draft_id = (payload.get('data') or {}).get('id', '')
+                            has_ops = bool(payload.get('a2ui_operations'))
+                    except ValueError:
+                        pass
+            follow = {'embeds': [{'title': f'Draft {draft_id} ready for review' if draft_id else 'Run finished',
+                                  'description': (deltas or '(no text)')[:3500], 'color': 15154199}]}
+            req = urllib.request.Request(f'https://discord.com/api/v10/webhooks/{app_id}/{itoken}',
+                                         data=json.dumps(follow).encode('utf-8'),
+                                         headers={'content-type': 'application/json'})
+            urllib.request.urlopen(req, timeout=30)
+        except Exception as e:
+            sys.stderr.write(f'[interactions] followup failed: {e}\n')
+        finally:
+            tmp.unlink(missing_ok=True)
+
     def do_POST(self):
         if PATH_PREFIX and self.path.startswith(PATH_PREFIX + '/'):
             self.path = self.path[len(PATH_PREFIX):]
@@ -155,7 +258,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('content-length', '0')
             self.end_headers()
             return
-        if self.path == '/run':
+        if PATH_PREFIX and self.path == PATH_PREFIX + '/interactions' or self.path == '/interactions':
+            self.do_INTERACTIONS(raw)
+        elif self.path == '/run':
             self.send_response(200)
             self._cors()
             self.send_header('content-type', 'text/event-stream; charset=utf-8')
