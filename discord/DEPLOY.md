@@ -87,6 +87,11 @@ AILANG (not the web layer) is what actually permits or blocks sends.
 
 ## Health and checks
 
+Self-connect quirk: `curl http://<tailscale-ip>:8089` from the host itself
+hangs — macOS routes self-traffic on the utun interface into the tunnel.
+Test locally via `127.0.0.1:8089`; other tailnet devices reach the same
+wildcard listener normally (`http://<machine-tailscale-ip>:8089/`).
+
 - `GET /healthz` → `ok`
 - The page's renderer status line shows whether the AILANG WASM runtime loaded
   (or the JS fallback engaged).

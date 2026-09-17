@@ -137,6 +137,11 @@ try {
   } finally {
     server.kill('SIGTERM');
   }
+
+  // ─── Headless WASM renderer: the real ailang.wasm + renderer.ail in Node.
+  const wasmTest = spawnSync('node', [path.join(root, 'tests', 'wasm_renderer_test.cjs')], {encoding: 'utf8', timeout: 120000});
+  assert.equal(wasmTest.status, 0, wasmTest.stdout + wasmTest.stderr);
+  console.log(wasmTest.stdout.trim().split('\n').pop());
   console.log('All offline integration checks passed. No live Discord API calls made.');
 } finally {
   if(child) child.kill('SIGTERM');
