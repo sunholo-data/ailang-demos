@@ -34,7 +34,7 @@ action back to <code>/action</code>. Offline by design: the run stores a draft; 
 <div id="stream" aria-live="polite"></div>
 <div id="action"></div>
 <div id="result" class="status"></div>
-<script src="/wasm/ailang-repl.js"></script>
+<script src="../wasm/ailang-repl.js"></script>
 <script>
 const streamEl = document.getElementById('stream');
 const actionEl = document.getElementById('action');
@@ -45,7 +45,7 @@ let useWasm = false;
 // ─── WASM renderer: load the AILANG runtime, install renderer.ail, render via ailangCall.
 async function initWasm() {
   try {
-    const repl = await new AilangREPL().init('/wasm/ailang.wasm');
+    const repl = await new AilangREPL().init('../wasm/ailang.wasm');
     const source = await (await fetch('/renderer.ail')).text();
     const loaded = window.ailangLoadModule('renderer', source);
     if (!loaded.success) throw new Error(loaded.error || 'loadModule failed');
@@ -122,7 +122,7 @@ async function submit(id, revision, text) {
     action: { name: 'submitDraft', surfaceId: `draft-${id}`, sourceComponentId: 'submit',
       timestamp: new Date().toISOString(), context: { draftId: id, revision: Number(revision) || 1, text: text } }
   };
-  const res = await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) });
+  const res = await fetch('action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) });
   const out = await res.json();
   if (out.ok && out.data && out.data.url) {
     const url = out.data.url;
@@ -142,7 +142,7 @@ async function run() {
     runId: 'browser-' + Date.now(),
     messages: [{ role: 'user', id: 'u' + Date.now(), content: document.getElementById('msg').value }]
   };
-  const res = await fetch('/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch('run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';

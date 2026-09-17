@@ -53,7 +53,7 @@ whether it sends to the <code>#daneel</code> channel on the sunholo Discord
 server. The static page keeps the send safely off; the live one can flip it on.</p>
 <p id="live"></p>
 </div>
-<script src="/wasm/ailang-repl.js"></script>
+<script src="../wasm/ailang-repl.js"></script>
 <script>
 // Deploy-time constants. LIVE_URL points at the interactive instance served by
 // discord/ailang-discord-server (which must set DISCORD_SSE_ORIGIN to this
@@ -104,7 +104,7 @@ function renderEvent(raw) {
 let useWasm = false;
 async function initWasm() {
   try {
-    await new AilangREPL().init('/wasm/ailang.wasm');
+    await new AilangREPL().init('../wasm/ailang.wasm');
     const source = await (await fetch('renderer.ail')).text();
     const loaded = window.ailangLoadModule('renderer', source);
     if (!loaded.success) throw new Error(loaded.error || 'loadModule failed');

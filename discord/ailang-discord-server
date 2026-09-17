@@ -40,6 +40,10 @@ CORS_ORIGIN = env.get('DISCORD_SSE_ORIGIN', '').strip()
 # WASM runtime directory: the repo's wasm/ sits beside this demo's parent by
 # default (root.parent / 'wasm'); containers override with AILANG_WASM_DIR.
 WASM_DIR = Path(env.get('AILANG_WASM_DIR', str(root.parent / 'wasm')))
+# Optional mount prefix (e.g. '/discord' behind a tailscale-serve path proxy).
+# Incoming paths are stripped of it before routing, so the same page works at
+# the server root and under a subpath.
+PATH_PREFIX = env.get('DISCORD_SSE_PATH_PREFIX', '').strip().rstrip('/')
 MAX_BODY = int(env.get('DISCORD_SSE_MAX_BODY', str(64 * 1024)))
 PAGE = Path(root / 'site' / 'index.html')
 
@@ -75,6 +79,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length).decode('utf-8', 'replace') if length else ''
 
     def do_GET(self):
+        if PATH_PREFIX and self.path.startswith(PATH_PREFIX + '/'):
+            self.path = self.path[len(PATH_PREFIX):]
+        elif self.path == PATH_PREFIX:
+            self.path = '/'
         if self.path == '/healthz':
             body = b'ok'
             self.send_response(200)
@@ -139,6 +147,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if PATH_PREFIX and self.path.startswith(PATH_PREFIX + '/'):
+            self.path = self.path[len(PATH_PREFIX):]
         raw = self._read_body()
         if raw is None:
             self.send_response(413)

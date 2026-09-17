@@ -85,6 +85,32 @@ front; the server speaks plain HTTP on the loopback/internal network.)
 Flip between modes by editing `config.json` and restarting; the policy gate in
 AILANG (not the web layer) is what actually permits or blocks sends.
 
+## Tailscale (this machine's visitor access)
+
+The Studio exposes the demo on the tailnet via `tailscale serve` (HTTPS at the
+MagicDNS name) alongside the existing site:
+
+```
+https://voights-mac-studio.tail97eda0.ts.net/          → 127.0.0.1:8941  (existing site)
+https://voights-mac-studio.tail97eda0.ts.net/discord/  → 127.0.0.1:8089  (this demo)
+https://voights-mac-studio.tail97eda0.ts.net/wasm/     → 127.0.0.1:8090  (wasm/ static dir)
+```
+
+Setup (the GUI app's CLI; the homebrew `tailscale` errors on this Mac):
+
+```sh
+TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+"$TS" serve --bg --set-path /discord http://127.0.0.1:8089
+"$TS" serve --bg --set-path /wasm   http://127.0.0.1:8090   # python3 -m http.server --directory ../wasm 8090
+```
+
+Notes: `serve --set-path` STRIPS the prefix before proxying, so the demo server
+runs prefix-agnostic (its relative-URL page works at both / and /discord/);
+the server also accepts a `DISCORD_SSE_PATH_PREFIX` strip for proxies that keep
+it. The static hub copy (site/discord/) uses the same relative asset paths so
+the CI-hosted page works unchanged. Self-connect to the raw tailnet IP hangs
+on macOS (utun routing) — always test via the ts.net HTTPS name or loopback.
+
 ## Health and checks
 
 Self-connect quirk: `curl http://<tailscale-ip>:8089` from the host itself
