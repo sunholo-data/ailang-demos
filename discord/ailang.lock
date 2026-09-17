@@ -1,6 +1,6 @@
 {
   "ailang_version": "v0.39.4-10-g6f3a96683-dirty",
-  "generated_at": "2026-09-17T15:43:33.353495Z",
+  "generated_at": "2026-09-17T16:47:32.516425Z",
   "generator": "ailang lock v0.39.4-10-g6f3a96683-dirty",
   "packages": [
     {
@@ -19,22 +19,23 @@
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:18ca045b0413b1469bad9ca30395e864fe1c5c24f87d6ad847ba34b206e2cb03",
+      "content_hash": "sha256:861d1e9953ab4e441ac25df15b5287b751888b12c20e8a02d25da65a41fd045a",
       "effects": [
         "IO"
       ],
       "exports": [
-        "sunholo/agui/events"
+        "sunholo/agui/events",
+        "sunholo/agui/input"
       ],
-      "interface_hash": "sha256:c227d01e77de373b23d506b85b5ee8a55a40e6d3f68c6ae4f1a20d1d74e243de",
+      "interface_hash": "sha256:2c4ba6050529c017668819fe88f2c3a798ba280c19dd10a4783b1b591c094ace",
       "name": "sunholo/agui",
       "path": "/Users/voightkampff/dev/sunholo-data/ailang-packages/packages/agui",
       "source": "path",
-      "version": "0.1.0"
+      "version": "0.2.0"
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:09bfa1dffbbed99118283139b39859b31a89393ce177c40c4d3d0860933cadbf",
+      "content_hash": "sha256:0b91db78c1efb3d41c8eed6769ad6028bb80763c916769b3ebd79d35cd4cc18e",
       "effects": [
         "IO",
         "Net"
@@ -46,7 +47,7 @@
       "name": "sunholo/discord",
       "path": "/Users/voightkampff/dev/sunholo-data/ailang-packages/packages/discord",
       "source": "path",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ],
   "schema": "ailang.lock/v1",

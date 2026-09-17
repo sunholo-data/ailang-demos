@@ -54,6 +54,31 @@
   in normal demo checks. Core feedback prepared in CORE_FEEDBACK.md, not sent.
 - No live Discord requests, messages, registry publication or browser deployment.
 
+## Verification — 2026-09-17 (0.2.0 package release)
+
+Feature release published after the 0.1.0 docs work:
+
+- `sunholo/agui@0.2.0`: new `sunholo/agui/input` module — `decodeRunAgentInput`
+  parses the request-side RunAgentInput payload (required threadId/runId, strict
+  role discrimination incl. tool messages with toolCallId, defaults for optional
+  fields). 6 new native tests → 19 total, 15 contract clauses, 0 gaps, smoke
+  12/12.
+- `sunholo/discord@0.2.0`: `editMessage` (PATCH), `typing` (204 No Content
+  handled), thread support — `startThread` from a message, `activeThreads`,
+  exported `parseChannel`; responseJson's error path factored into shared
+  `classifyError` (contract: result.status == status). 24 native tests (was 22),
+  26 contract clauses, 0 gaps, smoke 14/14. Threads are channels: reads and
+  sends work with thread IDs unchanged.
+- Both published to registry.ailang.sunholo.com (smoke gates green inside
+  publish); consumer verification installs 0.2.0 of both from the registry,
+  compiles and runs event-encode + input-decode checks.
+- Consumer docs (README quickstarts/effects tables, AGENT.md install + caps
+  notes) committed in bdcfee6 and shipped with these tarballs.
+- Demo lock refreshed; demo checks 2/2 and npm test 4/4 still green.
+- Remaining: browser/SSE integration milestone (the SSE server consumes
+  `decodeRunAgentInput` and emits the event codecs); four older unsent feedback
+  reports.
+
 ## Verification — 2026-09-17 (registry publication)
 
 Both protocol packages published to the AILANG registry (immutable versions):
