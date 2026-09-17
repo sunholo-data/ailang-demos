@@ -1,7 +1,7 @@
 {
-  "ailang_version": "v0.35.2-dirty",
-  "generated_at": "2026-09-08T09:25:03.440551Z",
-  "generator": "ailang lock v0.35.2-dirty",
+  "ailang_version": "v0.39.4-10-g6f3a96683-dirty",
+  "generated_at": "2026-09-17T15:35:17.248287Z",
+  "generator": "ailang lock v0.39.4-10-g6f3a96683-dirty",
   "packages": [
     {
       "ailang": ">=0.9.2",
@@ -19,7 +19,7 @@
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:59c69455f4468d414f9ed9b19e3d935a336cf77f548d8599215af5aecf4a618a",
+      "content_hash": "sha256:65dfa471534fd8967a26e2875cb66808b4a3461c206ebc451a7189524597538a",
       "effects": [],
       "exports": [
         "sunholo/agui/events"
@@ -32,7 +32,7 @@
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:d8fac7d48664f130ac82e5a22dc41af016fcd9fa401e701deb214438cce47d86",
+      "content_hash": "sha256:b80aabed31b2d9884bfd0bc4cba552e1dd2a87c45094fd53393c3576ff78a6f4",
       "effects": [
         "Net"
       ],
