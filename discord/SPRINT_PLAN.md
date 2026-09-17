@@ -89,8 +89,18 @@
   is unavailable. The server serves the renderer source and the WASM runtime
   from a strict allowlist. Integration suite extended to seven groups (assets
   served, renderEvent asserted via the CLI); all pass offline.
-- Remaining in the milestone: WASM renderer and an independent frontend test
-  against a deployed instance; Gateway streaming; thread/attachment richness.
+- Deployment readiness: `discord/DEPLOY.md` runbook for the Daneel account
+  (visitor experience, env knobs, systemd sketch, public-demo vs live modes
+  gated by the AILANG policy layer, health checks); `discord/Dockerfile`
+  (Python + pinned ailang binary + WASM runtime; token/config mounted at
+  runtime, never baked in). Server hardened for exposure: configurable bind
+  host (loopback default), CORS closed by default with an explicit origin
+  option, 64KB body cap. The page now surfaces the Discord message link when a
+  live send succeeds — that link is the visitor-visible payoff. Demo hub nav
+  link is added at deploy time so the static site never points at a dead
+  origin.
+- Remaining in the milestone: deploy on the Daneel host, add the hub link,
+  Gateway streaming, thread/attachment richness.
 
 ## Verification — 2026-09-17 (0.2.0 package release)
 

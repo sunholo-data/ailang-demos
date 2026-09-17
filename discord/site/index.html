@@ -124,8 +124,14 @@ async function submit(id, revision, text) {
   };
   const res = await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) });
   const out = await res.json();
-  resultEl.textContent = 'action → ' + JSON.stringify(out);
-  resultEl.className = 'status ' + (out.ok ? '' : 'err');
+  if (out.ok && out.data && out.data.url) {
+    const url = out.data.url;
+    resultEl.innerHTML = 'posted to Discord — <a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+    resultEl.className = 'status';
+  } else {
+    resultEl.textContent = 'action → ' + JSON.stringify(out);
+    resultEl.className = 'status ' + (out.ok ? '' : 'err');
+  }
 }
 
 async function run() {

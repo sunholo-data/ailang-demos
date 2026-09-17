@@ -32,6 +32,15 @@ if env.get('DISCORD_TOKEN_FILE'):
     env['DISCORD_TOKEN_FILE'] = str(Path(env['DISCORD_TOKEN_FILE']).resolve())
 
 PORT = int(env.get('DISCORD_SSE_PORT', '8089'))
+# Default binding is loopback: public exposure is a deliberate deployment choice
+# (DISCORD_SSE_HOST=0.0.0.0 behind a TLS proxy). CORS stays closed unless the
+# operator names the site origin that may call this server cross-origin.
+HOST = env.get('DISCORD_SSE_HOST', '127.0.0.1')
+CORS_ORIGIN = env.get('DISCORD_SSE_ORIGIN', '').strip()
+# WASM runtime directory: the repo's wasm/ sits beside this demo's parent by
+# default (root.parent / 'wasm'); containers override with AILANG_WASM_DIR.
+WASM_DIR = Path(env.get('AILANG_WASM_DIR', str(root.parent / 'wasm')))
+MAX_BODY = int(env.get('DISCORD_SSE_MAX_BODY', str(64 * 1024)))
 PAGE = Path(root / 'site' / 'index.html')
 
 
@@ -54,8 +63,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         sys.stderr.write('[sse] ' + (fmt % a) + '\n')
 
+    def _cors(self):
+        if CORS_ORIGIN:
+            self.send_header('access-control-allow-origin', CORS_ORIGIN)
+            self.send_header('vary', 'origin')
+
     def _read_body(self):
         length = int(self.headers.get('content-length') or 0)
+        if length > MAX_BODY:
+            return None
         return self.rfile.read(length).decode('utf-8', 'replace') if length else ''
 
     def do_GET(self):
@@ -97,7 +113,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
             try:
-                body = (root.parent / 'wasm' / self.path[len('/wasm/'):]).read_bytes()
+                body = (WASM_DIR / self.path[len('/wasm/'):]).read_bytes()
             except OSError:
                 self.send_response(404)
                 self.send_header('content-length', '0')
@@ -113,10 +129,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('content-length', '0')
             self.end_headers()
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.send_header('access-control-allow-methods', 'POST, GET, OPTIONS')
+        self.send_header('access-control-allow-headers', 'content-type')
+        self.send_header('access-control-max-age', '86400')
+        self.send_header('content-length', '0')
+        self.end_headers()
+
     def do_POST(self):
         raw = self._read_body()
+        if raw is None:
+            self.send_response(413)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
         if self.path == '/run':
             self.send_response(200)
+            self._cors()
             self.send_header('content-type', 'text/event-stream; charset=utf-8')
             self.send_header('cache-control', 'no-cache')
             self.send_header('connection', 'close')
@@ -148,6 +179,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, out = cli('action', '--file', str(tmp))
                 body = out.strip().encode('utf-8') or b'{"ok":false,"error":{"kind":"input","message":"empty response"}}'
                 self.send_response(200)
+                self._cors()
                 self.send_header('content-type', 'application/json')
                 self.send_header('content-length', str(len(body)))
                 self.end_headers()
@@ -161,8 +193,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
-    print(f'AG-UI SSE server on http://127.0.0.1:{PORT} (state: {state})', file=sys.stderr, flush=True)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f'AG-UI SSE server on http://{HOST}:{PORT} (state: {state}, cors: {CORS_ORIGIN or "closed"})', file=sys.stderr, flush=True)
     server.serve_forever()
 
 
