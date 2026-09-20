@@ -180,18 +180,19 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/decisions/': target = ROOT / 'site/index.html'
         elif path.startswith('/decisions/'):
             name = path.removeprefix('/decisions/')
-            if name in MODULES: target = ROOT / name
+            if name in {'wasm/ailang.wasm', 'wasm/wasm_exec.js'}: target = REPO / name
+            elif name in MODULES: target = ROOT / name
             elif name.startswith('assets/') and name.removeprefix('assets/') in ASSETS: target = ROOT / 'site' / name
-            elif name in {'app.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
+            elif name in {'app.js', 'transport.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
             elif name in {'bank/synthetic.jsonl', 'bank/recorded.jsonl'}: target = ROOT / name
-            elif name == 'ailang/pkg/sunholo/decisions/decide.ail': target = REPO.parent / 'ailang-packages/packages/decisions/decide.ail'
+            elif name == 'ailang/pkg/sunholo/decisions/decide.ail': target = Path(os.environ.get('AILANG_CACHE', str(Path.home() / '.ailang/cache/registry'))) / 'sunholo/decisions/0.4.0/decide.ail'
             else: self.send_error(404); return
         elif path in {'/wasm/ailang.wasm', '/wasm/wasm_exec.js'}: target = REPO / path.lstrip('/')
         else: self.send_error(404); return
         if not target.is_file(): self.send_error(404); return
         # Store the shared runtime, but revalidate on every use so a rebuild never
         # leaves newer AILANG modules running against a stale binary.
-        runtime = path in {'/wasm/ailang.wasm', '/wasm/wasm_exec.js'}
+        runtime = path in {'/wasm/ailang.wasm', '/wasm/wasm_exec.js', '/decisions/wasm/ailang.wasm', '/decisions/wasm/wasm_exec.js'}
         if runtime:
             stat = target.stat()
             etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'

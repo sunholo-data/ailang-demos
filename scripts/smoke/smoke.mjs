@@ -28,6 +28,7 @@ const FAIL_FAST = process.env.FAIL_FAST === '1';
 // 'wasm' pages must signal __demoReady. 'static' pages just need to load
 // without console errors (no boot phase).
 const DEMOS = [
+  { name: 'decisions', kind: 'wasm', url: '/decisions/' },
   { name: 'hub',                kind: 'static', url: '/' },
   { name: 'document-intelligence', kind: 'static', url: '/document-intelligence/' },
   { name: 'streaming', kind: 'static', url: '/streaming/' },

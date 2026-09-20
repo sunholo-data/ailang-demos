@@ -6,6 +6,7 @@ const artJobs=new Map();
 let artworkWorld=0, artQueue=Promise.resolve();
 let socialViewKey='';
 const motion = new NoulMotion($('#world'));
+const publicTransport = new NoulsTransport((fn,...args)=>call(fn,...args));
 const colors = {wary:'#287a63',bold:'#bd3012',paranoid:'#7953a4',curious:'#2474a8'};
 const flavors = {wary:'A careful step, then another.',bold:'A little courage goes a long way.',paranoid:'Something might be watching.',curious:'There is always something to discover.'};
 let primary, liveKey='', liveSession='', sessionBudget=0, sessionCost=0;
@@ -156,20 +157,21 @@ async function configure(next,key='',reset=false) {
     
   }
   if(mode==='live'){
-    const response=await fetch('api/status');
-    if(!response.ok)throw new Error('Live mode needs the Studio preview server. Offline exploration and recorded decisions are available here.');
+    const response=await publicTransport.request('api/status');
+    if(!response.ok)throw new Error('Unable to initialize browser transport.');
     const transport=await response.json();
-    if(!transport.available)throw new Error('Live relay awaits an approved session budget. Offline exploration remains available.');
+    if(!transport.available)throw new Error('Live transport is unavailable.');
     if(!liveSession||reset){
-      const sessionResponse=await fetch('api/session',{method:'POST'});
+      const sessionResponse=await publicTransport.request('api/session',{method:'POST'});
       const session=await sessionResponse.json();
       if(!session.ok)throw new Error(session.error);
       liveSession=session.session;sessionBudget=session.budget;sessionCost=0;
     }
     liveKey=key;
+    await rpc('configure',[],{mode:'simulate'});
   } else liveKey='';
   if(!world||reset){draw(await call('init'));liveCount=0;}
-  $('#runtime').textContent=liveKey?'Jev live via Studio':'Habitat ready · connect Jev';$('#connect-live').textContent=liveKey?'Jev connected · key settings':'Connect Jev';
+  $('#runtime').textContent=liveKey?'Jev live · direct from your browser':'Habitat ready · connect Jev';$('#connect-live').textContent=liveKey?'Jev connected · key settings':'Connect Jev';
   document.querySelectorAll('[data-mode]').forEach(button=>{
     button.setAttribute('aria-pressed',button.dataset.mode===mode);
     if(button.dataset.mode==='live')button.textContent=mode==='live'?'Live connected':'Connect live';
@@ -183,8 +185,8 @@ async function configure(next,key='',reset=false) {
   await selectCreature(selected);
   running=!addingItem;syncItemControls();
 }
-// The private preview executes the same AILANG oracle in the CLI.
-// Browser WASM continues physics while the server waits for Net.
+// AILANG prepares/parses the decision; browser fetch carries the bytes.
+// The worker is free to advance physics while OpenRouter responds.
 async function requestJudgment(id, snapshot, generation) {
   livePending=true;
   const started=Date.now();
@@ -193,21 +195,21 @@ async function requestJudgment(id, snapshot, generation) {
     if(generation===epoch)$('#decision-stage').textContent=`Waiting for a live judgment… ${Math.floor((Date.now()-started)/1000)}s`;
   },1000);
   try {
-    const response=await fetch('api/decision',{
+    const response=await publicTransport.request('api/decision',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},
       body:JSON.stringify({world:snapshot,id,completed:liveCount,session:liveSession}),
       signal:AbortSignal.timeout(45000)
     });
-    if(response.status===404)throw new Error('This server does not provide live AILANG judgments. Use the Studio preview server or import a recorded bank.');
     const result=await response.json();
     if(generation!==epoch){if(result.ok){rows.push(result.row);renderLedger();}return;}
     if(response.status===429&&result.retryable){$('#decision-stage').textContent=result.error;await new Promise(resolve=>setTimeout(resolve,1500));return;}
+    if(typeof result.sessionCost==='number')sessionCost=Math.max(sessionCost,result.sessionCost);
     if(!result.ok)throw new Error(result.error);
     rows.push(result.row);renderLedger();
     resolvedDecision={row:result.row,snapshot};
     liveCount++;sessionCost=Math.max(sessionCost,result.sessionCost);
-    $('#mode-note').textContent=`Live via Studio · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;
+    $('#mode-note').textContent=`Jev live · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;
   } catch(error) {
     if(generation===epoch)fail(error);
   } finally {
@@ -363,6 +365,7 @@ $('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)r
     draw(initialFrame);
     await selectCreature(selected);
     renderLedger();
+    window.__demoReady=true;
     $('#runtime').textContent='Habitat ready · Jev live demo';$('#connect-live').disabled=false;
     $('#play').textContent='Start Jev';$('#play').disabled=false;
     $('#reset').disabled=false;$('#place').disabled=false;$('#artifact').disabled=false;$('#create-noul').disabled=false;$('#add-item').disabled=false;
@@ -518,7 +521,7 @@ async function generateItemArt(job){
     let result;
     // Only retry explicit local busy responses: they have not called the model.
     while(current()){
-      const response=await fetch('api/image',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':job.key},
+      const response=await publicTransport.request('api/image',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':job.key},
         body:JSON.stringify({session:job.session,id:job.id,description:job.description}),signal});
       result=await response.json();
       if(response.status!==429||!result.retryable)break;
@@ -619,7 +622,7 @@ $('#character-form').onsubmit=async e=>{
   while(livePending)await new Promise(resolve=>setTimeout(resolve,100));
   if(generation!==epoch)throw new Error('The session changed. Interpret the character again.');
   $('#character-status').textContent='Jev is interpreting your character…';
-  const response=await fetch('api/character',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},body:JSON.stringify({session:liveSession,name:$('#character-name').value.trim(),description:$('#character-description').value.trim()}),signal:AbortSignal.timeout(45000)});
+  const response=await publicTransport.request('api/character',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},body:JSON.stringify({session:liveSession,name:$('#character-name').value.trim(),description:$('#character-description').value.trim()}),signal:AbortSignal.timeout(45000)});
   const result=await response.json();
   if(generation!==epoch)return;
   if(typeof result.sessionCost==='number'){sessionCost=Math.max(sessionCost,result.sessionCost);$('#mode-note').textContent=`Jev live · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;}

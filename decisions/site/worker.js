@@ -1,10 +1,10 @@
 /* One serialized AILANG runtime. No policy or model requests in JavaScript. */
-importScripts('../wasm/wasm_exec.js');
+importScripts('wasm/wasm_exec.js');
 let ready;
 async function initialize() {
   postMessage({progress:'Bringing the habitat home…',completed:0});
   const go = new Go();
-  const url = new URL('../wasm/ailang.wasm', self.location.href).href;
+  const url = new URL('wasm/ailang.wasm', self.location.href).href;
   // Large WASM responses can be evicted/skipped by the ordinary HTTP cache.
   // Cache Storage keeps one shared URL; validators still pick up runtime rebuilds.
   let cache, saved;

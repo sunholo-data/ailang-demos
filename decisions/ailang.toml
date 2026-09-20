@@ -6,7 +6,7 @@ ailang = ">=0.40.0"
 description = "The Deliberating Nouls — artificial-life showcase for sunholo/decisions: creatures whose judgment at choice points is a typed System One decision call"
 
 [dependencies]
-"sunholo/decisions" = { path = "../../ailang-packages/packages/decisions" }
+"sunholo/decisions" = "0.4.0"
 
 [effects]
 max = ["IO", "FS", "Net", "Env", "Rand"]

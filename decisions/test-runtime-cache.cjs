@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
  page.context().on('response',r=>{if(r.url().endsWith('/wasm/ailang.wasm'))statuses.push(r.status());});
  await page.goto(process.env.NOULS_PREVIEW_URL||'https://voights-mac-studio.tail97eda0.ts.net:8443/decisions/');
  await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),{timeout:120000});
- assert(await page.evaluate(async()=>Boolean((await (await caches.open('ailang-runtime-v1')).match('/wasm/ailang.wasm'))?.headers.get('ETag'))));
+ assert(await page.evaluate(async()=>Boolean((await (await caches.open('ailang-runtime-v1')).match(new URL('wasm/ailang.wasm',location.href).href))?.headers.get('ETag'))));
  await page.reload();
  await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),{timeout:120000});
  assert.equal(requests.length,2);assert(requests[1]['if-none-match']);assert.deepEqual(statuses,[200,304]);

@@ -7,13 +7,13 @@ const root = path.resolve(__dirname, '..');
 process.chdir(root);
 globalThis.crypto = require('node:crypto').webcrypto;
 globalThis.self = globalThis;
-require(path.join(root, 'wasm/wasm_exec.js'));
+require(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'), 'wasm_exec.js'));
 (async () => {
   const go = new Go();
-  const {instance} = await WebAssembly.instantiate(fs.readFileSync('wasm/ailang.wasm'), go.importObject);
+  const {instance} = await WebAssembly.instantiate(fs.readFileSync(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'),'ailang.wasm')), go.importObject);
   go.run(instance);
   ailangSetTypeCheckBudget(8000);
-  for (const [name,file] of [['pkg/sunholo/decisions/decide','../ailang-packages/packages/decisions/decide.ail'], ...['world','souls','render','oracle','bank','host'].map(n=>[n,`decisions/${n}.ail`])]) {
+  for (const [name,file] of [['pkg/sunholo/decisions/decide',path.join(require('node:os').homedir(),'.ailang/cache/registry/sunholo/decisions/0.4.0/decide.ail')], ...['world','souls','render','oracle','bank','host'].map(n=>[n,`decisions/${n}.ail`])]) {
     const loaded = ailangLoadModule(name, fs.readFileSync(file,'utf8'));
     assert.equal(loaded.success,true,`${name}: ${loaded.error}`);
     console.log(`PASS load ${name} (${loaded.typeCheckMs || '?'} ms)`);

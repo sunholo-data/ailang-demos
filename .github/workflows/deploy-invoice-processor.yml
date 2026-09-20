@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'decisions/**'
+      - 'scripts/build-decisions.sh'
       - 'wasm/**'
       - 'invoice_processor_wasm/**'
       - 'docparse/**'
@@ -95,8 +97,57 @@ jobs:
       - name: Type-check all demo entry points
         run: scripts/check_demos.sh --verbose
 
+  test-decisions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pinned decisions CLI
+        run: |
+          set -euo pipefail
+          VERSION=$(tr -d '[:space:]' < decisions/.ailang-version)
+          curl -fsSL --retry 3 "https://github.com/sunholo-data/ailang/releases/download/$VERSION/linux.x64.ailang.tar.gz" -o /tmp/decisions-cli.tar.gz
+          mkdir /tmp/decisions-cli
+          tar -xzf /tmp/decisions-cli.tar.gz -C /tmp/decisions-cli
+          install -m 0755 /tmp/decisions-cli/ailang /usr/local/bin/ailang
+      - name: Check and test native decisions code
+        working-directory: decisions
+        run: |
+          ailang lock
+          ailang check --package .
+          ailang test --package .
+          ailang run --verify-contracts --caps IO,FS,Net,Env,Rand --entry main main.ail selftest
+      - name: Build standalone static decisions artifact
+        run: scripts/build-decisions.sh .decisions-site/decisions
+      - name: Test public transport and released WASM
+        run: |
+          node --test decisions/test-transport.cjs
+          NOULS_WASM_DIR="$PWD/.decisions-site/decisions/wasm" node decisions/test-wasm.cjs
+      - name: Install browser checks
+        working-directory: scripts/smoke
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Test public demo without an API server
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8959 --bind 127.0.0.1 --directory .decisions-site > /tmp/decisions-static.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID"' EXIT
+          export NOULS_PREVIEW_URL=http://127.0.0.1:8959/decisions/
+          node decisions/test-public-browser.cjs
+          node decisions/test-browser.cjs
+          node decisions/test-item-art.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: decisions-public
+          path: .decisions-site/decisions
+
   deploy:
-    needs: test
+    if: github.ref == 'refs/heads/main'
+    needs: [test, test-decisions]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -471,6 +522,12 @@ jobs:
           find _site -type f | head -60 || true
           echo "::endgroup::"
           echo "Assembled $(find _site -type f | wc -l) files into _site/"
+
+      - name: Include tested decisions artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: decisions-public
+          path: _site/decisions
 
       - name: Setup Node for smoke test
         uses: actions/setup-node@v4

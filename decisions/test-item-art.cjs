@@ -3,7 +3,7 @@ const {chromium}=require('../scripts/smoke/node_modules/playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 (async()=>{
- const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+ const browser=await chromium.launch({...(process.platform==='darwin'?{executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}:{}),headless:true});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -11,15 +11,15 @@ const fs=require('node:fs'),path=require('node:path');
   const fixture=process.env.NOULS_ART_FIXTURE||path.join(__dirname,'site/assets/bold.webp');
   const media=fixture.endsWith('.png')?'image/png':'image/webp';
   const data=`data:${media};base64,${fs.readFileSync(fixture).toString('base64')}`;
-  await page.route('**/api/image',async route=>{
+  await page.route('https://openrouter.ai/api/v1/images',async route=>{
    requests++;
-   const body=route.request().postDataJSON();assert(body.description);assert(body.id);
+   const body=route.request().postDataJSON();assert(body.prompt);assert.equal(body.model,'black-forest-labs/flux.2-klein-4b');
    const result=await new Promise(resolve=>{release=resolve;});
-   await route.fulfill({json:result}).catch(()=>{});
+   await route.fulfill(result.ok?{json:{data:[{media_type:media,b64_json:fs.readFileSync(fixture).toString('base64')}],usage:{cost:result.cost}}}:{status:402,json:{error:result.error}}).catch(()=>{});
   });
   await page.goto(process.env.NOULS_PREVIEW_URL||'http://127.0.0.1:8954/decisions/');
   await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),{timeout:120000});
-  await page.evaluate(async()=>{await rpc('configure',[],{mode:'simulate'});mode='simulate';liveKey='test-key';liveSession='offline';sessionBudget=.1;running=true;});
+  await page.evaluate(async()=>{await rpc('configure',[],{mode:'simulate'});mode='simulate';liveKey='test-key';const s=await(await publicTransport.request('api/session')).json();liveSession=s.session;sessionBudget=s.budget;running=true;});
   async function place(description){
    await page.locator('#add-item').tap();await page.locator('#artifact').fill(description);
    await page.locator('#place').tap();await page.waitForFunction(()=>!busy);

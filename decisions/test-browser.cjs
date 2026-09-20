@@ -2,7 +2,7 @@
 const {chromium}=require('../scripts/smoke/node_modules/playwright');
 const assert=require('node:assert/strict');
 (async()=>{
-const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+const browser=await chromium.launch({...(process.platform==='darwin'?{executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}:{}),headless:true});
 try{
 const page=await browser.newPage({viewport:{width:1440,height:1080},deviceScaleFactor:1});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -113,8 +113,8 @@ assert(!(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWid
 console.log('PASS mobile item sheet, pause, edit, centre placement, resume, draft retention and cancel');
 // Synthetic relay response only; the actual AILANG addNoul adapter still runs.
 const profile={version:1,name:'Pip',description:'A brave fast explorer who tires easily.',appearance:'curious',actThreshold:.4,presentAt:.8,cadence:12,speed:1.4,stamina:.6};
-await mobile.route('**/api/character',route=>route.fulfill({json:{ok:true,profile,decision:{model:'synthetic-browser-test',cost_usd:.00002,answers:[]},sessionCost:.00002,sessionBudget:.1}}));
-await mobile.evaluate(()=>{liveKey='test-only-not-a-real-key';liveSession='offline-test';sessionBudget=.1;});
+await mobile.route('https://openrouter.ai/api/alpha/decisions',route=>route.fulfill({json:require('./test-provider-fixture.cjs')(route.request().postDataJSON())}));
+await mobile.evaluate(async()=>{liveKey='test-only-not-a-real-key';const s=await (await publicTransport.request('api/session')).json();liveSession=s.session;sessionBudget=s.budget;});
 await mobile.locator('#create-noul').click();await mobile.locator('#character-name').fill('Pip');
 await mobile.locator('#character-description').fill(profile.description);await mobile.locator('#design-character').click();
 await mobile.locator('#character-preview').waitFor({state:'visible'});
