@@ -1,5 +1,8 @@
 # Public release — direct browser transport
 
+[Public demo](https://www.sunholo.com/ailang-demos/decisions/) ·
+[Demo hub](https://www.sunholo.com/ailang-demos/)
+
 The integration branch includes both sessions' social, inventory, artwork,
 branding and custom-character work. The public page now uses the visitor's key
 in direct browser requests to OpenRouter, with no private Studio API dependency.

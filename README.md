@@ -33,6 +33,19 @@ This isn't AI generating boilerplate. AILANG's type system, algebraic effects, a
 
 ## Demos
 
+### The deliberating Nouls — live Jev decisions
+
+[Play the public demo](https://www.sunholo.com/ailang-demos/decisions/) — create
+creatures and describe objects, then watch Jev judge their world through typed
+probability distributions. Inspect social preferences, survival needs and item
+interactions, and replay each banked decision.
+
+Bring your **OpenRouter API key**. Requests go directly from your browser to
+OpenRouter; AILANG WASM prepares, validates and samples the decisions. No private
+Studio connection is required. Each tab pauses at $0.10 of reported usage; the
+last call may cross that threshold. Optional generated item pictures share that
+budget. [Source, local build and data boundaries](decisions/README.md).
+
 ### Discord activity and agent tools
 
 [Local CLI and MCP demo](discord/README.md) — read configured Discord channels,

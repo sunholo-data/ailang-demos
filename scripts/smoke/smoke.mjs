@@ -46,7 +46,9 @@ const DEMOS = [
   { name: 'streaming/claude_chat',       kind: 'wasm',   url: '/streaming/claude_chat/' },
   { name: 'streaming/gemini_live',       kind: 'wasm',   url: '/streaming/gemini_live/' },
   { name: 'streaming/safe_agent',        kind: 'wasm',   url: '/streaming/safe_agent/' },
-  { name: 'streaming/voice_docparse',    kind: 'wasm',   url: '/streaming/voice_docparse/' },
+  // This page compiles both streaming and the full DocParse module graph.
+  // Cold startup exceeded 30s on the shared CI runner; keep error checks intact.
+  { name: 'streaming/voice_docparse',    kind: 'wasm',   url: '/streaming/voice_docparse/', readyTimeoutMs: 90000 },
   { name: 'streaming/ambient_assistant', kind: 'wasm',   url: '/streaming/ambient_assistant/' },
 ];
 
@@ -116,7 +118,7 @@ for (const demo of DEMOS.filter(d => !process.env.ONLY || d.name.includes(proces
           await new Promise((r) => setTimeout(r, 100));
         }
         return { ready: false, error: 'timeout waiting for __demoReady' };
-      }, { timeoutMs: READY_TIMEOUT_MS, readySelector: demo.readySelector, readyText: demo.readyText });
+      }, { timeoutMs: demo.readyTimeoutMs || READY_TIMEOUT_MS, readySelector: demo.readySelector, readyText: demo.readyText });
 
       if (state.ready && demo.name === 'leak_lab') {
         for (const [id, expected] of [['direct','blocked'], ['url','blocked'], ['helper','blocked'], ['record','blocked'], ['relabel','blocked'], ['redact','allowed'], ['authority','allowed']]) {

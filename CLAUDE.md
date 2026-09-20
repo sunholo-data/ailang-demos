@@ -65,6 +65,15 @@ URLs served:
 
 Edits to source files are reflected immediately (refresh browser). The script assembles `_site/` with symlinks to source directories.
 
+## Public Nouls demo
+
+The deliberating Nouls is at https://www.sunholo.com/ailang-demos/decisions/.
+Visitors supply their OpenRouter key; `decisions/site/transport.js` uses browser
+fetch directly, and `decisions/host.ail` prepares/parses typed requests in WASM.
+The public app does not use the legacy Studio relay. Its pinned runtime and
+registry dependency are built by `scripts/build-decisions.sh`; see
+`decisions/README.md` and `decisions/PUBLISHING.md` for deployment and validation.
+
 ## Quick Commands
 
 ```bash

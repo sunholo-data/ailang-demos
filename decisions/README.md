@@ -3,6 +3,11 @@
 A browser artificial-life demo of `sunholo/decisions`: typed Jev judgments,
 sampled actions, banked distributions and deterministic offline replay.
 
+**[Play the public demo](https://www.sunholo.com/ailang-demos/decisions/)** ·
+[All AILANG demos](https://www.sunholo.com/ailang-demos/)
+
+Bring your own OpenRouter key. No Tailscale or private Studio access is needed.
+
 ## Public browser architecture
 
 The page is static. AILANG WASM builds the typed Jev request, validates the answer,
