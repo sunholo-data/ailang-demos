@@ -254,7 +254,7 @@ pure func syntheticForBold(c2: Creature, w: World) -> Result[BankRow, string] = 
   let p = personalityOf(c2.soul);
   -- Keep the pinned v0 regression fixture scoped to its original ecosystem.
   let oldWorld = { w | entities: filter(\e. startsWith(e.id, "e"), w.entities) };
-  let qs = filter(\q. q.name != "eat_target" && q.name != "drink_target" && q.name != "toilet_target", buildQuestions(p, c2, oldWorld));
+  let qs = filter(\q. q.name != "eat_target" && q.name != "drink_target" && q.name != "toilet_target" && q.name != "companion" && q.name != "avoid_companion", buildQuestions(p, c2, oldWorld));
   match parseAnswers(syntheticBody(), qs) {
     Err(e) => Err("synthetic body rejected by parseAnswers: ${errText(e)}"),
     Ok(d)  => syntheticRowFromDecision(c2, oldWorld, p, qs, d)

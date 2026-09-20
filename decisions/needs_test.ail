@@ -14,7 +14,7 @@ pure func subject() -> Creature = {
 }
 pure func habitat(c: Creature) -> World = {
  tick: 0, size: 60.0, creatures: [c],
- entities: [{id: "player-object", kind: "stone", desc: "a player-described object", pos: {x: 20.0, y: 20.0}}]
+ entities: [{id: "player-object", kind: "stone", carrier:"", desc: "a player-described object", pos: {x: 20.0, y: 20.0}}]
 }
 pure func first(w: World) -> Creature = match w.creatures { c :: _ => c, [] => subject() }
 pure func step(i: Intent) -> Creature = first(stepWorld(habitat(subject()), [{id: "c1", act: Do(i)}]))

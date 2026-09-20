@@ -12,12 +12,12 @@
 module world
 
 import std/json (Json, jo, ja, kv, js, jint, jnum,
-                 getString, getNumber, getInt, getArray, getObject, asString, decode)
+                 getString, getNumber, getInt, getArray, getObject, asString, decode, jb)
 import std/math (sqrt, floor, abs_Float, intToFloat, floatToInt, atan2, sin, cos)
 import std/list (map, filter, foldl, length, take, drop, contains, sortBy, concat, nth_or)
 import std/option (Option, Some, None, getOrElse)
 import std/result (Result, Ok, Err)
-import std/string (chars, compare, floatToStr, intToStr)
+import std/string (chars, compare, floatToStr, intToStr, startsWith)
 
 -- ============================================================
 -- Types
@@ -26,9 +26,9 @@ import std/string (chars, compare, floatToStr, intToStr)
 export type Vec2 = { x: float, y: float }
 
 -- A thing in the world. `desc` is ALL the semantics there is.
-export type Entity = { id: string, kind: string, desc: string, pos: Vec2 }
+export type Entity = { id: string, kind: string, desc: string, pos: Vec2, carrier: string }
 
-export type Intent = Wander | Approach(string) | Flee(string) | Eat(string) | Drink(string) | Toilet(string) | Rest
+export type Intent = Wander | Approach(string) | Flee(string) | Eat(string) | Drink(string) | Toilet(string) | Socialize(string) | Avoid(string) | PickUp(string) | Drop | Destroy(string) | Rest
 
 export type Creature = {
   id: string,
@@ -110,6 +110,11 @@ tests [(Wander, "wandering"),
     Eat(id)        => "seeking food at ${id}",
     Drink(id)      => "seeking water at ${id}",
     Toilet(id)     => "seeking the toilet at ${id}",
+    Socialize(id)  => "seeking company of ${id}",
+    Avoid(id)      => "keeping distance from ${id}",
+    PickUp(id) => "picking up ${id}",
+    Drop => "putting down my item",
+    Destroy(id) => "destroying ${id}",
     Rest           => "resting"
   }
 }
@@ -135,7 +140,7 @@ pure func byDistTo(c: Creature) -> (Entity, Entity) -> int =
 
 export pure func visible(c: Creature, w: World) -> [Entity] =
   sortBy(byDistTo(c),
-         filter(\e. distTo(c, e) <= perceiveRadius(), w.entities))
+         filter(\e. e.carrier == "" && distTo(c, e) <= perceiveRadius(), w.entities))
 
 -- The nearest n visible entities (percept budget: question options and
 -- threat scans only consider this prefix).
@@ -145,12 +150,58 @@ export pure func takeNearest(c: Creature, w: World, n: int) -> [Entity] =
 export pure func creatureById(w: World, id: string) -> Option[Creature] =
   foldl(\acc. \c. if c.id == id then Some(c) else acc, None, w.creatures)
 
+-- Inventory is physical world state, not an inferred semantic property.
+-- Player additions are movable; the original habitat remains fixed scenery.
+export pure func movable(e: Entity) -> bool = startsWith(e.id, "introduced-")
+export pure func heldItems(c: Creature, w: World) -> [Entity] = filter(\e. e.carrier == c.id, w.entities)
+export pure func availableItems(c: Creature, w: World) -> [Entity] = filter(\e. e.carrier == "" || e.carrier == c.id, w.entities)
+export pure func looseItems(w: World) -> [Entity] = filter(\e. movable(e) && e.carrier == "", w.entities)
+export pure func heldDescription(c: Creature, w: World) -> string = match heldItems(c,w) {
+  [] => "nothing", e :: _ => e.desc
+}
+export pure func inventoryValid(w: World) -> bool =
+  foldl(\ok. \c. ok && length(heldItems(c,w)) <= 1, true, w.creatures) &&
+  foldl(\ok. \e. ok && (e.carrier == "" || (movable(e) && match creatureById(w,e.carrier) {None => false, Some(_) => true})), true, w.entities)
+
+-- Social observations are public descriptions and actions, never another
+-- creature's private needs or memories. Preferences are demo personality data.
+export pure func socialPreferences(c: Creature) -> string = {
+  let baseline = if c.soul == "wary" then "I prefer calm, gentle companions who give me space. Sudden approaches and reckless behaviour put me off."
+    else if c.soul == "bold" then "I enjoy adventurous, energetic company and shared exploration. I dislike being held back, but give frightened companions space."
+    else if c.soul == "paranoid" then "I prefer quiet, predictable companions at a respectful distance. I dislike crowding and being followed; solitude often feels better."
+    else "I like meeting unfamiliar companions and curious explorers. I enjoy novelty, but respect companions who want to be alone.";
+  let personal = match decode(c.profile) { Err(_) => "", Ok(j) => getOrElse(getString(j, "description"), "") };
+  if personal == "" then baseline else "${baseline} My individual description takes priority for social likes and dislikes: ${personal}"
+}
+
+export pure func otherNouls(c: Creature, w: World) -> [Creature]
+ensures { length(result) <= length(w.creatures) }
+{ filter(\peer. peer.id != c.id && peer.health > 0.0, w.creatures) }
+
+export pure func publicDescription(c: Creature) -> string =
+  match decode(c.profile) { Err(_) => "${c.soul} Noul", Ok(j) => getOrElse(getString(j, "description"), "${c.soul} Noul") }
+
+pure func peerPos(w: World, c: Creature, id: string) -> Option[Vec2] =
+  if id == c.id then None else match creatureById(w, id) {
+    Some(peer) => if peer.health > 0.0 then Some(peer.pos) else None,
+    None => None
+  }
+
+pure func peerName(w: World, id: string) -> string =
+  match creatureById(w, id) { Some(peer) => peer.name, None => id }
+
 -- The state Json sent to the decision model: own vitals, visible things
 -- with their descriptions, recent memory, time of day. Token-tight by design
 -- The UI bounds the map at 40 objects; whole-map descriptions increase token use.
 export pure func perceive(c: Creature, w: World) -> Json =
   jo([
     kv("profile", js(c.profile)), kv("policyVersion", jint(2)), kv("urgency", jnum(urgencyOf(c))),
+    kv("socialPolicyVersion", jint(1)), kv("itemPolicyVersion", jint(1)),
+    kv("inventory", jo([kv("capacity", jint(1)), kv("held", ja(map(entityToJson,heldItems(c,w))))])),
+    kv("socialPreferences", js(socialPreferences(c))),
+    kv("others", ja(map(\peer. jo([kv("id", js(peer.id)), kv("name", js(peer.name)),
+      kv("description", js(publicDescription(peer))), kv("carrying", js(heldDescription(peer,w))), kv("doing", js(intentText(peer.intent))),
+      kv("direction", js(compass(c.pos, peer.pos))), kv("distance", jnum(dist(c.pos, peer.pos)))]), otherNouls(c, w)))),
     kv("visibility", js("The whole habitat is visible. Nearby objects matter most for immediate threats; all map descriptions are candidates for needs.")),
     kv("self", jo([
       kv("name", js(c.name)),
@@ -170,7 +221,7 @@ export pure func perceive(c: Creature, w: World) -> Json =
       kv("distance", js(if distTo(c, e) < 6.0 then "very close"
                          else if distTo(c, e) < 14.0 then "close" else "far off"))
     ]), visible(c, w)))),
-    kv("map", ja(map(\e. jo([kv("id", js(e.id)), kv("desc", js(e.desc)), kv("direction", js(compass(c.pos, e.pos))), kv("distance", jnum(distTo(c, e)))]), w.entities))),
+    kv("map", ja(map(\e. jo([kv("id", js(e.id)), kv("desc", js(e.desc)), kv("movable", jb(movable(e))), kv("carrier", js(e.carrier)), kv("direction", js(compass(c.pos, e.pos))), kv("distance", jnum(distTo(c, e)))]), availableItems(c,w)))),
     kv("memory", ja(map(js, c.memory))),
     kv("timeOfDay", js(timeOfDay(w.tick)))
   ])
@@ -193,9 +244,13 @@ export pure func shouldDeliberate(c: Creature, w: World, cadence: int) -> bool =
 -- bounded timeout. Sleeping continues unless another bodily need is urgent.
 export pure func pursuingNeed(c: Creature, w: World) -> bool =
   if w.tick - c.lastDeliberation > 360 then false else match c.intent {
-    Eat(id) => match entityPos(w, id) { Some(_) => not reached(w, c, id), None => false },
-    Drink(id) => match entityPos(w, id) { Some(_) => not reached(w, c, id), None => false },
-    Toilet(id) => match entityPos(w, id) { Some(_) => not reached(w, c, id), None => false },
+    Eat(id) => match entityPos(w, c, id) { Some(_) => not reached(w, c, id), None => false },
+    Drink(id) => match entityPos(w, c, id) { Some(_) => not reached(w, c, id), None => false },
+    Toilet(id) => match entityPos(w, c, id) { Some(_) => not reached(w, c, id), None => false },
+    PickUp(id) => urgencyOf(c) < 0.8 && w.tick-c.lastDeliberation < 120 && length(heldItems(c,w)) == 0 && match entityPos(w,c,id) {Some(_) => not reached(w,c,id), None => false},
+    Destroy(id) => urgencyOf(c) < 0.8 && w.tick-c.lastDeliberation < 120 && match entityPos(w,c,id) {Some(_) => not reached(w,c,id), None => false},
+    Socialize(id) => urgencyOf(c) < 0.8 && w.tick - c.lastDeliberation < 60 && match peerPos(w,c,id) { Some(p) => dist(c.pos,p) >= 3.0, None => false },
+    Avoid(id) => urgencyOf(c) < 0.8 && w.tick - c.lastDeliberation < 30 && match peerPos(w,c,id) { Some(p) => dist(c.pos,p) < 10.0, None => false },
     Rest => c.pauseTicks == 0 && c.energy < 0.85 && c.hunger < 0.85 && c.thirst < 0.85 && c.bowel < 0.85,
     _ => false
   }
@@ -217,18 +272,50 @@ pure func stepSpeed() -> float = 0.35
 
 pure func eatEntity(entities: [Entity], c: Creature) -> [Entity] =
   if c.health <= 0.0 then entities else match c.intent {
-    Eat(id) => filter(\e. e.id != id || distTo(c, e) >= 2.0, entities),
+    Eat(id) => filter(\e. e.id != id || distTo(c, e) >= 2.0 || (e.carrier != "" && e.carrier != c.id), entities),
     _       => entities
   }
 
 -- One deterministic world tick. Actions are matched by creature id;
 -- missing ids Idle (the creature keeps executing its current intent).
-export pure func stepWorld(w: World, acts: [Move]) -> World = {
+export pure func stepWorld(w: World, acts: [Move]) -> World
+requires { inventoryValid(w) }
+ensures { inventoryValid(result) }
+{
+  let chosen = map(\c. match findAction(acts,c.id) {Do(i) => {c | intent:i}, Hesitate => {c | intent:Rest}, Idle => c}, w.creatures);
   let creatures = map(\c. stepCreature(w, ageNeeds(c), findAction(acts, c.id)), w.creatures);
-  { tick: w.tick + 1,
-    size: w.size,
-    creatures: creatures,
-    entities: foldl(eatEntity, w.entities, map(\c. match findAction(acts, c.id) { Do(i) => { c | intent: i }, Hesitate => { c | intent: Rest }, Idle => c }, w.creatures)) }
+  let moved = {tick:w.tick+1, size:w.size, creatures:creatures, entities:foldl(eatEntity,w.entities,chosen)};
+  -- Resolve sequentially in creature order: simultaneous claims cannot duplicate an item.
+  let handled = foldl(handleInventory,moved,chosen);
+  {handled | entities:map(\e. if e.carrier == "" then e else match creatureById(handled,e.carrier) {
+    Some(c) => if c.health > 0.0 then {e | pos:c.pos} else {e | carrier:"",pos:c.pos},
+    None => {e | carrier:""}
+  },handled.entities)}
+}
+
+pure func inventoryMemory(w: World, id: string, message: string) -> World =
+  {w | creatures:map(\c. if c.id == id then {c | intent:Wander, memory:remember(c,message), lastDeliberation:w.tick} else c,w.creatures)}
+
+pure func handleInventory(w: World, actor: Creature) -> World = match creatureById(w,actor.id) {
+  None => w,
+  Some(c) => if c.health <= 0.0 then w else match actor.intent {
+    PickUp(id) => if length(heldItems(c,w)) > 0 then w else match filter(\e. e.id==id && movable(e) && e.carrier=="" && distTo(actor,e)<2.0,w.entities) {
+      [] => w,
+      e :: _ => inventoryMemory({w | entities:map(\item. if item.id==id then {item | carrier:c.id,pos:c.pos} else item,w.entities)},c.id,"I picked up ${e.desc}")
+    },
+    Drop => match heldItems(c,w) {
+      [] => w,
+      e :: _ => {
+        let spot=clampPos(w.size,{x:c.pos.x+2.4*cos(c.heading),y:c.pos.y+2.4*sin(c.heading)});
+        inventoryMemory({w | entities:map(\item. if item.id==e.id then {item | carrier:"",pos:spot} else item,w.entities)},c.id,"I put down ${e.desc}")
+      }
+    },
+    Destroy(id) => match filter(\e. e.id==id && movable(e) && (e.carrier==c.id || (e.carrier=="" && distTo(actor,e)<2.0)),w.entities) {
+      [] => w,
+      e :: _ => inventoryMemory({w | entities:filter(\item. item.id!=id,w.entities)},c.id,"I destroyed ${e.desc}")
+    },
+    _ => w
+  }
 }
 
 pure func stepCreature(w: World, c: Creature, act: Action) -> Creature =
@@ -292,12 +379,17 @@ pure func intentTargetDesc(i: Intent) -> string =
 -- deterministic function of tick+id, so identical runs replay identically.
 pure func finishedIntent(w: World, c: Creature, i: Intent) -> bool =
   match i {
+    PickUp(id) => length(heldItems(c,w)) > 0 || match entityPos(w,c,id) {None => true, Some(_) => false},
+    Destroy(id) => match entityPos(w,c,id) {None => true, Some(_) => false},
+    Drop => length(heldItems(c,w)) == 0,
     Rest => c.energy >= 0.85 && c.pauseTicks == 0,
-    Eat(id) => match entityPos(w, id) { None => true, Some(_) => false },
-    Drink(id) => match entityPos(w, id) { None => true, Some(_) => false },
-    Toilet(id) => match entityPos(w, id) { None => true, Some(_) => false },
-    Approach(id) => match entityPos(w, id) { Some(p) => dist(c.pos, p) < 2.0, None => true },
-    Flee(id) => match entityPos(w, id) { Some(p) => dist(c.pos, p) >= perceiveRadius(), None => true },
+    Eat(id) => match entityPos(w, c, id) { None => true, Some(_) => false },
+    Drink(id) => match entityPos(w, c, id) { None => true, Some(_) => false },
+    Toilet(id) => match entityPos(w, c, id) { None => true, Some(_) => false },
+    Approach(id) => match entityPos(w, c, id) { Some(p) => dist(c.pos, p) < 2.0, None => true },
+    Flee(id) => match entityPos(w, c, id) { Some(p) => dist(c.pos, p) >= perceiveRadius(), None => true },
+    Socialize(id) => match peerPos(w,c,id) { Some(p) => dist(c.pos,p) < 3.0, None => true },
+    Avoid(id) => match peerPos(w,c,id) { Some(p) => dist(c.pos,p) >= 10.0, None => true },
     _ => false
   }
 
@@ -311,8 +403,10 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
   let drinking = match i { Drink(id) => reached(w, c, id), _ => false };
   let toileting = match i { Toilet(id) => reached(w, c, id), _ => false };
   let supplied = eating || drinking || toileting;
+  let meeting = match i { Socialize(id) => match peerPos(w,c,id) { Some(p) => dist(c.pos,p) < 3.0, None => false }, _ => false };
   let finished = finishedIntent(w, c, i);
-  let active = if supplied then Rest else if finished then Wander else i;
+  let handling = match i {PickUp(id) => reached(w,c,id), Destroy(id) => reached(w,c,id), Drop => true, _ => false};
+  let active = if supplied || meeting || handling then Rest else if finished then Wander else i;
   let target = targetOf(w, c, active);
   let desiredHeading = headingAfter(c, active, target);
   let origin = clampPos(w.size, c.pos);
@@ -334,12 +428,13 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
     pauseTicks: c.pauseTicks,
     energy: clamp01(c.energy + (if eating then 0.15 else 0.0) - 0.0008 / profileNumber(c.profile, "stamina", 1.0, 0.6, 1.4) + (if isRest(active) then 0.008 else 0.0)),
     fear: clamp01(c.fear - 0.01 + fearDelta(active)),
-    comfort: clamp01(c.comfort + (if isRest(active) then 0.02 else -0.002)),
+    comfort: clamp01(c.comfort + (if meeting then 0.08 else 0.0) + (if isRest(active) then 0.02 else -0.002)),
     soul: c.soul, profile: c.profile,
     intent: if blocked then Wander else active,
     memory: if supplied then remember(c, if eating then "I ate the object I chose" else if drinking then "I drank from the object I chose" else "I pooed at the place I chose")
             else if blocked then remember(c, "The edge blocked my path; I turned back into the habitat")
-            else if finished then remember(c, "I reached ${intentTargetDesc(i)}")
+            else if meeting then remember(c, match i { Socialize(id) => "I spent time beside ${peerName(w,id)}; the company felt comforting", _ => "I found company" })
+            else if finished then remember(c, match i { Avoid(id) => "I gave ${peerName(w,id)} space", Socialize(id) => "My chosen companion is no longer available", _ => "I reached ${intentTargetDesc(i)}" })
             else c.memory,
     seen: c.seen,
     lastDeliberation: if blocked then w.tick - 100 else c.lastDeliberation,
@@ -349,11 +444,15 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
 -- Where is this intent heading? None = keep current heading (Wander/Rest).
 pure func targetOf(w: World, c: Creature, i: Intent) -> Option[Vec2] =
   match i {
-    Approach(id) => entityPos(w, id),
-    Eat(id) => entityPos(w, id),
-    Drink(id) => entityPos(w, id),
-    Toilet(id) => entityPos(w, id),
-    Flee(id)     => match entityPos(w, id) {
+    Socialize(id) => peerPos(w, c, id),
+    Avoid(id) => match peerPos(w,c,id) { Some(p) => Some({x:c.pos.x + (c.pos.x-p.x), y:c.pos.y + (c.pos.y-p.y)}), None => None },
+    PickUp(id) => entityPos(w,c,id),
+    Destroy(id) => entityPos(w,c,id),
+    Approach(id) => entityPos(w, c, id),
+    Eat(id) => entityPos(w, c, id),
+    Drink(id) => entityPos(w, c, id),
+    Toilet(id) => entityPos(w, c, id),
+    Flee(id)     => match entityPos(w, c, id) {
                       Some(p) => Some({ x: c.pos.x + (c.pos.x - p.x),
                                         y: c.pos.y + (c.pos.y - p.y) }),
                       None    => None
@@ -361,8 +460,8 @@ pure func targetOf(w: World, c: Creature, i: Intent) -> Option[Vec2] =
     _            => None
   }
 
-pure func entityPos(w: World, id: string) -> Option[Vec2] =
-  foldl(\acc. \e. if e.id == id then Some(e.pos) else acc, None, w.entities)
+pure func entityPos(w: World, c: Creature, id: string) -> Option[Vec2] =
+  foldl(\acc. \e. if e.id == id && (e.carrier == "" || e.carrier == c.id) then Some(e.pos) else acc, None, w.entities)
 
 -- Heading for the next step: toward a target if any; Wander wobbles
 -- deterministically; otherwise keep heading.
@@ -386,6 +485,11 @@ export pure func intentToJson(i: Intent) -> Json =
     Eat(id)        => jo([kv("tag", js("Eat")), kv("id", js(id))]),
     Drink(id) => jo([kv("tag", js("Drink")), kv("id", js(id))]),
     Toilet(id) => jo([kv("tag", js("Toilet")), kv("id", js(id))]),
+    Socialize(id)  => jo([kv("tag", js("Socialize")), kv("id", js(id))]),
+    Avoid(id)      => jo([kv("tag", js("Avoid")), kv("id", js(id))]),
+    PickUp(id) => jo([kv("tag",js("PickUp")),kv("id",js(id))]),
+    Drop => jo([kv("tag",js("Drop"))]),
+    Destroy(id) => jo([kv("tag",js("Destroy")),kv("id",js(id))]),
     Rest           => jo([kv("tag", js("Rest"))])
   }
 
@@ -395,6 +499,11 @@ export pure func intentOfJson(j: Json) -> Result[Intent, string] =
     Some(tag) =>
       if tag == "Wander" then Ok(Wander)
       else if tag == "Rest" then Ok(Rest)
+      else if tag == "Drop" then Ok(Drop)
+      else if tag == "PickUp" then Ok(PickUp(getOrElse(getString(j,"id"),"")))
+      else if tag == "Destroy" then Ok(Destroy(getOrElse(getString(j,"id"),"")))
+      else if tag == "Socialize" then Ok(Socialize(getOrElse(getString(j, "id"), "")))
+      else if tag == "Avoid" then Ok(Avoid(getOrElse(getString(j, "id"), "")))
       else if tag == "Approach" then Ok(Approach(getOrElse(getString(j, "id"), "")))
       else if tag == "Flee" then Ok(Flee(getOrElse(getString(j, "id"), "")))
       else if tag == "Eat" then Ok(Eat(getOrElse(getString(j, "id"), "")))
@@ -418,6 +527,7 @@ export pure func creatureToJson(c: Creature) -> Json =
     kv("hunger", jnum(c.hunger)), kv("thirst", jnum(c.thirst)), kv("bowel", jnum(c.bowel)),
     kv("pauseTicks", jint(c.pauseTicks)), kv("thought", js(thoughtNoun(c))),
     kv("energy", jnum(c.energy)), kv("fear", jnum(c.fear)), kv("comfort", jnum(c.comfort)),
+    kv("socialPreferences", js(socialPreferences(c))),
     kv("profile", js(c.profile)), kv("soul", js(c.soul)), kv("intent", intentToJson(c.intent)),
     kv("memory", ja(map(js, c.memory))), kv("seen", ja(map(js, c.seen))),
     kv("lastDeliberation", jint(c.lastDeliberation)),
@@ -426,7 +536,7 @@ export pure func creatureToJson(c: Creature) -> Json =
 
 export pure func entityToJson(e: Entity) -> Json =
   jo([kv("id", js(e.id)), kv("kind", js(e.kind)), kv("desc", js(e.desc)),
-      kv("pos", vec2ToJson(e.pos))])
+      kv("pos", vec2ToJson(e.pos)), kv("carrier",js(e.carrier)), kv("movable",jb(movable(e)))])
 
 export pure func actionToJson(a: Action) -> Json =
   match a {
@@ -492,6 +602,7 @@ export pure func worldOfJson(j: Json) -> Result[World, string] = {
     None     => [],
     Some(es) => map(\e. { id: getOrElse(getString(e, "id"), "?"),
                           kind: getOrElse(getString(e, "kind"), "blob"),
+                          carrier: getOrElse(getString(e,"carrier"),""),
                           desc: getOrElse(getString(e, "desc"), ""),
                           pos: match getObject(e, "pos") {
                                  Some(p) => vec2OfJson(p),
@@ -542,7 +653,7 @@ export pure func mkCreature(id: string, name: string, soul: string, x: float, y:
     lastDeliberation: 0, deliberating: false }
 
 pure func mkEntity(id: string, kind: string, desc: string, x: float, y: float) -> Entity =
-  { id: id, kind: kind, desc: desc, pos: { x: x, y: y } }
+  { id: id, kind: kind, desc: desc, carrier:"", pos: { x: x, y: y } }
 
 -- The canned demo world: four personalities, ten description-only things.
 -- Descriptions are deliberately semantic — the entire point of the demo is
@@ -575,6 +686,8 @@ export pure func demoWorld() -> World =
 
 -- Physiology is deterministic; the model chooses whether and where to respond.
 pure func ageNeeds(c: Creature) -> Creature
+requires { c.hunger >= 0.0, c.hunger <= 1.0, c.thirst >= 0.0, c.thirst <= 1.0,
+           c.bowel >= 0.0, c.bowel <= 1.0, c.health >= 0.0, c.health <= 1.0 }
 ensures { result.hunger >= 0.0, result.hunger <= 1.0,
           result.thirst >= 0.0, result.thirst <= 1.0,
           result.bowel >= 0.0, result.bowel <= 1.0,
@@ -597,13 +710,14 @@ export pure func urgencyOf(c: Creature) -> float = {
 }
 
 pure func reached(w: World, c: Creature, id: string) -> bool =
-  match entityPos(w, id) { None => false, Some(p) => dist(c.pos, p) < 2.0 }
+  match entityPos(w, c, id) { None => false, Some(p) => dist(c.pos, p) < 2.0 }
 
 -- Bounded visual shorthand for executed intent/need, not hidden model reasoning.
 export pure func thoughtNoun(c: Creature) -> string =
   if c.health <= 0.0 then "dead" else if c.pauseTicks > 0 then "unsure" else match c.intent {
     Flee(_) => "danger", Eat(_) => "food", Drink(_) => "water", Toilet(_) => "toilet",
-    Rest => "rest", Approach(_) => "explore",
+    PickUp(_) => "pickup", Drop => "drop", Destroy(_) => "destroy",
+    Rest => "rest", Approach(_) => "explore", Socialize(_) => "company", Avoid(_) => "space",
     Wander => if c.energy < 0.2 then "sleep" else if c.bowel >= 0.65 then "toilet" else if c.thirst >= 0.65 then "water"
               else if c.hunger >= 0.65 then "food" else "explore"
   }

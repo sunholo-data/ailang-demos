@@ -451,7 +451,7 @@ jobs:
 
           # Co-Presenter
           mkdir -p _site/co-presenter
-          cp co-presenter/index.html _site/co-presenter/
+          cp co_presenter/index.html _site/co-presenter/
 
           # Cognitive Commons — multi-tab AI debating society
           mkdir -p _site/cognitive_commons/types

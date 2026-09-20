@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev intuition · The Deliberating Nouls</title><link rel="stylesheet" href="assets/brand/sunholo-tokens.css"><link rel="stylesheet" href="style.css?v=ailang-11"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev intuition · The Deliberating Nouls</title><link rel="stylesheet" href="assets/brand/sunholo-tokens.css"><link rel="stylesheet" href="style.css?v=ailang-21"></head>
 <body class="sunholo-brand">
 <header><a class="brand" href="../"><img src="assets/brand/ailang-logo.svg" alt="AILANG" width="48" height="48"><span>AILANG</span></a><span class="project">An experiment in artificial life</span><button id="about-button" class="quiet">How this world thinks</button></header>
 <main>
@@ -7,10 +7,10 @@
 <div class="workspace">
 <section class="habitat" aria-label="Habitat">
 <div class="world-toolbar"><div class="live-controls"><span class="live-label">Jev intuition</span><button id="connect-live" disabled>Connect Jev</button></div><span id="phase">Early day</span></div>
-<div class="world-wrap"><div id="world" aria-label="Select a creature to inspect it"><div class="loading">Growing a little world…</div></div><div id="object-description" role="status" hidden><button id="close-description" aria-label="Close description">×</button><strong>Description Jev sees</strong><p></p></div><div class="world-caption"><span id="world-note">The whole habitat is visible</span><span id="tick">Tick 0</span></div></div>
-<div class="transport"><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset</button><span id="mode-note">Live model judgments</span></div>
-<p id="status" role="status"></p>
-<form id="artifact-form"><label for="artifact">Introduce something new</label><div class="input-row"><input id="artifact" maxlength="160" placeholder="A shiny black egg that hums quietly" autocomplete="off"><button id="place" type="submit" disabled>Place in world</button></div><label class="image-upload">Add a picture (optional)<input id="artifact-image" type="file" accept="image/png,image/jpeg,image/webp"></label><p id="image-note">PNG, JPEG or WebP, up to 4 MB. Eight pictures per world. Jev reads your description; pictures stay in this browser.</p><p id="placement-note">Describe something unfamiliar, place it in the habitat, and watch Jev judge it.</p></form>
+<div class="world-wrap"><div id="placement-controls" hidden><p id="placement-note" role="status">Paused · Tap a spot in the habitat.</p><div><button id="place-center">Place in centre</button><button id="edit-item">Edit</button><button id="cancel-placement">Cancel</button></div></div><div id="world" tabindex="0" aria-label="Select a creature to inspect it"><div class="loading" id="habitat-loading"><div class="loading-content"><div class="loading-nouls" aria-hidden="true"><img src="assets/wary.webp" alt=""><img src="assets/bold.webp" alt=""><img src="assets/paranoid.webp" alt=""><img src="assets/curious.webp" alt=""></div><h2>Growing a little world</h2><p id="loading-stage" role="status">Waking the habitat…</p><progress id="loading-progress" max="100" value="0" aria-label="Habitat loading progress"></progress><p class="loading-hint">The Nouls are getting ready. First visits take a little longer.</p><span id="loading-count">0% ready</span><button id="loading-retry" hidden>Try again</button></div></div></div><div id="object-description" role="status" hidden><button id="close-description" aria-label="Close description">×</button><strong>Description Jev sees</strong><p></p></div><div class="world-caption"><span id="world-note">The whole habitat is visible</span><span id="tick">Tick 0</span></div></div>
+<div class="transport"><button id="add-item" class="primary" disabled>＋ Add item</button><button id="play" disabled>Pause</button><button id="reset" disabled>Reset</button><span id="mode-note">Live model judgments</span></div>
+<p id="status" role="status"></p><p id="item-activity" role="status" hidden></p><p id="artwork-status" role="status" hidden></p>
+
 </section>
 <aside class="observation" aria-label="Creature observation">
 <div class="aside-title"><span>Under observation</span><span id="source-badge">Awaiting Jev</span></div>
@@ -18,12 +18,14 @@
 <div id="creature-tabs" class="creature-tabs" aria-label="Select creature"></div>
 <div class="creature-heading"><span id="portrait" class="portrait bold"><i></i></span><div><h2 id="creature-name">Bold Noul</h2><p id="personality">A little courage goes a long way.</p></div></div>
 <div id="character-traits" class="trait-grid" hidden></div>
-<p id="current-thought" class="current-thought"></p><div id="vitals" class="vitals"></div>
+<p id="carrying-note" class="carrying-note">Carrying: nothing · room for one item</p><p id="current-thought" class="current-thought"></p><div id="vitals" class="vitals"></div>
+
 <div class="decision-heading"><h3 id="decision-title">A moment of intuition</h3><span id="verified"></span></div>
 <p id="decision-context">Every judgment will appear here with its full distribution.</p>
 <div id="decision-stage" aria-live="polite">Connect Jev to watch the first real decision.</div>
 <div id="distribution"></div>
 <div id="outcome" class="outcome" hidden></div><button id="watch" disabled>Replay this decision</button>
+<section class="social-observation" aria-label="Social preferences"><h3>Company &amp; personal space</h3><p id="social-preferences"></p><p id="social-encounter"></p><div id="social-choices"></div></section>
 <details><summary>Look inside the decision</summary><div class="evidence-tabs"><button data-evidence="state">Perception</button><button data-evidence="questions">Questions</button><button data-evidence="decision">Full answer</button></div><pre id="evidence"></pre></details>
 </aside>
 </div>
@@ -31,10 +33,21 @@
 
 <footer><span>Judgment by typed decisions. World and policy in AILANG.</span><span>Observe · sample · act · replay</span></footer>
 </main>
+<dialog id="item-dialog" aria-labelledby="item-title" aria-describedby="item-pause-note">
+<button id="close-item" class="close" aria-label="Cancel adding item">×</button>
+<span class="item-eyebrow">A little surprise for the Nouls</span><h2 id="item-title">Add something new</h2>
+<p id="item-pause-note">The habitat is paused while you add your item.</p>
+<form id="artifact-form"><label for="artifact">What have you found?</label>
+<input id="artifact" maxlength="160" required placeholder="A shiny black egg that hums quietly" autocomplete="off" enterkeyhint="done">
+<div class="item-suggestions" aria-label="Item ideas"><button type="button" data-item="A bowl of sweet berries">Sweet berries</button><button type="button" data-item="A tiny bell that rings in the breeze">Tiny bell</button><button type="button" data-item="A warm glowing stone">Glowing stone</button></div>
+<label class="draw-item"><input id="generate-art" type="checkbox" checked><span>Draw it for me <small>About 1.4¢ · appears after placing</small></span></label><p id="art-option-note"></p>
+<details id="item-picture"><summary>Add a picture <span>(optional)</span></summary><label class="image-upload" for="artifact-image">Choose a picture<input id="artifact-image" type="file" accept="image/png,image/jpeg,image/webp"></label><p id="image-note" role="status">PNG, JPEG or WebP, up to 4 MB. Pictures stay in this browser; Jev reads your description.</p></details>
+<div class="item-actions"><button id="cancel-item" type="button">Cancel</button><button id="place" class="primary" type="submit" disabled>Choose a spot →</button></div>
+</form></dialog>
 <dialog id="about"><button class="close" data-close="about" aria-label="Close">×</button><h2>Instinct, with evidence.</h2><p>Things in this world have descriptions, not “edible” or “dangerous” flags. In live mode, a decision model reads a creature’s perception and answers typed questions with probabilities.</p><p>AILANG checks threats and the creature’s confidence threshold, then samples an action. The full decision and random roll are saved so that the action can be reproduced offline.</p><p>The habitat runs in your browser. New judgments run through Jev via the Studio. You can inspect or replay a saved decision from the ledger without making another model call.</p></dialog>
 <dialog id="live-dialog"><button class="close" data-close="live-dialog" aria-label="Close">×</button><h2>Give them intuition.</h2><p>Live mode sends your key and creature perceptions to this private Studio preview server over HTTPS. The server runs the AILANG decision call through OpenRouter to TypeSafe.</p><form id="key-form"><label for="api-key">OpenRouter API key</label><input id="api-key" type="password" autocomplete="off" required placeholder="sk-or-…"><p>The key is saved in this browser and used only in memory on the Studio for each request. It is not written to a server file. Live calls incur usage charges. The world keeps making decisions until you pause it. Recorded cost is shown below the habitat.</p><button class="primary">Start live session</button></form><p>If browser networking is unavailable, record with the CLI and import the bank here.</p></dialog>
 <dialog id="character-dialog" aria-labelledby="character-title"><button class="close" data-close="character-dialog" aria-label="Close">×</button><h2 id="character-title">Create a Noul</h2><p>Describe who it is and what it can do. Jev turns your description into traits you can inspect before it joins the habitat.</p>
 <form id="character-form"><label for="character-name">Name</label><input id="character-name" maxlength="32" required placeholder="Pip"><label for="character-description">Personality and abilities</label><textarea id="character-description" rows="4" minlength="10" maxlength="400" required placeholder="A curious, gentle wanderer who runs quickly but tires easily. Loves berries and is afraid of shiny things."></textarea><p>Up to 400 characters. One Jev call, charged to your current $0.10 session. Up to eight Nouls per habitat.</p><button id="design-character" class="primary">Interpret with Jev</button></form>
-<p id="character-status" role="status"></p><section id="character-preview" hidden><h3>Jev’s interpretation</h3><div id="proposed-traits" class="trait-grid"></div><p>Confidence and threat settings guide its choices; urgency can override caution. Speed and stamina change its movement and tiredness.</p><p>All Nouls can walk, investigate, eat, drink, poo, rest and flee. Flying, magic, combat and crafting remain description only. Appearance uses one of our four existing creatures.</p><details><summary>Inspect the mapping evidence</summary><p>Numeric traits use the expected value of Jev’s full score distributions. Appearance uses its highest-ranked choice. Actions in the habitat are still sampled.</p><pre id="character-evidence"></pre><button id="download-character">Download character and evidence</button></details><button id="add-character" class="primary">Add to habitat</button></section></dialog>
-<script src="motion.js?v=ailang-11" defer></script>
-<script src="app.js?v=ailang-11" defer></script></body></html>
+<p id="character-status" role="status"></p><section id="character-preview" hidden><h3>Jev’s interpretation</h3><div id="proposed-traits" class="trait-grid"></div><p>Confidence and threat settings guide its choices; urgency can override caution. Speed and stamina change its movement and tiredness.</p><p>All Nouls can walk, investigate, eat, drink, poo, rest, flee, seek company and give each other space. Flying, magic, combat and crafting remain description only. Appearance uses one of our four existing creatures.</p><details><summary>Inspect the mapping evidence</summary><p>Numeric traits use the expected value of Jev’s full score distributions. Appearance uses its highest-ranked choice. Actions in the habitat are still sampled.</p><pre id="character-evidence"></pre><button id="download-character">Download character and evidence</button></details><button id="add-character" class="primary">Add to habitat</button></section></dialog>
+<script src="motion.js?v=ailang-21" defer></script>
+<script src="app.js?v=ailang-21" defer></script></body></html>

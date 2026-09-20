@@ -61,7 +61,7 @@ pure func placeEntity(s: string, desc: string, x: float, y: float) -> string = m
     if strLength(trim(desc)) == 0 || strLength(desc) > 160 then failure("Use a description between 1 and 160 characters")
     else if not validPlacement(x, y, w.size) then failure("Place the object inside the habitat")
     else if length(w.entities) >= 40 then failure("This habitat is full (40 objects)")
-    else frame({ w | entities: concat(w.entities, [{id: "introduced-${w.tick}-${length(w.entities)}", kind: "stone", desc: trim(desc), pos: {x: x, y: y}}]) })
+    else frame({ w | entities: concat(w.entities, [{id: "introduced-${w.tick}-${length(w.entities)}", kind: "stone", carrier:"", desc: trim(desc), pos: {x: x, y: y}}]) })
 }
 export pure func review(line: string) -> string = match lineToRow(line) {
   Err(m) => failure(m), Ok(row) => match replayRow(row) {
@@ -70,6 +70,7 @@ export pure func review(line: string) -> string = match lineToRow(line) {
         Err(e) => failure(errText(e)), Ok(ps) => encode(jo([
           kv("ok", jb(true)), kv("verified", jb(rowActionMatches(row, act))),
           kv("row", rowToJson(row)), kv("action", actionToJson(act)),
+          kv("company", socialDistribution(d,"companion")), kv("avoidance", socialDistribution(d,"avoid_companion")),
           kv("distribution", probsToJson(ps)), kv("bars", js(renderBars(encode(probsToJson(ps)), row.roll))),
           kv("explanation", js(explain(d, row.soul, row.state))),
           kv("sample", js(match sampleFrom(ps, row.roll) { Ok(k) => k, Err(m) => m })),
@@ -79,6 +80,10 @@ export pure func review(line: string) -> string = match lineToRow(line) {
     }
   }
 }
+-- Presentation data from the saved typed answers, without a new model call.
+pure func socialDistribution(d: Decision, name: string) -> Json =
+  match answer(d,name) { Err(_) => ja([]), Ok(a) => match ranked(a) { Err(_) => ja([]), Ok(ps) => probsToJson(ps) } }
+
 export func deliberateLive(s: string, id: string, completed: int) -> string ! {Net @limit=1, Env @limit=1, Rand @limit=1} = if not validCompletedCount(completed) then failure("Invalid completed-decision count") else match readWorld(s) {
   Err(m) => failure(m), Ok(w) => match creatureById(w, id) {
     None => failure("Unknown creature"), Some(c) => if c.health <= 0.0 then failure("This creature has died. Reset to begin a new habitat.") else match deliberate(demoModel(), c, w) {

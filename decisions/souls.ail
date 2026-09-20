@@ -9,7 +9,7 @@
 
 module souls
 
-import world (Creature, World, Entity, Intent, Action, Do, Hesitate, Idle, Wander, Approach, Flee, Rest, Eat, Drink, Toilet, visible, takeNearest, urgencyOf, profileNumber)
+import world (Creature, World, Entity, Intent, Action, Do, Hesitate, Idle, Wander, Approach, Flee, Rest, Eat, Drink, Toilet, Socialize, Avoid, PickUp, Drop, Destroy, heldItems, availableItems, looseItems, movable, otherNouls, publicDescription, visible, takeNearest, urgencyOf, profileNumber)
 import pkg/sunholo/decisions/decide (Question, Noul, Choice, Score,
                                      Answer, NoulA, ChoiceA, ScoreA,
                                      Decision, DecideError, MissingKey, Http, Transport, BadResponse, MissingAnswer, WrongVariant,
@@ -95,7 +95,11 @@ export pure func behaviorOptions() -> [{ key: string, desc: string }] = [
   { key: "rest",        desc: "Lie still for a while and recover energy" },
   { key: "flee",        desc: "Get away from whatever might hurt me" },
   { key: "investigate", desc: "Go look closely at the most interesting nearby thing" },
-  { key: "socialize",   desc: "Drift toward another Noul for company" }
+  { key: "socialize", desc: "Approach a preferred living Noul and spend time beside them" },
+  { key: "avoid", desc: "Give an unwanted companion personal space by walking away" },
+  {key:"pickup",desc:"Pick up an interesting or useful added item; I can carry only one at a time"},
+  {key:"drop",desc:"Put my carried item down beside me so others can find it"},
+  {key:"destroy",desc:"Permanently destroy an added item I am carrying or can reach; do this only for a reason, such as a clearly harmful or unwanted object"}
 ]
 
 export pure func dangerLevels() -> [string] = [
@@ -121,10 +125,10 @@ export type NQ = { name: string, q: Question }
 --   extra       — the personality's own question, if any
 export pure func buildQuestions(p: Personality, c: Creature, w: World) -> [NQ] = {
   let near = takeNearest(c, w, 4)
-  let candidates = w.entities
+  let candidates = availableItems(c,w)
   let behavior = { name: "behavior",
-                   q: Choice("You are ${c.name} in a small world. ${p.flavor} Consider hunger, thirst, tiredness and needToPoo (higher means more urgent), as well as health and danger. At 80% or more, meet needs before exploring. At 95% you are desperate: dehydration and starvation can kill you, so tolerate uncertainty and act. Sleeping relieves tiredness. Avoid treating harmless unfamiliar objects as certain threats. Judge suitability from the descriptions; objects have no predefined edible or safe flags. What should you do next?",
-                             behaviorOptionsFor(c)) }
+                   q: Choice("You are ${c.name} in a small world. ${p.flavor} Consider hunger, thirst, tiredness and needToPoo (higher means more urgent), as well as health and danger. At 80% or more, meet needs before exploring. At 95% you are desperate: dehydration and starvation can kill you, so tolerate uncertainty and act. Sleeping relieves tiredness. Avoid treating harmless unfamiliar objects as certain threats. Judge suitability from the descriptions; objects have no predefined edible or safe flags. Consider the others and my socialPreferences: company can be welcome or unwelcome, and preferences need not be mutual. Respect companions who are avoiding me. My inventory holds at most one item. Only movable player-added items can be picked up or destroyed; fixed habitat features cannot. Do not take items carried by others. Carrying can be useful or comforting; put an item down when done, and avoid destroying useful or merely unfamiliar things. What should you do next?",
+                             filter(\o. length(otherNouls(c,w)) > 0 || (o.key != "socialize" && o.key != "avoid"), inventoryBehavior(c,w))) }
   let approach = { name: "approach",
                    q: Choice("Which described map object is most worth walking over to?",
                              entityOptions(candidates)) }
@@ -135,7 +139,37 @@ export pure func buildQuestions(p: Personality, c: Creature, w: World) -> [NQ] =
       { name: "eat_target", q: Choice("Which described map object would best satisfy hunger if I chose to eat?", entityOptions(candidates)) },
       { name: "drink_target", q: Choice("Which described map object would best satisfy thirst if I chose to drink?", entityOptions(candidates)) },
       { name: "toilet_target", q: Choice("Which described map place would be most suitable for pooing, away from food and water?", entityOptions(candidates)) }]),
-    concat(threatQuestions(near), questionExtra(p)))
+    concat(itemQuestions(c,w),concat(socialQuestions(c,w), concat(threatQuestions(near), questionExtra(p)))))
+}
+
+export pure func inventoryBehavior(c: Creature, w: World) -> [{key:string,desc:string}] =
+  filter(\o. if o.key=="pickup" then length(heldItems(c,w))==0 && length(looseItems(w))>0
+    else if o.key=="drop" then length(heldItems(c,w))>0
+    else if o.key=="destroy" then length(filter(movable,availableItems(c,w)))>0
+    else true,behaviorOptionsFor(c))
+
+export pure func itemQuestions(c: Creature, w: World) -> [NQ]
+ensures {length(result) <= 2}
+{
+  let loose=looseItems(w);
+  let targets=filter(movable,availableItems(c,w));
+  concat(if length(heldItems(c,w))>0 || length(loose)==0 then [] else
+    [{name:"pickup_target",q:Choice("Which added object would I most like to carry, considering its description, my personality and needs?",entityOptions(loose))}],
+    if length(targets)==0 then [] else
+    [{name:"destroy_target",q:Choice("Only if I choose destroy: which added object has a good reason to be permanently removed? Prefer to preserve useful or harmless things. My carried item is available, but other creatures' possessions are not.",entityOptions(targets))}])
+}
+
+-- At most two extra questions in the same Net request. The whole target
+-- distribution is banked; preferences are sampled, not reduced to a favourite.
+export pure func socialQuestions(c: Creature, w: World) -> [NQ]
+ensures { length(result) == 0 || length(result) == 2 }
+{
+  let peers = otherNouls(c,w);
+  let opts = map(\peer. {key:peer.id, desc:"${peer.name}: ${publicDescription(peer)}"}, peers);
+  if length(peers) == 0 then [] else [
+    {name:"companion", q:Choice("Whose company would I prefer now, considering my socialPreferences, observable actions, distance and past encounters? Respect avoidance. These are personal, possibly one-sided preferences; use alone if solitude suits me better.", concat(opts,[{key:"alone",desc:"I prefer my own company right now"}]))},
+    {name:"avoid_companion", q:Choice("Whom would I rather give space, considering my preferences and their actions? Dislike is not evidence of danger. Choose none if I need not avoid anybody.",concat(opts,[{key:"none",desc:"No companion needs avoiding"}]))}
+  ]
 }
 
 pure func questionExtra(p: Personality) -> [NQ] =
@@ -336,6 +370,10 @@ export pure func roll2(roll: float) -> float = {
 -- their DESCRIPTIONS alone).
 pure func modeAction(d: Decision, roll: float, mode: string) -> Action =
   if mode == "eat" || mode == "drink" || mode == "toilet" then needAction(d, roll, mode)
+  else if mode == "socialize" then socialAction(d,roll,"companion")
+  else if mode == "avoid" then socialAction(d,roll,"avoid_companion")
+  else if mode == "pickup" || mode == "destroy" then itemAction(d,roll,mode)
+  else if mode == "drop" then Do(Drop)
   else if mode == "rest" then Do(Rest)
   else if mode == "flee" then
     match likeliestThreat(d) {
@@ -353,6 +391,29 @@ pure func modeAction(d: Decision, roll: float, mode: string) -> Action =
                }
     }
   else Do(Wander)
+
+pure func itemAction(d: Decision, roll: float, mode: string) -> Action =
+  match answer(d,"${mode}_target") {
+    Err(_) => Do(Wander), Ok(a) => match ranked(a) {
+      Err(_) => Do(Wander), Ok(ps) => match sampleFrom(ps,roll2(roll)) {
+        Err(_) => Do(Wander), Ok(id) => if mode=="pickup" then Do(PickUp(id)) else Do(Destroy(id))
+      }
+    }
+  }
+
+-- Missing social answers retain the historical Wander result for old banks.
+pure func socialAction(d: Decision, roll: float, question: string) -> Action =
+  match answer(d,question) {
+    Err(_) => Do(Wander),
+    Ok(a) => match ranked(a) {
+      Err(_) => Do(Wander),
+      Ok(ps) => match sampleFrom(ps,roll2(roll)) {
+        Err(_) => Do(Wander),
+        Ok(id) => if id == "alone" then Do(Rest) else if id == "none" then Do(Wander)
+          else if question == "companion" then Do(Socialize(id)) else Do(Avoid(id))
+      }
+    }
+  }
 
 -- Decision → Action, the demo's core policy:
 --   1. any PRESENT threat overrides everything (survival first);

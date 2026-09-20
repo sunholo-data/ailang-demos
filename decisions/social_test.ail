@@ -1,0 +1,102 @@
+module social_test
+import world (Creature, World, Intent, Action, Socialize, Avoid, Rest, Wander, Do, demoWorld, mkCreature, stepWorld, otherNouls, socialPreferences, perceive, worldToJson, worldOfJson, intentToJson, intentOfJson, shouldDeliberate, dist)
+import souls (socialQuestions, buildQuestions, soulOf, actOnDecision, personalityOf)
+import pkg/sunholo/decisions/decide (Decision, ChoiceA, Choice)
+import std/json (encode, ja, getArray, getString)
+import std/list (length, foldl)
+import std/option (getOrElse)
+import std/result (Ok, Err)
+import std/string (contains)
+import std/io (println, exit)
+
+pure func me() -> Creature = {mkCreature("c1","Wary","wary",10.0,10.0,0.0) | hunger:0.2,thirst:0.2,bowel:0.2}
+pure func peer() -> Creature = {mkCreature("c2","Bold","bold",20.0,10.0,0.0) | hunger:0.2,thirst:0.2,bowel:0.2}
+pure func habitat(c: Creature, p: Creature) -> World = {demoWorld() | creatures:[c,p],entities:[]}
+pure func first(w: World) -> Creature = match w.creatures { c :: _ => c, [] => me() }
+pure func socialDecision(mode: string, target: string) -> Decision = {
+ model:"synthetic-social-test",id:"social-fixture",input_tokens:0,output_tokens:0,cost_usd:0.0,
+ answers:[{name:"behavior",answer:ChoiceA({choice:mode,confidence:1.0,probabilities:[{key:mode,p:1.0}]})},
+ {name:target,answer:ChoiceA({choice:"c2",confidence:1.0,probabilities:[{key:"c2",p:0.6},{key:"c3",p:0.4}]})}]}
+
+pure func observations() -> bool {
+ let c=me();let p={peer() | memory:["private-memory"],health:0.8};
+ let state=perceive(c,habitat(c,p));
+ let peers=getOrElse(getArray(state,"others"),[]);
+ length(peers)==1 && contains(encode(ja(peers)),"Bold") && not contains(encode(state),"private-memory") &&
+ length(otherNouls(c,habitat(c,{p | health:0.0})))==0 &&
+ socialPreferences(c)!=socialPreferences(p)
+}
+pure func customPreferences() -> bool = contains(socialPreferences({me() | profile:"{\"description\":\"Loves quiet company and dislikes being chased\"}"}),"Loves quiet company")
+pure func questions() -> bool {
+ let c=me();let w=habitat(c,peer());let qs=socialQuestions(c,w);
+ length(qs)==2 && length(socialQuestions(c,{w | creatures:[c]}))==0 &&
+ foldl(\ok. \q. ok && match q.q { Choice(_,opts) => length(opts)==2 && foldl(\valid. \o. valid && o.key != "c1",true,opts), _ => false },true,qs)
+}
+pure func sampledTargets() -> bool {
+ let d=socialDecision("socialize","companion");
+ match (actOnDecision(d,personalityOf("bold"),0.1),actOnDecision(d,personalityOf("bold"),0.5)) {
+  (Ok(Do(Socialize(a))),Ok(Do(Socialize(b)))) => a=="c2" && b=="c3",
+  _ => false
+ }
+}
+pure func avoidance() -> bool = match actOnDecision(socialDecision("avoid","avoid_companion"),personalityOf("bold"),0.1) { Ok(Do(Avoid(id))) => id=="c2", _ => false }
+pure func legacySocial() -> bool {
+ let d={socialDecision("socialize","companion") | answers:[{name:"behavior",answer:ChoiceA({choice:"socialize",confidence:1.0,probabilities:[{key:"socialize",p:1.0}]})}]};
+ match actOnDecision(d,personalityOf("bold"),0.1) { Ok(Do(Wander)) => true, _ => false }
+}
+pure func movement() -> bool {
+ let c=me();let p=peer();let w=habitat(c,p);
+ let toward=first(stepWorld(w,[{id:c.id,act:Do(Socialize(p.id))}]));
+ let away=first(stepWorld(habitat(c,{p | pos:{x:15.0,y:10.0}}),[{id:c.id,act:Do(Avoid(p.id))}]));
+ toward.pos.x>c.pos.x && away.pos.x<c.pos.x && toward.pos.y==c.pos.y
+}
+pure func movingTarget() -> bool {
+ let c={me() | intent:Socialize("c2")};let p={peer() | pos:{x:10.0,y:20.0}};
+ let after=first(stepWorld(habitat(c,p),[]));
+ after.pos.y>c.pos.y
+}
+pure func encounter() -> bool {
+ let c=me();let p={peer() | pos:{x:12.0,y:10.0}};
+ let after=first(stepWorld(habitat(c,p),[{id:c.id,act:Do(Socialize(p.id))}]));
+ after.pos.x==c.pos.x && after.pos.y==c.pos.y && after.comfort>c.comfort &&
+ contains(encode(worldToJson(habitat(after,p))),"I spent time beside Bold")
+}
+pure func noDeadTarget() -> bool {
+ let c={me() | intent:Socialize("c2")};let p={peer() | health:0.0};
+ match first(stepWorld(habitat(c,p),[])).intent { Wander => true, _ => false }
+}
+pure func urgencyInterrupts() -> bool {
+ let c={me() | intent:Socialize("c2"),thirst:0.9,lastDeliberation:0};let w={habitat(c,peer()) | tick:8};
+ shouldDeliberate(c,w,12) && foldl(\valid. \q. valid && match q.q {
+ Choice(_,opts) => if q.name=="behavior" then foldl(\ok. \o. ok && o.key!="socialize" && o.key!="avoid",true,opts) else true,
+ _ => true },true,buildQuestions(soulOf(c),c,w))
+}
+pure func codecs() -> bool {
+ let w=habitat({me() | intent:Socialize("c2")},{peer() | intent:Avoid("c1")});
+ match worldOfJson(worldToJson(w)) { Err(_) => false, Ok(restored) => encode(worldToJson(restored))==encode(worldToJson(w)) }
+}
+test "perception sees living peers without reading their private memories" { assert observations() }
+test "custom description supplies individual social preferences" { assert customPreferences() }
+test "bounded social questions exclude self and offer solitude" { assert questions() }
+test "companion target is sampled rather than fixed to the highest probability" { assert sampledTargets() }
+test "avoidance has a distinct social action" { assert avoidance() }
+test "old social banks preserve their wandering action" { assert legacySocial() }
+test "social actions approach and avoid actual peer positions" { assert movement() }
+test "social movement follows a moving companion" { assert movingTarget() }
+test "arrival stops and banks a comforting encounter in memory" { assert encounter() }
+test "a dead companion is no longer followed" { assert noDeadTarget() }
+test "urgent survival interrupts optional company" { assert urgencyInterrupts() }
+test "social intents round trip in world snapshots" { assert codecs() }
+export func main() -> () ! {IO} {
+ let ok=observations() && customPreferences() && questions() && sampledTargets() && avoidance() && legacySocial() && movement() && movingTarget() && encounter() && noDeadTarget() && urgencyInterrupts() && codecs();
+ println(if ok then "PASS social perception, preferences, sampling, movement, memory, survival and codecs" else "FAIL social checks");
+ if ok then () else exit(1)
+}
+
+pure func socialCodecRoundTrip(id: string) -> bool
+ensures { result }
+{ match (intentOfJson(intentToJson(Socialize(id))),intentOfJson(intentToJson(Avoid(id)))) {
+   (Ok(Socialize(a)),Ok(Avoid(b))) => a==id && b==id,
+   _ => false
+ }
+}

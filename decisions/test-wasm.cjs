@@ -129,6 +129,54 @@ require(path.join(root, 'wasm/wasm_exec.js'));
   assert.equal((await call('restoreNoul',state,JSON.stringify({...customRow,state:'{}'}))).ok,false);
   console.log('PASS WASM player creation, bounded count, escaping, profile perception and custom bank replay');
 
+  const socialPerception=await call('perceptOf',state,'c2');
+  assert.equal(socialPerception.state.others.length,3);
+  assert(!socialPerception.state.others.some(c=>c.id==='c2'));
+  assert.match(socialPerception.state.socialPreferences,/adventurous/);
+  const choice=(key,probabilities)=>({kind:'ChoiceA',choice:key,confidence:1,probabilities});
+  const socialRow={...row,creatureId:'c2',soul:'bold',source:'synthetic',roll:.5,
+    state:JSON.stringify(socialPerception.state),
+    decision:JSON.stringify({...JSON.parse(row.decision),model:'synthetic-social-test',answers:[
+      {name:'behavior',answer:choice('socialize',[{key:'socialize',p:1}])},
+      {name:'companion',answer:choice('c1',[{key:'c1',p:.6},{key:'c4',p:.3},{key:'alone',p:.1}])},
+      {name:'avoid_companion',answer:choice('none',[{key:'none',p:.7},{key:'c3',p:.3}])}
+    ]}),action:JSON.stringify({tag:'Do',intent:{tag:'Socialize',id:'c4'}})};
+  const socialReview=await call('review',JSON.stringify(socialRow));
+  assert.equal(socialReview.verified,true);
+  assert.deepEqual(socialReview.company,[{key:'c1',p:.6},{key:'c4',p:.3},{key:'alone',p:.1}]);
+  const socialFrame=await call('enact',state,JSON.stringify(socialRow));
+  const socialActor=socialFrame.world.creatures.find(c=>c.id==='c2');
+  assert.equal(socialActor.intent.tag,'Socialize');assert(socialActor.pos.x<40);
+  assert.match(socialFrame.svg,/Current need or intent: company/);
+  fs.writeFileSync('/tmp/nouls-social-test.jsonl',JSON.stringify(socialRow)+'\n');
+  console.log('PASS WASM social perception, sampled companion, banked preferences, replay and movement');
+
+  // Inventory choices and full item lifecycle run through real AILANG replay.
+  let items=(await call('init')).world;
+  const owner=items.creatures.find(c=>c.id==='c2');
+  items=(await call('addEntity',JSON.stringify(items),'A tiny brass bell',String(owner.pos.x),String(owner.pos.y))).world;
+  const itemId=items.entities.at(-1).id;
+  async function itemAction(mode,tag){
+    const row={...socialRow,tick:items.tick,state:JSON.stringify((await call('perceptOf',JSON.stringify(items),'c2')).state),
+      decision:JSON.stringify({model:'synthetic-inventory',id:'items',input_tokens:0,output_tokens:0,cost_usd:0,answers:[
+        {name:'behavior',answer:choice(mode,[{key:mode,p:1}])},
+        {name:mode+'_target',answer:choice(itemId,[{key:itemId,p:1}])}]}),
+      action:JSON.stringify({tag:'Do',intent:tag==='Drop'?{tag}:{tag,id:itemId}})};
+    assert.equal((await call('review',JSON.stringify(row))).verified,true);
+    items=(await call('enact',JSON.stringify(items),JSON.stringify(row))).world;
+  }
+  await itemAction('pickup','PickUp');assert.equal(items.entities.find(e=>e.id===itemId).carrier,'c2');
+  let inv=(await call('perceptOf',JSON.stringify(items),'c2')).state.inventory;
+  assert.equal(inv.capacity,1);assert.equal(inv.held[0].id,itemId);
+  items=(await call('coast',JSON.stringify(items))).world;
+  assert.deepEqual(items.entities.find(e=>e.id===itemId).pos,items.creatures.find(c=>c.id==='c2').pos);
+  await itemAction('drop','Drop');assert.equal(items.entities.find(e=>e.id===itemId).carrier,'');
+  items.creatures.find(c=>c.id==='c2').pos={...items.entities.find(e=>e.id===itemId).pos};
+  await itemAction('pickup','PickUp');await itemAction('destroy','Destroy');
+  assert(!items.entities.some(e=>e.id===itemId));
+  assert.equal((await call('perceptOf',JSON.stringify(items),'c2')).state.inventory.held.length,0);
+  console.log('PASS WASM pickup, carrying position, capacity perception, drop, re-pickup, destruction and banked action replay');
+
   for(const cap of ['Net','Env']) ailangGrantCapability(cap);
   ailangSetEffectHandler('Env',{getEnv:name=>({_ctor:'Err',_fields:[{_ctor:'NotFound',_fields:[name]}]})});
   const missing=await call('deliberateLive',state,'c2',0);
