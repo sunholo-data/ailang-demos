@@ -122,7 +122,7 @@ async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlig
 function showEvidence(){if(!review)return;const raw=review.row[evidence];try{$('#evidence').textContent=JSON.stringify(JSON.parse(raw),null,2);}catch{$('#evidence').textContent=raw;}}
 function actionLabel(action){if(action.tag==='Do'){const target=review ? [...(JSON.parse(review.row.state).nearby||[]),...(JSON.parse(review.row.state).others||[]),...(JSON.parse(review.row.state).map||[])].find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+(target.name||target.desc) : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
 async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();updateSocial();}
-function renderLedger(){const root=$('#timeline');root.replaceChildren();if(!rows.length){const empty=document.createElement('p');empty.className='ledger-empty';empty.textContent='The next decision is unwritten. Connect Jev and watch this fill with real judgments.';root.append(empty);}rows.slice(-80).forEach((r,offset)=>{const i=Math.max(0,rows.length-80)+offset;const b=document.createElement('button');b.className=i===activeRow?'active':'';const small=document.createElement('small');small.textContent=`Tick ${r.tick} / ${r.source==='synthetic'?'Synthetic fixture':'Recorded decision'}`;const strong=document.createElement('strong');strong.textContent=world.creatures.find(c=>c.id===r.creatureId)?.name||`${r.soul} Noul`;const sub=document.createElement('small');sub.textContent=`Roll ${Math.round(r.roll*100)}% · inspect decision`;b.append(small,strong,sub);b.onclick=async()=>{try{if(busy||addingItem)return;running=false;$('#play').textContent='Resume';selected=r.creatureId;await selectCreature(selected);await showRow(i);}catch(e){fail(e)}};root.append(b)});$('#bank-count').textContent=`${rows.length} banked decision${rows.length===1?'':'s'}`;const total=rows.filter(r=>r.source!=='synthetic').reduce((sum,r)=>sum+(JSON.parse(r.decision).cost_usd||0),0);$('#cost').textContent=`Recorded cost $${total.toFixed(6)} / replay $0`;$('#download').disabled=!rows.length;}
+function renderLedger(){const root=$('#timeline');root.replaceChildren();if(!rows.length){const empty=document.createElement('p');empty.className='ledger-empty';empty.textContent='The next decision is unwritten. Connect Jev and watch this fill with real judgments.';root.append(empty);}rows.slice(-80).forEach((r,offset)=>{const i=Math.max(0,rows.length-80)+offset;const b=document.createElement('button');b.className=i===activeRow?'active':'';const small=document.createElement('small');small.textContent=`Tick ${r.tick} / ${r.source==='synthetic'?'Synthetic fixture':'Recorded decision'}`;const strong=document.createElement('strong');strong.textContent=world.creatures.find(c=>c.id===r.creatureId)?.name||`${r.soul} Noul`;const sub=document.createElement('small');sub.textContent=`Roll ${Math.round(r.roll*100)}% · inspect decision`;b.append(small,strong,sub);b.onclick=async()=>{try{if(busy||addingItem)return;running=false;$('#play').textContent='Resume';selected=r.creatureId;await selectCreature(selected);await showRow(i);openGamePanel('observation-panel');}catch(e){fail(e)}};root.append(b)});$('#bank-count').textContent=`${rows.length} banked decision${rows.length===1?'':'s'}`;const total=rows.filter(r=>r.source!=='synthetic').reduce((sum,r)=>sum+(JSON.parse(r.decision).cost_usd||0),0);$('#cost').textContent=`Recorded cost $${total.toFixed(6)} / replay $0`;$('#download').disabled=!rows.length;}
 async function watchDecision() {
   if(busy||!review)return;
   running=false;busy=true;
@@ -349,13 +349,13 @@ $('#place-center').onclick=()=>placeItem($('#nouls-world').viewBox.baseVal.width
 $('#world').onclick=async e=>{try{
   if(placing){const svg=$('#world svg'),pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());await placeItem(Math.max(0,Math.min(svg.viewBox.baseVal.width,pt.x)),Math.max(0,Math.min(svg.viewBox.baseVal.height,pt.y)));}
   else if(e.target.closest('[data-object]')){const ent=world.entities.find(v=>v.id===e.target.closest('[data-object]').dataset.object);if(ent)showDescription(ent,e);}
-  else if(!busy&&e.target.closest('.noul'))await selectCreature(e.target.closest('.noul').dataset.id);
+  else if(!busy&&e.target.closest('.noul')){await selectCreature(e.target.closest('.noul').dataset.id);openGamePanel('observation-panel');}
 }catch(err){busy=false;fail(err);}};
-$('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);}else if(!busy&&(e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();selectCreature(e.target.closest('.noul').dataset.id).catch(fail);}};
+$('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);}else if(!busy&&(e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();selectCreature(e.target.closest('.noul').dataset.id).then(()=>openGamePanel('observation-panel')).catch(fail);}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&placing){e.preventDefault();finishItem();}});
 document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>{evidence=b.dataset.evidence;showEvidence();});
 $('#download').onclick=()=>{const url=URL.createObjectURL(new Blob([rows.map(r=>JSON.stringify(r)).join('\n')+'\n'],{type:'application/x-ndjson'}));const a=document.createElement('a');a.href=url;a.download='nouls-bank.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>64e6)throw new Error('Choose a bank smaller than 64 MB.');running=false;const imported=(await file.text()).trim().split('\n').map(JSON.parse);if(!imported.length||imported.length>10000)throw new Error('Use a bank with 1–10,000 decisions.');let restored={world};for(const row of imported){const checked=await call('review',JSON.stringify(row));if(!checked.verified)throw new Error('Import stopped: a banked action diverged.');if(!restored.world.creatures.some(c=>c.id===row.creatureId))restored=await call('restoreNoul',JSON.stringify(restored.world),JSON.stringify(row));}if(restored.svg)draw(restored);rows=imported;selected=rows[0].creatureId;running=false;await selectCreature(selected);await showRow(0);$('#play').textContent='Resume';}catch(err){fail(err);}finally{e.target.value='';}};
+$('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>64e6)throw new Error('Choose a bank smaller than 64 MB.');running=false;const imported=(await file.text()).trim().split('\n').map(JSON.parse);if(!imported.length||imported.length>10000)throw new Error('Use a bank with 1–10,000 decisions.');let restored={world};for(const row of imported){const checked=await call('review',JSON.stringify(row));if(!checked.verified)throw new Error('Import stopped: a banked action diverged.');if(!restored.world.creatures.some(c=>c.id===row.creatureId))restored=await call('restoreNoul',JSON.stringify(restored.world),JSON.stringify(row));}if(restored.svg)draw(restored);rows=imported;selected=rows[0].creatureId;running=false;await selectCreature(selected);await showRow(0);openGamePanel('observation-panel');$('#play').textContent='Resume';}catch(err){fail(err);}finally{e.target.value='';}};
 (async()=>{
   try {
     startWorker();
@@ -638,3 +638,31 @@ $('#add-character').onclick=async()=>{
  finally{busy=false;$('#add-character').disabled=false;}
 };
 $('#download-character').onclick=()=>{if(!characterDesign)return;const url=URL.createObjectURL(new Blob([JSON.stringify({profile:characterDesign.profile,decision:characterDesign.decision},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='noul-character.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+
+// Open inspection only from deliberate user actions; live judgments stay in the habitat.
+function openGamePanel(id){
+  for(const panel of document.querySelectorAll('.game-panel[open]'))panel.close();
+  hideDescription();
+  document.getElementById(id).showModal();
+}
+$('#observe').onclick=()=>openGamePanel('observation-panel');
+$('#history').onclick=()=>openGamePanel('history-panel');
+for(const panel of document.querySelectorAll('.game-panel')){
+  panel.addEventListener('click',event=>{
+    const box=panel.getBoundingClientRect();
+    if(event.target===panel&&(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom))panel.close();
+  });
+}
+const fullscreenButton=$('#fullscreen');
+fullscreenButton.hidden=!document.fullscreenEnabled;
+fullscreenButton.onclick=async()=>{
+  try{
+    if(document.fullscreenElement)await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  }catch{ $('#status').textContent='Full screen is unavailable in this browser. The habitat still fills the window.'; }
+};
+document.addEventListener('fullscreenchange',()=>{
+  const active=!!document.fullscreenElement;
+  fullscreenButton.querySelector('span').textContent=active?'Exit full screen':'Full screen';
+  fullscreenButton.setAttribute('aria-label',active?'Exit full screen':'Enter full screen');
+});

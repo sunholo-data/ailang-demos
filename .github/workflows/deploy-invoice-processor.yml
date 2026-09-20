@@ -139,6 +139,7 @@ jobs:
           export NOULS_PREVIEW_URL=http://127.0.0.1:8959/decisions/
           node decisions/test-public-browser.cjs
           node decisions/test-browser.cjs
+          node decisions/test-fullscreen-browser.cjs
           node decisions/test-item-art.cjs
       - uses: actions/upload-artifact@v4
         with:

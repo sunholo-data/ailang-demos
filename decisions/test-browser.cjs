@@ -115,6 +115,7 @@ console.log('PASS mobile item sheet, pause, edit, centre placement, resume, draf
 const profile={version:1,name:'Pip',description:'A brave fast explorer who tires easily.',appearance:'curious',actThreshold:.4,presentAt:.8,cadence:12,speed:1.4,stamina:.6};
 await mobile.route('https://openrouter.ai/api/alpha/decisions',route=>route.fulfill({json:require('./test-provider-fixture.cjs')(route.request().postDataJSON())}));
 await mobile.evaluate(async()=>{liveKey='test-only-not-a-real-key';const s=await (await publicTransport.request('api/session')).json();liveSession=s.session;sessionBudget=s.budget;});
+await mobile.locator('#observe').click();
 await mobile.locator('#create-noul').click();await mobile.locator('#character-name').fill('Pip');
 await mobile.locator('#character-description').fill(profile.description);await mobile.locator('#design-character').click();
 await mobile.locator('#character-preview').waitFor({state:'visible'});

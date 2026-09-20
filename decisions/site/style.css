@@ -239,3 +239,74 @@ dialog .primary{margin-top:12px}
 .carrying-note{font-size:13px;color:#6c5127;background:#faf3df;padding:8px 12px;border-radius:3px;line-height:1.5}
 #item-activity{font-size:13px;padding:10px 16px;margin:0;color:#6c5127;background:#faf3df;border-top:1px solid #ddd0ad}
 #item-activity[hidden],.item-placing #item-activity{display:none}
+
+/* The habitat is the page. Keep its square coordinate system intact at every size. */
+html,body{height:100%;overflow:hidden;background:#f1f5ed}
+body{height:100dvh;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+body>header{flex:none;width:100%;max-width:none;padding:6px 16px;gap:10px;background:#f9fbf6;border-color:#d8e2d1;min-height:56px}
+header .brand img{width:32px;height:32px;margin:0}
+header h1{font-size:18px;letter-spacing:-.4px;line-height:1.2;margin:0}
+.header-actions{display:flex;gap:4px;margin-left:auto;flex-shrink:0}
+.header-actions button{background:transparent;border-color:transparent;padding:8px 10px}
+#fullscreen{gap:6px}
+#fullscreen[hidden]{display:none}
+main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
+.workspace{display:block;height:100%}
+.habitat{position:relative;display:flex;flex-direction:column;height:100%;border:0;border-radius:0;background:#f1f5ed;overflow:hidden}
+.world-toolbar{flex:none;padding:4px 20px;border:0;background:transparent;min-height:52px;flex-wrap:nowrap}
+.live-controls{gap:12px;min-width:0}.runtime{max-width:none;font-size:11px}
+#connect-live{background:#ffffffc9;border-color:#b8cbb0;color:#365e40}
+.world-wrap{flex:1;min-height:0;display:grid;place-items:center;container-type:size}
+#world{width:min(100cqw,100cqh);height:min(100cqw,100cqh);flex:none;aspect-ratio:1}
+.world-caption{position:absolute;bottom:8px;left:20px;right:20px;padding:0;border:0;font-size:11px;align-items:end;z-index:1}
+.world-caption span{background:#f1f5edd9;padding:2px 6px;border-radius:4px}
+.transport{flex:none;align-self:center;border:1px solid #d8e2d1;border-radius:16px;background:#ffffffed;padding:8px;gap:6px;margin:8px 12px 12px;box-shadow:0 3px 14px #2847340d;flex-wrap:nowrap}
+.transport button{border-radius:9px;white-space:nowrap}
+.transport>span{display:none}
+.transport #add-item{min-width:120px;background:#365e40;border-color:#365e40}
+.transport #add-item:hover{background:#274b30}
+#observe,#history,#play,#reset{color:#365e40;border-color:transparent;background:transparent}
+#observe:hover,#history:hover,#play:hover,#reset:hover{background:#edf3e8}
+.habitat>#status,.habitat>#item-activity,.habitat>#artwork-status{position:absolute;left:50%;transform:translateX(-50%);bottom:82px;z-index:4;width:max-content;max-width:min(540px,calc(100% - 24px));border:1px solid #d8e2d1;border-radius:10px;padding:8px 14px;background:#fffffff2;font-size:12px;line-height:1.5;box-shadow:0 3px 14px #2847340d;pointer-events:none}
+.habitat>#item-activity{bottom:126px;background:#faf3dff5}
+.habitat>#artwork-status{bottom:170px;background:#e7f0e0f5}
+#placement-controls{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:5;border:1px solid #aac2a5;border-radius:14px;width:max-content;max-width:calc(100% - 24px);box-shadow:0 3px 14px #2847341a}
+#placement-controls>div{flex-wrap:nowrap}
+#placement-controls button{font-size:12px;padding:8px 12px}
+.item-placing .world-wrap{margin-bottom:112px}
+.item-placing .world-caption{display:none}
+#object-description{z-index:6;max-width:440px;left:50%;right:auto;transform:translateX(-50%);width:calc(100% - 24px);bottom:20px;border-radius:10px}
+#object-description.hover-popup{transform:none}
+.game-panel{position:fixed;inset:12px 12px 12px auto;margin:0;width:min(440px,calc(100% - 24px));max-width:none;max-height:none;height:calc(100% - 24px);padding:0 24px 24px;border:1px solid #c6d6bf;border-radius:16px;overflow:auto;overscroll-behavior:contain;box-shadow:0 12px 50px #28473430}
+.game-panel::backdrop{background:#233d293d}
+.panel-top{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:12px;background:white;padding:10px 0;border-bottom:1px solid #d8e2d1;margin-bottom:18px;font-size:13px;font-weight:700;color:#365e40}
+.panel-top button{border:0;font-size:24px;color:#365e40}
+.ledger-heading{flex-direction:column;align-items:start}
+.ledger .timeline{flex-direction:column;overflow:visible}
+.ledger .timeline button{width:100%;min-width:0}
+.ledger h2{font-size:24px}
+.game-panel .ledger-footer{flex-wrap:wrap}
+@media(max-width:740px){
+ body>header{padding:4px 10px;gap:8px;min-height:52px}
+ header h1{font-size:15px;max-width:155px}
+ header .brand img{width:28px;height:28px}
+ .header-actions button{padding:8px;font-size:12px;min-width:44px}
+ #fullscreen span{display:none}#fullscreen{font-size:23px}
+ .world-toolbar{padding:4px 12px}.live-label{font-size:12px}.runtime{display:none}#phase{display:block;font-size:11px}
+ .transport{width:calc(100% - 20px);padding:6px;gap:2px;margin:8px 10px 10px;border-radius:14px}
+ .transport button{font-size:12px;padding:8px;min-width:44px}
+ .transport #add-item{min-width:100px;flex:1}
+ .world-caption{left:8px;right:8px}
+ .game-panel{inset:auto 0 0;height:85dvh;max-height:100dvh;width:100%;padding:0 20px max(24px,env(safe-area-inset-bottom));border-radius:18px 18px 0 0}
+}
+@media(max-height:500px) and (min-width:600px){
+ body>header{min-height:44px;padding:0 12px}header h1{font-size:15px}
+ .world-toolbar{position:absolute;left:8px;top:0;z-index:2;align-items:start;padding:8px;flex-direction:column;gap:4px}
+ .live-controls{flex-direction:column;align-items:start;gap:4px}.runtime{display:none}
+ .transport{position:absolute;right:8px;bottom:8px;flex-direction:column;margin:0;padding:6px;width:auto}
+ .transport button{width:100%}.transport #add-item{min-width:100px}
+ .world-wrap{margin:0 136px}.world-caption{left:0;right:0}
+ .game-panel{inset:8px 8px 8px auto;height:calc(100% - 16px);width:400px;border-radius:14px}
+ .habitat>#status,.habitat>#item-activity,.habitat>#artwork-status{bottom:8px;max-width:45%;font-size:11px}
+ .item-placing .world-wrap{margin:0 136px 0 0}.item-placing #placement-controls{left:auto;right:8px;bottom:8px;transform:none;max-width:180px;padding:10px}.item-placing #placement-controls>div{flex-direction:column}
+}

@@ -1,3 +1,18 @@
+## Full-window habitat (2026-09-20)
+
+The habitat fills the viewport with a compact control dock. Creature inspection
+and decision history use accessible modal panels (side panel on desktop, bottom
+sheet on phones). Clicking or keyboard-selecting a Noul opens its inspector;
+background judgments never open it. A native full-screen toggle is offered only
+when the browser supports it. The square world remains undistorted, with the
+whole habitat visible and placement coordinates preserved.
+
+`test-fullscreen-browser.cjs` uses the static public artifact and real WASM with
+provider requests blocked. It checks 1440×900, 390×844, 320×568 and 844×390 layouts,
+visible controls, no document overflow, panel/keyboard navigation, precise item
+placement and native full-screen entry/exit. Screenshots were inspected for desktop
+and phone portrait/landscape. Native AILANG logic and transport are unchanged.
+
 ## Public browser release update (supersedes relay notes below)
 
 The current UI uses `site/transport.js` to call OpenRouter directly with the
