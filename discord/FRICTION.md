@@ -49,6 +49,27 @@ and rejection of a second writer process. No live duplicate-send experiment perf
 sibling-relative paths; rerun lock after cloning. No manual mutation of generated
 lockfile paths. Registry version pinning is deferred until packages are released.
 
+## F008 — Test harness findings during native evidence retrofit (2026-09-15, confirmed)
+Found while adding contracts/tests to both packages on
+`build/package-authoring-followups` tooling (AILANG dev + 427f1a00e):
+
+- The named-test stripper counts braces inside string literals; one intentionally
+  malformed JSON literal (`"{\"partial"`) broke every test in the module with a
+  misleading synthesized-file parse error. Workaround: keep braces balanced.
+- forall-style `properties [...]` never execute (confirms core #624); `ensures`
+  clauses DO run as 100-case properties and were used instead.
+- Float binops inside test bodies fail typeclass dictionary resolution
+  (`missing dictionary method: prelude::Fractional::Int::add`). Same expression works
+  in normal function bodies.
+- No property generator for imported types: contract cases on `Json`-typed (or
+  Json-carrying ADT) parameters skip as `no_generator`, and module-level runs exit 1
+  without `--allow-skips`. Same-file types generate fine.
+
+Full reports with repros: CORE_FEEDBACK.md (harness section). Sent 2026-09-15 via
+`ailang messages` to inbox `ailang-core` on the canonical Firestore store:
+inbox_1789485974623_606ffb47, inbox_1789485983321_c818644e,
+inbox_1789485984226_d0b46184, inbox_1789485985209_903af4be.
+
 ## Working capabilities / resolved concerns
 - Result-returning FS writes and rename work for durable cursors and draft receipts.
 - Empty-list recursion bases need explicit @allow_empty_ok rationale under strict checking.

@@ -20,6 +20,11 @@ demos/
 ├── docparse/              # Document parsing (DOCX, PPTX, XLSX, PDF)
 │   ├── document.ail
 │   └── services/
+├── decisions/            # The Deliberating Nouls — alife demo for sunholo/decisions
+│   ├── world.ail souls.ail render.ail bank.ail oracle.ail main.ail
+│   ├── bank_test.ail + bank/synthetic.jsonl (recorded-soul fixture)
+│   ├── DESIGN_SPEC.md SPRINT_PLAN.md HANDOVER.md
+│   └── site/              # Worker/WASM browser host (see BROWSER_VALIDATION.md)
 ├── streaming/             # Streaming protocols (SSE, WebSocket bidi)
 │   ├── index.html         # Hub page (links to browser UIs)
 │   ├── test_sse.ail       # Minimal Gemini SSE test
@@ -74,6 +79,14 @@ for f in streaming/*/main.ail streaming/test_sse.ail; do
 done
 
 # ── Verified working CLI demos ──
+
+# Deliberating Nouls — alife for sunholo/decisions (offline; no key)
+cd decisions && ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail selftest
+cd decisions && ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail simulate --ticks 200 --seed 7
+cd decisions && ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail fixture --out bank/synthetic.jsonl
+cd decisions && ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail replay --bank bank/synthetic.jsonl
+# live tier (operator, needs OPENROUTER_API_KEY):
+cd decisions && OPENROUTER_API_KEY=sk-or-... ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail record --ticks 24
 
 # Ambient Assistant — always-listening voice assistant
 ambient --mic "Hey AILANG"                    # mic + interactive

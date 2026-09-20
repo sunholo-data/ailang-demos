@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""Live AG-UI HTTP/SSE endpoint for the Discord demo.
+
+Stdlib-only HTTP host: accepts a RunAgentInput POST (the request payload of
+the AG-UI protocol, decoded inside AILANG by the published sunholo/agui/input
+module), invokes the AILANG CLI `serve` step and streams the returned AG-UI
+JSONL as server-sent events. The browser page served at / renders the stream
+and posts an A2UI draft-review action back (renderer/action round-trip).
+
+Offline by design: the run creates a real stored draft for review and never
+touches the Discord network; the browser action decides whether to send.
+Process/state rules mirror ./ailang-discord (private state dir, writer flock).
+"""
+import fcntl
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import threading
+import urllib.request
+from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+root = Path(__file__).resolve().parent
+os.umask(0o077)
+env = os.environ.copy()
+state = Path(env.get('DISCORD_STATE_DIR', str(Path.home() / '.ailang' / 'discord'))).resolve()
+state.mkdir(mode=0o700, parents=True, exist_ok=True)
+env['DISCORD_STATE_DIR'] = str(state)
+env['DISCORD_CONFIG'] = str(Path(env.get('DISCORD_CONFIG', str(root / 'config.json'))).resolve())
+if env.get('DISCORD_TOKEN_FILE'):
+    env['DISCORD_TOKEN_FILE'] = str(Path(env['DISCORD_TOKEN_FILE']).resolve())
+
+PORT = int(env.get('DISCORD_SSE_PORT', '8089'))
+# Default binding is loopback: public exposure is a deliberate deployment choice
+# (DISCORD_SSE_HOST=0.0.0.0 behind a TLS proxy). CORS stays closed unless the
+# operator names the site origin that may call this server cross-origin.
+HOST = env.get('DISCORD_SSE_HOST', '127.0.0.1')
+CORS_ORIGIN = env.get('DISCORD_SSE_ORIGIN', '').strip()
+# WASM runtime directory: the repo's wasm/ sits beside this demo's parent by
+# default (root.parent / 'wasm'); containers override with AILANG_WASM_DIR.
+WASM_DIR = Path(env.get('AILANG_WASM_DIR', str(root.parent / 'wasm')))
+# Optional mount prefix (e.g. '/discord' behind a tailscale-serve path proxy).
+# Incoming paths are stripped of it before routing, so the same page works at
+# the server root and under a subpath.
+PATH_PREFIX = env.get('DISCORD_SSE_PATH_PREFIX', '').strip().rstrip('/')
+MAX_BODY = int(env.get('DISCORD_SSE_MAX_BODY', str(64 * 1024)))
+PAGE = Path(root / 'site' / 'index.html')
+
+
+def cli(*args):
+    """Run the AILANG CLI under the writer lock; returns (returncode, stdout)."""
+    lock = open(state / '.writer.lock', 'a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        child = subprocess.run(['ailang', 'run', '--entry', 'main', '--caps', 'IO,FS,Net,Env,Clock',
+                                '--quiet', '--no-print', 'main.ail', *args],
+                               cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        return child.returncode, child.stdout
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
+    def log_message(self, fmt, *a):
+        sys.stderr.write('[sse] ' + (fmt % a) + '\n')
+
+    def _cors(self):
+        if CORS_ORIGIN:
+            self.send_header('access-control-allow-origin', CORS_ORIGIN)
+            self.send_header('vary', 'origin')
+
+    def _read_body(self):
+        length = int(self.headers.get('content-length') or 0)
+        if length > MAX_BODY:
+            return None
+        return self.rfile.read(length).decode('utf-8', 'replace') if length else ''
+
+    def do_GET(self):
+        if PATH_PREFIX and self.path.startswith(PATH_PREFIX + '/'):
+            self.path = self.path[len(PATH_PREFIX):]
+        elif self.path == PATH_PREFIX:
+            self.path = '/'
+        if self.path == '/healthz':
+            body = b'ok'
+            self.send_response(200)
+            self.send_header('content-type', 'text/plain')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path in ('/', '/index.html'):
+            try:
+                body = PAGE.read_bytes()
+            except OSError:
+                body = b'missing site/index.html'
+            self.send_response(200)
+            self.send_header('content-type', 'text/html; charset=utf-8')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == '/renderer.ail':
+            try:
+                body = (root / 'renderer.ail').read_bytes()
+            except OSError:
+                body = b'missing renderer.ail'
+            self.send_response(200)
+            self.send_header('content-type', 'text/plain; charset=utf-8')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path.startswith('/wasm/') and self.path.count('/') == 2:
+            # Fixed allowlist only: the AILANG WASM runtime + its glue scripts.
+            names = {'/wasm/ailang.wasm': 'application/wasm',
+                     '/wasm/wasm_exec.js': 'text/javascript',
+                     '/wasm/ailang-repl.js': 'text/javascript'}
+            if self.path not in names:
+                self.send_response(404)
+                self.send_header('content-length', '0')
+                self.end_headers()
+                return
+            try:
+                body = (WASM_DIR / self.path[len('/wasm/'):]).read_bytes()
+            except OSError:
+                self.send_response(404)
+                self.send_header('content-length', '0')
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header('content-type', names[self.path])
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.send_header('content-length', '0')
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.send_header('access-control-allow-methods', 'POST, GET, OPTIONS')
+        self.send_header('access-control-allow-headers', 'content-type')
+        self.send_header('access-control-max-age', '86400')
+        self.send_header('content-length', '0')
+        self.end_headers()
+
+    def do_INTERACTIONS(self, raw):
+        """Discord Interactions Endpoint: verify Ed25519 (host-side, pynacl),
+        answer PING, defer commands, run the AILANG step, deliver a followup.
+        Generic: what a command DOES is the application's dispatch; this host
+        starts the demo agent flow with the interaction's text option."""
+        key = env.get('DISCORD_APP_PUBLIC_KEY', '').strip()
+        try:
+            import nacl.signing as _s  # noqa: F401  (capability probe)
+            have_nacl = True
+        except ImportError:
+            have_nacl = False
+        if not (have_nacl and key):
+            self.send_response(501)
+            self._cors()
+            self.send_header('content-type', 'application/json')
+            body = b'{"error":"interactions endpoint requires pynacl and DISCORD_APP_PUBLIC_KEY"}'
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        try:
+            from nacl.signing import VerifyKey
+            from nacl.exceptions import BadSignatureError
+            sig = self.headers.get('x-signature-ed25519', '')
+            ts = self.headers.get('x-signature-timestamp', '')
+            VerifyKey(bytes.fromhex(key)).verify(ts.encode() + raw.encode(), bytes.fromhex(sig))
+        except Exception as e:
+            sys.stderr.write(f'[interactions] signature verification failed: {e}\n')
+            self.send_response(401)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
+        try:
+            interaction = json.loads(raw)
+        except ValueError:
+            self.send_response(400)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
+        if interaction.get('type') == 1:
+            body = b'{"type":1}'
+            self.send_response(200)
+            self.send_header('content-type', 'application/json')
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if interaction.get('type') == 2:
+            # Defer now (Discord's 3s window), then run the AILANG step and
+            # deliver the result as a followup via the interaction webhook.
+            self.send_response(200)
+            self.send_header('content-type', 'application/json')
+            body = b'{"type":5}'
+            self.send_header('content-length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            threading.Thread(target=self._deferred_followup, args=(interaction, raw), daemon=True).start()
+            return
+        self.send_response(400)
+        self.send_header('content-length', '0')
+        self.end_headers()
+
+    def _deferred_followup(self, interaction):
+        """Run the AILANG agent step for a deferred slash command and deliver
+        the result (draft review embed) via the interaction webhook. Generic:
+        this host's agent step is the demo flow; other applications dispatch
+        their own command names to their own flows."""
+        app_id = str(interaction.get('application_id') or '')
+        itoken = str(interaction.get('token') or '')
+        text = ''
+        for opt in (interaction.get('data') or {}).get('options') or []:
+            if opt.get('name') == 'text':
+                text = str(opt.get('value') or '')
+        tmp = state / f'interaction-{os.getpid()}-{threading.get_ident()}.json'
+        tmp.write_text(json.dumps({'threadId': 'interactions',
+                                   'runId': 'ic-' + str(interaction.get('id', '')),
+                                   'messages': [{'role': 'user', 'id': 'ic', 'content': text}]}), encoding='utf-8')
+        try:
+            _code, out = cli('serve', '--file', str(tmp))
+            events = [json.loads(line) for line in out.strip().splitlines() if line.strip()]
+            deltas = ''.join(e.get('delta', '') for e in events if e.get('type') == 'TEXT_MESSAGE_CONTENT')
+            draft_id, has_ops = '', False
+            for e in events:
+                if e.get('type') == 'TOOL_CALL_RESULT':
+                    try:
+                        payload = json.loads(e.get('content', '{}'))
+                        if payload.get('ok'):
+                            draft_id = (payload.get('data') or {}).get('id', '')
+                            has_ops = bool(payload.get('a2ui_operations'))
+                    except ValueError:
+                        pass
+            follow = {'embeds': [{'title': f'Draft {draft_id} ready for review' if draft_id else 'Run finished',
+                                  'description': (deltas or '(no text)')[:3500], 'color': 15154199}]}
+            req = urllib.request.Request(f'https://discord.com/api/v10/webhooks/{app_id}/{itoken}',
+                                         data=json.dumps(follow).encode('utf-8'),
+                                         headers={'content-type': 'application/json'})
+            urllib.request.urlopen(req, timeout=30)
+        except Exception as e:
+            sys.stderr.write(f'[interactions] followup failed: {e}\n')
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def do_POST(self):
+        if PATH_PREFIX and self.path.startswith(PATH_PREFIX + '/'):
+            self.path = self.path[len(PATH_PREFIX):]
+        raw = self._read_body()
+        if raw is None:
+            self.send_response(413)
+            self.send_header('content-length', '0')
+            self.end_headers()
+            return
+        if PATH_PREFIX and self.path == PATH_PREFIX + '/interactions' or self.path == '/interactions':
+            self.do_INTERACTIONS(raw)
+        elif self.path == '/run':
+            self.send_response(200)
+            self._cors()
+            self.send_header('content-type', 'text/event-stream; charset=utf-8')
+            self.send_header('cache-control', 'no-cache')
+            self.send_header('connection', 'close')
+            self.end_headers()
+            tmp = state / f'run-input-{os.getpid()}-{threading.get_ident()}.json'
+            tmp.write_text(raw, encoding='utf-8')
+            try:
+                code, out, _ = None, '', None
+                proc = subprocess.Popen(['ailang', 'run', '--entry', 'main', '--caps', 'IO,FS,Net,Env,Clock',
+                                         '--quiet', '--no-print', 'main.ail', 'serve', '--file', str(tmp)],
+                                        cwd=root, env=env, stdout=subprocess.PIPE, text=True, bufsize=1)
+                for line in proc.stdout:
+                    line = line.strip()
+                    if line:
+                        self.wfile.write(f'data: {line}\n\n'.encode('utf-8'))
+                        self.wfile.flush()
+                proc.wait(timeout=90)
+                self.wfile.write(b'data: [DONE]\n\n')
+                self.wfile.flush()
+            except Exception as e:  # stream broke; nothing to salvage
+                sys.stderr.write(f'[sse] run failed: {e}\n')
+            finally:
+                tmp.unlink(missing_ok=True)
+                self.close_connection = True
+        elif self.path == '/action':
+            tmp = state / f'action-{os.getpid()}-{threading.get_ident()}.json'
+            tmp.write_text(raw, encoding='utf-8')
+            try:
+                code, out = cli('action', '--file', str(tmp))
+                body = out.strip().encode('utf-8') or b'{"ok":false,"error":{"kind":"input","message":"empty response"}}'
+                self.send_response(200)
+                self._cors()
+                self.send_header('content-type', 'application/json')
+                self.send_header('content-length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            finally:
+                tmp.unlink(missing_ok=True)
+        else:
+            self.send_response(404)
+            self.send_header('content-length', '0')
+            self.end_headers()
+
+
+def main():
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f'AG-UI SSE server on http://{HOST}:{PORT} (state: {state}, cors: {CORS_ORIGIN or "closed"})', file=sys.stderr, flush=True)
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

@@ -23,7 +23,7 @@ if env.get('DISCORD_TOKEN_FILE'):
 args = sys.argv[1:]
 # An MCP process owns the lock for its lifetime. One writer process per state dir.
 # Requests within the MCP process are serialized by the transport relay below.
-mutating = bool(args) and args[0] in {'sync', 'draft', 'review', 'submit', 'action', 'send', 'reply', 'mcp'}
+mutating = bool(args) and args[0] in {'sync', 'draft', 'review', 'submit', 'action', 'send', 'reply', 'serve', 'register-commands', 'mcp'}
 lock = None
 if mutating:
     lock = open(state / '.writer.lock', 'a')

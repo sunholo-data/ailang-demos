@@ -1,0 +1,11 @@
+-- REPRO 1: named test body calling an imported SIBLING-module function
+-- directly -> internal panic (nil pointer dereference).
+-- Same call inside a same-file helper passes.
+module repro1
+
+import repro_lib (helper)
+
+pure func viaHelper() -> bool = helper()
+
+test "direct sibling call in body" { helper() }
+test "sibling call via same-file helper" { viaHelper() }

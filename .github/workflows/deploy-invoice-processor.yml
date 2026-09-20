@@ -393,6 +393,13 @@ jobs:
           # Demo-specific AILANG module alongside WASM runtime
           cp invoice_processor_wasm/wasm/invoice_processor.ail _site/wasm/
 
+          # Discord draft-review demo (static WASM replay + live-instance link)
+          if [ -d site/discord ]; then
+            mkdir -p _site/discord
+            cp site/discord/* _site/discord/
+            cp discord/renderer.ail _site/discord/renderer.ail
+          fi
+
           # Ecommerce landing page + screenshot
           mkdir -p _site/ecommerce/img
           cp ecommerce/browser/index.html _site/ecommerce/

@@ -1,0 +1,291 @@
+-- main.ail — The Deliberating Nouls: CLI entry.
+--
+-- Modes:
+--   selftest                       offline assertions (CI baseline, no key)
+--   simulate --ticks N --seed S    keyless tier: pure world + random souls
+--   record   --ticks N --out PATH  live tier: real decide() calls, banked
+--   replay   --bank PATH           recorded souls: banked-decision replay
+--   render   --file PATH           world Json → SVG fragment
+--
+-- Run (from the decisions/ package):
+--   ailang run --caps IO,FS,Net,Env,Rand --entry main main.ail selftest
+-- `record` additionally needs OPENROUTER_API_KEY in the environment.
+
+module main
+
+import std/io (println, printErr, exit)
+import std/env (getArgs)
+import std/fs (readFileResult, writeFileResult, mkdirAllResult)
+import std/string (stringToInt, startsWith, contains)
+import std/list (map, mapE, length, concat)
+import std/option (Some, None, getOrElse)
+import std/result (Result, Ok, Err)
+import std/rand (rand_seed, rand_float)
+import std/math (intToFloat, floatToInt)
+import std/json (Json, jo, ja, kv, js, jint, jnum, encode, decode)
+import world (World, Creature, Action, Move, Do, Wander, Approach, Flee, Rest,
+              demoWorld, stepWorld, digest, worldToJson, worldOfJson, visible,
+              shouldDeliberate, creatureById)
+import souls (soulOf)
+import oracle (deliberate, demoModel, planDeliberation, moveOf, applyToCreature)
+import bank (BankRow, syntheticRow, rowToLine, lineToRow, appendRow,
+             readRows, replayVerifies, rowOfDeliberation)
+import render (renderWorld, selfCheck)
+import pkg/sunholo/decisions/decide (Decision, defaultModel, OpenRouter)
+
+-- ============================================================
+-- Arg helpers (discord main.ail pattern)
+-- ============================================================
+
+func option(args: [string], flag: string, fallback: string) -> string =
+  match args {
+    [] => fallback,
+    key :: rest => if key == flag then match rest { [] => fallback, value :: _ => value }
+                   else option(rest, flag, fallback)
+  }
+
+func number(args: [string], flag: string, fallback: int) -> int =
+  match stringToInt(option(args, flag, "${fallback}")) {
+    Some(n) => n,
+    None    => fallback
+  }
+
+func mode(args: [string], fallback: string) -> string =
+  match args {
+    []              => fallback,
+    first :: rest   => if startsWith(first, "--") then option(rest, "--mode", fallback) else first
+  }
+
+-- ============================================================
+-- Keyless tier: pure world + random souls (seeded → replayable)
+-- ============================================================
+
+func randomAct(c: Creature, w: World) -> Action ! {Rand} = {
+  let roll = rand_float(0.0, 1.0);
+  match visible(c, w) {
+    []          => if roll < 0.25 then Do(Rest) else Do(Wander),
+    first :: _  =>
+      if roll < 0.25 then Do(Rest)
+      else if roll < 0.55 then Do(Approach(first.id))
+      else if roll < 0.75 then Do(Flee(first.id))
+      else Do(Wander)
+  }
+}
+
+func randomMoves(w: World) -> [Move] ! {Rand} =
+  mapE(\c. { id: c.id, act: randomAct(c, w) }, w.creatures)
+
+export func simulateTicks(w: World, n: int) -> World ! {Rand} =
+  if n <= 0 then w else simulateTicks(stepWorld(w, randomMoves(w)), n - 1)
+
+-- ============================================================
+-- Live tier: real deliberations, banked (sequential, rate-limit friendly)
+-- ============================================================
+
+func cadenceOf(c: Creature) -> int = soulOf(c).cadence
+
+pure func updateCreature(cs: [Creature], updated: Creature) -> [Creature] =
+  map(\c. if c.id == updated.id then updated else c, cs)
+
+func tickDeliberations(w: World, cs: [Creature], model: string, path: string,
+                       moves: [Move], rows: int, errs: int) -> ([Move], int, int) ! {Net, Env, Rand, FS, IO} =
+  match cs {
+    []        => (moves, rows, errs),
+    c :: rest =>
+      if shouldDeliberate(c, w, cadenceOf(c)) then
+        match deliberate(model, c, w) {
+          Err(m) => {
+            printErr("deliberation failed for ${c.name}: ${m}");
+            tickDeliberations(w, rest, model, path, moves, rows, errs + 1)
+          },
+          Ok(d)  =>
+            match rowOfDeliberation(d) {
+              Err(m) => {
+                printErr("banking failed for ${c.name}: ${m}");
+                tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                                  concat(moves, [moveOf(d)]), rows, errs + 1)
+              },
+              Ok(row) =>
+                match appendRow(path, row) {
+                  Err(m) => {
+                    printErr("bank write failed: ${m}");
+                    tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                                      concat(moves, [moveOf(d)]), rows, errs + 1)
+                  },
+                  Ok(_)  =>
+                    tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                                      concat(moves, [moveOf(d)]), rows + 1, errs)
+                }
+            }
+        }
+      else tickDeliberations(w, rest, model, path, moves, rows, errs)
+  }
+
+export func recordTicks(w: World, n: int, model: string, path: string,
+                        rows: int, errs: int) -> (World, int, int) ! {Net, Env, Rand, FS, IO} =
+  if n <= 0 then (w, rows, errs)
+  else
+    match tickDeliberations(w, w.creatures, model, path, [], rows, errs) {
+      (moves, rows2, errs2) =>
+        recordTicks(stepWorld(w, moves), n - 1, model, path, rows2, errs2)
+    }
+
+-- ============================================================
+-- Selftest (offline; no key, no network)
+-- ============================================================
+
+func check(name: string, ok: bool, failures: [string]) -> [string] ! {IO} = {
+  if ok then { println("PASS ${name}"); failures }
+  else { println("FAIL ${name}"); concat(failures, [name]) }
+}
+
+export func selftest() -> int ! {Rand, IO} = {
+  let f0 = [];
+  let f1 = match decode(encode(worldToJson(demoWorld()))) {
+    Err(_) => check("world-roundtrip", false, f0),
+    Ok(j)  => match worldOfJson(j) {
+      Err(_) => check("world-roundtrip", false, f0),
+      Ok(w2) => check("world-roundtrip", digest(w2) == digest(demoWorld()), f0)
+    }
+  };
+  rand_seed(7);
+  let dA = digest(simulateTicks(demoWorld(), 200));
+  rand_seed(7);
+  let dB = digest(simulateTicks(demoWorld(), 200));
+  let f2 = check("simulate-determinism", dA == dB, f1);
+  let f3 = match syntheticRow() {
+    Err(m)  => check("synthetic-row", false, f2),
+    Ok(row) =>
+      match replayVerifies(row) {
+        Err(_)   => check("synthetic-replay", false, f2),
+        Ok(good) => {
+          let viaLine = match lineToRow(rowToLine(row)) {
+            Ok(r2) => r2.action == row.action && r2.source == "synthetic",
+            Err(_) => false
+          };
+          let all = good && viaLine && contains(row.note, "forage") && contains(row.action, "e9");
+          check("synthetic-replay", all, f2)
+        }
+      }
+  };
+  let f4 = check("render-probe", selfCheck() == "probe-ok", f3);
+  let f5 = match creatureById(demoWorld(), "c1") {
+    None    => check("percept-semantics", false, f4),
+    Some(c1) => {
+      let plan = planDeliberation(c1, demoWorld());
+      check("percept-semantics", contains(encode(plan.state), "a humming red berry cluster"), f4)
+    }
+  };
+  let f6 = match syntheticRow() {
+    Err(_)  => check("fixture-action", false, f5),
+    Ok(row) => check("fixture-action", contains(row.action, "Approach") && contains(row.action, "e9"), f5)
+  };
+  length(f6)
+}
+
+-- ============================================================
+-- Entry
+-- ============================================================
+
+func usage() -> () ! {IO} = {
+  println("The Deliberating Nouls — sunholo/decisions demo");
+  println("  selftest                       offline assertions");
+  println("  simulate --ticks N --seed S    keyless random-soul simulation (--dump PATH writes the world Json)");
+  println("  fixture --out PATH             write the synthetic bank row (offline replay fixture)");
+  println("  record --ticks N --out PATH     live deliberations, banked (needs OPENROUTER_API_KEY)");
+  println("  replay --bank PATH             verify a bank reproduces its actions");
+  println("  render --file PATH              world Json to SVG")
+}
+
+func replayReport(rows: [BankRow], okC: int, badC: int, errC: int) -> (int, int, int) ! {IO} =
+  match rows {
+    []            => (okC, badC, errC),
+    row :: rest =>
+      match replayVerifies(row) {
+        Err(m)    => { println("row ${row.tick}/${row.creatureId}: ${m}"); replayReport(rest, okC, badC, errC + 1) },
+        Ok(true)  => replayReport(rest, okC + 1, badC, errC),
+        Ok(false) => { println("row ${row.tick}/${row.creatureId}: replay diverged from banked action"); replayReport(rest, okC, badC + 1, errC) }
+      }
+  }
+
+export func main() -> () ! {IO, FS, Net, Env, Rand} = {
+  let args = getArgs();
+  match mode(args, "selftest") {
+    "selftest" => {
+      let failures = selftest();
+      if failures == 0 then { println("SELFTEST OK"); exit(0) }
+      else { println("SELFTEST FAILED: ${failures} check(s)"); exit(1) }
+    },
+    "simulate" => {
+      let ticks = number(args, "--ticks", 200);
+      let seed = number(args, "--seed", 7);
+      rand_seed(seed);
+      let end = simulateTicks(demoWorld(), ticks);
+      match option(args, "--dump", "") {
+        "" => (),
+        path => match writeFileResult(path, encode(worldToJson(end))) {
+          Err(m) => { println("dump failed: ${m}"); exit(1) },
+          Ok(_)  => println("world dumped to ${path}") }
+      };
+      println(encode(jo([
+        kv("mode", js("simulate")), kv("seed", jint(seed)),
+        kv("ticks", jint(end.tick)), kv("digest", js(digest(end))),
+        kv("creatures", jint(length(end.creatures))),
+        kv("entities", jint(length(end.entities)))])))
+    },
+    "record" => {
+      let ticks = number(args, "--ticks", 24);
+      let path = option(args, "--out", "bank/recorded.jsonl");
+      match mkdirAllResult("bank") {
+        Err(m) => { println("mkdir failed: ${m}"); exit(1) },
+        Ok(_)  =>
+          match recordTicks(demoWorld(), ticks, option(args, "--model", demoModel()), path, 0, 0) {
+            (end, rows, errs) => {
+              println("recorded ${rows} deliberations (${errs} failures) to ${path}");
+              println("final digest: ${digest(end)}")
+            }
+          }
+      }
+    },
+    "fixture" => {
+      let path = option(args, "--out", "bank/synthetic.jsonl");
+      match mkdirAllResult("bank") {
+        Err(m) => { println("mkdir failed: ${m}"); exit(1) },
+        Ok(_)  =>
+          match syntheticRow() {
+            Err(m)   => { println("fixture failed: ${m}"); exit(1) },
+            Ok(row)  =>
+              match appendRow(path, row) {
+                Err(m)  => { println("bank write failed: ${m}"); exit(1) },
+                Ok(_)   => { println("synthetic bank written to ${path}"); exit(0) }
+              }
+          }
+      }
+    },
+    "replay" => {
+      let path = option(args, "--bank", "bank/recorded.jsonl");
+      match readRows(path) {
+        Err(m) => { println("replay failed: ${m}"); exit(1) },
+        Ok(rows) =>
+          match replayReport(rows, 0, 0, 0) {
+            (okCount, badCount, errCount) => {
+              println("replay: ${okCount} verified, ${badCount} diverged, ${errCount} errors, ${length(rows)} rows");
+              if badCount + errCount == 0 then exit(0) else exit(1)
+            }
+          }
+      }
+    },
+    "render" => {
+      let path = option(args, "--file", "");
+      match readFileResult(path) {
+        Err(m)   => { println("render failed: ${m}"); exit(1) },
+        Ok(text) => println(renderWorld(text))
+      }
+    },
+    other => {
+      println("unknown mode: ${other}");
+      usage();
+      exit(1)
+    }
+  }
+}

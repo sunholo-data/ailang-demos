@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AILANG Discord — AG-UI live demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.2rem; }
+  textarea { width: 100%; min-height: 4rem; font: inherit; }
+  button { font: inherit; padding: .4rem .9rem; cursor: pointer; }
+  #stream, #result { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin: 1rem 0; min-height: 2rem; }
+  #stream .ev { margin: .25rem 0; }
+  #stream .text { color: #111; }
+  #stream .tool { color: #06c; }
+  #stream .state { color: #666; font-size: .85rem; }
+  #stream .run { color: #080; font-size: .85rem; }
+  #stream .err { color: #b00; }
+  .action { background: #eef; border: 1px solid #99f; border-radius: 8px; padding: .75rem; margin: .5rem 0; }
+  #result { white-space: pre-wrap; color: #666; font-size: .85rem; }
+  #result.err { color: #b00; }
+  .status { color: #666; font-size: .85rem; }
+  code { background: #f4f4f4; padding: 0 .25rem; }
+</style>
+</head>
+<body>
+<h1>Discord draft review — live AG-UI over SSE, rendered by AILANG in your browser</h1>
+<p class="status">POSTs a RunAgentInput to <code>/run</code>; the server runs the AILANG <code>serve</code> step and streams AG-UI
+events back. The stream is rendered by an AILANG module (<code>renderer.ail</code>) executed in this page through the
+AILANG WASM runtime, with a JavaScript fallback if WASM is unavailable. The action button posts the A2UI draft-review
+action back to <code>/action</code>. Offline by design: the run stores a draft; the action decides whether it sends.</p>
+<p class="status" id="rendererStatus">renderer: loading…</p>
+<textarea id="msg" placeholder="Type the reply text for the draft…">AILANG live round-trip check — safe to delete</textarea>
+<button id="run">Run</button>
+<div id="stream" aria-live="polite"></div>
+<div id="action"></div>
+<div id="result" class="status"></div>
+<script src="../wasm/ailang-repl.js"></script>
+<script>
+const streamEl = document.getElementById('stream');
+const actionEl = document.getElementById('action');
+const resultEl = document.getElementById('result');
+let draft = null;
+let useWasm = false;
+
+// ─── WASM renderer: load the AILANG runtime, install renderer.ail, render via ailangCall.
+async function initWasm() {
+  try {
+    const repl = await new AilangREPL().init('../wasm/ailang.wasm');
+    const source = await (await fetch('/renderer.ail')).text();
+    const loaded = window.ailangLoadModule('renderer', source);
+    if (!loaded.success) throw new Error(loaded.error || 'loadModule failed');
+    // Self-check: the runtime must render a known event correctly before we trust it.
+    const probe = window.ailangCall('renderer', 'renderEvent',
+      JSON.stringify({ type: 'RUN_STARTED', threadId: 't', runId: 'self-check' }));
+    if (!probe.success || !probe.result.includes('RUN_STARTED')) throw new Error('renderer self-check failed');
+    useWasm = true;
+    document.getElementById('rendererStatus').textContent = 'renderer: AILANG WASM (renderer.ail executing in-page)';
+  } catch (e) {
+    useWasm = false;
+    document.getElementById('rendererStatus').textContent = 'renderer: JavaScript fallback (' + e.message + ')';
+  }
+}
+
+function renderEvent(raw) {
+  if (useWasm) {
+    const r = window.ailangCall('renderer', 'renderEvent', raw);
+    if (r.success) return r.result;
+    // fall through to the JS path below on WASM failure
+  }
+  return jsRenderEvent(JSON.parse(raw));
+}
+
+// ─── JavaScript fallback renderer (same contract as renderer.ail).
+function jsRenderEvent(ev) {
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  switch (ev.type) {
+    case 'RUN_STARTED': return `<div class="ev run">▶ run ${esc(ev.runId)} on thread ${esc(ev.threadId)}</div>`;
+    case 'TEXT_MESSAGE_CONTENT': return `<div class="ev text">${esc(ev.delta)}</div>`;
+    case 'TOOL_CALL_START': return `<div class="ev tool">⚙ tool ${esc(ev.toolCallName)} (${esc(ev.toolCallId)})</div>`;
+    case 'TOOL_CALL_END': return '';
+    case 'TOOL_CALL_RESULT': return jsToolResult(ev);
+    case 'STATE_SNAPSHOT': return `<div class="ev state">📷 state ${esc(JSON.stringify(ev.snapshot))}</div>`;
+    case 'RUN_FINISHED': return '<div class="ev run">■ run finished</div>';
+    case 'RUN_ERROR': return `<div class="ev err">✗ ${esc(ev.message)}</div>`;
+    default: return '';
+  }
+}
+
+function jsToolResult(ev) {
+  try {
+    const payload = JSON.parse(ev.content);
+    if (!payload.ok) return `<div class="ev tool">⚙ result: ${esc(JSON.stringify(payload).slice(0, 140))}</div>`;
+    const d = payload.data;
+    if (!d || !d.id) return `<div class="ev tool">⚙ result: ${esc(JSON.stringify(payload).slice(0, 140))}</div>`;
+    draft = d;
+    return `<div class="ev tool">⚙ result: stored draft <b>${esc(d.id)}</b></div>`
+      + `<div class="action">Review draft <b>${esc(d.id)}</b> — “${esc(d.text)}” `
+      + `<button data-draft="${esc(d.id)}" data-revision="${esc(d.revision)}" data-text="${esc(d.text)}">Submit</button></div>`;
+  } catch { return '<div class="ev tool">⚙ result (opaque)</div>'; }
+}
+
+function handleEvent(ev) {
+  const raw = JSON.stringify(ev);
+  let html = '';
+  if (useWasm) {
+    const r = window.ailangCall('renderer', 'renderEvent', raw);
+    if (r && r.success && typeof r.result === 'string') html = r.result;
+  }
+  if (!html) html = jsRenderEvent(ev);
+  streamEl.insertAdjacentHTML('beforeend', html);
+}
+
+// Action buttons (from the WASM renderer or the JS fallback) bind by data attributes.
+streamEl.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-draft]');
+  if (btn) submit(btn.dataset.draft, btn.dataset.revision, btn.dataset.text);
+});
+
+async function submit(id, revision, text) {
+  const action = {
+    version: 'v0.9.1',
+    action: { name: 'submitDraft', surfaceId: `draft-${id}`, sourceComponentId: 'submit',
+      timestamp: new Date().toISOString(), context: { draftId: id, revision: Number(revision) || 1, text: text } }
+  };
+  const res = await fetch('action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) });
+  const out = await res.json();
+  if (out.ok && out.data && out.data.url) {
+    const url = out.data.url;
+    resultEl.innerHTML = 'posted to Discord — <a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+    resultEl.className = 'status';
+  } else {
+    resultEl.textContent = 'action → ' + JSON.stringify(out);
+    resultEl.className = 'status ' + (out.ok ? '' : 'err');
+  }
+}
+
+async function run() {
+  streamEl.textContent = ''; actionEl.innerHTML = ''; resultEl.textContent = '';
+  draft = null;
+  const body = {
+    threadId: '1549868288002236417',
+    runId: 'browser-' + Date.now(),
+    messages: [{ role: 'user', id: 'u' + Date.now(), content: document.getElementById('msg').value }]
+  };
+  const res = await fetch('run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      for (const raw of frame.split('\n')) {
+        if (!raw.startsWith('data: ')) continue;
+        const payload = raw.slice(6);
+        if (payload === '[DONE]') { streamEl.insertAdjacentHTML('beforeend', '<div class="ev run">— stream complete —</div>'); continue; }
+        handleEvent(JSON.parse(payload));
+      }
+    }
+  }
+}
+
+document.getElementById('run').onclick = run;
+initWasm();
+</script>
+</body>
+</html>

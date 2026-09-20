@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AILANG Discord — draft review, rendered by AILANG in your browser</title>
+<style>
+  :root { --primary: #6366f1; --text: #222; --text-secondary: #666; --border: #ddd; }
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: var(--text); }
+  h1 { font-size: 1.25rem; }
+  .crumb a { color: var(--primary); text-decoration: none; font-size: .9rem; }
+  p { line-height: 1.65; font-size: .95rem; color: #333; }
+  button { font: inherit; padding: .45rem 1rem; cursor: pointer; border-radius: 6px; border: 1px solid var(--border); background: var(--primary); color: #fff; }
+  button:disabled { background: #999; cursor: wait; }
+  #status { color: var(--text-secondary); font-size: .85rem; margin: .75rem 0; }
+  #stream { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; min-height: 1rem; }
+  #stream:empty { display: none; }
+  .ev { margin: .3rem 0; }
+  .ev.text { color: #111; }
+  .ev.tool { color: #06c; }
+  .ev.state { color: #666; font-size: .85rem; }
+  .ev.run { color: #080; font-size: .85rem; }
+  .ev.err { color: #b00; }
+  .action { background: #eef; border: 1px solid #99f; border-radius: 8px; padding: .75rem; margin: .5rem 0; }
+  .action button { background: #345; }
+  .gate { color: #555; font-size: .85rem; margin-top: .4rem; }
+  code { background: #f4f4f4; padding: 0 .25rem; border-radius: 4px; }
+  .foot { color: var(--text-secondary); font-size: .85rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+</style>
+</head>
+<body>
+<p class="crumb"><a href="../">← Demo hub</a></p>
+<h1>Discord draft review — the whole agent run is AILANG, including the part in your browser</h1>
+<p>The server side decodes the client's request with the published
+<code>sunholo/agui</code> packages, runs an agent step, and streams AG-UI events.
+This page replays a recorded run, and the <em>rendering</em> is not JavaScript:
+an AILANG module (<code>renderer.ail</code>) is executed by the AILANG WASM
+compiler runtime right here in your browser, one event at a time. The same
+language, the same module format, both sides of the wire.</p>
+<p><button id="replay" disabled>Replay the recorded run</button> <button id="runLive" style="display:none">Run your own (live)</button></p>
+<p id="status">loading the AILANG WASM runtime…</p>
+<div id="liveform" style="display:none">
+  <textarea id="msg" placeholder="Type the reply text for the draft…">AILANG live round-trip check — safe to delete</textarea>
+</div>
+<div id="stream" aria-live="polite"></div>
+<div id="result" class="status"></div>
+<div class="foot">
+<p>The replay is a completed run: it read the channel fixture, drafted a reply and
+published an A2UI review surface. In the live deployment this page is served by
+the agent's own SSE server: the request is a real
+<code>RunAgentInput</code>, the draft is created from your text, and the
+review card's button posts the action back — with the policy gate deciding
+whether it sends to the <code>#daneel</code> channel on the sunholo Discord
+server. The static page keeps the send safely off; the live one can flip it on.</p>
+<p id="live"></p>
+</div>
+<script src="../wasm/ailang-repl.js"></script>
+<script>
+// Deploy-time constants. LIVE_URL points at the interactive instance served by
+// discord/ailang-discord-server (which must set DISCORD_SSE_ORIGIN to this
+// site's origin). Empty until Daneel deploys; the replay works regardless.
+const LIVE_URL = '';  // ← set at deploy time (see discord/DEPLOY.md)
+
+const streamEl = document.getElementById('stream');
+const statusEl = document.getElementById('status');
+let replayEvents = null;
+const resultEl = document.getElementById('result');
+
+function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// ─── JavaScript fallback renderer (same contract as renderer.ail).
+function jsRenderEvent(ev) {
+  switch (ev.type) {
+    case 'RUN_STARTED': return `<div class="ev run">▶ run ${esc(ev.runId)} on thread ${esc(ev.threadId)}</div>`;
+    case 'TEXT_MESSAGE_CONTENT': return `<div class="ev text">${esc(ev.delta)}</div>`;
+    case 'TOOL_CALL_START': return `<div class="ev tool">⚙ tool ${esc(ev.toolCallName)} (${esc(ev.toolCallId)})</div>`;
+    case 'TOOL_CALL_END': return '';
+    case 'TOOL_CALL_RESULT': return jsToolResult(ev);
+    case 'STATE_SNAPSHOT': return `<div class="ev state">📷 state ${esc(JSON.stringify(ev.snapshot))}</div>`;
+    case 'RUN_FINISHED': return '<div class="ev run">■ run finished</div>';
+    case 'RUN_ERROR': return `<div class="ev err">✗ ${esc(ev.message)}</div>`;
+    default: return '';
+  }
+}
+function jsToolResult(ev) {
+  try {
+    const payload = JSON.parse(ev.content);
+    if (!payload.ok) return `<div class="ev tool">⚙ result: ${esc(JSON.stringify(payload).slice(0, 140))}</div>`;
+    const d = payload.data;
+    return `<div class="ev tool">⚙ result: stored draft <b>${esc(d.id)}</b></div>`
+      + `<div class="action">Review draft <b>${esc(d.id)}</b> — “${esc(d.text)}” `
+      + `<button data-draft="${esc(d.id)}" data-revision="${esc(d.revision)}" disabled>Submit (live deployment only)</button>`
+      + `<div class="gate">This static preview ends here: the button's action posts to the server, which holds the Discord credential and the policy gate. In the live deployment it sends for real and returns the message link.</div></div>`;
+  } catch { return '<div class="ev tool">⚙ result (opaque)</div>'; }
+}
+
+function renderEvent(raw) {
+  if (useWasm) {
+    const r = window.ailangCall('renderer', 'renderEvent', raw);
+    if (r && r.success && typeof r.result === 'string' && r.result) return r.result;
+  }
+  return jsRenderEvent(JSON.parse(raw));
+}
+
+let useWasm = false;
+async function initWasm() {
+  try {
+    await new AilangREPL().init('../wasm/ailang.wasm');
+    const source = await (await fetch('renderer.ail')).text();
+    const loaded = window.ailangLoadModule('renderer', source);
+    if (!loaded.success) throw new Error(loaded.error || 'loadModule failed');
+    const probe = window.ailangCall('renderer', 'renderEvent',
+      JSON.stringify({ type: 'RUN_STARTED', threadId: 't', runId: 'self-check' }));
+    if (!probe.success || !probe.result.includes('RUN_STARTED')) throw new Error('renderer self-check failed');
+    useWasm = true;
+    statusEl.textContent = 'renderer: AILANG WASM (renderer.ail executing in-page)';
+  } catch (e) {
+    useWasm = false;
+    statusEl.textContent = 'renderer: JavaScript fallback (' + e.message + ')';
+  }
+  document.getElementById('replay').disabled = false;
+}
+
+async function replay() {
+  streamEl.textContent = '';
+  document.getElementById('replay').disabled = true;
+  const raws = (await (await fetch('run.jsonl')).text()).trim().split('\n');
+  // The WASM renderer consumes one event per call, in order — exactly what the
+  // live page does frame by frame; renderAll exists for one-shot replays.
+  for (const raw of raws) {
+    const html = renderEvent(raw);
+    if (html) streamEl.insertAdjacentHTML('beforeend', html);
+  }
+  streamEl.insertAdjacentHTML('beforeend', '<div class="ev run">— end of recorded run —</div>');
+  document.getElementById('replay').disabled = false;
+}
+
+document.getElementById('replay').onclick = replay;
+
+// ─── Live mode: when LIVE_URL is set, the browser drives the real instance
+// cross-origin (the server opts in via DISCORD_SSE_ORIGIN). The token never
+// leaves the server; the policy gate on the server decides sends.
+function api(path) { return LIVE_URL.replace(/\/$/, '') + path; }
+
+async function runLive() {
+  streamEl.textContent = '';
+  const body = {
+    threadId: '1549868288002236417',
+    runId: 'live-' + Date.now(),
+    messages: [{ role: 'user', id: 'u' + Date.now(), content: document.getElementById('msg').value }]
+  };
+  const res = await fetch(api('/run'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok || res.headers.get('content-type')?.indexOf('text/event-stream') !== 0) {
+    streamEl.insertAdjacentHTML('beforeend', '<div class="ev err">live endpoint unreachable (' + res.status + ') — the daneel server may be offline</div>');
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      for (const raw of frame.split('\n')) {
+        if (!raw.startsWith('data: ')) continue;
+        const payload = raw.slice(6);
+        if (payload === '[DONE]') { streamEl.insertAdjacentHTML('beforeend', '<div class="ev run">— stream complete —</div>'); continue; }
+        const html = renderEvent(payload);
+        if (html) streamEl.insertAdjacentHTML('beforeend', html);
+      }
+    }
+  }
+}
+
+streamEl.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-draft]');
+  if (!btn) return;
+  if (!LIVE_URL) {
+    resultEl.textContent = 'This static preview ends here: the live deployment wires this button to the server, which holds the Discord credential and the policy gate.';
+    return;
+  }
+  const action = {
+    version: 'v0.9.1',
+    action: { name: 'submitDraft', surfaceId: 'draft-' + btn.dataset.draft, sourceComponentId: 'submit',
+      timestamp: new Date().toISOString(),
+      context: { draftId: btn.dataset.draft, revision: Number(btn.dataset.revision) || 1, text: btn.dataset.text } }
+  };
+  fetch(api('/action'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action) })
+    .then(r => r.json())
+    .then(out => {
+      if (out.ok && out.data && out.data.url) {
+        const url = out.data.url;
+        resultEl.innerHTML = 'posted to Discord — <a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+        resultEl.className = '';
+      } else {
+        resultEl.textContent = 'action → ' + JSON.stringify(out);
+        resultEl.className = 'status err';
+      }
+    });
+});
+
+if (LIVE_URL) {
+  document.getElementById('runLive').style.display = '';
+  document.getElementById('liveform').style.display = '';
+  document.getElementById('runLive').onclick = runLive;
+  document.getElementById('live').innerHTML = 'Live instance: <a href="' + LIVE_URL + '">' + LIVE_URL + '</a>';
+}
+initWasm();
+</script>
+</body>
+</html>

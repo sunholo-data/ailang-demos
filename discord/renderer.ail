@@ -1,0 +1,92 @@
+module renderer
+
+-- Browser-side event renderer for the AG-UI SSE demo, executed by the
+-- AILANG WASM runtime in the page (wasm/ailang.wasm + ailangLoadModule +
+-- ailangCall). Pure and self-contained: std/json + std/string only, so the
+-- browser runtime needs no installed packages. One AG-UI event JSON string
+-- in, one HTML fragment out. Untrusted content is escaped; unknown events
+-- render nothing.
+
+import std/json (Json, decode, getString, getInt, get, getObject, getBool, asString)
+import std/option (Some, None, getOrElse)
+import std/string (replace, intToStr, concat)
+import std/list (length as listLength)
+
+export pure func escapeHtml(s: string) -> string
+tests [("<b>", "&lt;b&gt;"), ("safe", "safe"), ("a&\"b", "a&quot;b")]
+{
+  replace(replace(replace(replace(s, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
+}
+
+pure func box(cls: string, text: string) -> string =
+  "<div class=\"ev ${cls}\">${escapeHtml(text)}</div>"
+
+-- One AG-UI event JSON string → one HTML fragment ("" for ignorable events).
+export pure func renderEvent(raw: string) -> string
+{
+  match decode(raw) {
+    Err(_) => box("err", "unparseable event"),
+    Ok(j) => {
+      let kind = getOrElse(getString(j, "type"), "");
+      if kind == "RUN_STARTED" then
+        box("run", "▶ run ${getOrElse(getString(j, "runId"), "?")} on thread ${getOrElse(getString(j, "threadId"), "?")}")
+      else if kind == "TEXT_MESSAGE_CONTENT" then
+        "<div class=\"ev text\">${escapeHtml(getOrElse(getString(j, "delta"), ""))}</div>"
+      else if kind == "TOOL_CALL_START" then
+        box("tool", "⚙ tool ${getOrElse(getString(j, "toolCallName"), "?")} (${getOrElse(getString(j, "toolCallId"), "?")})")
+      else if kind == "TOOL_CALL_END" then ""
+      else if kind == "TOOL_CALL_RESULT" then toolResult(j)
+      else if kind == "STATE_SNAPSHOT" then
+        match get(j, "snapshot") { Some(s) => box("state", "📷 state ${show(s)}"), None => "" }
+      else if kind == "RUN_FINISHED" then box("run", "■ run finished")
+      else if kind == "RUN_ERROR" then box("err", "✗ ${getOrElse(getString(j, "message"), "unknown error")}")
+      else ""
+    }
+  }
+}
+
+-- Render the whole stream in order; used for replays and as the page's
+-- one-shot path when the stream has already completed. Blank lines (e.g. a
+-- trailing newline in a recorded file) render nothing.
+export pure func renderAll(raws: [string]) -> string
+ensures { listLength(raws) != 0 || result == "" }
+{
+  match raws {
+    [] => "",
+    raw :: rest => match raw {
+      "" => renderAll(rest),
+      _ => match renderEvent(raw) {
+        "" => renderAll(rest),
+        html => "${html}${renderAll(rest)}"
+      }
+    }
+  }
+}
+
+-- Tool results carry the draft payload with its A2UI review operations; render
+-- the review card with a submit button the page binds by data attributes.
+pure func toolResult(j: Json) -> string {
+  match get(j, "content") {
+    None => box("tool", "⚙ tool result (no content)"),
+    Some(content) => match asString(content) {
+      None => box("tool", "⚙ result (opaque)"),
+      Some(raw) => match decode(raw) {
+        Err(_) => box("tool", "⚙ result (opaque)"),
+        Ok(payload) =>
+          if not getOrElse(getBool(payload, "ok"), false) then box("tool", "⚙ result: ${show(payload)}")
+          else match getObject(payload, "data") {
+            None => box("tool", "⚙ result: ${show(payload)}"),
+            Some(d) => {
+              let id = getOrElse(getString(d, "id"), "");
+              let rev = getOrElse(getInt(d, "revision"), 1);
+              let text = getOrElse(getString(d, "text"), "");
+              concat(["<div class=\"ev tool\">⚙ result: stored draft <b>${escapeHtml(id)}</b></div>",
+              "<div class=\"action\" data-draft=\"${escapeHtml(id)}\">",
+              "Review draft <b>${escapeHtml(id)}</b> — “${escapeHtml(text)}” ",
+              "<button data-draft=\"${escapeHtml(id)}\" data-revision=\"${intToStr(rev)}\" data-text=\"${escapeHtml(text)}\">Submit</button></div>"])
+            }
+          }
+      }
+    }
+  }
+}

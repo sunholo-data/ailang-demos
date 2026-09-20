@@ -1,0 +1,4 @@
+-- A plain sibling module for the repros. No stdlib imports at all.
+module repro_lib
+
+export pure func helper() -> bool = true

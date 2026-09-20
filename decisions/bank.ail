@@ -1,0 +1,280 @@
+-- bank.ail — The Deliberating Nouls: the bank of deliberations.
+--
+-- The doctrine, as a file: every deliberation is banked WHOLE — the percept
+-- state, the exact questions, the full Decision (model, id, every answer
+-- with its distribution, usage/cost), the sampled roll, the resulting
+-- action. Replays reproduce exactly: same bank + same seed → same behavior,
+-- offline, keyless, CI-friendly. This is also the demo's audit surface.
+--
+-- v0 banks the PARSED Decision (the package's rule: bank the whole Decision;
+-- the raw wire body is the vendor's record — OpenRouter Broadcast — and
+-- parseAnswers stays exercised by the synthetic-fixture round-trip below,
+-- which replays a wire-shaped body through the package's own parser).
+
+module bank
+
+import world (Action, Intent, Move, World, Creature, demoWorld, creatureById,
+              actionToJson, actionOfJson, perceive)
+import souls (NQ, nqsToJson, nqsOfList, Personality, personalityOf, personalityForState, actOnDecision, actSummary,
+              buildQuestions, errText)
+import oracle (Deliberation)
+import pkg/sunholo/decisions/decide (Decision, Answer, NoulA, ChoiceA, ScoreA,
+                                     parseAnswers)
+import std/json (Json, jo, ja, kv, js, jnum, jint, encode, decode,
+                 getString, getNumber, getInt, getArray, getObject)
+import std/fs (appendFileResult, readFileResult)
+import std/list (map, foldl, length, concat, filter)
+import std/option (Option, Some, None, getOrElse)
+import std/result (Result, Ok, Err)
+import std/string (split, startsWith, replace)
+import world (World, Creature, perceive)
+
+-- ============================================================
+-- Decision ⇄ Json (the banked answer set)
+-- ============================================================
+
+export pure func probsToJson(ps: [{ key: string, p: float }]) -> Json =
+  ja(map(\e. jo([kv("key", js(e.key)), kv("p", jnum(e.p))]), ps))
+
+export pure func probsOfJson(j: Json) -> [{ key: string, p: float }] =
+  match getArray(j, "probabilities") {
+    None      => [],
+    Some(xs)  => map(\x. { key: getOrElse(getString(x, "key"), ""),
+                           p: getOrElse(getNumber(x, "p"), 0.0) }, xs)
+  }
+
+export pure func answerToJson(a: Answer) -> Json =
+  match a {
+    NoulA(p)    => jo([kv("kind", js("NoulA")), kv("p", jnum(p))]),
+    ChoiceA(r)  => jo([kv("kind", js("ChoiceA")),
+                       kv("choice", js(r.choice)),
+                       kv("confidence", jnum(r.confidence)),
+                       kv("probabilities", probsToJson(r.probabilities))]),
+    ScoreA(r)   => jo([kv("kind", js("ScoreA")),
+                       kv("score", jnum(r.score)),
+                       kv("confidence", jnum(r.confidence)),
+                       kv("probabilities", probsToJson(r.probabilities))])
+  }
+
+export pure func answerOfJson(j: Json) -> Result[Answer, string] =
+  match getString(j, "kind") {
+    None      => Err("answer without kind"),
+    Some(kind) =>
+      if kind == "NoulA" then
+        Ok(NoulA(getOrElse(getNumber(j, "p"), 0.0)))
+      else if kind == "ChoiceA" then
+        Ok(ChoiceA({ choice: getOrElse(getString(j, "choice"), ""),
+                     confidence: getOrElse(getNumber(j, "confidence"), 0.0),
+                     probabilities: probsOfJson(j) }))
+      else if kind == "ScoreA" then
+        Ok(ScoreA({ score: getOrElse(getNumber(j, "score"), 0.0),
+                    confidence: getOrElse(getNumber(j, "confidence"), 0.0),
+                    probabilities: probsOfJson(j) }))
+      else Err("unknown answer kind ${kind}")
+  }
+
+export pure func decisionToJson(d: Decision) -> Json =
+  jo([
+    kv("model", js(d.model)),
+    kv("id", js(d.id)),
+    kv("answers", ja(map(\row. jo([kv("name", js(row.name)),
+                                    kv("answer", answerToJson(row.answer))]),
+                          d.answers))),
+    kv("input_tokens", jint(d.input_tokens)),
+    kv("output_tokens", jint(d.output_tokens)),
+    kv("cost_usd", jnum(d.cost_usd))
+  ])
+
+export pure func decisionOfJson(j: Json) -> Result[Decision, string] =
+  match getArray(j, "answers") {
+    None      => Err("decision without answers"),
+    Some(rows) =>
+      match answerRows(rows, []) {
+        Err(m)  => Err(m),
+        Ok(ans) => Ok({
+          model: getOrElse(getString(j, "model"), "?"),
+          id: getOrElse(getString(j, "id"), "?"),
+          answers: ans,
+          input_tokens: getOrElse(getInt(j, "input_tokens"), 0),
+          output_tokens: getOrElse(getInt(j, "output_tokens"), 0),
+          cost_usd: getOrElse(getNumber(j, "cost_usd"), 0.0) })
+      }
+  }
+
+@allow_empty_ok("a Decision with zero answers is a wire anomaly the caller reports, not a default")
+pure func answerRows(rows: [Json], acc: [{ name: string, answer: Answer }]) -> Result[[{ name: string, answer: Answer }], string] =
+  match rows {
+    []            => Ok(acc),
+    [row, ...rest] =>
+      match getObject(row, "answer") {
+        None    => Err("answer row without answer payload"),
+        Some(a) =>
+          match answerOfJson(a) {
+            Err(m)  => Err(m),
+            Ok(ans) => answerRows(rest, concat(acc, [{ name: getOrElse(getString(row, "name"), ""),
+                                                       answer: ans }]))
+          }
+      }
+  }
+
+-- ============================================================
+-- Bank rows (JSONL)
+-- ============================================================
+
+export type BankRow = {
+  tick: int,
+  creatureId: string,
+  soul: string,        -- personality key at deliberation time
+  state: string,       -- encoded percept Json
+  questions: string,   -- encoded [NQ] (rebuilds the Question set on replay)
+  decision: string,    -- encoded Decision
+  roll: float,
+  action: string,      -- encoded Action
+  note: string,
+  source: string       -- "live" | "synthetic"
+}
+
+export pure func rowToJson(r: BankRow) -> Json =
+  jo([
+    kv("tick", jint(r.tick)), kv("creatureId", js(r.creatureId)),
+    kv("soul", js(r.soul)), kv("state", js(r.state)),
+    kv("questions", js(r.questions)), kv("decision", js(r.decision)),
+    kv("roll", jnum(r.roll)), kv("action", js(r.action)),
+    kv("note", js(r.note)), kv("source", js(r.source))
+  ])
+
+export pure func rowOfJson(j: Json) -> Result[BankRow, string] =
+  Ok({
+    tick: getOrElse(getInt(j, "tick"), 0),
+    creatureId: getOrElse(getString(j, "creatureId"), "?"),
+    soul: getOrElse(getString(j, "soul"), ""),
+    state: getOrElse(getString(j, "state"), "{}"),
+    questions: getOrElse(getString(j, "questions"), "[]"),
+    decision: getOrElse(getString(j, "decision"), "{}"),
+    roll: getOrElse(getNumber(j, "roll"), 0.0),
+    action: getOrElse(getString(j, "action"), "{}"),
+    note: getOrElse(getString(j, "note"), ""),
+    source: getOrElse(getString(j, "source"), "?") })
+
+export pure func rowToLine(r: BankRow) -> string = encode(rowToJson(r))
+
+export pure func lineToRow(line: string) -> Result[BankRow, string] =
+  match decode(line) {
+    Err(m) => Err("unparseable bank line: ${m}"),
+    Ok(j)  => rowOfJson(j)
+  }
+
+-- ============================================================
+-- FS (one row per line; strict — a corrupt line is an error, never skipped)
+-- ============================================================
+
+export func appendRow(path: string, r: BankRow) -> Result[(), string] ! {FS} =
+  appendFileResult(path, "${rowToLine(r)}\n")
+
+export func readRows(path: string) -> Result[[BankRow], string] ! {FS} =
+  match readFileResult(path) {
+    Err(m)   => Err("cannot read bank: ${m}"),
+    Ok(text) => collectRows(split(text, "\n"), [])
+  }
+
+pure func collectRows(lines: [string], acc: [BankRow]) -> Result[[BankRow], string] =
+  match lines {
+    []             => Ok(acc),
+    [line, ...rest] =>
+      if line == "" then collectRows(rest, acc)
+      else match lineToRow(line) {
+        Err(m)   => Err(m),
+        Ok(row)  => collectRows(rest, concat(acc, [row]))
+      }
+  }
+
+-- ============================================================
+-- Replay (tier 2: recorded souls — offline, keyless)
+-- ============================================================
+
+-- Rebuild the Decision from the banked row and re-run the pure policy with
+-- the banked roll. The returned action MUST equal the banked action.
+export pure func replayRow(r: BankRow) -> Result[(Decision, Action), string] =
+  match decode(r.decision) {
+    Err(m)  => Err("banked decision unparseable: ${m}"),
+    Ok(dj)  =>
+      match decisionOfJson(dj) {
+        Err(m)  => Err(m),
+        Ok(d)   =>
+          match actOnDecision(d, personalityForState(r.soul, r.state), r.roll) {
+            Err(m)   => Err(m),
+            Ok(act)  => Ok((d, act))
+          }
+      }
+  }
+
+-- Does the replay reproduce the banked action, byte for byte?
+export pure func replayVerifies(r: BankRow) -> Result[bool, string] =
+  match replayRow(r) {
+    Err(m)          => Err(m),
+    Ok((_, act))    => Ok(rowActionMatches(r, act))
+  }
+
+export pure func rowActionMatches(r: BankRow, act: Action) -> bool =
+  encode(actionToJson(act)) == r.action
+
+-- A live deliberation → its bank row (the whole Decision, state, questions,
+-- roll and action travel together — never argmax alone).
+export pure func rowOfDeliberation(d: Deliberation) -> Result[BankRow, string] =
+  match nqsToJson(d.questions) {
+    Err(m)  => Err(m),
+    Ok(qs)  => Ok({
+      tick: d.tick, creatureId: d.creatureId, soul: d.soul,
+      state: d.state, questions: encode(qs),
+      decision: encode(decisionToJson(d.decision)),
+      roll: d.roll, action: encode(actionToJson(d.action)),
+      note: d.note, source: "live" })
+  }
+
+-- ============================================================
+-- The synthetic fixture (clearly labeled; wire-shaped after the package's
+-- own pinned fixtures) — lets the demo run its replay tier with NO key
+-- and NO recording, and exercises parseAnswers on a body, not just codecs.
+-- ============================================================
+
+-- A wire-shaped body for the BOLD Noul's first deliberation in demoWorld:
+-- answers behavior + approach (e3/e5/e9/e2 visible to c2) + threats +
+-- danger. Roll 0.5 → forage (0.62 band) → approach samples e9 at roll2
+-- 0.809 → Do(Approach("e9")): the bold Noul walks to the glowing spores.
+export pure func syntheticBody() -> string =
+  "{\"model\":\"typesafe/jev-1.13\",\"answers\":{\"behavior\":{\"type\":\"choice\",\"choice\":\"forage\",\"probabilities\":{\"forage\":0.62,\"rest\":0.11,\"flee\":0.09,\"investigate\":0.12,\"socialize\":0.06},\"confidence\":0.71},\"approach\":{\"type\":\"choice\",\"choice\":\"e5\",\"probabilities\":{\"e3\":0.20,\"e5\":0.52,\"e9\":0.18,\"e2\":0.10},\"confidence\":0.55},\"threat_e3\":{\"type\":\"noul\",\"noul\":0.31},\"threat_e5\":{\"type\":\"noul\",\"noul\":0.08},\"threat_e9\":{\"type\":\"noul\",\"noul\":0.44},\"danger\":{\"type\":\"score\",\"score\":1,\"legend\":{\"0\":\"calm - nothing seems wrong\",\"1\":\"uneasy - something is off\",\"2\":\"dangerous - something here can hurt me\",\"3\":\"critical - I am in trouble right now\"},\"probabilities\":{\"0\":0.25,\"1\":0.55,\"2\":0.15,\"3\":0.05},\"confidence\":0.83}},\"usage\":{\"input_tokens\":424,\"output_tokens\":73,\"cost\":1.7808e-05},\"id\":\"synthetic-v0-0001\",\"provider\":\"TypeSafe\"}"
+
+export pure func syntheticRow() -> Result[BankRow, string] =
+  match creatureById(demoWorld(), "c2") {
+    None     => Err("synthetic fixture: demo world lost its bold Noul"),
+    Some(c2) => syntheticForBold(c2, demoWorld())
+  }
+
+pure func syntheticForBold(c2: Creature, w: World) -> Result[BankRow, string] = {
+  let p = personalityOf(c2.soul);
+  -- Keep the pinned v0 regression fixture scoped to its original ecosystem.
+  let oldWorld = { w | entities: filter(\e. startsWith(e.id, "e"), w.entities) };
+  let qs = filter(\q. q.name != "eat_target" && q.name != "drink_target" && q.name != "toilet_target", buildQuestions(p, c2, oldWorld));
+  match parseAnswers(syntheticBody(), qs) {
+    Err(e) => Err("synthetic body rejected by parseAnswers: ${errText(e)}"),
+    Ok(d)  => syntheticRowFromDecision(c2, oldWorld, p, qs, d)
+  }
+}
+
+pure func syntheticRowFromDecision(c2: Creature, w: World, p: Personality, qs: [NQ], d: Decision) -> Result[BankRow, string] =
+  match actOnDecision(d, p, 0.5) {
+    Err(m)  => Err(m),
+    Ok(act) => Ok({
+      tick: w.tick, creatureId: c2.id, soul: c2.soul,
+      state: replace(encode(perceive(c2, w)), "\"policyVersion\":2", "\"policyVersion\":0"),
+      questions: match nqsToJson(qs) {
+                   Err(m)  => "[encode failed: ${m}]",
+                   Ok(q)   => encode(q) },
+      decision: encode(decisionToJson(d)),
+      roll: 0.5,
+      action: encode(actionToJson(act)),
+      note: "[synthetic] ${actSummary(d, p, 0.5)}",
+      source: "synthetic" })
+  }
+
+pure func worldPerceive(c: Creature, w: World) -> Json = perceive(c, w)

@@ -1,8 +1,103 @@
-# Prepared feedback for AILANG core
+# Feedback for AILANG core
 
-These reports have NOT been sent. Reproduced on AILANG v0.35.2-dirty,
+Delivery status:
+
+- **Test-harness findings (4 reports): SENT 2026-09-15** via `ailang messages`
+  to the canonical Firestore store (inbox `ailang-core`, from
+  `ailang-demos-discord`, Pub/Sub notification published). IDs:
+  `inbox_1789485974623_606ffb47` (string-aware stripper),
+  `inbox_1789485983321_c818644e` (forall properties #624),
+  `inbox_1789485984226_d0b46184` (float dictionary lookup),
+  `inbox_1789485985209_903af4be` (generators for imported types).
+  Note: the installed CLI renamed the store selection to
+  `AILANG_STORAGE_MESSAGING=gcp` (v1.0.0 rename; the skill's
+  `AILANG_MESSAGES_STORE` is rejected loudly — update the skill).
+- Earlier sections below: prepared, NOT sent. Reproduced on AILANG v0.35.2-dirty,
 commit a67b794313a1bf29567c285ebaa197be52675235, macOS arm64.
 Run the repro commands from `ailang-demos/discord`.
+
+## Test harness: stripper is not string-aware; unbalanced braces in strings corrupt the whole module's tests [SENT: inbox_1789485974623_606ffb47]
+
+Found while retrofitting native tests (2026-09-15), on `build/package-authoring-followups`
+(AILANG dev + 427f1a00e). `internal/testing/source_strip.go: testAndPropertySkipRanges`
+computes each `test` block's skip range by scanning raw runes for `{`/`}`. Braces inside
+string literals count. A test body containing an unbalanced brace inside a string — e.g.
+an intentionally-malformed JSON payload like `"{\"partial"` (invalid JSON on purpose) —
+makes the range scan never return to depth 0, so the range collapses to the `test` line
+and the rest of the block leaks into the stripped base for every test in the module.
+Every test then dies with the same `PAR_NO_PREFIX_PARSE ... unexpected token in expression: }`
+against the synthesized `_namedtest_body_*.ail`, far from the offending line.
+
+Repro (any module):
+
+```ailang
+test "stripper confusion" {
+  decode("{\"partial") == Err("...")   -- one {, no } — invalid JSON on purpose
+}
+```
+
+in a module with a second, unrelated test. Suggested fix: compute skip ranges from the
+lexer's token stream (which knows string boundaries), or at minimum treat braces inside
+string literals as inert. Impact: cost a full debugging session; the failure points at
+unrelated tests and is invisible in the user's source. Workaround: keep JSON literals
+brace-balanced (`"{\"partial\":}"` is still invalid JSON).
+
+## Test harness: forall-style `properties [...]` never execute (confirms #624) [SENT: inbox_1789485983321_c818644e]
+
+Confirmed on the same build: even the smallest forall property fails to lower.
+
+```ailang
+export pure func wrap(l: int) -> bool ! {}
+properties [ forall(l: int) => l >= 0 || wrap(l) ]
+{ l >= 0 }
+```
+
+Actual: `test 0: evaluation failed: PAR_UNEXPECTED_TOKEN at _test.ail:5:36` — the
+synthesized file does not parse; the same holds for top-level `property "..." { forall(...) => ... }`.
+The runner comment already routes forall properties to the known-broken
+`EvaluateExpression` path (M-M3-RESIDUAL T6 / #624) while `requires`/`ensures` clauses
+run properly as 100-case properties. Suggestion for the interim: reject `properties [...]`
+at compile time with a pointer to #624 instead of failing every module test at runtime;
+and once #624 lands, property syntax becomes the natural home for the codecs'
+round-trip laws (decode(encode(e)) == e).
+
+Impact on this work: both retrofitted packages rely on `ensures`-clause PBT for runtime
+property evidence and cannot express ADT round-trip laws as quantified properties.
+
+## Test harness: float binops in named test bodies fail dictionary lookup [SENT: inbox_1789485984226_d0b46184]
+
+Inside a `test "..." { ... }` body, any float comparison errors at runtime:
+
+```ailang
+test "float compare" {
+  problem("v", "m").retryAfter == 0.0
+}
+```
+
+Actual: `evaluation error: missing dictionary method: prelude::Fractional::Int::add`
+(and `expected float arguments` for `==` directly). The same expression passes in a
+regular function body and under `ailang run`; it fails only in the lowered named-test
+path. Workaround used: compare floats via contract clauses/properties instead, or
+through `show`-free integer projections. Suggestion: the named-test-body evaluation
+should reuse the standard evaluator's typeclass dictionary resolution.
+
+## Test harness: no property generator for imported types (Json/ADTs) [SENT: inbox_1789485985209_903af4be]
+
+Addendum 2026-09-17: same-file ADTs derive, but a record containing a
+list-of-records field does not — `fieldsFit(fs: [EmbedField])` generates 100
+cases while `validEmbed(e: Embed)` (Embed has `fields: [EmbedField]`) skips as
+no_generator. Nested record-in-list-in-record appears to exhaust the derivation
+budget. Observed on the embed codec (sunholo/discord 0.3.0).
+
+Contract-derived property cases need generators for every parameter type. Same-file
+records and ADTs derive fine, but imported types do not (`deriveNamedType` only sees
+the same file). Every `ensures` on a function taking `std/json` `Json` — or an ADT
+whose constructor fields carry `Json` — skips as `no_generator` (a vacuous-class skip
+that makes `ailang test <module>` exit 1 without `--allow-skips`). This hit 4 of 12
+Discord contracts and 7 of 8 AG-UI contracts; AGENT.md in each package documents the
+structural skips. Suggestion: derive generators for imported stdlib types (or expose
+same-file `type X = Y` alias resolution to imported ADTs), and/or classify imported-type
+skips separately from vacuous ones in exit-code semantics.
 
 ## Bug: teaching prompt promises unary !, checker rejects it
 

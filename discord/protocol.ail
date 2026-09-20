@@ -5,6 +5,7 @@ import std/clock (now)
 import std/option (getOrElse)
 import service (createDraft)
 import pkg/sunholo/agui/events (Event, RunError, RunStarted, RunFinished, TextStart, TextContent, TextEnd, ToolStart, ToolArgs, ToolEnd, ToolResult, StateSnapshot, Custom, eventJson, jsonLines, validateRun)
+import pkg/sunholo/agui/input (decodeRunAgentInput, AgentMessage)
 import pkg/sunholo/a2ui/protocol_v091 (reviewSurface)
 
 -- Deterministic protocol fixture, explicitly simulated: no Discord call or model.
@@ -30,4 +31,39 @@ export func draftEvents(channelId: string, text: string, replyTo: string) -> [Ev
     ToolEnd("draft"), ToolResult("draft-result", "draft", encode(result))];
   if getOrElse(getBool(result, "ok"), false) then start ++ [StateSnapshot(result), RunFinished("discord-review", runId)]
   else start ++ [RunError(encode(result))]
+}
+
+-- The last user-role message content in the request conversation, if any.
+export pure func lastUserContent(xs: [AgentMessage]) -> string {
+  match xs {
+    [] => "",
+    m :: rest => match lastUserContent(rest) {
+      "" => if m.role == "user" then m.content else "",
+      later => later
+    }
+  }
+}
+
+-- The live HTTP/SSE endpoint's agent step. The host (ailang-discord-server)
+-- accepts a RunAgentInput POST, decodes it with the published
+-- sunholo/agui/input module and streams the returned JSONL as data: frames.
+-- Offline by design: it echoes the request's last user message, creates a real
+-- stored draft for review (A2UI operations included by createDraft) and never
+-- touches the network — the browser's action decides whether to send later.
+export func serveEvents(raw: string) -> [Event] ! {FS, Env, Clock} {
+  match decodeRunAgentInput(raw) {
+    Err(e) => [RunStarted("discord-sse", "request-error"), RunError("Request decode failed: ${e}")],
+    Ok(input) => match lastUserContent(input.messages) {
+      "" => [RunStarted(input.threadId, input.runId), RunError("No user message in request")],
+      userText => {
+        let result = createDraft(input.threadId, userText, "");
+        let start = [RunStarted(input.threadId, input.runId),
+          TextStart("assistant-1"), TextContent("assistant-1", "Drafting a reply to: ${userText}"), TextEnd("assistant-1"),
+          ToolStart("draft", "discord_draft"), ToolArgs("draft", "{}"), ToolEnd("draft"),
+          ToolResult("draft-result", "draft", encode(result))];
+        if getOrElse(getBool(result, "ok"), false) then start ++ [StateSnapshot(result), RunFinished(input.threadId, input.runId)]
+        else start ++ [RunError(encode(result))]
+      }
+    }
+  }
 }

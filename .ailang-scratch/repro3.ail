@@ -1,0 +1,11 @@
+-- FAILS: identical body to repro2.ail; only difference is the sibling
+-- import in the header (UNUSED). The sibling imports std/list.
+module repro3
+
+import repro_sibling (dummy)
+import std/list (sortBy, length)
+
+pure func cmpNum(a: int, b: int) -> int = if a < b then -1 else 1
+pure func libSortWorks() -> bool = length(sortBy(cmpNum, [3, 1, 2])) == 3
+
+test "stdlib sortBy, sibling imported but unused" { libSortWorks() }

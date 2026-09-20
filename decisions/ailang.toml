@@ -1,0 +1,12 @@
+[package]
+name = "sunholo/decisions_demo"
+version = "0.1.0"
+edition = "1"
+ailang = ">=0.40.0"
+description = "The Deliberating Nouls — artificial-life showcase for sunholo/decisions: creatures whose judgment at choice points is a typed System One decision call"
+
+[dependencies]
+"sunholo/decisions" = { path = "../../ailang-packages/packages/decisions" }
+
+[effects]
+max = ["IO", "FS", "Net", "Env", "Rand"]

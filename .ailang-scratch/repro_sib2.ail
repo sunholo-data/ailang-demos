@@ -1,0 +1,6 @@
+module repro_sib2
+
+import std/list (length, map)
+import std/string (contains, intToStr)
+
+export pure func dummy2() -> bool = true

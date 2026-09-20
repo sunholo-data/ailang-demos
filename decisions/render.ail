@@ -1,0 +1,211 @@
+-- render.ail — The Deliberating Nouls: pure SVG/HTML fragment renderer.
+--
+-- Logic is self-contained (std/json, std/string, std/list, std/math,
+-- std/option, std/result only — no sibling or package imports), so the
+-- browser WASM runtime needs no installed packages to run it: the same
+-- module runs in the CLI (render mode) and in the page (discord
+-- renderer.ail precedent). One Json string in, one fragment out.
+-- Artwork uses relative assets/*.webp paths; serve/export alongside site/assets.
+-- Untrusted content (user-injected artifact descriptions) is escaped.
+
+module render
+
+import std/json (Json, decode, getString, getNumber, getInt, getArray, getObject, asArray, asString, asNumber, get)
+import std/string (replace, floatToStr, join, intToStr, contains)
+import std/list (map, foldl, length)
+import std/math (floor, intToFloat, floatToInt, cos, sin)
+import std/option (Option, Some, None, getOrElse)
+import std/result (Result, Ok, Err)
+
+-- ============================================================
+-- Escaping (every untrusted string passes through here)
+-- ============================================================
+
+export pure func escapeHtml(s: string) -> string
+tests [("<b>", "&lt;b&gt;"), ("safe", "safe"), ("a&\"b", "a&amp;&quot;b")]
+{
+  replace(replace(replace(replace(s, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
+}
+
+-- One decimal: positions, probabilities.
+export pure func fmt1(v: float) -> string {
+  let t = floatToInt(v * 10.0)
+  "${intToStr(t / 10)}.${intToStr(if t < 0 then (0 - t) % 10 else t % 10)}"
+}
+
+-- ============================================================
+-- World rendering
+-- ============================================================
+
+pure func soulColor(soul: string) -> string =
+  if soul == "wary" then "#a0aeb9"
+  else if soul == "bold" then "#e73c17"
+  else if soul == "paranoid" then "#dce3e8"
+  else if soul == "curious" then "#dce3e8"
+  else "#a0aeb9"
+
+-- Asset names are selected from fixed palettes; untrusted descriptions remain titles.
+pure func kindShape(id: string, kind: string, desc: string, x: float, y: float) -> string {
+  let shape = if kind == "tree" then
+    "<ellipse cy=\"1.5\" rx=\"3.7\" ry=\"1.3\" fill=\"#2c3e50\" opacity=\".2\"/><path d=\"M-.5 1 L-.25 -3 .3 -3 .65 1Z\" fill=\"#526677\"/><path d=\"M0 -1 L-1.3 -2 M.1 -2 L1.4 -3\" stroke=\"#526677\" stroke-width=\".4\"/><path d=\"M-2 -1.5 C-5 -2 -3.3 -5 -1.9 -4.7 C-2.3 -7 1 -7.5 1.8 -5.3 C4 -5.6 4.3 -2.6 2.5 -2 C1.8 -.5 -.7 -1 -2 -1.5Z\" fill=\"#526677\"/><path d=\"M-2.5 -3 Q-3 -4.6 -1.3 -4.2 Q-.9 -6.8 1.1 -5 Q3 -5 2.6 -3.6 Q.5 -4.1 -.3 -2.8Z\" fill=\"#a0aeb9\"/>"
+  else if kind == "path" then
+    "<path d=\"M-5 -.5 Q-2 -2 .5 -.2 T5 .3 L5 1.7 Q2 2 .2 1.3 T-5 1Z\" fill=\"#a0aeb9\"/><path d=\"M-3 -.1 l.15 .05 M-2 .4 l.15 .05 M-1 .1 l.15 .05 M1 .7 l.15 .05 M2 1 l.15 .05 M3 .6 l.15 .05\" stroke=\"#526677\" stroke-width=\".35\" stroke-linecap=\"round\"/>"
+  else if kind == "food" then
+    "<ellipse cy=\"1\" rx=\"2.6\" ry=\"1.1\" fill=\"#2c3e50\" opacity=\".3\"/><path d=\"M-2.4 -.2 Q0 -1.4 2.4 -.2 L1.8 1 Q0 2 -1.8 1Z\" fill=\"#526677\"/><ellipse rx=\"2.35\" ry=\".9\" fill=\"#dce3e8\"/><circle cx=\"-.8\" cy=\"-.2\" r=\".6\" fill=\"#e73c17\"/><circle cx=\".7\" cy=\"-.1\" r=\".6\" fill=\"#bd3012\"/><path d=\"M-.2 -.3 q.3 -1.5 1 -.8\" stroke=\"#526677\" stroke-width=\".3\" fill=\"none\"/><text y=\"3\" text-anchor=\"middle\" fill=\"#2c3e50\">Fruit bowl</text>"
+  else if kind == "water" then
+    "<ellipse cy=\".4\" rx=\"3.1\" ry=\"1.9\" fill=\"#526677\"/><ellipse rx=\"2.8\" ry=\"1.65\" fill=\"#a0aeb9\"/><ellipse cy=\"-.2\" rx=\"2.35\" ry=\"1.1\" fill=\"#a0aeb9\"/><path d=\"M-1.5 -.3 Q-.5 -.7 .5 -.3\" stroke=\"#ffffff\" stroke-width=\".2\" fill=\"none\"/><text y=\"3\" text-anchor=\"middle\" fill=\"#2c3e50\">Spring</text>"
+  else if kind == "toilet" then
+    "<path d=\"M-2.8 -.7 L0 -2 2.8 -.7 2.4 1.3 0 2.1 -2.4 1.3Z\" fill=\"#526677\"/><path d=\"M-2.5 -.8 L0 .3 2.5 -.8 M0 .3 V2\" fill=\"none\" stroke=\"#a0aeb9\" stroke-width=\".3\"/><ellipse cy=\"-.7\" rx=\"1.5\" ry=\".7\" fill=\"#2c3e50\"/><path d=\"M-.6 -.6 q-.2 -.6 .3 -.7 q-.1 -.6 .4 -.7 q.7 .5 .4 1.3Z\" fill=\"#526677\"/><text y=\"3.7\" text-anchor=\"middle\" fill=\"#2c3e50\">Compost</text>"
+  else if kind == "blob" then
+    "<path d=\"M-.45 .9 L-.3 -.7 Q0 -1 .3 -.7 L.5 .9Z\" fill=\"#dce3e8\"/><path d=\"M-1.5 -.45 C-1.35 -2.4 1.35 -2.4 1.5 -.45 Q0 .1 -1.5 -.45Z\" fill=\"url(#mushroom)\"/><path d=\"M-1.25 -.42 Q0 .05 1.25 -.42\" fill=\"none\" stroke=\"#dce3e8\" stroke-width=\".12\"/><ellipse cx=\"-.5\" cy=\"-1.15\" rx=\".22\" ry=\".1\" fill=\"#dce3e8\" opacity=\".5\"/>"
+  else if kind == "puff" then
+    "<path d=\"M0 .5 Q.8 -.9 .2 -1.9 Q-1.2 -1.8 -.35 -.85\" fill=\"#526677\"/><circle cx=\"-.7\" cy=\"-.3\" r=\".68\" fill=\"url(#berry)\"/><circle cx=\".55\" cy=\"-.65\" r=\".7\" fill=\"url(#berry)\"/><circle cx=\"0\" cy=\".35\" r=\".72\" fill=\"url(#berry)\"/><path d=\"M-.35 -.85 l.2 -.18 M.75 -1.1 l.18 -.08 M-.25 .02 l.16 -.1\" stroke=\"#dce3e8\" stroke-width=\".13\" stroke-linecap=\"round\"/>"
+  else if kind == "shard" then
+    "<path d=\"M-1.3 -.5 L.8 -1.25 1.4 .45 -.7 1.2Z\" fill=\"url(#metal)\" stroke=\"#526677\" stroke-width=\".08\"/><path d=\"M-1.3 -.5 L-.7 1.2 -.4 .55 -.95 -.6 M.8 -1.25 L.55 -.55 -1 -.05\" fill=\"#dce3e8\"/><path d=\"M.1 -.15 l.7 -.3 -.2 .7 -.6 .1Z\" fill=\"#526677\" opacity=\".8\"/>"
+  else if kind == "spike" then
+    "<path d=\"M-1.6 .55 L-.7 -.15 -.9 -1.2 -.15 -.55 .3 -1.8 .7 -.55 1.45 -.9 1.05 .3 1.6 .8Z\" fill=\"url(#thorn)\"/><path d=\"M-.8 .5 L.3 -1.4 .25 .4 1.1 .65Z\" fill=\"#a0aeb9\" opacity=\".7\"/>"
+  else
+    "<path d=\"M-1.4 .55 C-2 -.1 -.7 -1.7 .1 -1.55 C1.2 -1.6 1.9 -.1 1.25 .65 C.5 1.3 -.9 1.1 -1.4 .55Z\" fill=\"url(#stone)\"/><path d=\"M-1.05 -.35 Q-.5 -1.1 .2 -1.08\" fill=\"none\" stroke=\"#dce3e8\" stroke-opacity=\".45\" stroke-width=\".14\" stroke-linecap=\"round\"/>"
+  "<g class=\"world-entity\" transform=\"translate(${fmt1(x)} ${fmt1(y)})\"><title>${escapeHtml(id)}: ${escapeHtml(desc)}</title><ellipse cy=\".95\" rx=\"1.65\" ry=\".6\" fill=\"#2c3e50\" opacity=\".24\"/>${shape}</g>"
+}
+
+-- Sixteen pre-rendered yaw angles. Negative and wrapped headings stay in range.
+pure func spriteColumn(heading: float) -> int
+ensures { result >= 0, result < 16 }
+tests [(0.0, 0), (1.0, 2), (-1.0, 13), (7.0, 1)]
+{
+  let n = floatToInt(floor(heading * 16.0 / 6.283185307179586));
+  ((n % 16) + 16) % 16
+}
+
+pure func spriteLayer(asset: string, column: int, extra: string) -> string =
+  "<svg class=\"noul-sprite ${extra}\" x=\"-4.2\" y=\"-4.7\" width=\"8.4\" height=\"8.4\" viewBox=\"${intToStr(column * 128)} 0 128 128\" overflow=\"hidden\"><image href=\"assets/${asset}-walk.webp?v=ailang-brand-10\" width=\"2048\" height=\"640\"/></svg>"
+
+pure func creatureSvg(id: string, name: string, soul: string, x: float, y: float,
+                       heading: float, energy: float, deliberating: bool, thought: string, alive: bool) -> string = {
+  let asset = if soul == "wary" then "wary" else if soul == "paranoid" then "paranoid" else if soul == "curious" then "curious" else "bold"
+  let labelX = if x < 7.0 then 7.0 - x else if x > 53.0 then 53.0 - x else 0.0
+  let labelY = if y < 8.0 then 4.4 else -4.0
+  let column = spriteColumn(heading)
+  join("", ["<g class=\"noul ${if alive then "" else "dead"}\" role=\"button\" tabindex=\"0\" aria-label=\"Inspect ${escapeHtml(name)}\" data-id=\"${escapeHtml(id)}\" transform=\"translate(${fmt1(x)} ${fmt1(y)})\">",
+    "<ellipse class=\"selection-marker\" cx=\"0\" cy=\"1.5\" rx=\"2.35\" ry=\".85\" fill=\"none\" stroke=\"#bd3012\" stroke-width=\".13\"/>",
+    "<ellipse class=\"noul-shadow\" cx=\"0\" cy=\"1.3\" rx=\"1.7\" ry=\".6\" fill=\"#2c3e50\" opacity=\".27\"/>",
+    spriteLayer(asset, column, "sprite-a"), spriteLayer(asset, column, "sprite-b"),
+    "<circle class=\"noul-hit\" r=\"2.9\" fill=\"transparent\"/>",
+    "<circle class=\"deliberating\" r=\"3.2\" fill=\"none\" stroke=\"#e73c17\" stroke-width=\".12\" stroke-dasharray=\".1 .8\" opacity=\"${if deliberating then "1" else "0"}\"/>",
+    thoughtBubble(thought, if y < 8.0 then 4.4 else -4.0),
+    "<text class=\"noul-label\" x=\"${floatToStr(labelX)}\" y=\"${floatToStr(labelY)}\" text-anchor=\"middle\" fill=\"#ffffff\">${escapeHtml(name)}</text></g>"])
+}
+
+pure func concat3(a: string, b: string, c: string) -> string = "${a}${b}${c}"
+
+-- World Json string → one SVG fragment. Failures render a visible error
+-- fragment, never a silent blank (no silent fallbacks).
+export pure func renderWorld(worldJson: string) -> string =
+  match decode(worldJson) {
+    Err(m)   => box("err", "unparseable world: ${escapeHtml(m)}"),
+    Ok(j)    => {
+      let size = getOrElse(getNumber(j, "size"), 60.0)
+      let tick = getOrElse(getInt(j, "tick"), 0)
+      let phase = phaseOf(tick)
+      let ground = "${artDefs()}<g id=\"habitat-ground\" aria-hidden=\"true\"><rect width=\"60\" height=\"60\" fill=\"#f6f8fa\"/></g>"
+      let ents = match getArray(j, "entities") {
+        None      => ""
+        Some(list) => join("", map(\e. kindShape(getOrElse(getString(e, "id"), "?"),
+                                             getOrElse(getString(e, "kind"), "stone"),
+                                             getOrElse(getString(e, "desc"), ""),
+                                             getOrElse(numberAt(e, "x"), 0.0),
+                                             getOrElse(numberAt(e, "y"), 0.0)), list))
+      }
+      let cs = match getArray(j, "creatures") {
+        None      => ""
+        Some(list) => join("", map(\c. creatureSvg(getOrElse(getString(c, "id"), "?"),
+                                                  getOrElse(getString(c, "name"), "noul"),
+                                                  getOrElse(getString(c, "soul"), ""),
+                                                  getOrElse(numberAt(c, "x"), 0.0),
+                                                  getOrElse(numberAt(c, "y"), 0.0),
+                                                  getOrElse(numberAt(c, "heading"), 0.0),
+                                                  getOrElse(getNumber(c, "energy"), 0.5),
+                                                  getOrElse(getNumber(c, "deliberating"), 0.0) > 0.5,
+                                                  getOrElse(getString(c, "thought"), "explore"),
+                                                  getOrElse(getNumber(c, "health"), 1.0) > 0.0), list))
+      }
+      "<svg id=\"nouls-world\" viewBox=\"0 0 ${fmt1(size)} ${fmt1(size)}\" xmlns=\"http://www.w3.org/2000/svg\">${ground}<g id=\"world-entities\">${ents}</g><g id=\"world-creatures\">${cs}</g></svg>"
+    }
+  }
+
+-- Position helper: creature/entity pos is nested {x, y}.
+pure func numberAt(j: Json, key: string) -> Option[float] =
+  match getObject(j, "pos") {
+    None     => None,
+    Some(p)  => getNumber(p, key)
+  }
+
+-- 0 early day / 1 late day / 2 dusk (mirrors world.timeOfDay).
+pure func phaseOf(tick: int) -> int {
+  let f = intToFloat(tick) / 120.0
+  let cyc = (f - floor(f)) * 120.0
+  floatToInt(floor(cyc / 40.0))
+}
+
+pure func box(cls: string, text: string) -> string =
+  "<div class=\"err ${cls}\">${escapeHtml(text)}</div>"
+
+-- ============================================================
+-- Thought bubbles: a distribution as bars + the sampled roll
+-- ============================================================
+
+-- A distribution "[[{\"key\":\"a\",\"p\":0.7},...]" plus the roll that was
+-- drawn from it, rendered as labeled bars with a roll marker line at the
+-- roll's position — the demo's single-glance teaching of "sampled, not
+-- argmaxed". Returns "" for an empty distribution (caller omits the bubble).
+export pure func renderBars(distJson: string, roll: float) -> string =
+  match decode(distJson) {
+    Err(m)  => box("err", "unparseable distribution: ${escapeHtml(m)}"),
+    Ok(j)   => match asArray(j) {
+      None      => "",
+      Some(list) => {
+        let barOf = \kvp. {
+          let k = getOrElse(getString(kvp, "key"), "?")
+          let p = getOrElse(getNumber(kvp, "p"), 0.0)
+          let w = p * 100.0
+          concat3(
+            "<div class=\"bar-row\"><span class=\"bar-key\">${escapeHtml(k)}</span>",
+            "<div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:${fmt1(w)}%\"></div></div>",
+            "<span class=\"bar-p\">${escapeHtml(fmt1(p * 100.0))}%</span></div>")
+        }
+        let bars = join("", map(barOf, list))
+        let segments = join("", map(\v. "<span class=\"prob-segment\" data-action=\"${escapeHtml(getOrElse(getString(v, "key"), "?"))}\" style=\"width:${fmt1(getOrElse(getNumber(v, "p"), 0.0) * 100.0)}%\" title=\"${escapeHtml(getOrElse(getString(v, "key"), "?"))}\"></span>", list))
+        let marker = "<div class=\"roll-marker\" style=\"left:${fmt1(roll * 100.0)}%\" title=\"the roll landed here\">▲</div>"
+        "<div class=\"bars\">${bars}<div class=\"roll-track\">${segments}${marker}</div><div class=\"roll-note\">roll ${escapeHtml(fmt1(roll * 100.0))}% — sampled from the distribution, not argmax</div></div>"
+      }
+    }
+  }
+
+-- ============================================================
+-- Inspector panel: the percept + questions + answers, escaped
+-- ============================================================
+
+export pure func renderInspector(stateJson: string, note: string) -> string =
+  "<div class=\"inspector\"><div class=\"insp-note\">${escapeHtml(note)}</div><pre class=\"insp-state\">${escapeHtml(stateJson)}</pre></div>"
+
+-- ============================================================
+-- Self-check (the host gates on this before trusting the renderer —
+-- discord renderer.ail precedent)
+-- ============================================================
+
+export pure func selfCheck() -> string {
+  let probe = "{\"tick\":0,\"size\":60.0,\"creatures\":[{\"id\":\"pc\",\"name\":\"Probe Noul\",\"soul\":\"wary\",\"pos\":{\"x\":10.0,\"y\":10.0},\"heading\":0.5,\"energy\":0.5,\"deliberating\":0.0}],\"entities\":[{\"id\":\"pe\",\"kind\":\"blob\",\"desc\":\"a probe thing\",\"pos\":{\"x\":30.0,\"y\":30.0}}]}"
+  let svg = renderWorld(probe)
+  if contains(svg, "Probe Noul") && contains(svg, "a probe thing") then "probe-ok"
+  else "probe-failed"
+}
+
+-- Lighting matches the Blender woodland: warm upper-left highlights, cool shade.
+pure func artDefs() -> string = "<defs><radialGradient id=\"bare-ground\" cx=\".4\" cy=\".3\" r=\".9\"><stop stop-color=\"#a0aeb9\" stop-opacity=\".6\"/><stop offset=\"1\" stop-color=\"#526677\" stop-opacity=\".4\"/></radialGradient><radialGradient id=\"mushroom\" cx=\".3\" cy=\".15\" r=\".9\"><stop stop-color=\"#dce3e8\"/><stop offset=\".5\" stop-color=\"#a0aeb9\"/><stop offset=\"1\" stop-color=\"#526677\"/></radialGradient><radialGradient id=\"berry\" cx=\".3\" cy=\".2\" r=\".85\"><stop stop-color=\"#f29682\"/><stop offset=\".4\" stop-color=\"#e73c17\"/><stop offset=\"1\" stop-color=\"#bd3012\"/></radialGradient><linearGradient id=\"metal\" x2=\".8\" y2=\"1\"><stop stop-color=\"#dce3e8\"/><stop offset=\".5\" stop-color=\"#a0aeb9\"/><stop offset=\"1\" stop-color=\"#526677\"/></linearGradient><linearGradient id=\"thorn\" x2=\"1\" y2=\"1\"><stop stop-color=\"#a0aeb9\"/><stop offset=\"1\" stop-color=\"#526677\"/></linearGradient><radialGradient id=\"stone\" cx=\".3\" cy=\".15\" r=\".85\"><stop stop-color=\"#dce3e8\"/><stop offset=\".55\" stop-color=\"#a0aeb9\"/><stop offset=\"1\" stop-color=\"#526677\"/></radialGradient></defs>"
+
+
+pure func thoughtBubble(noun: string, y: float) -> string {
+  let word = if noun == "food" || noun == "water" || noun == "toilet" || noun == "danger" || noun == "rest" || noun == "unsure" || noun == "dead" || noun == "sleep" then noun else "explore";
+  "<g class=\"thought\" transform=\"translate(0 ${floatToStr(y)})\" pointer-events=\"none\"><title>Current need or intent: ${word}</title><rect x=\"-4\" y=\"-1.8\" width=\"8\" height=\"2.8\" rx=\"1.3\" fill=\"#ffffff\" fill-opacity=\".96\"/><circle cx=\"-.6\" cy=\"1.35\" r=\".28\" fill=\"#ffffff\"/><circle cx=\"-.2\" cy=\"1.95\" r=\".15\" fill=\"#ffffff\"/><text x=\"0\" y=\".15\" text-anchor=\"middle\" fill=\"#2c3e50\">${word}</text></g>"
+}

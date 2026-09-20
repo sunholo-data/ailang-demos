@@ -1,0 +1,21 @@
+-- Probe: does the inline `tests [...]` bug still exist on the installed binary?
+-- CLAUDE.md (historical note): inline tests on pure functions that call
+-- IMPORTED stdlib functions fail with "cannot apply non-function value: nil".
+-- Reproduce on v0.40.2-6-ge12e0335d before choosing a test strategy.
+
+module probe_tests
+import std/string (toUpper)
+import std/list (length)
+
+-- Case 1: pure function calling an imported stdlib function, with an inline test.
+export pure func shout(s: string) -> string
+  tests [
+    ("hey", "HEY")
+  ] {
+  toUpper(s)
+}
+
+-- Case 2: pure function calling an imported stdlib function with two args.
+export pure func sizeOf(s: string) -> int {
+  length([s])
+}

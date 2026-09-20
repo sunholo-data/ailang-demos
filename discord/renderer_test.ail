@@ -1,0 +1,59 @@
+-- Native tests for the browser WASM renderer (renderer.ail).
+--
+-- Offline only: pure event JSON → HTML fragment mapping, the same logic the
+-- WASM runtime executes in the browser page.
+
+module renderer_test
+
+import std/json (encode, jo, kv, js, jint, jb, getString, getInt, getBool)
+import std/string (contains)
+import std/result (isOk)
+import renderer (renderEvent, renderAll, escapeHtml)
+
+pure func isError[a, b](r: Result[a, b]) -> bool = match r { Err(_) => true, Ok(_) => false }
+
+test "escapeHtml escapes markup and quotes" {
+  escapeHtml("<b>") == "&lt;b&gt;" &&
+  escapeHtml("safe") == "safe" &&
+  escapeHtml("a&\"b") == "a&amp;&quot;b"
+}
+
+test "run lifecycle renders markers" {
+  contains(renderEvent(encode(jo([kv("type", js("RUN_STARTED")), kv("threadId", js("t")), kv("runId", js("r"))]))), "▶ run r") &&
+  contains(renderEvent(encode(jo([kv("type", js("RUN_FINISHED"))]))), "run finished") &&
+  contains(renderEvent(encode(jo([kv("type", js("RUN_ERROR")), kv("message", js("boom"))]))), "boom")
+}
+
+test "text deltas render escaped" {
+  let ev = encode(jo([kv("type", js("TEXT_MESSAGE_CONTENT")), kv("messageId", js("m")), kv("delta", js("<hi>"))]));
+  let html = renderEvent(ev);
+  contains(html, "&lt;hi&gt;") && not contains(html, "<hi>")
+}
+
+test "tool result renders a draft review action" {
+  let payload = jo([kv("ok", jb(true)),
+    kv("data", jo([kv("id", js("42")), kv("revision", jint(1)), kv("text", js("hello"))])),
+    kv("a2ui_operations", jo([]))]);
+  let toolResultEvent = encode(jo([kv("type", js("TOOL_CALL_RESULT")), kv("messageId", js("m")),
+    kv("toolCallId", js("draft")), kv("content", js(encode(payload)))]));
+  let html = renderEvent(toolResultEvent);
+  contains(html, "Review draft") && contains(html, "data-draft=\"42\"") && contains(html, "data-revision=\"1\"") &&
+  contains(html, "data-text=\"hello\"")
+}
+
+test "unknown and malformed events render empty or an error box" {
+  renderEvent("not json") != "" &&
+  renderEvent(encode(jo([kv("type", js("SOMETHING_ELSE"))]))) == ""
+}
+
+test "renderAll concatenates in order and renders nothing for empty input" {
+  renderAll([]) == "" &&
+  contains(renderAll([encode(jo([kv("type", js("RUN_STARTED")), kv("threadId", js("t")), kv("runId", js("r"))])),
+                      encode(jo([kv("type", js("RUN_FINISHED"))]))]), "run finished")
+}
+
+test "renderAll skips blank lines from recorded files" {
+  renderAll([""]) == "" &&
+  renderAll([encode(jo([kv("type", js("RUN_FINISHED"))])), ""]) == renderEvent(encode(jo([kv("type", js("RUN_FINISHED"))]))) &&
+  not contains(renderAll([encode(jo([kv("type", js("RUN_FINISHED"))])), ""]), "unparseable")
+}

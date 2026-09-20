@@ -1,0 +1,50 @@
+module character_test
+import host (profileFromDecision, addNoul)
+import world (World, Creature, mkCreature, demoWorld, worldToJson, worldOfJson, profileNumber, stepWorld, perceive)
+import souls (soulOf, personalityForState)
+import pkg/sunholo/decisions/decide (Decision, ScoreA, ChoiceA)
+import std/json (encode, decode, getNumber, getString, jo, kv, js, jint, jnum)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+import std/io (println, exit)
+
+pure func decision() -> Decision = {model: "synthetic-creation-test", id: "test", input_tokens: 0, output_tokens: 0, cost_usd: 0.0,
+ answers: [
+ {name:"caution",answer:ScoreA({score:0.0,confidence:1.0,probabilities:[{key:"0",p:1.0}]})},
+ {name:"threatTolerance",answer:ScoreA({score:2.0,confidence:1.0,probabilities:[{key:"2",p:1.0}]})},
+ {name:"deliberation",answer:ScoreA({score:1.0,confidence:1.0,probabilities:[{key:"1",p:1.0}]})},
+ {name:"speed",answer:ScoreA({score:2.0,confidence:1.0,probabilities:[{key:"2",p:1.0}]})},
+ {name:"stamina",answer:ScoreA({score:0.0,confidence:1.0,probabilities:[{key:"0",p:1.0}]})},
+ {name:"appearance",answer:ChoiceA({choice:"curious",confidence:1.0,probabilities:[{key:"curious",p:1.0}]})}
+ ]}
+pure func profile() -> string = match profileFromDecision("Pip", "Runs quickly but tires easily; a curious brave explorer.", decision()) {Err(_) => "", Ok(p) => encode(p)}
+pure func subject() -> Creature = {mkCreature("c5","Pip","curious",30.0,30.0,0.0) | profile:profile(), hunger:0.2, thirst:0.2, bowel:0.2, energy:0.8}
+pure func mappingWorks() -> bool = profileNumber(profile(),"speed",1.0,0.6,1.4)>1.39 && profileNumber(profile(),"stamina",1.0,0.6,1.4)<0.61 && soulOf(subject()).actThreshold<0.41
+pure func missingRejected() -> bool = match profileFromDecision("Pip","description",{decision() | answers:[]}) {Err(_) => true, Ok(_) => false}
+pure func bounded() -> bool = profileNumber("{\"speed\":999}","speed",1.0,0.6,1.4)<=1.4 && profileNumber("{\"stamina\":-4}","stamina",1.0,0.6,1.4)>=0.6
+pure func first(w: World) -> Creature = match w.creatures {c :: _ => c, [] => subject()}
+pure func movesFaster() -> bool = {
+ let c=subject(); let ordinary={c | profile:""};
+ let fast=first(stepWorld({demoWorld() | creatures:[c]},[]));
+ let slow=first(stepWorld({demoWorld() | creatures:[ordinary]},[]));
+ fast.pos.x>slow.pos.x && fast.energy<slow.energy && fast.profile==c.profile
+}
+pure func replaysProfile() -> bool = {
+ let c=subject(); let p=personalityForState(c.soul,encode(jo([kv("profile",js(c.profile)),kv("policyVersion",jint(2)),kv("urgency",jnum(0.0))])));
+ p.actThreshold==soulOf(c).actThreshold && p.presentAt==soulOf(c).presentAt && p.cadence==soulOf(c).cadence
+}
+pure func createsCreature() -> bool = match decode(addNoul(encode(worldToJson(demoWorld())),profile())) {Err(_) => false, Ok(j) => getOrElse(getString(j,"error"),"")==""}
+test "distribution maps to bounded features" { assert mappingWorks() }
+test "missing scores rejected" { assert missingRejected() }
+test "physical features cannot escape bounds" { assert bounded() }
+test "speed and stamina change physics" { assert movesFaster() }
+test "banked profile reconstructs policy" { assert replaysProfile() }
+test "host accepts mapped profile" { assert createsCreature() }
+
+export func main() -> () ! {IO} {
+ let c=subject();
+ let replay=personalityForState(c.soul,encode(perceive(c,demoWorld())));
+ let ok=mappingWorks() && missingRejected() && bounded() && movesFaster() && replaysProfile() && createsCreature() && replay.actThreshold==soulOf(c).actThreshold;
+ println(if ok then "PASS character mapping, physics and perception replay with runtime contracts" else "FAIL character mapping");
+ if ok then () else exit(1)
+}

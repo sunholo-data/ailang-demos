@@ -91,6 +91,69 @@ try {
   console.log('PASS exact MCP tool surface, concurrent requests and process lock');
   child.stdin.end();
   await new Promise(resolve=>child.once('exit',resolve)); child=null;
+
+  // ─── Live AG-UI HTTP/SSE endpoint: RunAgentInput → event stream → action round-trip.
+  // Offline by design: the run stores a draft; the action path ends at the policy gate
+  // (writes disabled, no token), proving the request/decode/apply chain end to end.
+  const server=spawn('python3',[path.join(root,'ailang-discord-server')],{cwd:root,env:{...env,DISCORD_SSE_PORT:'18089'},encoding:'utf8'});
+  try {
+    await new Promise((resolve,reject)=>{let n=0;const t=setInterval(()=>{
+      fetch('http://127.0.0.1:18089/healthz').then(r=>r.ok?resolve():Promise.reject()).catch(()=>{if(++n>60){clearInterval(t);reject(new Error('SSE server never became healthy'))}})
+    },200);setTimeout(()=>{clearInterval(t);reject(new Error('SSE server timeout'))},15000)});
+    const runBody={threadId:channelId,runId:'sse-test-1',messages:[{role:'user',id:'m1',content:'SSE round-trip check'}]};
+    const res=await fetch('http://127.0.0.1:18089/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(runBody)});
+    assert.equal(res.headers.get('content-type'),'text/event-stream; charset=utf-8');
+    const text=await res.text();
+    const frames=text.split('\n\n').filter(f=>f.startsWith('data: ')).map(f=>f.slice(6));
+    assert.equal(frames[frames.length-1],'[DONE]',text);
+    const events=frames.slice(0,-1).map(JSON.parse);
+    for(const e of events) EventSchemas.parse(e);
+    const started=events.find(e=>e.type==='RUN_STARTED');
+    assert.equal(started.threadId,runBody.threadId);
+    assert.equal(started.runId,runBody.runId);
+    assert.ok(events.find(e=>e.type==='TEXT_MESSAGE_CONTENT').delta.includes('SSE round-trip check'));
+    const draftResult=JSON.parse(events.find(e=>e.type==='TOOL_CALL_RESULT'&&e.toolCallId==='draft').content);
+    assert.equal(draftResult.ok,true);
+    validateOperations(draftResult.a2ui_operations);
+    const draftPayload=draftResult.data;
+    assert.equal(events[events.length-1].type,'RUN_FINISHED');
+    console.log('PASS live SSE endpoint: RunAgentInput → validated AG-UI stream');
+
+    const action={version:'v0.9.1',action:{name:'submitDraft',surfaceId:`draft-${draftPayload.id}`,sourceComponentId:'submit',timestamp:'2026-09-08T09:00:00Z',context:{draftId:draftPayload.id,revision:draftPayload.revision,text:'SSE edited'}}};
+    const actionRes=await fetch('http://127.0.0.1:18089/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(action)});
+    const actionOut=await actionRes.json();
+    assert.equal(actionOut.error.kind,'policy',JSON.stringify(actionOut));
+    console.log('PASS renderer/action round-trip over HTTP');
+
+    // The page's WASM renderer assets must be reachable (allowlist-checked).
+    const rendererSrc = await (await fetch('http://127.0.0.1:18089/renderer.ail')).text();
+    assert.ok(rendererSrc.includes('export pure func renderEvent'), rendererSrc.slice(0, 80));
+    const repl = await (await fetch('http://127.0.0.1:18089/wasm/ailang-repl.js')).text();
+    assert.ok(repl.includes('AilangREPL'));
+    const wasm = await fetch('http://127.0.0.1:18089/wasm/ailang.wasm');
+    assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+    assert.ok((await wasm.arrayBuffer()).byteLength > 1000);
+    console.log('PASS WASM renderer assets served (AILANG renders in-page)');
+  } finally {
+    server.kill('SIGTERM');
+  }
+
+  // ─── Headless WASM renderer: the real ailang.wasm + renderer.ail in Node.
+  const wasmTest = spawnSync('node', [path.join(root, 'tests', 'wasm_renderer_test.cjs')], {encoding: 'utf8', timeout: 120000});
+  assert.equal(wasmTest.status, 0, wasmTest.stdout + wasmTest.stderr);
+  console.log(wasmTest.stdout.trim().split('\n').pop());
+
+  // ─── Slash commands: signed interactions round-trip (Ed25519, pynacl).
+  const py = spawnSync('python3', [path.join(root, 'tests', 'interactions_test.py')],
+    {encoding: 'utf8', timeout: 180000, env: {...process.env, DEMO_ROOT: path.join(root)}});
+  const pyLines = (py.stdout + py.stderr).split('\n').filter(l => l.startsWith('PASS') || l.startsWith('SKIP'));
+  if (pyLines[0] && pyLines[0].startsWith('SKIP')) {
+    console.log('SKIP slash-command interactions: pynacl not installed (install to cover)');
+  } else {
+    assert.equal(py.status, 0, py.stdout + py.stderr);
+    for (const l of pyLines) console.log(l);
+    console.log('PASS slash-command interactions: Ed25519 handshake end to end');
+  }
   console.log('All offline integration checks passed. No live Discord API calls made.');
 } finally {
   if(child) child.kill('SIGTERM');

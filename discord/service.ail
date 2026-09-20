@@ -10,6 +10,7 @@ import std/result (Result, Ok, Err)
 import std/list (map, filter, foldl, length as listLength, take)
 import std/string (trim, length, split, join, startsWith)
 import pkg/sunholo/discord/client (DiscordError, DiscordMessage, DiscordChannel, identity, channels, readMessages, readMessage, sendMessage, validId, messageBody, messageJson, parseMessages, errorJson, problem)
+import pkg/sunholo/discord/interactions (commandDefinition, commandOption, registerCommands)
 import pkg/sunholo/a2ui/protocol_v091 (reviewSurface, decodeAction)
 
 export type Config = {guildId: string, userId: string, channelIds: [string], writeChannels: [string], writes: bool}
@@ -232,6 +233,23 @@ export func submitDraft(draftId: string, revision: int, text: string) -> Json ! 
         }
       }
   }
+
+-- Register the demo's global slash-command set on the bot application. The
+-- application ID is the bot's own user ID (users/@me). Generic: the host
+-- dispatches any command's text option to the agent flow.
+export func registerDemoCommands() -> Json ! {Net, Env} = match token() {
+  Err(e) => apiFail(e), Ok(t) => match identity(t) {
+    Err(e) => apiFail(e), Ok(me) => {
+      let appId = getOrElse(getString(me, "id"), "");
+      let defs = [
+        commandDefinition("agent", "Ask the AILANG agent a question", [commandOption("text", "What to ask", true)]),
+        commandDefinition("agent-help", "What the agent can do", [])];
+      match registerCommands(t, appId, defs) {
+        Err(e) => apiFail(e), Ok(j) => ok(j)
+      }
+    }
+  }
+}
 
 export func submitAction(raw: string) -> Json ! {FS, Net, Env, Clock} = match decodeAction(raw) {
   Err(e) => fail("protocol", e), Ok(a) => {
