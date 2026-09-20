@@ -111,8 +111,15 @@
   .card--linkedin::before { background: linear-gradient(90deg, var(--primary), var(--ai-orange)); }
   .card--linkedin .card-icon { background: var(--primary-faded); color: var(--primary); }
 
+  .section img { max-width: 100%; height: auto; }
+
   @media (max-width: 900px) { .key-bar { padding: 8px 20px; flex-wrap: wrap; } }
-  @media (max-width: 560px) { .key-bar { flex-direction: column; align-items: stretch; } .key-bar input { flex: 1; } }
+  @media (max-width: 560px) {
+    .key-bar { flex-direction: column; align-items: stretch; }
+    .key-bar input { flex: 1; }
+    .header { flex-wrap: wrap; height: auto; }
+    .header-right { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
