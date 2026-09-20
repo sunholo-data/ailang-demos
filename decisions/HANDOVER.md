@@ -1,3 +1,11 @@
+## Public browser release update (supersedes relay notes below)
+
+The current UI uses `site/transport.js` to call OpenRouter directly with the
+visitor's key. WASM host adapters prepare typed requests and parse/sample replies;
+network waiting does not occupy the worker. No Studio API is needed. The public
+artifact uses its own pinned v0.40.2 runtime and registry decisions@0.4.0 dependency.
+See README.md and PUBLISHING.md for build commands, spending semantics and checks.
+
 ## Current update — AILANG branding and player-created Nouls (2026-09-20)
 
 Preview build `ailang-11`. Official AILANG SVG, locally hosted Montserrat and

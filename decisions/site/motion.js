@@ -25,6 +25,7 @@ class NoulMotion {
       s.toX=c.pos.x;s.toY=c.pos.y;s.toH=s.h+this.angleDelta(s.h,c.heading);
       s.dead=c.status==='dead';s.distance=distance;s.phaseStart=s.phase;
       s.phaseEnd=s.phase+distance/1.8; // One gait cycle per distance actually travelled.
+      s.held=this.root.querySelector(`#carried-art [data-carrier="${c.id}"]`);
       s.a=el.querySelector('.sprite-a');s.b=el.querySelector('.sprite-b');
       // patchSvg supplies canonical AILANG positions; restore current visual pose.
       this.paint(s,now);
@@ -37,6 +38,7 @@ class NoulMotion {
     s.x=s.fromX+(s.toX-s.fromX)*t;s.y=s.fromY+(s.toY-s.fromY)*t;
     s.h=s.fromH+(s.toH-s.fromH)*(turn*turn*(3-2*turn));
     s.phase=s.phaseStart+(s.phaseEnd-s.phaseStart)*t;
+    if(s.held)s.held.setAttribute('transform',`translate(${(s.x+2.3).toFixed(3)} ${(s.y-.5).toFixed(3)})`);
     s.el.setAttribute('transform',`translate(${s.x.toFixed(3)} ${s.y.toFixed(3)})`);
     const angle=((s.h/(Math.PI*2)%1)+1)%1*16;
     const column=Math.floor(angle),blend=angle-column;

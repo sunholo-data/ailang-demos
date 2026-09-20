@@ -142,11 +142,10 @@ ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
 # Deliberating Nouls — sunholo/decisions alife demo.
-# The AILANG modules run in-page via the shared wasm/ runtime; the decisions
-# package is vendored from the sibling ailang-packages checkout (0.4.0 is a
-# local path dep, not on the registry yet). See decisions/BROWSER_VALIDATION.md
-# for the Worker host contract and runtime evidence.
-mkdir -p "$SITE/decisions"
+# The public build uses a pinned runtime; local preview uses the shared runtime.
+# Resolve decisions/ailang.lock before starting this preview.
+mkdir -p "$SITE/decisions/wasm"
+cp "$REPO_ROOT/wasm/ailang.wasm" "$REPO_ROOT/wasm/wasm_exec.js" "$SITE/decisions/wasm/"
 for f in world.ail souls.ail render.ail bank.ail oracle.ail host.ail; do
   [ -f "$REPO_ROOT/decisions/$f" ] && cp "$REPO_ROOT/decisions/$f" "$SITE/decisions/"
 done
@@ -159,7 +158,7 @@ if [ -d "$REPO_ROOT/decisions/bank" ]; then
   mkdir -p "$SITE/decisions/bank"
   cp "$REPO_ROOT/decisions/bank/"*.jsonl "$SITE/decisions/bank/" 2>/dev/null || true
 fi
-DECISIONS_PKG="$REPO_ROOT/../ailang-packages/packages/decisions"
+DECISIONS_PKG="${AILANG_CACHE:-$HOME/.ailang/cache/registry}/sunholo/decisions/0.4.0"
 if [ -f "$DECISIONS_PKG/decide.ail" ]; then
   mkdir -p "$SITE/decisions/ailang/pkg/sunholo/decisions"
   cp "$DECISIONS_PKG/decide.ail" "$SITE/decisions/ailang/pkg/sunholo/decisions/"

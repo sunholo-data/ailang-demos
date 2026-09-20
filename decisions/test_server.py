@@ -1,5 +1,6 @@
 """Relay boundaries: run python3 -m unittest discover -s decisions -p test_server.py."""
 import io
+import base64
 import json
 import unittest
 import threading
@@ -92,5 +93,99 @@ class RelayTests(unittest.TestCase):
             self.assertEqual(json.loads(run.call_args.kwargs['input'])['operation'],'character')
         self.assertEqual(request.response[0],200)
         self.assertEqual(serve.SESSIONS['session']['spent'],0.002)
+
+class ImageRelayTests(unittest.TestCase):
+    setUp = RelayTests.setUp
+    def image_request(self, **overrides):
+        request=Request({'session':'session','id':'introduced-0-9','description':'A glowing stone',**overrides})
+        request.path='/decisions/api/image'
+        return request
+    def result(self, cost=0.014):
+        return {'data':[{'b64_json':base64.b64encode(b'\x89PNG\r\n\x1a\nfixture').decode(),'media_type':'image/png'}], 'usage':{'cost':cost}}
+    def test_image_uses_fixed_model_transport_and_shared_budget(self):
+        request=self.image_request()
+        with patch.object(serve.item_art,'generate',return_value=self.result()) as generate:
+            request.do_POST()
+        generate.assert_called_once_with('A glowing stone','test-only-key')
+        self.assertEqual(request.response[0],200)
+        self.assertTrue(request.response[1]['ok'])
+        self.assertEqual(request.response[1]['model'],'black-forest-labs/flux.2-klein-4b')
+        self.assertEqual(request.response[1]['sessionCost'],0.014)
+        self.assertNotIn('test-only-key',json.dumps(request.response))
+    def test_repeat_item_is_not_billed_twice(self):
+        with patch.object(serve.item_art,'generate',return_value=self.result()) as generate:
+            self.image_request().do_POST();self.image_request().do_POST()
+            self.assertEqual(generate.call_count,1)
+        self.assertEqual(serve.SESSIONS['session']['spent'],0.014)
+    def test_picture_needs_enough_remaining_budget(self):
+        serve.SESSIONS['session']['spent']=0.09
+        request=self.image_request()
+        with patch.object(serve.item_art,'generate') as generate:
+            request.do_POST();generate.assert_not_called()
+        self.assertEqual(request.response[0],402)
+    def test_collision_retry_has_not_called_provider(self):
+        lock=threading.Lock();lock.acquire();serve.SESSIONS['session']['lock']=lock
+        try:
+            request=self.image_request()
+            with patch.object(serve.item_art,'generate') as generate:
+                request.do_POST();generate.assert_not_called()
+            self.assertEqual(request.response[0],429)
+            self.assertTrue(request.response[1]['retryable'])
+        finally:lock.release()
+    def test_bad_image_still_accounts_for_billed_call(self):
+        result=self.result();result['data'][0]['media_type']='image/svg+xml'
+        request=self.image_request()
+        with patch.object(serve.item_art,'generate',return_value=result):request.do_POST()
+        self.assertFalse(request.response[1]['ok'])
+        self.assertEqual(serve.SESSIONS['session']['spent'],0.014)
+    def test_uncertain_timeout_stops_further_spend(self):
+        request=self.image_request()
+        with patch.object(serve.item_art,'generate',side_effect=TimeoutError('secret diagnostics')):request.do_POST()
+        self.assertFalse(request.response[1]['ok'])
+        self.assertEqual(serve.SESSIONS['session']['spent'],serve.SESSION_BUDGET)
+        self.assertNotIn('secret diagnostics',json.dumps(request.response))
+    def test_unknown_image_cost_stops_spend_but_returns_picture(self):
+        request=self.image_request()
+        with patch.object(serve.item_art,'generate',return_value=self.result(None)):request.do_POST()
+        self.assertTrue(request.response[1]['ok'])
+        self.assertEqual(serve.SESSIONS['session']['spent'],serve.SESSION_BUDGET)
+    def test_provider_rejection_is_not_charged_or_retried(self):
+        with patch.object(serve.item_art,'generate',side_effect=serve.HTTPError('url',400,'bad request',{},None)) as generate:
+            request=self.image_request();request.do_POST();self.image_request().do_POST()
+            self.assertEqual(generate.call_count,1)
+        self.assertFalse(request.response[1]['ok'])
+        self.assertEqual(serve.SESSIONS['session']['spent'],0)
+    def test_invalid_description_never_calls_provider(self):
+        request=self.image_request(description=' ')
+        with patch.object(serve.item_art,'generate') as generate:
+            request.do_POST();generate.assert_not_called()
+        self.assertEqual(request.response[0],400)
+
+class AssetRequest(serve.Handler):
+    def __init__(self, path, headers=None):
+        self.path=path;self.headers=headers or {};self.wfile=io.BytesIO();self.response_headers={}
+    def send_response(self, status):self.status=status
+    def send_header(self, name, value):self.response_headers[name]=value
+    def end_headers(self):pass
+
+class RuntimeCacheTests(unittest.TestCase):
+    def test_runtime_revalidation_and_rebuild(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory, patch.object(serve,'REPO',Path(directory)):
+            runtime=Path(directory)/'wasm';runtime.mkdir()
+            for name in ['ailang.wasm','wasm_exec.js']:
+                target=runtime/name;target.write_bytes(b'first runtime')
+                first=AssetRequest('/wasm/'+name);first.do_GET()
+                self.assertEqual(first.status,200)
+                self.assertEqual(first.response_headers['Cache-Control'],'public, no-cache')
+                tag=first.response_headers['ETag']
+                cached=AssetRequest('/wasm/'+name,{'If-None-Match':tag});cached.do_GET()
+                self.assertEqual(cached.status,304);self.assertEqual(cached.wfile.getvalue(),b'')
+                target.write_bytes(b'new rebuilt runtime')
+                changed=AssetRequest('/wasm/'+name,{'If-None-Match':tag});changed.do_GET()
+                self.assertEqual(changed.status,200)
+                self.assertNotEqual(changed.response_headers['ETag'],tag)
+                self.assertEqual(changed.wfile.getvalue(),b'new rebuilt runtime')
 
 if __name__=='__main__':unittest.main()

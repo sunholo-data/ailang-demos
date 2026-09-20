@@ -18,7 +18,7 @@ pure func urgentGate() -> bool = soulOf({subject() | thirst: 1.0}).actThreshold 
 pure func replayGates() -> bool = personalityForState("paranoid", "{\"policyVersion\":2,\"urgency\":1.0}").actThreshold < 0.3 && personalityForState("paranoid", "{}").actThreshold > 0.8
 pure func farCandidates() -> bool {
  let c=subject();
- let w={habitat(c) | entities: [{id: "far-player-water", kind: "stone", desc: "a distant jug of fresh water", pos: {x: 57.0, y: 57.0}}]};
+ let w={habitat(c) | entities: [{id: "far-player-water", kind: "stone", carrier:"", desc: "a distant jug of fresh water", pos: {x: 57.0, y: 57.0}}]};
  let qs=buildQuestions(soulOf(c),c,w);
  let inOptions=foldl(\found. \q. found || match q.q {Choice(_,opts) => foldl(\yes. \o. yes || o.key == "far-player-water",false,opts), _ => false},false,qs);
  inOptions && contains(encode(perceive(c,w)),"far-player-water")

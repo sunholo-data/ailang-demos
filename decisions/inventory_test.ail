@@ -1,0 +1,134 @@
+module inventory_test
+import world (World, Creature, Entity, Intent, PickUp, Drop, Destroy, Eat, Wander, Do, demoWorld, mkCreature, stepWorld, heldItems, availableItems, looseItems, inventoryValid, perceive, worldToJson, worldOfJson, intentToJson, intentOfJson, dist)
+import souls (actOnDecision, personalityOf, itemQuestions, inventoryBehavior)
+import pkg/sunholo/decisions/decide (Decision, ChoiceA, Choice)
+import std/list (length, map, filter, foldl)
+import std/json (encode, getArray, getObject)
+import std/option (getOrElse)
+import std/result (Ok, Err)
+import std/string (contains)
+import std/io (println, exit)
+
+pure func me() -> Creature = {mkCreature("c1","Wary","wary",20.0,20.0,0.0) | hunger:0.2,thirst:0.2,bowel:0.2}
+pure func item(id: string, x: float) -> Entity = {id:id,kind:"stone",desc:"a tiny ringing bell",carrier:"",pos:{x:x,y:20.0}}
+pure func habitat() -> World = {demoWorld() | creatures:[me()], entities:[item("introduced-bell",20.0),item("introduced-stone",21.0)]}
+pure func first(w: World) -> Creature = match w.creatures {c :: _ => c, [] => me()}
+pure func act(w: World, i: Intent) -> World = stepWorld(w,[{id:"c1",act:Do(i)}])
+pure func picked() -> World = act(habitat(),PickUp("introduced-bell"))
+pure func held(w: World) -> [Entity] = heldItems(first(w),w)
+pure func noItem(w: World, id: string) -> bool = length(filter(\e. e.id==id,w.entities))==0
+
+pure func oneItem() -> bool {
+ let w=act(picked(),PickUp("introduced-stone"));
+ length(held(w))==1 && length(w.entities)==2 && inventoryValid(w) &&
+ match held(w) {e :: _ => e.id=="introduced-bell", _ => false}
+}
+pure func follows() -> bool {
+ let w=act(picked(),Wander);
+ match held(w) {e :: _ => e.pos.x==first(w).pos.x && e.pos.y==first(w).pos.y, _ => false}
+}
+pure func dropping() -> bool {
+ let w=act(picked(),Drop);
+ length(held(w))==0 && length(w.entities)==2 && inventoryValid(w) &&
+ length(filter(\e. e.id=="introduced-bell" && dist(e.pos,first(w).pos)>2.0,w.entities))==1 &&
+ contains(encode(worldToJson(w)),"I put down a tiny ringing bell")
+}
+pure func pickupAgain() -> bool {
+ let dropped=act(picked(),Drop);
+ let bell=match filter(\e. e.id=="introduced-bell",dropped.entities) {e :: _ => e, _ => item("missing",0.0)};
+ let moved={dropped | creatures:[{first(dropped) | pos:bell.pos}]};
+ length(held(act(moved,PickUp(bell.id))))==1
+}
+pure func destroyed() -> bool {
+ let w=act(picked(),Destroy("introduced-bell"));
+ length(held(w))==0 && noItem(w,"introduced-bell") && inventoryValid(w) &&
+ contains(encode(worldToJson(w)),"I destroyed a tiny ringing bell")
+}
+pure func groundDestroyed() -> bool = noItem(act(habitat(),Destroy("introduced-bell")),"introduced-bell")
+pure func cannotReach() -> bool {
+ let far={habitat() | entities:[item("introduced-far",45.0)]};
+ let w=act(far,PickUp("introduced-far"));
+ length(held(w))==0 && first(w).pos.x>first(far).pos.x && length(act(far,Destroy("introduced-far")).entities)==1
+}
+pure func fixedScenery() -> bool {
+ let w={habitat() | entities:[item("water",20.0)]};
+ length(held(act(w,PickUp("water"))))==0 && length(act(w,Destroy("water")).entities)==1
+}
+pure func competingClaims() -> bool {
+ let w={habitat() | creatures:[me(),{me() | id:"c2",name:"Bold"}]};
+ let next=stepWorld(w,[{id:"c2",act:Do(PickUp("introduced-bell"))},{id:"c1",act:Do(PickUp("introduced-bell"))}]);
+ inventoryValid(next) && length(filter(\e. e.carrier=="c1",next.entities))==1 && length(filter(\e. e.carrier=="c2",next.entities))==0
+}
+pure func noStealing() -> bool {
+ let w={picked() | creatures:[first(picked()),{me() | id:"c2",name:"Bold"}]};
+ let theft=stepWorld(w,[{id:"c2",act:Do(PickUp("introduced-bell"))}]);
+ let damage=stepWorld(w,[{id:"c2",act:Do(Destroy("introduced-bell"))}]);
+ let eating=stepWorld(w,[{id:"c2",act:Do(Eat("introduced-bell"))}]);
+ length(filter(\e. e.id=="introduced-bell" && e.carrier=="c1",theft.entities))==1 &&
+ length(damage.entities)==2 && length(eating.entities)==2
+}
+pure func deathDrops() -> bool {
+ let w={picked() | creatures:[{first(picked()) | health:0.001,thirst:1.0}]};
+ let after=stepWorld(w,[]);
+ first(after).health==0.0 && length(held(after))==0 && length(after.entities)==2 && inventoryValid(after)
+}
+pure func observations() -> bool {
+ let w=picked();let p=perceive(first(w),w);
+ let inventory=getOrElse(getObject(p,"inventory"),p);
+ length(getOrElse(getArray(inventory,"held"),[]))==1 &&
+ contains(encode(p),"a tiny ringing bell") && length(looseItems(w))==1
+}
+pure func questions() -> bool {
+ let w=picked();
+ length(filter(\o. o.key=="pickup",inventoryBehavior(first(w),w)))==0 &&
+ length(filter(\o. o.key=="drop",inventoryBehavior(first(w),w)))==1 &&
+ length(filter(\q. q.name=="pickup_target",itemQuestions(first(w),w)))==0 &&
+ length(filter(\q. q.name=="destroy_target",itemQuestions(first(w),w)))==1 &&
+ length(filter(\o. o.key=="drop",inventoryBehavior(me(),habitat())))==0
+}
+pure func decision(mode: string) -> Decision = {
+ model:"synthetic-items",id:"item-test",input_tokens:0,output_tokens:0,cost_usd:0.0,
+ answers:[{name:"behavior",answer:ChoiceA({choice:mode,confidence:1.0,probabilities:[{key:mode,p:1.0}]})},
+ {name:"${mode}_target",answer:ChoiceA({choice:"introduced-bell",confidence:1.0,probabilities:[{key:"introduced-bell",p:0.6},{key:"introduced-stone",p:0.4}]})}]}
+pure func sampledActions() -> bool {
+ let p=personalityOf("wary");
+ match (actOnDecision(decision("pickup"),p,0.5),actOnDecision(decision("destroy"),p,0.5),actOnDecision(decision("drop"),p,0.5)) {
+  (Ok(Do(PickUp(a))),Ok(Do(Destroy(b))),Ok(Do(Drop))) => a=="introduced-stone" && b=="introduced-stone",
+  _ => false
+ }
+}
+pure func roundtrip() -> bool = match worldOfJson(worldToJson(picked())) {
+ Ok(w) => encode(worldToJson(w))==encode(worldToJson(picked())), Err(_) => false
+}
+pure func conservation(n: int) -> bool
+ensures {result}
+{
+ let w=if n % 3==0 then act(picked(),Drop) else if n % 3==1 then act(picked(),PickUp("introduced-stone")) else act(picked(),Destroy("introduced-bell"));
+ inventoryValid(w) && length(w.entities)==(if n%3==0 || n%3==1 then 2 else 1)
+}
+pure func itemCodecs(id: string) -> bool
+ensures {result}
+{match (intentOfJson(intentToJson(PickUp(id))),intentOfJson(intentToJson(Destroy(id))),intentOfJson(intentToJson(Drop))) {
+ (Ok(PickUp(a)),Ok(Destroy(b)),Ok(Drop)) => a==id && b==id, _ => false
+}}
+
+test "one carried item at a time" {assert oneItem()}
+test "held item follows the Noul" {assert follows()}
+test "drop leaves an item beside the Noul" {assert dropping()}
+test "dropped items can be picked up again" {assert pickupAgain()}
+test "destroy carried item removes it permanently" {assert destroyed()}
+test "nearby ground item can be destroyed" {assert groundDestroyed()}
+test "distant item must be approached before handling" {assert cannotReach()}
+test "fixed habitat features cannot be picked up or destroyed" {assert fixedScenery()}
+test "simultaneous claims give an item to exactly one Noul" {assert competingClaims()}
+test "another Noul cannot steal destroy or eat held items" {assert noStealing()}
+test "death drops a held item" {assert deathDrops()}
+test "Jev perceives inventory and available objects" {assert observations()}
+test "choices respect free hands and available items" {assert questions()}
+test "item targets are sampled instead of argmax" {assert sampledActions()}
+test "inventory round trips through snapshots" {assert roundtrip()}
+export func main() -> () ! {IO} {
+ let ok=oneItem() && follows() && dropping() && pickupAgain() && destroyed() && groundDestroyed() && cannotReach() && fixedScenery() && competingClaims() && noStealing() && deathDrops() && observations() && questions() && sampledActions() && roundtrip();
+ println(if ok then "PASS item lifecycle, capacity, ownership, movement, death, perception, policy and snapshots" else "FAIL item checks");
+ if ok then () else exit(1)
+}

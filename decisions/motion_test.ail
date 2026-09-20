@@ -11,7 +11,7 @@ pure func subject() -> Creature = {
 }
 pure func habitat(c: Creature) -> World = {
   tick: 0, size: 60.0, creatures: [c],
-  entities: [{id: "threat", kind: "stone", desc: "a nearby stranger", pos: {x: 40.0, y: 30.0}}]
+  entities: [{id: "threat", kind: "stone", carrier:"", desc: "a nearby stranger", pos: {x: 40.0, y: 30.0}}]
 }
 pure func first(w: World) -> Creature = match w.creatures { c :: _ => c, [] => subject() }
 pure func rests() -> bool {

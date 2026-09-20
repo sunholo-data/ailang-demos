@@ -2,19 +2,33 @@
 const $ = s => document.querySelector(s);
 let pendingArtwork=null, imageGeneration=0, imageBusy=false;
 const artwork=new Map();
+const artJobs=new Map();
+let artworkWorld=0, artQueue=Promise.resolve();
+let socialViewKey='';
 const motion = new NoulMotion($('#world'));
-const colors = {wary:'#314352',bold:'#e73c17',paranoid:'#526677',curious:'#a0aeb9'};
+const publicTransport = new NoulsTransport((fn,...args)=>call(fn,...args));
+const colors = {wary:'#287a63',bold:'#bd3012',paranoid:'#7953a4',curious:'#2474a8'};
 const flavors = {wary:'A careful step, then another.',bold:'A little courage goes a long way.',paranoid:'Something might be watching.',curious:'There is always something to discover.'};
 let primary, liveKey='', liveSession='', sessionBudget=0, sessionCost=0;
 let world, mode='live', selected='c2', rows=[], activeRow=0, review;
 let running=false, busy=false, placing=false, epoch=0, evidence='state', liveCount=0;
+let addingItem=false, resumeAfterItem=false, committingItem=false;
 let livePending=false, resolvedDecision=null, lastLiveId=null;
+function loadingProgress(message,completed){
+  $('#runtime').textContent=message;
+  const progress=$('#loading-progress');if(!progress||$('#habitat-loading').classList.contains('failed'))return;
+  const stage=Math.max(0,Math.min(10,completed||0));
+  progress.value=Math.max(progress.value,stage<=1?stage*35:35+(stage-1)*65/9);
+  $('#loading-stage').textContent=message;
+  $('#loading-count').textContent=`${Math.round(progress.value)}% ready`;
+}
+$('#loading-retry').onclick=()=>location.reload();
 function createClient() {
-  const worker = new Worker('worker.js');
+  const worker = new Worker('worker.js?v=ailang-21');
   const pending = new Map();
   let nextId=0;
   worker.onmessage=({data})=>{
-    if(data.progress){$('#runtime').textContent=data.progress;return;}
+    if(data.progress){loadingProgress(data.progress,data.completed);return;}
     const request=pending.get(data.id);
     if(!request)return;
     clearTimeout(request.timer);pending.delete(data.id);
@@ -48,7 +62,7 @@ function startWorker() {
   primary=createClient();livePending=false;resolvedDecision=null;
 }
 async function call(fn,...args){const res=JSON.parse(await rpc(fn,args));if(!res.ok)throw new Error(res.error);return res;}
-function fail(error){running=false;busy=false;$('#connect-live').disabled=false;document.querySelectorAll('[data-mode]').forEach(b=>b.disabled=false);$('#play').textContent='Resume';$('#status').textContent=error.message+(mode==='live'?' Live session paused. You can retry, or use offline exploration / import a CLI-recorded bank.':'');$('.observation').classList.remove('thinking');}
+function fail(error){resumeAfterItem=false;const loader=$('#habitat-loading');if(loader){loader.classList.add('failed');$('#loading-stage').textContent='The habitat couldn’t wake up.';$('.loading-hint').textContent='Try loading it again to welcome the Nouls.';$('#loading-retry').hidden=false;}running=false;busy=false;$('#connect-live').disabled=false;document.querySelectorAll('[data-mode]').forEach(b=>b.disabled=false);$('#play').textContent='Resume';$('#status').textContent=error.message+(mode==='live'?' Live session paused. You can retry, or use offline exploration / import a CLI-recorded bank.':'');$('.observation').classList.remove('thinking');}
 // Keep the rendered artwork mounted: moving a Noul must not reload its image.
 function patchSvg(current, next) {
   for (const attr of [...current.attributes]) {
@@ -72,7 +86,9 @@ function patchSvg(current, next) {
   });
 }
 function draw(frame) {
+  const previousWorld=world;
   world=frame.world;
+  showItemActivity(previousWorld);
   const current=$('#nouls-world');
   if (!current) $('#world').innerHTML=frame.svg;
   else {
@@ -89,14 +105,24 @@ function draw(frame) {
   $('#phase').textContent=['Early day','Late day','Dusk'][Math.floor(world.tick%120/40)];
   highlight();
 }
-function highlight(){document.querySelectorAll('.noul').forEach(el=>el.classList.toggle('selected',el.dataset.id===selected));}
+function highlight(){
+  document.querySelectorAll('.noul').forEach(el=>{
+    const c=world.creatures.find(c=>c.id===el.dataset.id);if(!c)return;
+    el.classList.toggle('selected',c.id===selected);
+    el.style.setProperty('--creature',colors[c.soul]);
+  });
+  const c=world.creatures.find(c=>c.id===selected);
+  const held=world.entities.find(e=>e.carrier===selected);
+  $('#carrying-note').textContent=held?`Carrying: ${held.desc}`:'Carrying: nothing · room for one item';
+  if(c)$('.observation').style.setProperty('--creature',colors[c.soul]);
+}
 function tabs(){const root=$('#creature-tabs');root.replaceChildren();for(const c of world.creatures){const b=document.createElement('button');b.textContent=c.profile?c.name:c.soul[0].toUpperCase()+c.soul.slice(1);b.style.setProperty('--creature',colors[c.soul]);b.setAttribute('aria-pressed',c.id===selected);b.onclick=()=>{if(!busy)selectCreature(c.id).catch(fail);};root.append(b);}}
 async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();
- const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}}
+ const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;updateSocial();$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}updateSocial();}
 function showEvidence(){if(!review)return;const raw=review.row[evidence];try{$('#evidence').textContent=JSON.stringify(JSON.parse(raw),null,2);}catch{$('#evidence').textContent=raw;}}
-function actionLabel(action){if(action.tag==='Do'){const target=review ? JSON.parse(review.row.state).nearby?.find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+target.desc : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
-async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();}
-function renderLedger(){const root=$('#timeline');root.replaceChildren();if(!rows.length){const empty=document.createElement('p');empty.className='ledger-empty';empty.textContent='The next decision is unwritten. Connect Jev and watch this fill with real judgments.';root.append(empty);}rows.slice(-80).forEach((r,offset)=>{const i=Math.max(0,rows.length-80)+offset;const b=document.createElement('button');b.className=i===activeRow?'active':'';const small=document.createElement('small');small.textContent=`Tick ${r.tick} / ${r.source==='synthetic'?'Synthetic fixture':'Recorded decision'}`;const strong=document.createElement('strong');strong.textContent=world.creatures.find(c=>c.id===r.creatureId)?.name||`${r.soul} Noul`;const sub=document.createElement('small');sub.textContent=`Roll ${Math.round(r.roll*100)}% · inspect decision`;b.append(small,strong,sub);b.onclick=async()=>{try{if(busy)return;running=false;$('#play').textContent='Resume';selected=r.creatureId;await selectCreature(selected);await showRow(i);}catch(e){fail(e)}};root.append(b)});$('#bank-count').textContent=`${rows.length} banked decision${rows.length===1?'':'s'}`;const total=rows.filter(r=>r.source!=='synthetic').reduce((sum,r)=>sum+(JSON.parse(r.decision).cost_usd||0),0);$('#cost').textContent=`Recorded cost $${total.toFixed(6)} / replay $0`;$('#download').disabled=!rows.length;}
+function actionLabel(action){if(action.tag==='Do'){const target=review ? [...(JSON.parse(review.row.state).nearby||[]),...(JSON.parse(review.row.state).others||[]),...(JSON.parse(review.row.state).map||[])].find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+(target.name||target.desc) : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
+async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();updateSocial();}
+function renderLedger(){const root=$('#timeline');root.replaceChildren();if(!rows.length){const empty=document.createElement('p');empty.className='ledger-empty';empty.textContent='The next decision is unwritten. Connect Jev and watch this fill with real judgments.';root.append(empty);}rows.slice(-80).forEach((r,offset)=>{const i=Math.max(0,rows.length-80)+offset;const b=document.createElement('button');b.className=i===activeRow?'active':'';const small=document.createElement('small');small.textContent=`Tick ${r.tick} / ${r.source==='synthetic'?'Synthetic fixture':'Recorded decision'}`;const strong=document.createElement('strong');strong.textContent=world.creatures.find(c=>c.id===r.creatureId)?.name||`${r.soul} Noul`;const sub=document.createElement('small');sub.textContent=`Roll ${Math.round(r.roll*100)}% · inspect decision`;b.append(small,strong,sub);b.onclick=async()=>{try{if(busy||addingItem)return;running=false;$('#play').textContent='Resume';selected=r.creatureId;await selectCreature(selected);await showRow(i);}catch(e){fail(e)}};root.append(b)});$('#bank-count').textContent=`${rows.length} banked decision${rows.length===1?'':'s'}`;const total=rows.filter(r=>r.source!=='synthetic').reduce((sum,r)=>sum+(JSON.parse(r.decision).cost_usd||0),0);$('#cost').textContent=`Recorded cost $${total.toFixed(6)} / replay $0`;$('#download').disabled=!rows.length;}
 async function watchDecision() {
   if(busy||!review)return;
   running=false;busy=true;
@@ -131,20 +157,21 @@ async function configure(next,key='',reset=false) {
     
   }
   if(mode==='live'){
-    const response=await fetch('api/status');
-    if(!response.ok)throw new Error('Live mode needs the Studio preview server. Offline exploration and recorded decisions are available here.');
+    const response=await publicTransport.request('api/status');
+    if(!response.ok)throw new Error('Unable to initialize browser transport.');
     const transport=await response.json();
-    if(!transport.available)throw new Error('Live relay awaits an approved session budget. Offline exploration remains available.');
+    if(!transport.available)throw new Error('Live transport is unavailable.');
     if(!liveSession||reset){
-      const sessionResponse=await fetch('api/session',{method:'POST'});
+      const sessionResponse=await publicTransport.request('api/session',{method:'POST'});
       const session=await sessionResponse.json();
       if(!session.ok)throw new Error(session.error);
       liveSession=session.session;sessionBudget=session.budget;sessionCost=0;
     }
     liveKey=key;
+    await rpc('configure',[],{mode:'simulate'});
   } else liveKey='';
   if(!world||reset){draw(await call('init'));liveCount=0;}
-  $('#runtime').textContent=liveKey?'Jev live via Studio':'Habitat ready · connect Jev';$('#connect-live').textContent=liveKey?'Jev connected · key settings':'Connect Jev';
+  $('#runtime').textContent=liveKey?'Jev live · direct from your browser':'Habitat ready · connect Jev';$('#connect-live').textContent=liveKey?'Jev connected · key settings':'Connect Jev';
   document.querySelectorAll('[data-mode]').forEach(button=>{
     button.setAttribute('aria-pressed',button.dataset.mode===mode);
     if(button.dataset.mode==='live')button.textContent=mode==='live'?'Live connected':'Connect live';
@@ -156,10 +183,10 @@ async function configure(next,key='',reset=false) {
   $('#play').disabled=false;$('#reset').disabled=false;
   $('#play').textContent='Pause';
   await selectCreature(selected);
-  running=true;
+  running=!addingItem;syncItemControls();
 }
-// The private preview executes the same AILANG oracle in the CLI.
-// Browser WASM continues physics while the server waits for Net.
+// AILANG prepares/parses the decision; browser fetch carries the bytes.
+// The worker is free to advance physics while OpenRouter responds.
 async function requestJudgment(id, snapshot, generation) {
   livePending=true;
   const started=Date.now();
@@ -168,21 +195,21 @@ async function requestJudgment(id, snapshot, generation) {
     if(generation===epoch)$('#decision-stage').textContent=`Waiting for a live judgment… ${Math.floor((Date.now()-started)/1000)}s`;
   },1000);
   try {
-    const response=await fetch('api/decision',{
+    const response=await publicTransport.request('api/decision',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},
       body:JSON.stringify({world:snapshot,id,completed:liveCount,session:liveSession}),
       signal:AbortSignal.timeout(45000)
     });
-    if(response.status===404)throw new Error('This server does not provide live AILANG judgments. Use the Studio preview server or import a recorded bank.');
     const result=await response.json();
     if(generation!==epoch){if(result.ok){rows.push(result.row);renderLedger();}return;}
     if(response.status===429&&result.retryable){$('#decision-stage').textContent=result.error;await new Promise(resolve=>setTimeout(resolve,1500));return;}
+    if(typeof result.sessionCost==='number')sessionCost=Math.max(sessionCost,result.sessionCost);
     if(!result.ok)throw new Error(result.error);
     rows.push(result.row);renderLedger();
     resolvedDecision={row:result.row,snapshot};
-    liveCount++;sessionCost=result.sessionCost;
-    $('#mode-note').textContent=`Live via Studio · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;
+    liveCount++;sessionCost=Math.max(sessionCost,result.sessionCost);
+    $('#mode-note').textContent=`Jev live · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;
   } catch(error) {
     if(generation===epoch)fail(error);
   } finally {
@@ -191,7 +218,7 @@ async function requestJudgment(id, snapshot, generation) {
   }
 }
 async function loop() {
-  if(!running||busy||!world)return;
+  if(!running||busy||addingItem||!world)return;
   busy=true;
   const current=epoch;
   try {
@@ -211,9 +238,10 @@ async function loop() {
         draw(frame);
       }
       if(world.creatures.every(c=>c.status==='dead')){running=false;$('#play').textContent='Habitat ended';$('#status').textContent='All four creatures have died. Their decisions remain in the bank. Reset to begin a new habitat.';return;}
-      if(!livePending&&sessionCost<sessionBudget) {
+      if(!running||addingItem)return;
+      if(!livePending&&!artJobs.size&&sessionCost<sessionBudget) {
         const due=await call('whoDeliberates',JSON.stringify(world));
-        if(current!==epoch)return;
+        if(current!==epoch||!running||addingItem)return;
         if(due.ids.length){
           const id=due.ids[0];
           lastLiveId=id;requestJudgment(id,JSON.stringify(world),current);
@@ -227,14 +255,104 @@ async function loop() {
 }
 $('#play').onclick=()=>{if(!liveKey){$('#connect-live').click();return;}running=!running;$('#play').textContent=running?'Pause':'Resume';};
 $('#watch').onclick=()=>watchDecision().catch(fail);
-$('#reset').onclick=()=>{imageGeneration++;imageBusy=false;artwork.clear();pendingArtwork=null;$('#artifact-image').value='';if(liveKey)configure('live',liveKey,true).catch(fail);else call('init').then(draw).catch(fail);};
+$('#reset').onclick=()=>{clearPlacementPing();hideDescription();resetGeneratedArt();imageGeneration++;imageBusy=false;artwork.clear();pendingArtwork=null;$('#artifact-image').value='';if(liveKey)configure('live',liveKey,true).catch(fail);else call('init').then(draw).catch(fail);};
 $('#connect-live').onclick=()=>{$('#api-key').value=localStorage.getItem('openrouter-api-key')||'';$('#live-dialog').showModal();};
-$('#key-form').onsubmit=e=>{e.preventDefault();const key=$('#api-key').value.trim();localStorage.setItem('openrouter-api-key',key);$('#api-key').value='';$('#live-dialog').close();configure('live',key).then(()=>{running=true;$('#play').textContent='Pause';$('#decision-stage').textContent='Live session started. Waiting for the first judgment…';}).catch(fail);};
+$('#key-form').onsubmit=e=>{e.preventDefault();const key=$('#api-key').value.trim();localStorage.setItem('openrouter-api-key',key);$('#api-key').value='';$('#live-dialog').close();configure('live',key).then(()=>{running=!addingItem;$('#play').textContent='Pause';$('#decision-stage').textContent='Live session started. Waiting for the first judgment…';}).catch(fail);};
 $('#about-button').onclick=()=>$('#about').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
-$('#artifact-form').onsubmit=e=>{e.preventDefault();if(imageBusy){$('#image-note').textContent='Preparing the picture…';return;}if(!$('#artifact').value.trim())return;running=false;$('#play').textContent='Resume';placing=true;$('#world').classList.add('placing');$('#placement-note').textContent='Click inside the habitat to place your object. Press Escape to cancel.';};
-$('#world').onclick=async e=>{try{if(placing&&!busy){busy=true;const svg=$('#world svg'),pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());const frame=await call('addEntity',JSON.stringify(world),$('#artifact').value,String(pt.x),String(pt.y));if(pendingArtwork){artwork.set(frame.world.entities.at(-1).id,pendingArtwork);pendingArtwork=null;$('#artifact-image').value='';$('#image-note').textContent=`${artwork.size} of 8 pictures placed. Pictures stay in this browser.`;}draw(frame);placing=false;$('#world').classList.remove('placing');$('#artifact').value='';busy=false;$('#placement-note').textContent=mode==='live'?'Object placed. Nearby creatures will judge it when the session runs.':'Object placed. Exploration remains random; switch to live for semantic judgment.';}else if(e.target.closest('[data-object]')){const ent=world.entities.find(v=>v.id===e.target.closest('[data-object]').dataset.object);if(ent){showDescription(ent,e);}}else if(!busy&&e.target.closest('.noul'))await selectCreature(e.target.closest('.noul').dataset.id);}catch(err){busy=false;fail(err);}};
-$('#world').onkeydown=e=>{if(!busy&&(e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();selectCreature(e.target.closest('.noul').dataset.id).catch(fail);}};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){placing=false;$('#world').classList.remove('placing');}});
+function syncItemControls(){
+  for(const id of ['play','reset','connect-live','create-noul','watch','import-bank']){
+    const el=$('#'+id);
+    if(addingItem){if(!el.hasAttribute('data-item-disabled'))el.dataset.itemDisabled=String(el.disabled);el.disabled=true;}
+    else if(el.hasAttribute('data-item-disabled')){el.disabled=el.dataset.itemDisabled==='true';delete el.dataset.itemDisabled;}
+  }
+  $('#add-item').disabled=addingItem;
+  $('#placement-controls').hidden=!placing;
+  $('#world').classList.toggle('placing',placing);
+  $('.habitat').classList.toggle('item-placing',placing);
+  for(const id of ['place-center','edit-item','cancel-placement'])$('#'+id).disabled=committingItem;
+}
+function openItem(){
+  if(committingItem)return;
+  if(!addingItem){resumeAfterItem=running;addingItem=true;}
+  running=false;placing=false;$('#play').textContent='Paused';hideDescription();syncItemControls();
+  syncArtOption();$('#item-dialog').showModal();
+}
+function focusHabitat(){
+  if(!placing)return;
+  $('.world-wrap').scrollIntoView({block:'center',behavior:'instant'});
+  $('#world').focus({preventScroll:true});
+}
+function finishItem(placed=false){
+  if(committingItem)return;
+  addingItem=false;placing=false;
+  $('#item-dialog').close();syncItemControls();
+  running=resumeAfterItem;resumeAfterItem=false;
+  $('#play').textContent=running?'Pause':liveKey?'Resume':'Start Jev';
+  if(placed)$('#status').textContent=running?'Item added. The Nouls are exploring again.':'Item added. Start or resume Jev to see what the Nouls make of it.';
+  $('#add-item').focus({preventScroll:true});
+}
+$('#add-item').onclick=openItem;
+$('#edit-item').onclick=openItem;
+for(const id of ['close-item','cancel-item','cancel-placement'])$('#'+id).onclick=()=>finishItem();
+$('#item-dialog').addEventListener('cancel',e=>{e.preventDefault();finishItem();});
+document.querySelectorAll('[data-item]').forEach(button=>button.onclick=()=>{$('#artifact').value=button.dataset.item;$('#artifact').focus();});
+$('#artifact-form').onsubmit=e=>{
+  e.preventDefault();if(imageBusy){$('#image-note').textContent='Preparing the picture…';return;}
+  if(!$('#artifact').value.trim())return;
+  document.activeElement.blur();placing=true;$('#item-dialog').close();syncItemControls();
+  $('#placement-note').textContent='Paused · Tap a spot for your item, or place it in the centre.';
+  requestAnimationFrame(focusHabitat);
+};
+// Keep the habitat visible as the phone keyboard retracts.
+window.visualViewport?.addEventListener('resize',()=>{if(placing)requestAnimationFrame(focusHabitat);});
+let placementPingTimer;
+function clearPlacementPing(){
+  clearTimeout(placementPingTimer);$('#placement-ping')?.remove();
+}
+function placementPing(x,y,confirmed=false){
+  clearPlacementPing();
+  const bounds=$('#nouls-world').viewBox.baseVal;
+  const ping=document.createElement('span');ping.id='placement-ping';
+  ping.className='placement-ping'+(confirmed?' confirmed':'');ping.setAttribute('aria-hidden','true');
+  ping.style.left=`${(x-bounds.x)/bounds.width*100}%`;
+  ping.style.top=`${(y-bounds.y)/bounds.height*100}%`;
+  $('#world').append(ping);
+  if(confirmed)placementPingTimer=setTimeout(clearPlacementPing,1400);
+}
+function showPlacedDescription(entity){
+  showDescription(entity);
+  const popup=$('#object-description');popup.dataset.placement='true';
+  $('#object-description strong').textContent='Added to the habitat';
+  popupCloseTimer=setTimeout(hideDescription,4000);
+}
+async function placeItem(x,y){
+  if(!placing||committingItem)return;
+  if(busy){$('#placement-note').textContent='Finishing the last movement… tap again in a moment.';return;}
+  busy=true;committingItem=true;syncItemControls();
+  placementPing(x,y);
+  try{
+    const frame=await call('addEntity',JSON.stringify(world),$('#artifact').value.trim(),String(x),String(y));
+    const entity=frame.world.entities.at(-1);
+    const shouldDraw=$('#generate-art').checked&&!$('#generate-art').disabled&&!pendingArtwork;
+    if(pendingArtwork)artwork.set(entity.id,pendingArtwork);
+    draw(frame);
+    if(shouldDraw)queueItemArt(entity);
+pendingArtwork=null;imageGeneration++;$('#artifact-image').value='';$('#artifact').value='';
+    $('#image-note').textContent='PNG, JPEG or WebP, up to 4 MB. Pictures stay in this browser; Jev reads your description.';
+    $('#item-picture').open=false;committingItem=false;finishItem(true);
+    placementPing(entity.pos.x,entity.pos.y,true);
+    showPlacedDescription(entity);
+  }catch(error){clearPlacementPing();resumeAfterItem=false;$('#placement-note').textContent='Could not place the item. Try another spot or cancel.';fail(error);}
+  finally{busy=false;committingItem=false;syncItemControls();}
+}
+$('#place-center').onclick=()=>placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);
+$('#world').onclick=async e=>{try{
+  if(placing){const svg=$('#world svg'),pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());await placeItem(Math.max(0,Math.min(svg.viewBox.baseVal.width,pt.x)),Math.max(0,Math.min(svg.viewBox.baseVal.height,pt.y)));}
+  else if(e.target.closest('[data-object]')){const ent=world.entities.find(v=>v.id===e.target.closest('[data-object]').dataset.object);if(ent)showDescription(ent,e);}
+  else if(!busy&&e.target.closest('.noul'))await selectCreature(e.target.closest('.noul').dataset.id);
+}catch(err){busy=false;fail(err);}};
+$('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);}else if(!busy&&(e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();selectCreature(e.target.closest('.noul').dataset.id).catch(fail);}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&placing){e.preventDefault();finishItem();}});
 document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>{evidence=b.dataset.evidence;showEvidence();});
 $('#download').onclick=()=>{const url=URL.createObjectURL(new Blob([rows.map(r=>JSON.stringify(r)).join('\n')+'\n'],{type:'application/x-ndjson'}));const a=document.createElement('a');a.href=url;a.download='nouls-bank.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>64e6)throw new Error('Choose a bank smaller than 64 MB.');running=false;const imported=(await file.text()).trim().split('\n').map(JSON.parse);if(!imported.length||imported.length>10000)throw new Error('Use a bank with 1–10,000 decisions.');let restored={world};for(const row of imported){const checked=await call('review',JSON.stringify(row));if(!checked.verified)throw new Error('Import stopped: a banked action diverged.');if(!restored.world.creatures.some(c=>c.id===row.creatureId))restored=await call('restoreNoul',JSON.stringify(restored.world),JSON.stringify(row));}if(restored.svg)draw(restored);rows=imported;selected=rows[0].creatureId;running=false;await selectCreature(selected);await showRow(0);$('#play').textContent='Resume';}catch(err){fail(err);}finally{e.target.value='';}};
@@ -242,12 +360,15 @@ $('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)r
   try {
     startWorker();
     await rpc('configure',[],{mode:'replay'});
-    draw(await call('init'));
+    const initialFrame=await call('init');
+    loadingProgress('The habitat is ready.',10);
+    draw(initialFrame);
     await selectCreature(selected);
     renderLedger();
+    window.__demoReady=true;
     $('#runtime').textContent='Habitat ready · Jev live demo';$('#connect-live').disabled=false;
     $('#play').textContent='Start Jev';$('#play').disabled=false;
-    $('#reset').disabled=false;$('#place').disabled=false;$('#artifact').disabled=false;$('#create-noul').disabled=false;
+    $('#reset').disabled=false;$('#place').disabled=false;$('#artifact').disabled=false;$('#create-noul').disabled=false;$('#add-item').disabled=false;
     $('#mode-note').textContent='Connect Jev to start making decisions';
     $('#world-note').textContent='Waiting for the first encounter';
     setInterval(loop,100);
@@ -265,30 +386,177 @@ function updateVitals() {
     const el=document.createElement('div');el.innerHTML=`<div class="vital-label"><span>${label}</span><span class="vital-value"></span></div><div class="vital-track"><i></i></div>`;$('#vitals').append(el);
   }
   values.forEach(([label,value],i)=>{const el=$('#vitals').children[i];el.querySelector('.vital-value').textContent=`${Math.round(value*100)}%`;el.querySelector('i').style.width=`${value*100}%`;el.classList.toggle('urgent',label==='Health'?value<.35:value>=.8);});
+  updateSocial();
   $('#current-thought').textContent=c.status==='dead'?`Died of ${c.deathCause}. Reset starts a new life.`:`${c.pauseTicks>0?'Unsure — pausing briefly':`Current need / intent: ${c.thought}`}`;
+}
+// Present AILANG preferences and banked Jev distributions; no social policy here.
+function updateSocial(){
+  const c=world?.creatures.find(c=>c.id===selected);if(!c)return;
+  $('#social-preferences').textContent=c.socialPreferences||'';
+  const target=world.creatures.find(peer=>peer.id===c.intent.id);
+  const activity=c.intent.tag==='Socialize'?`Seeking company: ${target?.name||c.intent.id}`:c.intent.tag==='Avoid'?`Giving space to ${target?.name||c.intent.id}`:'';
+  $('#social-encounter').textContent=activity||c.memory?.at(-1)||'';
+  const key=JSON.stringify([selected,review?.row?.decision]);if(key===socialViewKey)return;socialViewKey=key;
+  const root=$('#social-choices');root.replaceChildren();
+  if(!review?.company?.length){const p=document.createElement('p');p.textContent='Social preferences will appear here after a Jev judgment.';root.append(p);return;}
+  const observed=JSON.parse(review.row.state).others||[];
+  const note=document.createElement('p');note.textContent=`Jev preferences at tick ${review.row.tick}. These can be one-sided and change with encounters.`;root.append(note);
+  for(const [heading,options] of [['Seek company',review.company],['Give space',review.avoidance]]){
+    const group=document.createElement('div');group.className='social-distribution';
+    const title=document.createElement('strong');title.textContent=heading;group.append(title);
+    for(const option of options||[]){
+      const row=document.createElement('div');row.className='bar-row';
+      const name=document.createElement('span');name.textContent=option.key==='alone'?'Own company':option.key==='none'?'Nobody':observed.find(peer=>peer.id===option.key)?.name||option.key;
+      const track=document.createElement('div');track.className='bar-track';const fill=document.createElement('div');fill.className='bar-fill';fill.style.width=`${Math.max(0,Math.min(100,option.p*100))}%`;track.append(fill);
+      const value=document.createElement('span');value.className='bar-p';value.textContent=`${Math.round(option.p*100)}%`;
+      row.append(name,track,value);group.append(row);
+    }root.append(group);
+  }
+}
+
+let itemActivityTimer;
+function showItemActivity(previous){
+  if(!previous)return;
+  if(world.tick<previous.tick){clearTimeout(itemActivityTimer);$('#item-activity').hidden=true;return;}
+  const events=[];
+  for(const c of world.creatures){
+    const latest=c.memory?.at(-1),old=previous.creatures.find(p=>p.id===c.id)?.memory?.at(-1);
+    if(latest!==old&&/^I (picked up|put down|destroyed) /.test(latest||''))events.push(`${c.name} ${latest.slice(2)}`);
+  }
+  if(events.length){clearTimeout(itemActivityTimer);$('#item-activity').hidden=false;$('#item-activity').textContent=events.join(' · ');itemActivityTimer=setTimeout(()=>$('#item-activity').hidden=true,5000);}
 }
 function drawArtwork() {
   const svg=$('#nouls-world');if(!svg)return;
   for(const id of artwork.keys())if(!world.entities.some(e=>e.id===id))artwork.delete(id);
   for(const ent of world.entities){
     const original=[...svg.querySelectorAll('.world-entity')].find(el=>el.querySelector('title')?.textContent.startsWith(ent.id+':'));
-    if(original){original.dataset.object=ent.id;original.setAttribute('tabindex','0');original.setAttribute('role','button');original.setAttribute('aria-label',ent.desc);original.style.visibility=artwork.has(ent.id)?'hidden':'';}
+    if(original){original.dataset.object=ent.id;original.dataset.kind=ent.kind;original.setAttribute('tabindex','0');original.setAttribute('role','button');original.setAttribute('aria-label',ent.desc);original.style.visibility=artwork.has(ent.id)||ent.carrier?'hidden':'';}
   }
-  let layer=svg.querySelector('#player-art');
-  if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.id='player-art';svg.insertBefore(layer,svg.querySelector('#world-creatures'));}
   const ns='http://www.w3.org/2000/svg';
-  for(const el of [...layer.children])if(!artwork.has(el.dataset.object))el.remove();
-  for(const [id,data] of artwork){
-    const ent=world.entities.find(e=>e.id===id);if(!ent)continue;
-    let el=[...layer.children].find(e=>e.dataset.object===id);
-    if(!el){el=document.createElementNS(ns,'g');el.dataset.object=id;el.setAttribute('tabindex','0');el.setAttribute('role','button');el.setAttribute('aria-label',ent.desc);const title=document.createElementNS(ns,'title');title.textContent=ent.desc;el.append(title);const img=document.createElementNS(ns,'image');img.setAttribute('href',data);img.setAttribute('x','-2.2');img.setAttribute('y','-2.2');img.setAttribute('width','4.4');img.setAttribute('height','4.4');el.append(img);layer.append(el);}
-    el.setAttribute('transform',`translate(${ent.pos.x} ${ent.pos.y})`);
+  for(const layerId of ['player-art','carried-art']){
+    let layer=svg.querySelector('#'+layerId);
+    if(!layer){layer=document.createElementNS(ns,'g');layer.id=layerId;if(layerId==='player-art')svg.insertBefore(layer,svg.querySelector('#world-creatures'));else svg.append(layer);}
+    const entities=world.entities.filter(e=>layerId==='carried-art'?Boolean(e.carrier):!e.carrier&&artwork.has(e.id));
+    for(const el of [...layer.children])if(!entities.some(e=>e.id===el.dataset.object))el.remove();
+    for(const ent of entities){
+      let el=[...layer.children].find(e=>e.dataset.object===ent.id);
+      if(!el){
+        el=document.createElementNS(ns,'g');el.dataset.object=ent.id;el.setAttribute('tabindex','0');el.setAttribute('role','button');
+        const title=document.createElementNS(ns,'title');el.append(title);
+        const marker=document.createElementNS(ns,'circle');marker.setAttribute('r','1.45');marker.setAttribute('class','carried-marker');el.append(marker);
+        const placeholder=document.createElementNS(ns,'path');placeholder.setAttribute('d','M-1 -.7 Q0 -1.4 1 -.5 L.8 .8 Q0 1.3 -.9 .6Z');placeholder.setAttribute('fill','#ad9168');placeholder.classList.add('item-placeholder');el.append(placeholder);
+        const img=document.createElementNS(ns,'image');el.append(img);layer.append(el);
+      }
+      const data=artwork.get(ent.id),held=Boolean(ent.carrier),size=held?3:4.4;
+      const carrier=world.creatures.find(c=>c.id===ent.carrier);
+      const label=held?`${carrier?.name||'Noul'} is carrying ${ent.desc}`:ent.desc;
+      el.setAttribute('aria-label',label);el.querySelector('title').textContent=label;
+      if(held)el.dataset.carrier=ent.carrier;else delete el.dataset.carrier;
+      el.querySelector('.carried-marker').style.display=held?'':'none';
+      el.querySelector('.item-placeholder').style.display=data?'none':'';
+      const img=el.querySelector('image');img.style.display=data?'':'none';
+      if(data&&img.getAttribute('href')!==data)img.setAttribute('href',data);
+      for(const [name,value] of [['x',-size/2],['y',-size/2],['width',size],['height',size]])img.setAttribute(name,value);
+      el.setAttribute('transform',`translate(${ent.pos.x+(held?2.3:0)} ${ent.pos.y+(held?-.5:0)})`);
+    }
+  }
+}
+
+function syncArtOption(){
+  const connected=Boolean(liveKey&&liveSession);
+  const full=artwork.size+artJobs.size>=8;
+  $('#generate-art').disabled=!connected||Boolean(pendingArtwork)||imageBusy||full;
+  $('#art-option-note').textContent=pendingArtwork?'Your uploaded picture will be used.':!connected?'Connect Jev to generate pictures. You can still add this item.':full?'This habitat already has eight pictures placed or on the way.':'';
+}
+function resetGeneratedArt(){
+  artworkWorld++;
+  for(const job of artJobs.values())job.controller.abort();
+  artJobs.clear();artQueue=Promise.resolve();
+  $('#artwork-status').hidden=true;
+}
+function artStatus(message){
+  $('#artwork-status').hidden=false;$('#artwork-status').textContent=message;
+}
+function queueItemArt(entity){
+  if(!liveKey||!liveSession||artwork.size+artJobs.size>=8)return;
+  const job={id:entity.id,description:entity.desc,world:artworkWorld,session:liveSession,key:liveKey,controller:new AbortController()};
+  artJobs.set(job.id,job);artStatus(`Drawing your item${artJobs.size>1?'s':''}… You can keep playing.`);
+  artQueue=artQueue.then(()=>generateItemArt(job)).catch(()=>{});
+}
+// Remove only a uniform, edge-connected green matte from generated artwork.
+// Uploaded pictures keep their original background. Crop empty space for legibility.
+function itemSprite(bitmap){
+  const canvas=document.createElement('canvas'),scale=Math.min(1,384/Math.max(bitmap.width,bitmap.height));
+  const w=canvas.width=Math.max(1,Math.round(bitmap.width*scale)),h=canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0,w,h);
+  const pixels=ctx.getImageData(0,0,w,h),data=pixels.data;
+  const corners=[0,(w-1)*4,(w*(h-1))*4,(w*h-1)*4];
+  const bg=[0,1,2].map(c=>corners.reduce((sum,i)=>sum+data[i+c],0)/4);
+  const uniform=corners.every(i=>data[i+3]>250&&bg.every((v,c)=>Math.abs(v-data[i+c])<16));
+  if(uniform&&bg[1]>=bg[0]&&bg[1]>=bg[2]&&Math.min(...bg)>140){
+    const seen=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0;
+    function visit(n){if(seen[n])return;seen[n]=1;const i=n*4;
+      const distance=Math.hypot(data[i]-bg[0],data[i+1]-bg[1],data[i+2]-bg[2]);
+      if(distance>50)return;
+      data[i+3]=Math.round(255*Math.max(0,(distance-28)/22));queue[tail++]=n;
+    }
+    for(let x=0;x<w;x++){visit(x);visit((h-1)*w+x);}
+    for(let y=0;y<h;y++){visit(y*w);visit(y*w+w-1);}
+    while(head<tail){const n=queue[head++],x=n%w,y=Math.floor(n/w);if(x)visit(n-1);if(x<w-1)visit(n+1);if(y)visit(n-w);if(y<h-1)visit(n+w);}
+    ctx.putImageData(pixels,0,0);
+  }
+  let left=w,top=h,right=0,bottom=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>32){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+  if(left>right)return canvas.toDataURL('image/webp',.8);
+  const width=right-left+1,height=bottom-top+1,side=Math.max(width,height),padding=Math.ceil(side*.08);
+  const sprite=document.createElement('canvas');sprite.width=sprite.height=side+padding*2;
+  sprite.getContext('2d').drawImage(canvas,left,top,width,height,padding+(side-width)/2,padding+(side-height)/2,width,height);
+  return sprite.toDataURL('image/webp',.8);
+}
+async function generateItemArt(job){
+  const current=()=>job.world===artworkWorld&&artJobs.get(job.id)===job;
+  if(!current())return;
+  const signal=AbortSignal.any([job.controller.signal,AbortSignal.timeout(90000)]);
+  try{
+    let result;
+    // Only retry explicit local busy responses: they have not called the model.
+    while(current()){
+      const response=await publicTransport.request('api/image',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':job.key},
+        body:JSON.stringify({session:job.session,id:job.id,description:job.description}),signal});
+      result=await response.json();
+      if(response.status!==429||!result.retryable)break;
+      await new Promise(resolve=>setTimeout(resolve,750));
+      signal.throwIfAborted();
+    }
+    if(!current())return;
+    if(job.session===liveSession&&typeof result.sessionCost==='number'){
+      sessionCost=Math.max(sessionCost,result.sessionCost);
+      $('#mode-note').textContent=`Jev + artwork · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;
+    }
+    if(!result.ok)throw Error(result.error||'The picture could not be completed.');
+    if(typeof result.image!=='string'||!/^data:image\/(png|jpeg|webp);base64,/.test(result.image)||result.image.length>8*1024*1024)throw Error('The picture could not be displayed.');
+    const bitmap=await createImageBitmap(await (await fetch(result.image)).blob());
+    const data=itemSprite(bitmap);bitmap.close();
+    if(data.length>180000)throw Error('The picture was too large to display.');
+    if(!current())return;
+    if(!world.entities.some(e=>e.id===job.id)){artStatus('That item was removed before its picture arrived.');return;}
+    artwork.set(job.id,data);drawArtwork();
+    artStatus('Your item’s picture is ready'+(typeof result.cost==='number'?` · $${result.cost.toFixed(3)}`:'')+'.');
+  }catch(error){
+    if(current())artStatus((signal.aborted?'The picture timed out.':error.message)+' Your item remains in the habitat.');
+  }finally{
+    if(current()){
+      artJobs.delete(job.id);
+      if(artJobs.size)artStatus(`Drawing ${artJobs.size} more picture${artJobs.size===1?'':'s'}… You can keep playing.`);
+      syncArtOption();
+    }
+    job.key='';
   }
 }
 $('#artifact-image').onchange=async e=>{
-  const generation=++imageGeneration;const file=e.target.files[0];pendingArtwork=null;imageBusy=false;if(!file)return;imageBusy=true;
+  const generation=++imageGeneration;const file=e.target.files[0];pendingArtwork=null;imageBusy=false;syncArtOption();if(!file)return;imageBusy=true;syncArtOption();
   try{
-    if(artwork.size>=8)throw Error('This world already has eight pictures. Reset to start a new world.');
+    if(artwork.size+artJobs.size>=8)throw Error('This world already has eight pictures. Reset to start a new world.');
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>4*1024*1024)throw Error('Choose a PNG, JPEG or WebP no larger than 4 MB.');
     const bitmap=await createImageBitmap(file);
     const canvas=document.createElement('canvas');const scale=Math.min(1,384/Math.max(bitmap.width,bitmap.height));
@@ -297,14 +565,15 @@ $('#artifact-image').onchange=async e=>{
     const data=canvas.toDataURL('image/webp',.8);
     if(data.length>180000)throw Error('This picture is too complex. Choose a smaller or simpler picture.');
     if(generation!==imageGeneration)return;pendingArtwork=data;$('#image-note').textContent='Picture ready. Add a description, then place it in the world.';
-  }catch(error){if(generation===imageGeneration){e.target.value='';$('#image-note').textContent=error.message;}}finally{if(generation===imageGeneration)imageBusy=false;}
+  }catch(error){if(generation===imageGeneration){e.target.value='';$('#image-note').textContent=error.message;}}finally{if(generation===imageGeneration){imageBusy=false;syncArtOption();}}
 };
-$('#world').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest('[data-object]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}});
+$('#world').addEventListener('keydown',e=>{if(!placing&&(e.key==='Enter'||e.key===' ')&&e.target.closest('[data-object]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}});
 
 let popupCloseTimer;
 function showDescription(ent,event) {
   clearTimeout(popupCloseTimer);
-  const popup=$('#object-description');popup.hidden=false;
+  const popup=$('#object-description');delete popup.dataset.placement;popup.hidden=false;
+  $('#object-description strong').textContent='Description Jev sees';
   $('#object-description p').textContent=ent.desc;
   const hover=event&&event.type!=='focusin'&&matchMedia('(hover:hover)').matches;
   popup.classList.toggle('hover-popup',Boolean(hover));
@@ -316,12 +585,12 @@ function showDescription(ent,event) {
     popup.style.left=`${x}px`;popup.style.top=`${y}px`;
   }else{popup.style.width='';popup.style.left='';popup.style.top='';}
 }
-function hideDescription(){clearTimeout(popupCloseTimer);$('#object-description').hidden=true;}
+function hideDescription(){clearTimeout(popupCloseTimer);$('#object-description').hidden=true;delete $('#object-description').dataset.placement;}
 $('#close-description').onclick=hideDescription;
-$('#object-description').onpointerenter=()=>clearTimeout(popupCloseTimer);
+$('#object-description').onpointerenter=()=>{if(!$('#object-description').dataset.placement)clearTimeout(popupCloseTimer);};
 $('#object-description').onpointerleave=()=>{if($('#object-description').classList.contains('hover-popup'))hideDescription();};
 $('#world').addEventListener('pointermove',e=>{
-  if(e.pointerType==='touch')return;
+  if(addingItem||$('#object-description').dataset.placement||e.pointerType==='touch')return;
   const id=e.target.closest('[data-object]')?.dataset.object;
   const ent=world?.entities.find(v=>v.id===id);
   if(ent)showDescription(ent,e);
@@ -330,7 +599,7 @@ $('#world').addEventListener('pointermove',e=>{
   }
 });
 $('#world').addEventListener('pointerleave',()=>{if($('#object-description').classList.contains('hover-popup'))popupCloseTimer=setTimeout(hideDescription,180);});
-$('#world').addEventListener('focusin',e=>{const id=e.target.closest('[data-object]')?.dataset.object;const ent=world?.entities.find(v=>v.id===id);if(ent)showDescription(ent,e);});
+$('#world').addEventListener('focusin',e=>{if(addingItem)return;const id=e.target.closest('[data-object]')?.dataset.object;const ent=world?.entities.find(v=>v.id===id);if(ent)showDescription(ent,e);});
 
 let characterDesign=null, designingCharacter=false;
 function renderProfile(container,p){
@@ -353,10 +622,10 @@ $('#character-form').onsubmit=async e=>{
   while(livePending)await new Promise(resolve=>setTimeout(resolve,100));
   if(generation!==epoch)throw new Error('The session changed. Interpret the character again.');
   $('#character-status').textContent='Jev is interpreting your character…';
-  const response=await fetch('api/character',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},body:JSON.stringify({session:liveSession,name:$('#character-name').value.trim(),description:$('#character-description').value.trim()}),signal:AbortSignal.timeout(45000)});
+  const response=await publicTransport.request('api/character',{method:'POST',headers:{'Content-Type':'application/json','X-Nouls-Key':liveKey},body:JSON.stringify({session:liveSession,name:$('#character-name').value.trim(),description:$('#character-description').value.trim()}),signal:AbortSignal.timeout(45000)});
   const result=await response.json();
   if(generation!==epoch)return;
-  if(typeof result.sessionCost==='number'){sessionCost=result.sessionCost;$('#mode-note').textContent=`Jev live · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;}
+  if(typeof result.sessionCost==='number'){sessionCost=Math.max(sessionCost,result.sessionCost);$('#mode-note').textContent=`Jev live · $${sessionCost.toFixed(6)} / $${sessionBudget.toFixed(2)}`;}
   if(!result.ok)throw new Error(result.error||'Character interpretation failed.');
   characterDesign=result;renderProfile($('#proposed-traits'),result.profile);$('#character-evidence').textContent=JSON.stringify(result.decision,null,2);$('#character-preview').hidden=false;$('#character-status').textContent='Ready to review. Add this Noul, or edit the description and interpret again.';
  }catch(error){$('#character-status').textContent=error.message;}

@@ -11,6 +11,8 @@ import threading
 import shutil
 import secrets
 import math
+import item_art
+from urllib.error import HTTPError, URLError
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 LIVE_SLOTS = threading.BoundedSemaphore(4)
@@ -32,7 +34,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if urlsplit(self.path).path not in {'/decisions/api/decision', '/decisions/api/session', '/decisions/api/character'}:
+        if urlsplit(self.path).path not in {'/decisions/api/decision', '/decisions/api/session', '/decisions/api/character', '/decisions/api/image'}:
             self.send_error(404); return
         # Only same-origin browser clients. No CORS or public proxy service.
         origin = self.headers.get('Origin', '')
@@ -49,6 +51,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not 0 < length <= 262144:
                 self.json_response({'ok': False, 'error': 'Request size exceeds 256 KB'}, 413); return
             payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                self.json_response({'ok': False, 'error': 'Expected an object'}, 400); return
             session = SESSIONS.get(payload.get('session', ''))
             if session is None:
                 self.json_response({'ok': False, 'error': 'Start a new live session before making judgments.'}, 403); return
@@ -57,6 +61,9 @@ class Handler(SimpleHTTPRequestHandler):
             key = self.headers.get('X-Nouls-Key', '').strip()
             if not key:
                 self.json_response({'ok': False, 'error': 'Missing OpenRouter key'}, 400); return
+            if urlsplit(self.path).path == '/decisions/api/image':
+                self.item_image(payload, session, key)
+                return
             creating = urlsplit(self.path).path == '/decisions/api/character'
             if creating:
                 if not isinstance(payload.get('name'), str) or not 1 <= len(payload['name'].strip()) <= 32 or not isinstance(payload.get('description'), str) or not 10 <= len(payload['description'].strip()) <= 400:
@@ -117,6 +124,53 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, KeyError, IndexError):
             self.json_response({'ok': False, 'error': 'Invalid judgment request or runtime response'}, 400)
 
+    def item_image(self, payload, session, key):
+        description, item_id = payload.get('description'), payload.get('id')
+        if (not isinstance(description, str) or not 1 <= len(description.strip()) <= 160
+                or not isinstance(item_id, str) or not 1 <= len(item_id) <= 100):
+            self.json_response({'ok': False, 'error': 'Use an item ID and a description of 1–160 characters.'}, 400); return
+        lock = session.setdefault('lock', threading.Lock())
+        if not lock.acquire(blocking=False):
+            self.json_response({'ok': False, 'retryable': True, 'error': 'Waiting for the current judgment.'}, 429); return
+        slot = False
+        try:
+            pictures = session.setdefault('pictures', {})
+            if item_id in pictures:
+                self.json_response({**pictures[item_id], 'sessionCost': session['spent']}); return
+            if len(pictures) >= 8:
+                self.json_response({'ok': False, 'error': 'Eight generated pictures per session. Your item is still in the habitat.'}, 402); return
+            if session['spent'] + item_art.ESTIMATED_COST > SESSION_BUDGET or session['requests'] >= MAX_SESSION_REQUESTS:
+                self.json_response({'ok': False, 'error': 'Not enough session budget for a picture. Your item is still in the habitat.'}, 402); return
+            slot = LIVE_SLOTS.acquire(blocking=False)
+            if not slot:
+                self.json_response({'ok': False, 'retryable': True, 'error': 'Waiting for an artwork slot.'}, 429); return
+            session['requests'] += 1
+            # Never automatically retry an uncertain billed request. A repeated item ID
+            # receives its original result, including failures, without spending again.
+            billed = False
+            try:
+                result = item_art.generate(description.strip(), key)
+                cost = result.get('usage', {}).get('cost')
+                known_cost = type(cost) in (int, float) and math.isfinite(cost) and cost >= 0
+                session['spent'] = session['spent'] + cost if known_cost else SESSION_BUDGET
+                billed = True
+                value = {'ok': True, 'image': item_art.image_data(result), 'model': item_art.MODEL,
+                         'cost': cost if known_cost else None}
+            except HTTPError:
+                value = {'ok': False, 'error': 'The image provider could not draw this item. Check your OpenRouter connection.'}
+            except (URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+                if not billed:
+                    # A timeout may have completed upstream; reserve the remaining
+                    # budget rather than allowing further uncertain charges.
+                    session['spent'] = SESSION_BUDGET
+                value = {'ok': False, 'error': 'The picture could not be completed. Your item is still in the habitat.'}
+            value.update(sessionCost=session['spent'], sessionBudget=SESSION_BUDGET)
+            pictures[item_id] = value
+            self.json_response(value)
+        finally:
+            if slot: LIVE_SLOTS.release()
+            lock.release()
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if path == '/decisions/api/status':
@@ -126,20 +180,36 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/decisions/': target = ROOT / 'site/index.html'
         elif path.startswith('/decisions/'):
             name = path.removeprefix('/decisions/')
-            if name in MODULES: target = ROOT / name
+            if name in {'wasm/ailang.wasm', 'wasm/wasm_exec.js'}: target = REPO / name
+            elif name in MODULES: target = ROOT / name
             elif name.startswith('assets/') and name.removeprefix('assets/') in ASSETS: target = ROOT / 'site' / name
-            elif name in {'app.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
+            elif name in {'app.js', 'transport.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
             elif name in {'bank/synthetic.jsonl', 'bank/recorded.jsonl'}: target = ROOT / name
-            elif name == 'ailang/pkg/sunholo/decisions/decide.ail': target = REPO.parent / 'ailang-packages/packages/decisions/decide.ail'
+            elif name == 'ailang/pkg/sunholo/decisions/decide.ail': target = Path(os.environ.get('AILANG_CACHE', str(Path.home() / '.ailang/cache/registry'))) / 'sunholo/decisions/0.4.0/decide.ail'
             else: self.send_error(404); return
         elif path in {'/wasm/ailang.wasm', '/wasm/wasm_exec.js'}: target = REPO / path.lstrip('/')
         else: self.send_error(404); return
         if not target.is_file(): self.send_error(404); return
+        # Store the shared runtime, but revalidate on every use so a rebuild never
+        # leaves newer AILANG modules running against a stale binary.
+        runtime = path in {'/wasm/ailang.wasm', '/wasm/wasm_exec.js', '/decisions/wasm/ailang.wasm', '/decisions/wasm/wasm_exec.js'}
+        if runtime:
+            stat = target.stat()
+            etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+            validators = [v.strip().removeprefix('W/') for v in self.headers.get('If-None-Match', '').split(',')]
+            if etag in validators or '*' in validators:
+                self.send_response(304)
+                self.send_header('ETag', etag)
+                self.send_header('Cache-Control', 'public, no-cache')
+                self.end_headers(); return
         data = target.read_bytes()
         self.send_response(200)
+        if runtime:
+            self.send_header('ETag', etag)
+            self.send_header('Last-Modified', self.date_time_string(stat.st_mtime))
         self.send_header('Content-Type', 'application/wasm' if target.suffix == '.wasm' else self.guess_type(str(target)))
         self.send_header('Content-Length', str(len(data)))
-        self.send_header('Cache-Control', 'public, max-age=86400' if target.suffix == '.webp' else 'no-store')
+        self.send_header('Cache-Control', 'public, no-cache' if runtime else 'public, max-age=86400' if target.suffix == '.webp' else 'no-store')
         self.end_headers(); self.wfile.write(data)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(); parser.add_argument('--port', type=int, default=8942)
