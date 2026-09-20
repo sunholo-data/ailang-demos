@@ -141,6 +141,33 @@ mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"
 ln -s "$REPO_ROOT/ecommerce/img" "$SITE/ecommerce/img"
 
+# Deliberating Nouls — sunholo/decisions alife demo.
+# The AILANG modules run in-page via the shared wasm/ runtime; the decisions
+# package is vendored from the sibling ailang-packages checkout (0.4.0 is a
+# local path dep, not on the registry yet). See decisions/BROWSER_VALIDATION.md
+# for the Worker host contract and runtime evidence.
+mkdir -p "$SITE/decisions"
+for f in world.ail souls.ail render.ail bank.ail oracle.ail host.ail; do
+  [ -f "$REPO_ROOT/decisions/$f" ] && cp "$REPO_ROOT/decisions/$f" "$SITE/decisions/"
+done
+if [ -d "$REPO_ROOT/decisions/site" ]; then
+  cp -R "$REPO_ROOT/decisions/site/"* "$SITE/decisions/" 2>/dev/null || true
+else
+  echo "⚠  decisions/site/ browser host not built yet — see decisions/HANDOVER.md"
+fi
+if [ -d "$REPO_ROOT/decisions/bank" ]; then
+  mkdir -p "$SITE/decisions/bank"
+  cp "$REPO_ROOT/decisions/bank/"*.jsonl "$SITE/decisions/bank/" 2>/dev/null || true
+fi
+DECISIONS_PKG="$REPO_ROOT/../ailang-packages/packages/decisions"
+if [ -f "$DECISIONS_PKG/decide.ail" ]; then
+  mkdir -p "$SITE/decisions/ailang/pkg/sunholo/decisions"
+  cp "$DECISIONS_PKG/decide.ail" "$SITE/decisions/ailang/pkg/sunholo/decisions/"
+else
+  echo "⚠  sibling ailang-packages checkout not found — live tier unavailable;"
+  echo "   clone it beside this repo and re-run serve.sh"
+fi
+
 # Leak lab uses an isolated, newer compiler. Build with leak_lab/build.sh.
 ln -sfn "$REPO_ROOT/leak_lab" "$SITE/leak_lab"
 

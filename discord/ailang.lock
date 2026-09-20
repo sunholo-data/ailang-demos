@@ -1,6 +1,6 @@
 {
   "ailang_version": "v0.39.5-19-g62bf3993b-dirty",
-  "generated_at": "2026-09-17T20:30:14.990607Z",
+  "generated_at": "2026-09-17T20:36:06.859815Z",
   "generator": "ailang lock v0.39.5-19-g62bf3993b-dirty",
   "packages": [
     {
@@ -35,7 +35,7 @@
     },
     {
       "ailang": ">=0.35.0",
-      "content_hash": "sha256:3a87df202e73af7c26c58af7672442ac6ebb4826d800715380a993461f9d8d8c",
+      "content_hash": "sha256:0499a537aa9d7f972631e60ffa919dcd887feb83b825383f3aedcaa9ab7ee3c7",
       "effects": [
         "IO",
         "Net"

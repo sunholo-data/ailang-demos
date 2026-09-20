@@ -1,0 +1,85 @@
+-- oracle.ail — The Deliberating Nouls: the decision-call bridge.
+--
+-- ONE place touches the wire: decide() from sunholo/decisions, at decision
+-- points only. planDeliberation is pure (percept + batched questions);
+-- deliberate draws the roll (! {Rand}), calls decide (! {Net, Env}), and
+-- acts on the answer through the pure policy in souls.ail. Degraded mode
+-- (decideOrFallback) is v2; v0 surfaces typed errors loudly instead —
+-- no silent fallbacks.
+
+module oracle
+
+import world (World, Creature, Entity, Action, perceive, noteSeen, visible)
+import souls (soulOf, buildQuestions, actOnDecision, actSummary, errText, NQ)
+import pkg/sunholo/decisions/decide (decide, Decision, defaultModel, OpenRouter)
+import std/json (Json, encode)
+import std/list (map)
+import std/rand (rand_float)
+import std/result (Result, Ok, Err)
+
+-- One deliberation, fully banked (the doctrine: never argmax alone — the
+-- whole Decision travels with the row, state included).
+export type Deliberation = {
+  tick: int,
+  creatureId: string,
+  soul: string,        -- personality key at deliberation time
+  state: string,       -- encoded percept Json (what the creature saw)
+  questions: [NQ],     -- exactly what was asked
+  decision: Decision,  -- the whole answer set, distributions and all
+  roll: float,         -- the sample drawn from the behavior distribution
+  action: Action,      -- what the creature did about it
+  note: string         -- human-readable summary for the inspector
+}
+
+export type Plan = { state: Json, questions: [NQ] }
+
+export pure func planDeliberation(c: Creature, w: World) -> Plan = {
+  let p = soulOf(c);
+  { state: perceive(c, w), questions: buildQuestions(p, c, w) }
+}
+
+-- The model the demo pins (OpenRouter transport; the key is the host's).
+export pure func demoModel() -> string = defaultModel(OpenRouter)
+
+export func deliberate(model: string, c: Creature, w: World) -> Result[Deliberation, string] ! {Net, Env, Rand} = {
+  let p = soulOf(c);
+  let plan = planDeliberation(c, w);
+  let roll = rand_float(0.0, 1.0);
+  match decide(model, plan.state, plan.questions) {
+    Err(e)  => Err(errText(e)),
+    Ok(d)   =>
+      match actOnDecision(d, p, roll) {
+        Err(m)   => Err(m),
+        Ok(act)  => Ok({ tick: w.tick, creatureId: c.id, soul: c.soul,
+                         state: encode(plan.state), questions: plan.questions,
+                         decision: d, roll: roll, action: act,
+                         note: actSummary(d, p, roll) })
+      }
+  }
+}
+
+-- Deliberation result → the tick's Move record for stepWorld.
+export pure func moveOf(d: Deliberation) -> { id: string, act: Action } =
+  { id: d.creatureId, act: d.action }
+
+-- The creature-state change a deliberation implies: note what was visible
+-- (so "a NEW thing appeared" only fires for genuinely new things) and
+-- stamp the tick. Pure; hosts apply this when the in-flight call lands.
+export pure func applyToCreature(c: Creature, w: World) -> Creature = {
+  let seenNow = noteSeen(c, map(\e. e.id, visible(c, w)));
+  { id: c.id, name: c.name, pos: c.pos, heading: c.heading,
+    health: c.health, deathCause: c.deathCause,
+    hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: c.pauseTicks,
+    energy: c.energy, fear: c.fear, comfort: c.comfort,
+    soul: c.soul, profile: c.profile, intent: c.intent, memory: c.memory,
+    seen: seenNow, lastDeliberation: w.tick, deliberating: false }
+}
+
+-- A creature marked as having an oracle call in flight (host bookkeeping).
+export pure func markDeliberating(c: Creature) -> Creature =
+  { id: c.id, name: c.name, pos: c.pos, heading: c.heading,
+    health: c.health, deathCause: c.deathCause,
+    hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: c.pauseTicks,
+    energy: c.energy, fear: c.fear, comfort: c.comfort,
+    soul: c.soul, profile: c.profile, intent: c.intent, memory: c.memory,
+    seen: c.seen, lastDeliberation: c.lastDeliberation, deliberating: true }

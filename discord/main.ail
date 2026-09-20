@@ -7,7 +7,7 @@ import std/json (Json, getBool, encode)
 import std/option (Some, None, getOrElse)
 import std/result (Ok, Err)
 import std/string (stringToInt)
-import service (doctor, listChannels, readChannel, syncChannel, activity, sendText, createDraft, submitDraft, submitAction, fail)
+import service (doctor, listChannels, readChannel, syncChannel, activity, sendText, createDraft, submitDraft, submitAction, registerDemoCommands, fail)
 import protocol (exampleEvents, draftEvents, serveEvents)
 import pkg/sunholo/agui/events (jsonLines, validateRun)
 
@@ -51,6 +51,7 @@ export func main() -> () ! {IO, FS, Net, Env, Clock} = match getArgs() {
     else if cmd == "draft" then output(createDraft(option(args, "--channel", ""), option(args, "--text", ""), option(args, "--message", "")))
     else if cmd == "submit" then output(submitDraft(option(args, "--draft", ""), number(args, "--revision", 1), option(args, "--text", "")))
     else if cmd == "action" then match readFileResult(option(args, "--file", "")) {Err(_) => output(fail("input", "Cannot read action file")), Ok(raw) => output(submitAction(raw))}
+    else if cmd == "register-commands" then output(registerDemoCommands())
     else if cmd == "review" then println(jsonLines(draftEvents(option(args, "--channel", ""), option(args, "--text", ""), option(args, "--message", ""))))
   else if cmd == "serve" then match readFileResult(option(args, "--file", "")) {Err(_) => output(fail("input", "Cannot read run input file")), Ok(raw) => println(jsonLines(serveEvents(raw)))}
     else if cmd == "protocol-demo" then match validateRun(exampleEvents()) {Err(e) => output(fail("protocol", e)), Ok(_) => println(jsonLines(exampleEvents()))}
@@ -58,4 +59,4 @@ export func main() -> () ! {IO, FS, Net, Env, Clock} = match getArgs() {
     else output(fail("usage", "Unknown command; use help"))
 }
 
-func usage() -> () ! {IO} = println("AILANG Discord CLI\n  doctor | channels\n  read --channel ID [--limit 50] [--before ID | --after ID]\n  sync --channel ID [--pages 5]\n  activity --channel ID [--user ID] [--since yesterday|DATE|ID]\n  send --channel ID --text TEXT\n  reply --channel ID --message ID --text TEXT\n  draft --channel ID --text TEXT [--message ID]\n  submit --draft ID --revision 1 --text TEXT\n  action --file action.json\n  review --channel ID --text TEXT [--message ID] (AG-UI JSONL)\n  protocol-demo | mcp\n  serve --file run-input.json (AG-UI JSONL from a RunAgentInput request)\nConfiguration: DISCORD_CONFIG, DISCORD_BOT_TOKEN or DISCORD_TOKEN_FILE, DISCORD_STATE_DIR")
+func usage() -> () ! {IO} = println("AILANG Discord CLI\n  doctor | channels\n  read --channel ID [--limit 50] [--before ID | --after ID]\n  sync --channel ID [--pages 5]\n  activity --channel ID [--user ID] [--since yesterday|DATE|ID]\n  send --channel ID --text TEXT\n  reply --channel ID --message ID --text TEXT\n  draft --channel ID --text TEXT [--message ID]\n  submit --draft ID --revision 1 --text TEXT\n  action --file action.json\n  review --channel ID --text TEXT [--message ID] (AG-UI JSONL)\n  protocol-demo | mcp\n  serve --file run-input.json (AG-UI JSONL from a RunAgentInput request)\n  register-commands (PUT the slash-command set on the application)\nConfiguration: DISCORD_CONFIG, DISCORD_BOT_TOKEN or DISCORD_TOKEN_FILE, DISCORD_STATE_DIR")

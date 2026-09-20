@@ -1,0 +1,6 @@
+-- The sibling: imports std/list but exposes only a trivial function.
+module repro_sibling
+
+import std/list (length)
+
+export pure func dummy() -> bool = true

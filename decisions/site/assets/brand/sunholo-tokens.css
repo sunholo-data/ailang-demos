@@ -1,0 +1,21 @@
+/* Sunholo brand tokens. Apply .sunholo-brand to your asset wrapper. */
+.sunholo-brand {
+  --site-paper: #ffffff;
+  --site-ground: #f6f8fa;
+  --site-ink: #2c3e50;
+  --site-slate: #314352;
+  --site-muted: #526677;
+  --site-rule: #dce3e8;
+  --site-orange: #e73c17;
+  --site-action: #bd3012;
+  --site-radius: 3px;
+  --site-section: 72px;
+  --site-gap: 40px;
+  --site-h1: clamp(34px,4vw,56px);
+  --site-h2: clamp(27px,3vw,38px);
+  --site-h3: 22px;
+  --site-font: 'Montserrat', 'Segoe UI', sans-serif;
+}
+@media(max-width:900px) {
+  .sunholo-brand { --site-section:48px; --site-gap:28px; }
+}

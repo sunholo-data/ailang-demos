@@ -1,0 +1,68 @@
+module survival_test
+import world (Creature, World, Wander, Rest, Eat, Drink, Toilet, Do, Hesitate, demoWorld, stepWorld, shouldDeliberate, perceive, urgencyOf, worldToJson, worldOfJson)
+import souls (soulOf, personalityForState, buildQuestions, behaviorOptionsFor, actOnDecision)
+import pkg/sunholo/decisions/decide (Choice, ChoiceA, Decision)
+import std/list (foldl, length)
+import std/json (encode)
+import std/string (contains)
+import std/result (Ok, Err)
+import std/io (println, exit)
+
+pure func first(w: World) -> Creature = match w.creatures {
+ c :: _ => c,
+ [] => first(demoWorld())
+}
+pure func subject() -> Creature = { first(demoWorld()) | soul: "paranoid", hunger: 0.2, thirst: 0.2, bowel: 0.2, energy: 0.8, health: 1.0 }
+pure func habitat(c: Creature) -> World = {demoWorld() | creatures: [c]}
+pure func urgentGate() -> bool = soulOf({subject() | thirst: 1.0}).actThreshold < 0.3 && soulOf(subject()).actThreshold > 0.8
+pure func replayGates() -> bool = personalityForState("paranoid", "{\"policyVersion\":2,\"urgency\":1.0}").actThreshold < 0.3 && personalityForState("paranoid", "{}").actThreshold > 0.8
+pure func farCandidates() -> bool {
+ let c=subject();
+ let w={habitat(c) | entities: [{id: "far-player-water", kind: "stone", desc: "a distant jug of fresh water", pos: {x: 57.0, y: 57.0}}]};
+ let qs=buildQuestions(soulOf(c),c,w);
+ let inOptions=foldl(\found. \q. found || match q.q {Choice(_,opts) => foldl(\yes. \o. yes || o.key == "far-player-water",false,opts), _ => false},false,qs);
+ inOptions && contains(encode(perceive(c,w)),"far-player-water")
+}
+pure func completesTrip() -> bool {
+ let c={subject() | intent: Drink("water"), thirst: 0.9, lastDeliberation: 0};
+ not shouldDeliberate(c,{habitat(c) | tick: 40},6)
+}
+pure func resting() -> bool {
+ let c={subject() | energy: 0.1, intent: Rest};
+ let after=first(stepWorld(habitat(c),[]));
+ after.energy > c.energy && after.pos.x == c.pos.x && after.pos.y == c.pos.y
+}
+pure func death() -> bool {
+ let c={subject() | thirst: 1.0, health: 0.001};
+ let w=stepWorld(habitat(c),[]);let dead=first(w);
+ let again=first(stepWorld(w,[{id:c.id,act:Do(Eat("food"))}]));
+ dead.health <= 0.0 && dead.deathCause == "dehydration" && again.health <= 0.0 && again.pos.x == dead.pos.x && not shouldDeliberate(dead,w,6)
+}
+pure func recover() -> bool {
+ let c={subject() | health: 0.4};
+ first(stepWorld(habitat(c),[])).health > c.health
+}
+pure func desperateOptions() -> bool {
+ let opts=behaviorOptionsFor({subject() | thirst:1.0,bowel:1.0});
+ foldl(\ok. \o. ok && (o.key == "drink" || o.key == "flee"), true, opts) && length(opts) == 2
+}
+pure func desperateActs() -> bool {
+ let d: Decision={model:"synthetic",id:"test",input_tokens:0,output_tokens:0,cost_usd:0.0,answers:[
+ {name:"behavior",answer:ChoiceA({choice:"drink",confidence:0.45,probabilities:[{key:"drink",p:1.0}]})},
+ {name:"drink_target",answer:ChoiceA({choice:"user-jug",confidence:0.8,probabilities:[{key:"user-jug",p:1.0}]})}]};
+ match actOnDecision(d,soulOf({subject() | thirst:1.0}),0.2) { Ok(Do(Drink(id))) => id == "user-jug", _ => false }
+}
+test "urgency lowers cautious confidence gate" { assert urgentGate() }
+test "banked policy reconstructs gate without changing old banks" { assert replayGates() }
+test "distant described player objects are visible and targetable" { assert farCandidates() }
+test "active need trip is not interrupted by another ordinary judgment" { assert completesTrip() }
+test "sleep reduces tiredness without movement" { assert resting() }
+test "dehydration kills and dead creatures cannot act or revive" { assert death() }
+test "resolved needs allow health recovery" { assert recover() }
+test "desperate behavior question prioritizes survival" { assert desperateOptions() }
+test "desperate cautious creature acts on moderate model confidence" { assert desperateActs() }
+export func main() -> () ! {IO} {
+ let ok=urgentGate() && replayGates() && farCandidates() && completesTrip() && resting() && death() && recover() && desperateOptions() && desperateActs();
+ println(if ok then "PASS survival, whole-map perception, commitment, sleep, death and replay gates" else "FAIL survival");
+ if ok then () else exit(1)
+}

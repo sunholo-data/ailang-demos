@@ -1,0 +1,22 @@
+-- Private preview RPC entry. The host passes only a world snapshot and creature;
+-- the API credential arrives via the child process environment, never argv/files.
+module live_server
+import host (deliberateLive, designNoul)
+import std/io (readLine, println)
+import std/json (decode, getString, getInt, encode, jo, kv, js, jb)
+import std/option (Some, None, getOrElse)
+import std/result (Ok, Err)
+
+export func main() -> () ! {IO @limit=2, Net @limit=1, Env @limit=1, Rand @limit=1} {
+  let input = readLine();
+  let result = match decode(input) {
+    Err(_) => encode(jo([kv("ok", jb(false)), kv("error", js("Invalid request JSON"))])),
+    Ok(j) => if getOrElse(getString(j, "operation"), "decision") == "character"
+      then designNoul(getOrElse(getString(j, "name"), ""), getOrElse(getString(j, "description"), ""))
+      else match getString(j, "world") {
+      None => encode(jo([kv("ok", jb(false)), kv("error", js("Missing world snapshot"))])),
+      Some(w) => deliberateLive(w, getOrElse(getString(j, "id"), ""), getOrElse(getInt(j, "completed"), -1))
+    }
+  };
+  println(result)
+}

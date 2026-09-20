@@ -1,0 +1,17 @@
+module probe_multiarg_test
+
+-- Does `tests [...]` support multi-arg functions? Tuple input form.
+export pure func add2(a: int, b: int) -> int
+  tests [
+    ((1, 2), 3),
+    ((5, 5), 10)
+  ] {
+  a + b
+}
+
+export pure func oneArg(s: string) -> string
+  tests [
+    ("x", "xx")
+  ] {
+  "${s}${s}"
+}

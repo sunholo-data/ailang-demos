@@ -1,0 +1,134 @@
+-- Native tests for the Deliberating Nouls bank (extraction-safe coverage).
+--
+-- BUG (reported to core 2026-09-19, message inbox_1789849816269_681807c4):
+-- on ailang v0.40.2-6-ge12e0335d, named-test extraction (_namedtest_body_*)
+-- misbinds std/list.length to std/string's _str_len whenever the test file
+-- imports a sibling module whose own imports span std/list AND std/string
+-- (bank, souls, world all do). Any test path that traverses std/list.sortBy
+-- (syntheticRow → buildQuestions → visible) fails with
+-- "_str_len: expected String, got *eval.ListValue" — while the identical
+-- logic passes under `ailang run ... selftest`.
+--
+-- Therefore: named tests here cover the extraction-SAFE surface (codecs,
+-- sampling, row round-trips); the full-pipeline assertions (synthetic row
+-- builds/replays byte-for-byte, parseAnswers seam, world determinism,
+-- render probe) live in main.ail's selftest, executed via `ailang run`
+-- — unaffected by the extraction bug.
+--
+-- Run: ailang test bank_test.ail        (package discovery also finds it)
+
+module bank_test
+import bank (rowToLine, lineToRow, rowToJson, rowOfJson, answerToJson, answerOfJson, decisionToJson, decisionOfJson, BankRow)
+import souls (sampleFromText, questionToJson, questionOfJson)
+import world (Wander, actionToJson, actionOfJson, Do)
+import pkg/sunholo/decisions/decide (Answer, ChoiceA, Choice, Decision)
+import std/json (decode, encode)
+import std/string (contains)
+import std/result (Ok, Err)
+
+-- ============================================================
+-- Extraction-safe helpers (no std/list.sortBy anywhere on these paths)
+-- ============================================================
+
+pure func sampleText() -> string = sampleFromText([{ key: "a", p: 0.5 }, { key: "b", p: 0.5 }], 0.3)
+
+pure func sampleTextHigh() -> string = sampleFromText([{ key: "a", p: 0.5 }, { key: "b", p: 0.5 }], 0.9)
+
+pure func sampleTextEmpty() -> string = sampleFromText([], 0.5)
+
+pure func fixtureRow() -> BankRow =
+  { tick: 3, creatureId: "c2", soul: "bold", state: "{}", questions: "[]", decision: "{}", roll: 0.5, action: encode(actionToJson(Do(Wander))), note: "unit", source: "synthetic" }
+
+pure func rowRoundTripKeepsFields() -> bool = match lineToRow(rowToLine(fixtureRow())) {
+  Err(_) => false,
+  Ok(r2) => r2.tick == 3 && r2.creatureId == "c2" && r2.soul == "bold" && r2.action == (fixtureRow()).action && r2.source == "synthetic"
+}
+
+pure func jsonRowRoundTripKeepsFields() -> bool = match rowOfJson(rowToJson(fixtureRow())) {
+  Err(_) => false,
+  Ok(r2) => r2.note == "unit" && r2.roll == 0.5 && r2.state == "{}"
+}
+
+pure func fixtureAnswer() -> Answer =
+  ChoiceA({ choice: "forage", confidence: 0.71, probabilities: [{ key: "forage", p: 0.62 }] })
+
+pure func fixtureDecision() -> Decision =
+  { model: "typesafe/jev-1.13", id: "synthetic-v0-0001", answers: [{ name: "behavior", answer: fixtureAnswer() }], input_tokens: 424, output_tokens: 73, cost_usd: 1.7808e-05 }
+
+pure func answerRoundTrip() -> bool = match decode(encode(answerToJson(fixtureAnswer()))) {
+  Err(_) => false,
+  Ok(j) => match answerOfJson(j) {
+    Err(_) => false,
+    Ok(a2) => encode(answerToJson(a2)) == encode(answerToJson(fixtureAnswer()))
+  }
+}
+
+pure func decisionRoundTrip() -> bool = match decode(encode(decisionToJson(fixtureDecision()))) {
+  Err(_) => false,
+  Ok(j) => match decisionOfJson(j) {
+    Err(_) => false,
+    Ok(d2) => d2.model == "typesafe/jev-1.13" && d2.cost_usd == 1.7808e-05
+  }
+}
+
+pure func questionRoundTrip() -> bool = match questionToJson(Choice("Which?", [{ key: "a", desc: "ad" }])) {
+  Err(_) => false,
+  Ok(j) => match decode(encode(j)) {
+    Err(_) => false,
+    Ok(dj) => match questionOfJson(dj) {
+      Err(_) => false,
+      Ok(q2) => match questionToJson(q2) {
+        Err(_) => false,
+        Ok(j2) => contains(encode(j2), "Which?")
+      }
+    }
+  }
+}
+
+pure func actionRoundTrip() -> bool = match decode(encode(actionToJson(Do(Wander)))) {
+  Err(_) => false,
+  Ok(j) => match actionOfJson(j) {
+    Err(_) => false,
+    Ok(a2) => encode(actionToJson(a2)) == encode(actionToJson(Do(Wander)))
+  }
+}
+
+-- ============================================================
+-- Test bodies (same-file helpers only — see the decide_test.ail pattern)
+-- ============================================================
+
+test "sampleFrom: roll 0.3 lands in the first band" {
+  sampleText() == "a"
+}
+
+test "sampleFrom: roll 0.9 lands in the second band" {
+  sampleTextHigh() == "b"
+}
+
+test "sampleFrom: empty distribution is an error, not a default" {
+  sampleTextEmpty() == "err"
+}
+
+test "bank row: JSONL line round trip preserves fields" {
+  rowRoundTripKeepsFields()
+}
+
+test "bank row: Json round trip preserves fields" {
+  jsonRowRoundTripKeepsFields()
+}
+
+test "answer codec: ChoiceA round trip" {
+  answerRoundTrip()
+}
+
+test "decision codec: round trip keeps model and cost" {
+  decisionRoundTrip()
+}
+
+test "question codec: Choice round trip" {
+  questionRoundTrip()
+}
+
+test "action codec: Do(Wander) round trip" {
+  actionRoundTrip()
+}

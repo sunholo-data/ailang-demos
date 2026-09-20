@@ -1,0 +1,13 @@
+module probe_named_test
+import std/string (toUpper)
+import std/list (length)
+
+-- Named test block calling an imported STDLIB function.
+test "stdlib call in named test body" {
+  toUpper("hey") == "HEY"
+}
+
+-- Named test block calling an imported STDLIB 2-arg function.
+test "stdlib 2-arg call in named test body" {
+  length(["a", "b"]) == 2
+}

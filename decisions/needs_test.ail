@@ -1,0 +1,68 @@
+module needs_test
+import world (Creature, World, Intent, Wander, Rest, Eat, Drink, Toilet, Do, Hesitate, stepWorld, thoughtNoun, worldToJson, worldOfJson)
+import souls (actOnDecision, personalityOf)
+import pkg/sunholo/decisions/decide (Decision, ChoiceA)
+import std/result (Ok, Err)
+import std/io (println, exit)
+
+pure func subject() -> Creature = {
+ id: "c1", name: "Probe", pos: {x: 20.0, y: 20.0}, heading: 0.0,
+ health: 1.0, deathCause: "",
+ energy: 0.5, hunger: 0.8, thirst: 0.8, bowel: 0.8, pauseTicks: 0,
+ fear: 0.1, comfort: 0.5, soul: "wary", profile: "", intent: Wander,
+ memory: [], seen: [], lastDeliberation: 0, deliberating: false
+}
+pure func habitat(c: Creature) -> World = {
+ tick: 0, size: 60.0, creatures: [c],
+ entities: [{id: "player-object", kind: "stone", desc: "a player-described object", pos: {x: 20.0, y: 20.0}}]
+}
+pure func first(w: World) -> Creature = match w.creatures { c :: _ => c, [] => subject() }
+pure func step(i: Intent) -> Creature = first(stepWorld(habitat(subject()), [{id: "c1", act: Do(i)}]))
+pure func age(w: World, n: int) -> World = if n <= 0 then w else age(stepWorld(w, []), n - 1)
+pure func bounded() -> bool {
+ let c = first(age(habitat({subject() | hunger: 0.999, thirst: 0.999, bowel: 0.999}), 12));
+ c.hunger == 1.0 && c.thirst == 1.0 && c.bowel == 1.0
+}
+pure func remote() -> bool {
+ let c = {subject() | pos: {x: 10.0, y: 20.0}};
+ let after = first(stepWorld(habitat(c), [{id: "c1", act: Do(Drink("player-object"))}]));
+ after.thirst > c.thirst && after.pos.x > c.pos.x
+}
+pure func resumes() -> bool {
+ let paused = stepWorld(habitat(subject()), [{id: "c1", act: Hesitate}]);
+ let c = first(age(paused, 20));
+ c.pauseTicks == 0 && c.pos.x != 20.0
+}
+pure func policy(mode: string) -> bool {
+ let d: Decision = {model: "synthetic-test", id: "test", input_tokens: 0, output_tokens: 0, cost_usd: 0.0,
+ answers: [
+ {name: "behavior", answer: ChoiceA({choice: mode, confidence: 1.0, probabilities: [{key: mode, p: 1.0}]})},
+ {name: "${mode}_target", answer: ChoiceA({choice: "player-object", confidence: 1.0, probabilities: [{key: "player-object", p: 1.0}]})}]};
+ match actOnDecision(d, personalityOf("wary"), 0.2) {
+   Ok(Do(Eat(id))) => mode == "eat" && id == "player-object",
+   Ok(Do(Drink(id))) => mode == "drink" && id == "player-object",
+   Ok(Do(Toilet(id))) => mode == "toilet" && id == "player-object",
+   _ => false
+ }
+}
+pure func roundtrip() -> bool = match worldOfJson(worldToJson(habitat(subject()))) {
+ Ok(w) => first(w).hunger == 0.8 && first(w).bowel == 0.8,
+ Err(_) => false
+}
+test "physiology is bounded" { assert bounded() }
+test "eat a player object relieves hunger" { assert step(Eat("player-object")).hunger == 0.05 }
+test "drink from a player object relieves thirst" { assert step(Drink("player-object")).thirst == 0.05 }
+pure func bowelRelieved() -> bool = step(Toilet("player-object")).bowel == 0.0
+test "poo at a player object relieves bowel" { assert bowelRelieved() }
+test "no remote drinking before arrival" { assert remote() }
+test "hesitation is finite" { assert resumes() }
+test "model selected player food target" { assert policy("eat") }
+test "model selected player drink target" { assert policy("drink") }
+test "model selected player toilet target" { assert policy("toilet") }
+test "needs survive serialization" { assert roundtrip() }
+test "bounded noun reflects an active need" { assert thoughtNoun({subject() | intent: Drink("player-object")}) == "water" }
+export func main() -> () ! {IO} {
+ let ok = bounded() && remote() && resumes() && roundtrip() && policy("eat") && policy("drink") && policy("toilet") && step(Eat("player-object")).hunger == 0.05 && step(Drink("player-object")).thirst == 0.05 && step(Toilet("player-object")).bowel == 0.0;
+ println(if ok then "PASS needs, arrivals, finite hesitation and model-selected player targets" else "FAIL needs");
+ if ok then () else exit(1)
+}

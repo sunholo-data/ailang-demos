@@ -1,0 +1,13 @@
+module probe_lambda
+import std/list (foldl, map, filter, sortBy)
+
+-- Form B: space-separated lambda params
+export pure func sumB(xs: [int]) -> int = foldl(\acc x. acc + x, 0, xs)
+
+-- Form C: curried single-param lambdas
+export pure func sumC(xs: [int]) -> int = foldl(\acc. \x. acc + x, 0, xs)
+
+-- Form D: named two-arg function passed by name
+pure func add(acc: int, x: int) -> int = acc + x
+
+export pure func sumD(xs: [int]) -> int = foldl(add, 0, xs)
