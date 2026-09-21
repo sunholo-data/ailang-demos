@@ -26,7 +26,7 @@ import std/json (Json, jo, ja, kv, js, jint, jnum, encode, decode)
 import world (World, Creature, Action, Move, Do, Wander, Approach, Flee, Rest,
               demoWorld, stepWorld, digest, worldToJson, worldOfJson, visible,
               shouldDeliberate, creatureById)
-import souls (soulOf)
+import souls (reflectSelf, soulOf)
 import oracle (deliberate, demoModel, planDeliberation, moveOf, applyToCreature)
 import bank (BankRow, syntheticRow, rowToLine, lineToRow, appendRow,
              readRows, replayVerifies, rowOfDeliberation)
@@ -88,9 +88,9 @@ pure func updateCreature(cs: [Creature], updated: Creature) -> [Creature] =
   map(\c. if c.id == updated.id then updated else c, cs)
 
 func tickDeliberations(w: World, cs: [Creature], model: string, path: string,
-                       moves: [Move], rows: int, errs: int) -> ([Move], int, int) ! {Net, Env, Rand, FS, IO} =
+                       moves: [Move], rows: int, errs: int) -> (World, [Move], int, int) ! {Net, Env, Rand, FS, IO} =
   match cs {
-    []        => (moves, rows, errs),
+    []        => (w, moves, rows, errs),
     c :: rest =>
       if shouldDeliberate(c, w, cadenceOf(c)) then
         match deliberate(model, c, w) {
@@ -102,18 +102,18 @@ func tickDeliberations(w: World, cs: [Creature], model: string, path: string,
             match rowOfDeliberation(d) {
               Err(m) => {
                 printErr("banking failed for ${c.name}: ${m}");
-                tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                tickDeliberations({w | creatures:updateCreature(w.creatures,reflectSelf(applyToCreature(c,w),d.state,d.decision,w.tick))}, rest, model, path,
                                   concat(moves, [moveOf(d)]), rows, errs + 1)
               },
               Ok(row) =>
                 match appendRow(path, row) {
                   Err(m) => {
                     printErr("bank write failed: ${m}");
-                    tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                    tickDeliberations({w | creatures:updateCreature(w.creatures,reflectSelf(applyToCreature(c,w),d.state,d.decision,w.tick))}, rest, model, path,
                                       concat(moves, [moveOf(d)]), rows, errs + 1)
                   },
                   Ok(_)  =>
-                    tickDeliberations(w, updateCreature(rest, applyToCreature(c, w)), model, path,
+                    tickDeliberations({w | creatures:updateCreature(w.creatures,reflectSelf(applyToCreature(c,w),d.state,d.decision,w.tick))}, rest, model, path,
                                       concat(moves, [moveOf(d)]), rows + 1, errs)
                 }
             }
@@ -126,8 +126,8 @@ export func recordTicks(w: World, n: int, model: string, path: string,
   if n <= 0 then (w, rows, errs)
   else
     match tickDeliberations(w, w.creatures, model, path, [], rows, errs) {
-      (moves, rows2, errs2) =>
-        recordTicks(stepWorld(w, moves), n - 1, model, path, rows2, errs2)
+      (updated, moves, rows2, errs2) =>
+        recordTicks(stepWorld(updated, moves), n - 1, model, path, rows2, errs2)
     }
 
 -- ============================================================

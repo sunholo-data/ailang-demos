@@ -45,6 +45,38 @@ require(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'), 'wasm_ex
   assert.equal(applied.world.tick,31);
   assert.equal(applied.world.creatures.find(c=>c.id==='c2').lastDeliberation,30);
   console.log('PASS seeded WASM simulation determinism (30 ticks twice)');
+  // Completed encounters become evidence; a synthetic typed reflection traverses
+  // the real prepare/parse/bank/apply path, including asynchronous world changes.
+  let identityWorld=JSON.parse(state);
+  for(let i=0;i<3;i++){
+    identityWorld.creatures[0].pos={...identityWorld.creatures[1].pos};
+    identityWorld.creatures[0].intent={tag:'Socialize',id:'c2'};
+    identityWorld=(await call('coast',JSON.stringify(identityWorld))).world;
+  }
+  assert.equal(identityWorld.creatures[0].identity.total,3);
+  const identitySnapshot=JSON.stringify(identityWorld);
+  const prepared=await call('prepareLive',identitySnapshot,'c1',0);
+  const request=JSON.parse(prepared.body);assert(request.questions.self_belief);
+  const reply=require('./test-provider-fixture.cjs')(request);
+  reply.answers.self_belief={type:'choice',choice:'company',confidence:.9,probabilities:{company:1}};
+  const reflection=await call('completeLive',identitySnapshot,'c1',JSON.stringify(reply));
+  assert((await call('review',JSON.stringify(reflection.row))).verified);
+  identityWorld.creatures[0].intent={tag:'Socialize',id:'c2'};
+  identityWorld=(await call('coast',JSON.stringify(identityWorld))).world;
+  const reflected=(await call('applyDecision',JSON.stringify(identityWorld),identitySnapshot,JSON.stringify(reflection.row))).world;
+  const identity=reflected.creatures[0].identity;
+  assert.deepEqual(identity.beliefs,['company']);assert.equal(identity.total,4);assert.equal(identity.reviewed,3);
+  assert.equal(identity.history[0].evidence.length,3);
+  assert.match(reflected.creatures[0].selfDescription,/gentle company/);
+  const replayed=(await call('applyDecision',JSON.stringify(identityWorld),identitySnapshot,JSON.stringify(reflection.row))).world;
+  assert.deepEqual(replayed,reflected,'Banked reflection reproduces the same state');
+  const duplicate=(await call('applyDecision',JSON.stringify(reflected),identitySnapshot,JSON.stringify(reflection.row))).world;
+  assert.equal(duplicate.creatures[0].identity.history.length,1);
+  const next=JSON.parse((await call('prepareLive',JSON.stringify(reflected),'c1',1)).body);
+  assert(!next.questions.self_belief,'Already reviewed experience does not trigger another reflection');
+  assert.match(JSON.stringify(next.state),/gentle company/);
+  console.log('PASS WASM completed experiences, typed reflection, changed self-perception, bank replay and delayed-response preservation');
+
   const cornerWorld=JSON.parse(state);
   cornerWorld.creatures=cornerWorld.creatures.map(c=>({...c,pos:{x:59,y:59},heading:0.7,intent:{tag:'Wander'}}));
   let moving=JSON.stringify(cornerWorld);

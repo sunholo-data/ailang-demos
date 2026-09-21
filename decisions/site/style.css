@@ -310,3 +310,18 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
  .habitat>#status,.habitat>#item-activity,.habitat>#artwork-status{bottom:8px;max-width:45%;font-size:11px}
  .item-placing .world-wrap{margin:0 136px 0 0}.item-placing #placement-controls{left:auto;right:8px;bottom:8px;transform:none;max-width:180px;padding:10px}.item-placing #placement-controls>div{flex-direction:column}
 }
+
+/* The character's self-image is part of their story, with evidence one tap away. */
+.self-image{margin:1rem 0;padding:1rem;border:1px solid var(--border, #b7c8cd);border-radius:16px;background:rgba(255,255,255,.045);overflow-wrap:anywhere}
+.self-image-heading{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.self-image-heading h3{margin:0;font-size:1rem}
+#identity-count,.identity-progress,.identity-label{font-size:.75rem;opacity:.75}
+#self-description{font-size:1rem;line-height:1.6;margin:.75rem 0}
+.self-image summary{cursor:pointer;font-size:.85rem;padding:.5rem 0}
+.identity-change{border-top:1px solid rgba(140,166,177,.3);margin-top:1rem;padding-top:1rem}
+.identity-change strong{font-size:.8rem}
+.identity-change p,.identity-change li{font-size:.85rem;line-height:1.5}
+.identity-before{opacity:.65}
+.identity-change ul{padding-left:1.2rem}
+.identity-activity{display:block;max-width:100%;margin:.5rem 0;text-align:left;white-space:normal;font-size:.85rem}
+.identity-activity[hidden]{display:none}

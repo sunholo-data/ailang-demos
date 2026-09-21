@@ -71,7 +71,7 @@ export pure func applyToCreature(c: Creature, w: World) -> Creature = {
     health: c.health, deathCause: c.deathCause,
     hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: c.pauseTicks,
     energy: c.energy, fear: c.fear, comfort: c.comfort,
-    soul: c.soul, profile: c.profile, intent: c.intent, memory: c.memory,
+    soul: c.soul, profile: c.profile, identity: c.identity, intent: c.intent, memory: c.memory,
     seen: seenNow, lastDeliberation: w.tick, deliberating: false }
 }
 
@@ -81,5 +81,5 @@ export pure func markDeliberating(c: Creature) -> Creature =
     health: c.health, deathCause: c.deathCause,
     hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: c.pauseTicks,
     energy: c.energy, fear: c.fear, comfort: c.comfort,
-    soul: c.soul, profile: c.profile, intent: c.intent, memory: c.memory,
+    soul: c.soul, profile: c.profile, identity: c.identity, intent: c.intent, memory: c.memory,
     seen: c.seen, lastDeliberation: c.lastDeliberation, deliberating: true }

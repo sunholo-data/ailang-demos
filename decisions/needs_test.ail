@@ -1,5 +1,5 @@
 module needs_test
-import world (Creature, World, Intent, Wander, Rest, Eat, Drink, Toilet, Do, Hesitate, stepWorld, thoughtNoun, worldToJson, worldOfJson)
+import world (emptyIdentity, Creature, World, Intent, Wander, Rest, Eat, Drink, Toilet, Do, Hesitate, stepWorld, thoughtNoun, worldToJson, worldOfJson)
 import souls (actOnDecision, personalityOf)
 import pkg/sunholo/decisions/decide (Decision, ChoiceA)
 import std/result (Ok, Err)
@@ -9,7 +9,7 @@ pure func subject() -> Creature = {
  id: "c1", name: "Probe", pos: {x: 20.0, y: 20.0}, heading: 0.0,
  health: 1.0, deathCause: "",
  energy: 0.5, hunger: 0.8, thirst: 0.8, bowel: 0.8, pauseTicks: 0,
- fear: 0.1, comfort: 0.5, soul: "wary", profile: "", intent: Wander,
+ fear: 0.1, comfort: 0.5, soul: "wary", profile: "", identity: emptyIdentity(), intent: Wander,
  memory: [], seen: [], lastDeliberation: 0, deliberating: false
 }
 pure func habitat(c: Creature) -> World = {

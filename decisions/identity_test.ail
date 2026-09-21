@@ -1,0 +1,82 @@
+module identity_test
+import world (Creature, World, mkCreature, demoWorld, Do, Drink, stepWorld, noteExperience, reflectionDue, selfDescription, originalDescription, perceive, worldToJson, worldOfJson)
+import souls (reflectSelf, reflectionQuestions)
+import pkg/sunholo/decisions/decide (Decision, ChoiceA)
+import std/json (encode)
+import std/list (length, contains)
+import std/result (Ok, Err)
+import std/io (println, exit)
+
+pure func subject() -> Creature = {mkCreature("c1","Pip","wary",18.0,18.0,0.0) | profile:"{\"description\":\"A shy creature who likes berries.\"}"}
+pure func experienced() -> Creature = noteExperience(noteExperience(noteExperience(subject(),1,"I spent time with Bold and felt more comfortable."),2,"I spent time with Curious and felt more comfortable."),3,"I spent time with Bold and felt more comfortable.")
+pure func decision(key: string, confidence: float) -> Decision = {model:"synthetic-identity-test",id:"identity",input_tokens:0,output_tokens:0,cost_usd:0.0,answers:[{name:"self_belief",answer:ChoiceA({choice:key,confidence:confidence,probabilities:[{key:key,p:1.0}]})}]}
+pure func reflect(c: Creature, key: string, confidence: float) -> Creature = reflectSelf(c,encode(perceive(c,demoWorld())),decision(key,confidence),10)
+pure func changed() -> Creature = reflect(experienced(),"company",0.9)
+pure func first(w: World) -> Creature = match w.creatures { c :: _ => c, [] => subject() }
+pure func learns() -> bool = {
+ let c=changed();
+ contains(c.identity.beliefs,"company") && c.identity.reviewed==3 && c.profile==subject().profile && c.soul=="wary" && length(c.identity.history)==1 && selfDescription(c)!=originalDescription(c)
+}
+pure func survivesCodec() -> bool = match worldOfJson(worldToJson({demoWorld() | creatures:[changed()]})) {Err(_) => false,Ok(w) => encode(worldToJson(w))==encode(worldToJson({demoWorld() | creatures:[changed()]}))}
+pure func asyncEvidence() -> bool = {
+ let observed=experienced(); let current=noteExperience(observed,4,"I drank and my thirst fell.");
+ let result=reflectSelf(current,encode(perceive(observed,demoWorld())),decision("company",0.9),20);
+ result.identity.total==4 && result.identity.reviewed==3 && length(result.identity.experiences)==4 && match result.identity.history { h :: _ => length(h.evidence)==3, [] => false }
+}
+pure func noDoubleLearning() -> bool = {
+ let state=encode(perceive(experienced(),demoWorld())); let once=reflectSelf(experienced(),state,decision("company",0.9),10);
+ let twice=reflectSelf(once,state,decision("solitude",0.9),20);
+ selfDescription(twice)==selfDescription(once) && length(twice.identity.history)==1
+}
+pure func contraryExperience() -> bool = {
+ let c=noteExperience(noteExperience(noteExperience(changed(),11,"I gave Bold space."),12,"I gave Curious space."),13,"I rested alone and recovered.");
+ let result=reflect(c,"solitude",0.9);
+ contains(result.identity.beliefs,"solitude") && not contains(result.identity.beliefs,"company") && length(result.identity.history)==2
+}
+pure func outcomeRecorded() -> bool = {
+ let c=subject(); let w={demoWorld() | creatures:[c],entities:[{id:"jug",kind:"stone",carrier:"",pos:c.pos,desc:"a jug of clean water"}]};
+ let after=first(stepWorld(w,[{id:c.id,act:Do(Drink("jug"))}]));
+ after.identity.total==1 && after.thirst<0.1 && match after.identity.experiences {e :: _ => e.text=="I drank from a jug of clean water and my thirst fell.", [] => false}
+}
+pure func pendingNotExperience() -> bool = {
+ let c=subject(); let w={demoWorld() | creatures:[c],entities:[{id:"jug",kind:"stone",carrier:"",pos:{x:50.0,y:50.0},desc:"water"}]};
+ first(stepWorld(w,[{id:c.id,act:Do(Drink("jug"))}])).identity.total==0
+}
+pure func boundedHistory(c: Creature, n: int) -> Creature = if n==0 then c else {
+ let ready=noteExperience(noteExperience(noteExperience(c,n,"A completed encounter."),n,"A completed encounter."),n,"A completed encounter.");
+ boundedHistory(reflect(ready,if contains(c.identity.beliefs,"company") then "solitude" else "company",0.9),n-1)
+}
+
+
+-- On v0.40.2-6-ge12e0335d, named-test extraction misbinds list length
+-- inside the reflection pipeline to _str_len. The native runtime below
+-- exercises the full pipeline with contracts; retain extraction-safe tests too.
+test "identity starts with player description" {assert selfDescription(subject())=="A shy creature who likes berries."}
+test "reflection requires three completed experiences" {assert not reflectionDue(subject()) && length(reflectionQuestions(experienced()))==1}
+test "completed use records concrete outcome" {assert outcomeRecorded()}
+test "walking toward an outcome does not count as success" {assert pendingNotExperience()}
+
+export func main() -> () ! {IO} {
+ let missing=reflectSelf(experienced(),encode(perceive(experienced(),demoWorld())),{decision("company",1.0) | answers:[]},10);
+ let kept=reflect(experienced(),"keep",0.99);
+ let checks=[
+   {name:"original description",ok:selfDescription(subject())=="A shy creature who likes berries."},
+   {name:"three actual experiences required",ok:not reflectionDue(subject()) && length(reflectionQuestions(experienced()))==1},
+   {name:"changed belief preserves origin",ok:learns()},
+   {name:"low confidence preserves belief",ok:length(reflect(experienced(),"company",0.64).identity.beliefs)==0},
+   {name:"keep is a valid reflection",ok:kept.identity.reviewed==3 && length(kept.identity.history)==0},
+   {name:"legacy missing answer",ok:missing.identity.reviewed==0},
+   {name:"world codec",ok:survivesCodec()},
+   {name:"asynchronous evidence",ok:asyncEvidence()},
+   {name:"duplicate response",ok:noDoubleLearning()},
+   {name:"later experience reverses belief",ok:contraryExperience()},
+   {name:"concrete completed outcome",ok:outcomeRecorded()},
+   {name:"no imagined success",ok:pendingNotExperience()},
+   {name:"bounded history",ok:length(boundedHistory(subject(),8).identity.history)==5 && length(boundedHistory(subject(),8).identity.experiences)==6},
+   {name:"dead creature",ok:not reflectionDue({experienced() | health:0.0})}
+ ];
+ runChecks(checks)
+}
+func runChecks(checks: [{name:string,ok:bool}]) -> () ! {IO} = match checks {
+ [] => (), c :: rest => {println("${if c.ok then "PASS" else "FAIL"} ${c.name}"); if c.ok then runChecks(rest) else exit(1)}
+}

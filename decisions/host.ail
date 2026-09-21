@@ -1,7 +1,7 @@
 -- Browser boundary: all simulation, policy, sampling and evidence stay in AILANG.
 module host
 import world (World, Creature, Action, Move, Do, Rest, Wander, Approach, Flee, demoWorld, worldToJson, worldOfJson, stepWorld, visible, creatureById, perceive, shouldDeliberate, actionToJson, intentText, urgencyOf, mkCreature, profileNumber)
-import souls (soulOf, personalityOf, personalityForState, presentThreat, sampleFrom, errText, NQ, actOnDecision, actSummary)
+import souls (soulOf, personalityOf, personalityForState, presentThreat, sampleFrom, errText, NQ, actOnDecision, actSummary, reflectSelf)
 import oracle (deliberate, demoModel, applyToCreature, planDeliberation)
 import bank (lineToRow, replayRow, rowActionMatches, rowOfDeliberation, rowToJson, probsToJson, decisionToJson)
 import render (renderWorld, renderBars, fmt1)
@@ -89,7 +89,7 @@ export func deliberateLive(s: string, id: string, completed: int) -> string ! {N
     None => failure("Unknown creature"), Some(c) => if c.health <= 0.0 then failure("This creature has died. Reset to begin a new habitat.") else match deliberate(demoModel(), c, w) {
       Err(m) => failure(m), Ok(d) => match rowOfDeliberation(d) {
         Err(m) => failure(m), Ok(row) => {
-          let updated = { w | creatures: map(\cc. if cc.id == id then applyToCreature(cc, w) else cc, w.creatures) };
+          let updated = { w | creatures: map(\cc. if cc.id == id then reflectSelf(applyToCreature(cc, w),d.state,d.decision,w.tick) else cc, w.creatures) };
           let next = stepWorld(updated, [{id: id, act: d.action}]);
           encode(jo([kv("ok", jb(true)), kv("world", worldToJson(next)), kv("svg", js(renderWorld(encode(worldToJson(next))))), kv("row", rowToJson(row))]))
         }
@@ -138,11 +138,11 @@ export pure func applyDecision(current: string, snapshot: string, line: string) 
   Err(m) => failure(m), Ok(w) => match readWorld(snapshot) {
     Err(m) => failure(m), Ok(observed) => match lineToRow(line) {
       Err(m) => failure(m), Ok(row) => match replayRow(row) {
-        Err(m) => failure(m), Ok((_, act)) =>
+        Err(m) => failure(m), Ok((decision, act)) =>
           if not rowActionMatches(row, act) then failure("Refused divergent decision")
           else {
             let updated = { w | creatures: map(\c.
-              if c.id == row.creatureId then { applyToCreature(c, observed) | lastDeliberation: w.tick }
+              if c.id == row.creatureId then { reflectSelf(applyToCreature(c, observed),row.state,decision,w.tick) | lastDeliberation: w.tick }
               else c, w.creatures) };
             frame(stepWorld(updated, [{id: row.creatureId, act: act}]))
           }

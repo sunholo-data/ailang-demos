@@ -101,6 +101,7 @@ function draw(frame) {
   drawArtwork();
   motion.update(world);
   updateVitals();
+  updateIdentity(previousWorld);
   $('#tick').textContent=`Tick ${world.tick}`;
   $('#phase').textContent=['Early day','Late day','Dusk'][Math.floor(world.tick%120/40)];
   highlight();
@@ -117,7 +118,7 @@ function highlight(){
   if(c)$('.observation').style.setProperty('--creature',colors[c.soul]);
 }
 function tabs(){const root=$('#creature-tabs');root.replaceChildren();for(const c of world.creatures){const b=document.createElement('button');b.textContent=c.profile?c.name:c.soul[0].toUpperCase()+c.soul.slice(1);b.style.setProperty('--creature',colors[c.soul]);b.setAttribute('aria-pressed',c.id===selected);b.onclick=()=>{if(!busy)selectCreature(c.id).catch(fail);};root.append(b);}}
-async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();
+async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();updateIdentity();
  const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;updateSocial();$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}updateSocial();}
 function showEvidence(){if(!review)return;const raw=review.row[evidence];try{$('#evidence').textContent=JSON.stringify(JSON.parse(raw),null,2);}catch{$('#evidence').textContent=raw;}}
 function actionLabel(action){if(action.tag==='Do'){const target=review ? [...(JSON.parse(review.row.state).nearby||[]),...(JSON.parse(review.row.state).others||[]),...(JSON.parse(review.row.state).map||[])].find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+(target.name||target.desc) : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
@@ -666,3 +667,39 @@ document.addEventListener('fullscreenchange',()=>{
   fullscreenButton.querySelector('span').textContent=active?'Exit full screen':'Full screen';
   fullscreenButton.setAttribute('aria-label',active?'Exit full screen':'Enter full screen');
 });
+
+
+// All beliefs, descriptions and evidence come from AILANG; the UI only presents them.
+function updateIdentity(previousWorld) {
+  const c=world?.creatures.find(c=>c.id===selected);
+  if(c){
+    const identity=c.identity||{history:[],total:0,reviewed:0};
+    $('#self-description').textContent=c.selfDescription||flavors[c.soul];
+    $('#original-description').textContent=c.originalDescription||flavors[c.soul];
+    $('#identity-count').textContent=identity.history.length?'Shaped by experience':'A new beginning';
+    const pending=Math.max(0,identity.total-identity.reviewed);
+    $('#identity-progress').textContent=c.health<=0?'A life remembered.':pending>=3?'Ready to reflect at the next Jev judgment.':`${Math.min(pending,3)} / 3 new experiences before reflection. Keeping a belief is a choice, too.`;
+    const history=$('#identity-history');
+    const signature=JSON.stringify([c.id,identity.history]);
+    if(history.dataset.signature!==signature){
+      history.dataset.signature=signature;history.replaceChildren();
+      if(!identity.history.length){const p=document.createElement('p');p.textContent='Their story is just beginning. Completed experiences give Jev evidence to reflect on.';history.append(p);}
+      for(const change of [...identity.history].reverse()){
+        const entry=document.createElement('article');entry.className='identity-change';
+        const label=document.createElement('strong');label.textContent=`A new understanding · tick ${change.tick}`;
+        const before=document.createElement('p');before.className='identity-before';before.textContent=`Before: ${change.before}`;
+        const after=document.createElement('p');after.textContent=change.after;
+        const evidence=document.createElement('ul');
+        for(const event of change.evidence){const li=document.createElement('li');li.textContent=`Tick ${event.tick}: ${event.text}`;evidence.append(li);}
+        entry.append(label,before,after,evidence);history.append(entry);
+      }
+    }
+  }
+  if(!previousWorld){if(!world?.creatures.some(c=>c.identity?.history.length))$('#identity-activity').hidden=true;return;}
+  const changed=world.creatures.find(c=>{
+    const old=previousWorld.creatures.find(p=>p.id===c.id);
+    return old&&JSON.stringify(old.identity?.beliefs)!==JSON.stringify(c.identity?.beliefs)&&c.identity?.history.length;
+  });
+  if(changed){const notice=$('#identity-activity');notice.hidden=false;notice.textContent=`${changed.name} sees themselves differently. Read their story →`;notice.onclick=async()=>{await selectCreature(changed.id);openGamePanel('observation-panel');};}
+  else if(!world.creatures.some(c=>c.identity?.history.length))$('#identity-activity').hidden=true;
+}

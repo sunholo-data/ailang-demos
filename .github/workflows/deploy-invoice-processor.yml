@@ -118,6 +118,7 @@ jobs:
           ailang lock
           ailang check --package .
           ailang test --package .
+          ailang run --verify-contracts --caps IO --entry main identity_test.ail
           ailang run --verify-contracts --caps IO,FS,Net,Env,Rand --entry main main.ail selftest
       - name: Build standalone static decisions artifact
         run: scripts/build-decisions.sh .decisions-site/decisions
@@ -138,6 +139,7 @@ jobs:
           trap 'kill "$PREVIEW_PID"' EXIT
           export NOULS_PREVIEW_URL=http://127.0.0.1:8959/decisions/
           node decisions/test-public-browser.cjs
+          node decisions/test-identity-browser.cjs
           node decisions/test-browser.cjs
           node decisions/test-fullscreen-browser.cjs
           node decisions/test-item-art.cjs

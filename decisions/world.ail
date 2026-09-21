@@ -30,6 +30,10 @@ export type Entity = { id: string, kind: string, desc: string, pos: Vec2, carrie
 
 export type Intent = Wander | Approach(string) | Flee(string) | Eat(string) | Drink(string) | Toilet(string) | Socialize(string) | Avoid(string) | PickUp(string) | Drop | Destroy(string) | Rest
 
+export type Experience = { serial: int, tick: int, text: string }
+export type SelfChange = { tick: int, before: string, after: string, evidence: [Experience] }
+export type SelfImage = { beliefs: [string], experiences: [Experience], total: int, reviewed: int, history: [SelfChange] }
+
 export type Creature = {
   id: string,
   name: string,
@@ -40,6 +44,7 @@ export type Creature = {
   energy: float,         -- 0..1
   fear: float,           -- 0..1
   comfort: float,        -- 0..1
+  identity: SelfImage,
   profile: string,       -- optional, banked player-created decision configuration
   soul: string,          -- key into souls.ail's personality table
   intent: Intent,
@@ -171,7 +176,7 @@ export pure func socialPreferences(c: Creature) -> string = {
     else if c.soul == "paranoid" then "I prefer quiet, predictable companions at a respectful distance. I dislike crowding and being followed; solitude often feels better."
     else "I like meeting unfamiliar companions and curious explorers. I enjoy novelty, but respect companions who want to be alone.";
   let personal = match decode(c.profile) { Err(_) => "", Ok(j) => getOrElse(getString(j, "description"), "") };
-  if personal == "" then baseline else "${baseline} My individual description takes priority for social likes and dislikes: ${personal}"
+  "${if personal == "" then baseline else personal} These are starting preferences. My current self-description takes priority where experience has changed them: ${selfDescription(c)}"
 }
 
 export pure func otherNouls(c: Creature, w: World) -> [Creature]
@@ -195,6 +200,8 @@ pure func peerName(w: World, id: string) -> string =
 -- The UI bounds the map at 40 objects; whole-map descriptions increase token use.
 export pure func perceive(c: Creature, w: World) -> Json =
   jo([
+    kv("identityPolicyVersion",jint(1)), kv("selfImage",identityToJson(c.identity)), kv("selfDescription",js(selfDescription(c))), kv("originalDescription",js(originalDescription(c))),
+    kv("newExperiences",ja(map(experienceToJson,unreviewedExperiences(c)))),
     kv("profile", js(c.profile)), kv("policyVersion", jint(2)), kv("urgency", jnum(urgencyOf(c))),
     kv("socialPolicyVersion", jint(1)), kv("itemPolicyVersion", jint(1)),
     kv("inventory", jo([kv("capacity", jint(1)), kv("held", ja(map(entityToJson,heldItems(c,w))))])),
@@ -294,7 +301,7 @@ ensures { inventoryValid(result) }
 }
 
 pure func inventoryMemory(w: World, id: string, message: string) -> World =
-  {w | creatures:map(\c. if c.id == id then {c | intent:Wander, memory:remember(c,message), lastDeliberation:w.tick} else c,w.creatures)}
+  {w | creatures:map(\c. if c.id == id then {noteExperience(c,w.tick,message) | intent:Wander, memory:remember(c,message), lastDeliberation:w.tick} else c,w.creatures)}
 
 pure func handleInventory(w: World, actor: Creature) -> World = match creatureById(w,actor.id) {
   None => w,
@@ -334,7 +341,7 @@ pure func markDither(c: Creature) -> Creature = {
     hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: 6,
     energy: clamp01(c.energy - 0.001), fear: clamp01(c.fear + 0.01),
     comfort: clamp01(c.comfort - 0.005),
-    soul: c.soul, profile: c.profile, intent: Rest, memory: mem, seen: c.seen,
+    soul: c.soul, profile: c.profile, identity: c.identity, intent: Rest, memory: mem, seen: c.seen,
     lastDeliberation: c.lastDeliberation, deliberating: c.deliberating }
 }
 
@@ -343,7 +350,7 @@ pure func setIntent(c: Creature, i: Intent) -> Creature =
     health: c.health, deathCause: c.deathCause,
     hunger: c.hunger, thirst: c.thirst, bowel: c.bowel, pauseTicks: c.pauseTicks,
     energy: c.energy, fear: c.fear, comfort: c.comfort,
-    soul: c.soul, profile: c.profile, intent: i, memory: c.memory, seen: c.seen,
+    soul: c.soul, profile: c.profile, identity: c.identity, intent: i, memory: c.memory, seen: c.seen,
     lastDeliberation: c.lastDeliberation, deliberating: c.deliberating }
 
 export pure func remember(c: Creature, line: string) -> [string] = {
@@ -420,7 +427,7 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
   let vy = if crossY then 0.0 - dy else dy;
   let pos = clampPos(w.size, {x: origin.x + vx, y: origin.y + vy});
   let heading = if blocked then atan2(vy, vx) else desiredHeading;
-  { id: c.id, name: c.name, pos: pos, heading: heading,
+  let moved = { id: c.id, name: c.name, pos: pos, heading: heading,
     health: c.health, deathCause: c.deathCause,
     hunger: if eating then 0.05 else c.hunger,
     thirst: if drinking then 0.05 else c.thirst,
@@ -429,7 +436,7 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
     energy: clamp01(c.energy + (if eating then 0.15 else 0.0) - 0.0008 / profileNumber(c.profile, "stamina", 1.0, 0.6, 1.4) + (if isRest(active) then 0.008 else 0.0)),
     fear: clamp01(c.fear - 0.01 + fearDelta(active)),
     comfort: clamp01(c.comfort + (if meeting then 0.08 else 0.0) + (if isRest(active) then 0.02 else -0.002)),
-    soul: c.soul, profile: c.profile,
+    soul: c.soul, profile: c.profile, identity: c.identity,
     intent: if blocked then Wander else active,
     memory: if supplied then remember(c, if eating then "I ate the object I chose" else if drinking then "I drank from the object I chose" else "I pooed at the place I chose")
             else if blocked then remember(c, "The edge blocked my path; I turned back into the habitat")
@@ -438,7 +445,19 @@ ensures { result.pos.x >= 3.0, result.pos.x <= w.size - 3.0,
             else c.memory,
     seen: c.seen,
     lastDeliberation: if blocked then w.tick - 100 else c.lastDeliberation,
-    deliberating: c.deliberating }
+    deliberating: c.deliberating };
+  let event = if supplied then match i {
+    Eat(id) => "I ate ${objectDescription(w,id)} and my hunger fell.",
+    Drink(id) => "I drank from ${objectDescription(w,id)} and my thirst fell.",
+    Toilet(id) => "I found relief at ${objectDescription(w,id)}.", _ => ""
+  } else if meeting then match i { Socialize(id) => "I spent time with ${peerName(w,id)}${if moved.comfort > c.comfort then " and felt more comfortable" else "; I was already comfortable"}.", _ => "" }
+  else if finished then match i {
+    Approach(id) => "I approached ${objectDescription(w,id)}. I have not yet learned whether it is useful or safe.",
+    Flee(id) => "I moved away from ${objectDescription(w,id)}. My fear was not proof of danger.",
+    Avoid(id) => "I gave ${peerName(w,id)} space.",
+    Rest => "I rested and recovered my energy.", _ => ""
+  } else "";
+  if event == "" then moved else noteExperience(moved,w.tick,event)
 }
 
 -- Where is this intent heading? None = keep current heading (Wander/Rest).
@@ -528,6 +547,7 @@ export pure func creatureToJson(c: Creature) -> Json =
     kv("pauseTicks", jint(c.pauseTicks)), kv("thought", js(thoughtNoun(c))),
     kv("energy", jnum(c.energy)), kv("fear", jnum(c.fear)), kv("comfort", jnum(c.comfort)),
     kv("socialPreferences", js(socialPreferences(c))),
+    kv("identity", identityToJson(c.identity)), kv("selfDescription",js(selfDescription(c))), kv("originalDescription",js(originalDescription(c))),
     kv("profile", js(c.profile)), kv("soul", js(c.soul)), kv("intent", intentToJson(c.intent)),
     kv("memory", ja(map(js, c.memory))), kv("seen", ja(map(js, c.seen))),
     kv("lastDeliberation", jint(c.lastDeliberation)),
@@ -589,6 +609,7 @@ pure func creatureOfJson(j: Json) -> Result[Creature, string] = {
       comfort: getOrElse(getNumber(j, "comfort"), 0.5),
       soul: getOrElse(getString(j, "soul"), "wary"),
       profile: getOrElse(getString(j, "profile"), ""),
+      identity: identityOfJson(getOrElse(getObject(j,"identity"),jo([]))),
       intent: i,
       memory: jsonStrings(j, "memory"),
       seen: jsonStrings(j, "seen"),
@@ -643,7 +664,7 @@ export pure func digest(w: World) -> string = {
 -- ============================================================
 
 export pure func mkCreature(id: string, name: string, soul: string, x: float, y: float, h: float) -> Creature =
-  { id: id, name: name, soul: soul, profile: "", pos: { x: x, y: y }, heading: h,
+  { id: id, name: name, soul: soul, profile: "", identity: emptyIdentity(), pos: { x: x, y: y }, heading: h,
     health: 1.0, deathCause: "",
     hunger: if soul == "wary" then 0.68 else 0.3,
     thirst: if soul == "bold" then 0.65 else 0.25,
@@ -729,4 +750,65 @@ ensures { result >= lo, result <= hi }
 {
  let n = match decode(profile) { Err(_) => fallback, Ok(j) => getOrElse(getNumber(j, key), fallback) };
  if n < lo then lo else if n > hi then hi else n
+}
+
+
+-- Experience is earned by completed actions, never by a model's prediction.
+export pure func emptyIdentity() -> SelfImage = {beliefs:[],experiences:[],total:0,reviewed:0,history:[]}
+
+export pure func originalDescription(c: Creature) -> string = match decode(c.profile) {
+  Ok(j) => getOrElse(getString(j,"description"),"I am a ${c.soul} Noul."),
+  Err(_) => if c.soul == "wary" then "I prefer safety and gentle company."
+    else if c.soul == "paranoid" then "I am watchful, easily worried, and prefer my own space."
+    else if c.soul == "bold" then "I am adventurous and would rather act than wait."
+    else "I am curious about unfamiliar things and companions."
+}
+
+export pure func beliefFamily(key: string) -> string =
+  if key == "braver" || key == "careful" then "courage"
+  else if key == "company" || key == "solitude" then "company"
+  else if key == "explorer" || key == "content" then "curiosity"
+  else ""
+
+export pure func beliefText(key: string) -> string =
+  if key == "braver" then "I am learning to try things even when I feel unsure."
+  else if key == "careful" then "I am learning to take my time and look for evidence before committing."
+  else if key == "company" then "I am discovering that I enjoy gentle company."
+  else if key == "solitude" then "I am discovering that having my own space matters to me."
+  else if key == "explorer" then "I am becoming someone who seeks out unfamiliar things."
+  else if key == "content" then "I am becoming someone who values familiar comforts and a settled routine."
+  else ""
+
+export pure func selfDescription(c: Creature) -> string =
+  if length(c.identity.beliefs) == 0 then originalDescription(c)
+  else foldl(\acc. \key. if acc == "" then beliefText(key) else "${acc} ${beliefText(key)}", "", c.identity.beliefs)
+
+export pure func noteExperience(c: Creature, tick: int, text: string) -> Creature
+ensures { length(result.identity.experiences) <= 6, result.identity.total == c.identity.total + 1 }
+{
+  let events = concat(c.identity.experiences,[{serial:c.identity.total+1,tick:tick,text:text}]);
+  {c | identity:{c.identity | total:c.identity.total+1,experiences:drop(if length(events)>6 then length(events)-6 else 0,events)}}
+}
+
+export pure func unreviewedExperiences(c: Creature) -> [Experience] =
+  filter(\e. e.serial > c.identity.reviewed,c.identity.experiences)
+
+export pure func reflectionDue(c: Creature) -> bool =
+  c.health > 0.0 && length(unreviewedExperiences(c)) >= 3
+
+pure func objectDescription(w: World, id: string) -> string =
+  match filter(\e. e.id==id,w.entities) {e :: _ => e.desc, [] => id}
+
+pure func experienceToJson(e: Experience) -> Json = jo([kv("serial",jint(e.serial)),kv("tick",jint(e.tick)),kv("text",js(e.text))])
+pure func experienceOfJson(j: Json) -> Experience = {serial:getOrElse(getInt(j,"serial"),0),tick:getOrElse(getInt(j,"tick"),0),text:getOrElse(getString(j,"text"),"")}
+export pure func identityToJson(i: SelfImage) -> Json = jo([
+  kv("beliefs",ja(map(js,i.beliefs))),kv("total",jint(i.total)),kv("reviewed",jint(i.reviewed)),
+  kv("experiences",ja(map(experienceToJson,i.experiences))),
+  kv("history",ja(map(\h. jo([kv("tick",jint(h.tick)),kv("before",js(h.before)),kv("after",js(h.after)),kv("evidence",ja(map(experienceToJson,h.evidence)))]),i.history)))
+])
+export pure func identityOfJson(j: Json) -> SelfImage = {
+  beliefs:take(3,filter(\key. beliefFamily(key)!="",jsonStrings(j,"beliefs"))),
+  total:getOrElse(getInt(j,"total"),0), reviewed:getOrElse(getInt(j,"reviewed"),0),
+  experiences:take(6,map(experienceOfJson,getOrElse(getArray(j,"experiences"),[]))),
+  history:take(5,map(\h. {tick:getOrElse(getInt(h,"tick"),0),before:getOrElse(getString(h,"before"),""),after:getOrElse(getString(h,"after"),""),evidence:take(6,map(experienceOfJson,getOrElse(getArray(h,"evidence"),[])))},getOrElse(getArray(j,"history"),[])))
 }

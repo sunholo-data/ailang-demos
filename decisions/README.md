@@ -105,3 +105,16 @@ Original AILANG SVG, Montserrat and Sunholo tokens come from
 https://www.sunholo.com/assets.html, revision `aa420f4c1ebd`. Fonts and their SIL
 Open Font License are in `site/assets/brand/`. Blender source is in `art/`;
 creature sprites use slate and orange, sixteen headings and five gait frames.
+
+## A self-image shaped by experience
+
+Open **Nouls → Who I’m becoming** to see a creature’s current self-description,
+original description and the experiences behind its changes. After three
+completed experiences, Jev can revise one belief about courage, company or
+curiosity in its next ordinary judgment. It can also keep its existing view.
+Those beliefs inform future decisions, and later experiences can change them
+again. Wording comes from a bounded typed vocabulary, not generated prose.
+
+Self-image lasts for the current habitat; reset/reload begins again. Reflections
+are included in the existing session budget and banked decision evidence.
+See [identity validation](IDENTITY_VALIDATION.md) for implementation and evidence.

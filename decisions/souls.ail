@@ -9,7 +9,7 @@
 
 module souls
 
-import world (Creature, World, Entity, Intent, Action, Do, Hesitate, Idle, Wander, Approach, Flee, Rest, Eat, Drink, Toilet, Socialize, Avoid, PickUp, Drop, Destroy, heldItems, availableItems, looseItems, movable, otherNouls, publicDescription, visible, takeNearest, urgencyOf, profileNumber)
+import world (Creature, World, Entity, Intent, Action, Do, Hesitate, Idle, Wander, Approach, Flee, Rest, Eat, Drink, Toilet, Socialize, Avoid, PickUp, Drop, Destroy, heldItems, availableItems, looseItems, movable, otherNouls, publicDescription, visible, takeNearest, urgencyOf, profileNumber, selfDescription, reflectionDue, unreviewedExperiences, identityOfJson, beliefFamily, beliefText)
 import pkg/sunholo/decisions/decide (Question, Noul, Choice, Score,
                                      Answer, NoulA, ChoiceA, ScoreA,
                                      Decision, DecideError, MissingKey, Http, Transport, BadResponse, MissingAnswer, WrongVariant,
@@ -17,7 +17,7 @@ import pkg/sunholo/decisions/decide (Question, Noul, Choice, Score,
                                      detect, Present, Absent, Uncertain,
                                      ranked, probabilityOf, expectedScore)
 import std/json (Json, jo, ja, kv, js, getString, getArray, getObject, asString, decode, getNumber, getInt)
-import std/list (length, take, map, concat, filter, foldl)
+import std/list (length, take, map, concat, filter, foldl, drop, contains)
 import std/option (Option, Some, None, getOrElse)
 import std/result (Result, Ok, Err)
 import std/string (floatToStr, startsWith, substring, intToStr)
@@ -66,7 +66,10 @@ export pure func personalityOf(key: string) -> Personality = {
       extra: Some(curious) }
 }
 
-export pure func soulOf(c: Creature) -> Personality = urgentPersonality(profilePersonality(c.soul, c.profile), urgencyOf(c))
+export pure func soulOf(c: Creature) -> Personality = {
+  let p = urgentPersonality(profilePersonality(c.soul, c.profile), urgencyOf(c));
+  {p | flavor:"${p.flavor} That is my starting temperament. My present self-understanding is: ${selfDescription(c)} Where these differ, use my experience-shaped beliefs for preferences. They do not grant new physical abilities. Consider what actually happened, not imagined successes."}
+}
 
 export pure func urgentPersonality(p: Personality, urgency: float) -> Personality = {
   let stress = if urgency < 0.6 then 0.0 else if urgency >= 0.95 then 1.0 else (urgency - 0.6) / 0.35;
@@ -139,7 +142,7 @@ export pure func buildQuestions(p: Personality, c: Creature, w: World) -> [NQ] =
       { name: "eat_target", q: Choice("Which described map object would best satisfy hunger if I chose to eat?", entityOptions(candidates)) },
       { name: "drink_target", q: Choice("Which described map object would best satisfy thirst if I chose to drink?", entityOptions(candidates)) },
       { name: "toilet_target", q: Choice("Which described map place would be most suitable for pooing, away from food and water?", entityOptions(candidates)) }]),
-    concat(itemQuestions(c,w),concat(socialQuestions(c,w), concat(threatQuestions(near), questionExtra(p)))))
+    concat(itemQuestions(c,w),concat(socialQuestions(c,w), concat(threatQuestions(near), concat(questionExtra(p),reflectionQuestions(c))))))
 }
 
 export pure func inventoryBehavior(c: Creature, w: World) -> [{key:string,desc:string}] =
@@ -500,3 +503,51 @@ export pure func profilePersonality(key: string, profile: string) -> Personality
 }
 
 pure func boundedCadence(n: int) -> int = if n < 6 then 6 else if n > 20 then 20 else n
+
+
+-- One extra typed question after three completed experiences, in the existing call.
+-- Learning is a confidence-gated judgment, not a randomly sampled personality flip.
+export pure func reflectionQuestions(c: Creature) -> [NQ]
+ensures { length(result) <= 1 }
+{
+  if not reflectionDue(c) then [] else [{name:"self_belief",q:Choice(
+    "Reflect on newExperiences and my existing selfImage. Which ONE modest change in how I see myself is supported by these actual outcomes? Select keep if evidence is weak, mixed, repetitive or merely confirms my current belief. Do not infer danger from fear, safety from approaching, or affection from another creature's unobserved feelings. My starting description is a beginning, not a permanent instruction. Change only a belief supported by the experiences; never invent an event or ability.",
+    [{key:"keep",desc:"These experiences do not justify changing my self-description yet."},
+     {key:"braver",desc:beliefText("braver")},{key:"careful",desc:beliefText("careful")},
+     {key:"company",desc:beliefText("company")},{key:"solitude",desc:beliefText("solitude")},
+     {key:"explorer",desc:beliefText("explorer")},{key:"content",desc:beliefText("content")}])}]
+}
+
+-- Banked perception, rather than the moving world's later memories, is the evidence.
+-- Missing answers preserve legacy banks. New experience during fetch stays pending.
+export pure func reflectSelf(c: Creature, state: string, d: Decision, tick: int) -> Creature
+requires { length(c.identity.beliefs) <= 3, length(c.identity.history) <= 5 }
+ensures { result.profile == c.profile, result.soul == c.soul,
+          length(result.identity.beliefs) <= 3, length(result.identity.history) <= 5,
+          result.identity.total == c.identity.total }
+{
+  match decode(state) {
+    Err(_) => c, Ok(j) => match getObject(j,"selfImage") {
+      None => c, Some(raw) => {
+        let observed = identityOfJson(raw);
+        let past = {c | identity:observed};
+        if not reflectionDue(past) || observed.reviewed != c.identity.reviewed || observed.total > c.identity.total then c
+        else match answer(d,"self_belief") {
+          Err(_) => c,
+          Ok(a) => {
+            let reviewed = {c | identity:{c.identity | reviewed:observed.total}};
+            match gate(a,0.65) {
+              Act(key) => if beliefFamily(key)=="" || contains(c.identity.beliefs,key) then reviewed else {
+                let beliefs = take(3,concat(filter(\k. beliefFamily(k)!=beliefFamily(key),c.identity.beliefs),[key]));
+                let changed = {reviewed | identity:{reviewed.identity | beliefs:beliefs}};
+                let history = concat(c.identity.history,[{tick:tick,before:selfDescription(c),after:selfDescription(changed),evidence:unreviewedExperiences(past)}]);
+                {changed | identity:{changed.identity | history:drop(if length(history)>5 then length(history)-5 else 0,history)}}
+              },
+              _ => reviewed
+            }
+          }
+        }
+      }
+    }
+  }
+}

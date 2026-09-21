@@ -1,12 +1,12 @@
 module motion_test
-import world (World, Creature, Intent, Wander, Rest, Flee, Approach, Do, Hesitate, stepWorld)
+import world (emptyIdentity, World, Creature, Intent, Wander, Rest, Flee, Approach, Do, Hesitate, stepWorld)
 import std/io (println, exit)
 
 pure func subject() -> Creature = {
   id: "c1", name: "Motion probe", pos: {x: 30.0, y: 30.0}, heading: 0.0,
   health: 1.0, deathCause: "",
   hunger: 0.3, thirst: 0.3, bowel: 0.2, pauseTicks: 0,
-  energy: 0.5, fear: 0.2, comfort: 0.5, soul: "wary", profile: "", intent: Wander,
+  energy: 0.5, fear: 0.2, comfort: 0.5, soul: "wary", profile: "", identity: emptyIdentity(), intent: Wander,
   memory: [], seen: [], lastDeliberation: 0, deliberating: false
 }
 pure func habitat(c: Creature) -> World = {
