@@ -341,3 +341,11 @@ checks. No new paid provider call was used; synthetic answers test policy and
 execution, not the live model's quality. Float physiology/gates are runtime-tested,
 not statically proven. Strict publication quality retains the existing three
 metadata gates; no package is being published in this change.
+
+### Live inspection and steady feed regression
+
+`test-live-inspection.cjs` holds a simulation tick in flight and verifies pointer
+and keyboard inspection plus character-tab switching without pausing. It then
+applies another Noul's real-WASM judgment and checks that the open card retains
+its selected creature. Empty, short and long feed entries must produce identical
+feed, world and control geometry at desktop, 390px, 320px and landscape sizes.

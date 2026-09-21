@@ -141,6 +141,7 @@ jobs:
           node decisions/test-public-browser.cjs
           node decisions/test-identity-browser.cjs
           node decisions/test-session-browser.cjs
+          node decisions/test-live-inspection.cjs
           node decisions/test-browser.cjs
           node decisions/test-fullscreen-browser.cjs
           node decisions/test-item-art.cjs

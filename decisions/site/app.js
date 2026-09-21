@@ -124,9 +124,9 @@ function highlight(){
   $('#carrying-note').textContent=held?`Carrying: ${held.desc}`:'Carrying: nothing · room for one item';
   if(c)$('.observation').style.setProperty('--creature',colors[c.soul]);
 }
-function tabs(){const root=$('#creature-tabs');root.replaceChildren();for(const c of world.creatures){const b=document.createElement('button');b.textContent=c.profile?c.name:c.soul[0].toUpperCase()+c.soul.slice(1);b.style.setProperty('--creature',colors[c.soul]);b.setAttribute('aria-pressed',c.id===selected);b.onclick=()=>{if(!busy)selectCreature(c.id).catch(fail);};root.append(b);}}
+function tabs(){const root=$('#creature-tabs');root.replaceChildren();for(const c of world.creatures){const b=document.createElement('button');b.textContent=c.profile?c.name:c.soul[0].toUpperCase()+c.soul.slice(1);b.style.setProperty('--creature',colors[c.soul]);b.setAttribute('aria-pressed',c.id===selected);b.onclick=()=>{selectCreature(c.id).catch(fail);};root.append(b);}}
 async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();updateIdentity();updateMind();
- const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;updateSocial();$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}updateSocial();}
+ const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;updateSocial();$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);if(selectionEpoch!==epoch||selected!==id)return;$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}updateSocial();}
 function showEvidence(){if(!review)return;const raw=review.row[evidence];try{$('#evidence').textContent=JSON.stringify(JSON.parse(raw),null,2);}catch{$('#evidence').textContent=raw;}}
 function actionLabel(action){if(action.tag==='Do'){const target=review ? [...(JSON.parse(review.row.state).nearby||[]),...(JSON.parse(review.row.state).others||[]),...(JSON.parse(review.row.state).map||[])].find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+(target.name||target.desc) : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
 async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();updateSocial();if(!lastJudgments.has(row.creatureId)||lastJudgments.get(row.creatureId).tick<=row.tick)lastJudgments.set(row.creatureId,NoulFeedback.judgment(row,result));updateMind();}
@@ -239,9 +239,12 @@ async function loop() {
         const completed=resolvedDecision;resolvedDecision=null;
         const frame=await call('applyDecision',JSON.stringify(world),completed.snapshot,JSON.stringify(completed.row));
         if(current!==epoch)return;
-        draw(frame);selected=completed.row.creatureId;
-        await selectCreature(selected);
-        recordJudgment(completed.row,review);
+        draw(frame);
+        // A live judgment must not replace the Noul the player is inspecting.
+        if(!$('#observation-panel').open)selected=completed.row.creatureId;
+        if(selected===completed.row.creatureId)await selectCreature(selected);
+        const checked=review?.row?.creatureId===completed.row.creatureId&&review?.row?.decision===completed.row.decision&&review?.row?.tick===completed.row.tick?review:await call('review',JSON.stringify(completed.row));
+        recordJudgment(completed.row,checked);
       } else {
         const frame=await call('coast',JSON.stringify(world));
         if(current!==epoch)return;
@@ -360,9 +363,9 @@ $('#place-center').onclick=()=>placeItem($('#nouls-world').viewBox.baseVal.width
 $('#world').onclick=async e=>{try{
   if(placing){const svg=$('#world svg'),pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());await placeItem(Math.max(0,Math.min(svg.viewBox.baseVal.width,pt.x)),Math.max(0,Math.min(svg.viewBox.baseVal.height,pt.y)));}
   else if(e.target.closest('[data-object]')){const ent=world.entities.find(v=>v.id===e.target.closest('[data-object]').dataset.object);if(ent)showDescription(ent,e);}
-  else if(!busy&&e.target.closest('.noul')){await selectCreature(e.target.closest('.noul').dataset.id);openGamePanel('observation-panel');}
+  else if(e.target.closest('.noul')){openGamePanel('observation-panel');await selectCreature(e.target.closest('.noul').dataset.id);}
 }catch(err){busy=false;fail(err);}};
-$('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);}else if(!busy&&(e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();selectCreature(e.target.closest('.noul').dataset.id).then(()=>openGamePanel('observation-panel')).catch(fail);}};
+$('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventDefault();placeItem($('#nouls-world').viewBox.baseVal.width/2,$('#nouls-world').viewBox.baseVal.height/2);}else if((e.key==='Enter'||e.key===' ')&&e.target.closest('.noul')){e.preventDefault();openGamePanel('observation-panel');selectCreature(e.target.closest('.noul').dataset.id).catch(fail);}};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&placing){e.preventDefault();finishItem();}});
 document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>{evidence=b.dataset.evidence;showEvidence();});
 $('#download').onclick=()=>{const url=URL.createObjectURL(new Blob([rows.map(r=>JSON.stringify(r)).join('\n')+'\n'],{type:'application/x-ndjson'}));const a=document.createElement('a');a.href=url;a.download='nouls-bank.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};

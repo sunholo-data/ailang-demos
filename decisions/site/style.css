@@ -327,7 +327,7 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
 .identity-activity[hidden]{display:none}
 
 /* Visible feedback separates model judgments from their physical consequences. */
-.habitat-story{flex:none;margin:0 20px;max-height:150px;padding:8px 12px;border:1px solid var(--site-rule);border-radius:12px;background:#ffffffed;overflow:hidden}
+.habitat-story{flex:none;margin:0 20px;height:150px;max-height:150px;padding:8px 12px;border:1px solid var(--site-rule);border-radius:12px;background:#ffffffed;overflow:hidden}
 .story-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;font-weight:700;color:var(--site-green,#365e40)}
 .story-heading button{border:0;background:transparent;padding:4px 0;font-size:12px;color:inherit}
 #story-peek{display:flex;gap:16px}
@@ -348,8 +348,8 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
 .mind-now p{font-size:12px;line-height:1.5;margin:6px 0}#mind-wait{color:var(--muted)}
 #mind-now,#self-image-title,#noul-story,#decision-title{scroll-margin-top:110px}
 .item-placing .habitat-story{display:none}
-@media(max-width:740px){.habitat-story{margin:0 10px;max-height:145px;padding:6px 10px}#story-peek .story-event:nth-child(n+2){display:none}.story-event strong{font-size:12px}#story-peek .story-detail{font-size:11px;-webkit-line-clamp:2}.story-label{font-size:9px}.story-heading{font-size:10px}.noul-inner-nav{top:54px}}
-@media(max-height:500px) and (min-width:600px){.habitat-story{position:absolute;left:10px;bottom:10px;max-width:240px;max-height:120px;margin:0;z-index:2}#story-peek .story-event:nth-child(n+2){display:none}.story-detail{display:none}}
+@media(max-width:740px){.habitat-story{margin:0 10px;height:145px;max-height:145px;padding:6px 10px}#story-peek .story-event:nth-child(n+2){display:none}.story-event strong{font-size:12px}#story-peek .story-detail{font-size:11px;-webkit-line-clamp:2}.story-label{font-size:9px}.story-heading{font-size:10px}.noul-inner-nav{top:54px}}
+@media(max-height:500px) and (min-width:600px){.habitat-story{position:absolute;left:10px;bottom:10px;width:240px;max-width:240px;height:120px;max-height:120px;margin:0;z-index:2}#story-peek .story-event:nth-child(n+2){display:none}.story-detail{display:none}}
 
 /* Object names stay quiet; the full semantic description opens on hover/tap. */
 .world-entity > text { display:none; }
@@ -368,3 +368,6 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
 @media(max-height:500px) and (min-width:600px){#session-stop{position:absolute;right:140px;bottom:8px;width:310px;z-index:5;max-height:75dvh}}
 
 .bank-actions {flex-wrap:wrap;max-width:100%}
+/* Preview text fits its reserved space; the Story panel keeps the full account. */
+#story-peek .story-event strong {-webkit-line-clamp:1}
+#story-peek .story-label {white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
