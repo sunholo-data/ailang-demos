@@ -353,7 +353,7 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
 
 /* Object names stay quiet; the full semantic description opens on hover/tap. */
 .world-entity > text { display:none; }
-#world #object-labels text {font-size:1.65px;font-weight:600;fill:var(--sunholo-slate,#384656);stroke:#f1f5ed;stroke-width:.45px;paint-order:stroke;stroke-linejoin:round;cursor:pointer;pointer-events:all}
+#world #object-labels text {font-size:1.35px;font-weight:600;fill:var(--sunholo-slate,#384656);stroke:#f1f5ed;stroke-width:.45px;paint-order:stroke;stroke-linejoin:round;cursor:pointer;pointer-events:all}
 #object-description strong {display:block;padding-right:22px;overflow-wrap:anywhere}
 #artifact-title {margin-bottom:12px}
 #session-stop {flex:none;margin:8px 20px;padding:14px 16px;border:1px solid #e5b98a;border-radius:14px;background:#fff8ef;color:#384656}
@@ -362,7 +362,7 @@ main{flex:1;min-height:0;width:100%;max-width:none;padding:0;margin:0}
 #session-stop small {display:block;font-size:11px;line-height:1.4;margin-top:8px}
 .session-actions {display:flex;flex-wrap:wrap;gap:8px}
 .session-actions button {white-space:normal}
-@media(max-width:600px){#session-stop{margin:6px 10px;padding:12px}.session-actions{display:grid;grid-template-columns:1fr}.session-actions button{width:100%;font-size:12px}#world #object-labels text{font-size:1.8px}}
+@media(max-width:600px){#session-stop{margin:6px 10px;padding:12px}.session-actions{display:grid;grid-template-columns:1fr}.session-actions button{width:100%;font-size:12px}#world #object-labels text{font-size:1.35px}}
 .habitat:has(#session-stop:not([hidden])) .habitat-story {display:none}
 #session-stop {max-height:50dvh;overflow:auto}
 @media(max-height:500px) and (min-width:600px){#session-stop{position:absolute;right:140px;bottom:8px;width:310px;z-index:5;max-height:75dvh}}

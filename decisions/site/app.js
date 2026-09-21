@@ -778,13 +778,22 @@ function drawItemLabels(svg){
   let layer=svg.querySelector('#object-labels');
   if(!layer){layer=document.createElementNS(ns,'g');layer.id='object-labels';svg.insertBefore(layer,svg.querySelector('#world-entities'));}
   for(const el of [...layer.children])if(!world.entities.some(e=>e.id===el.dataset.object&&!e.carrier))el.remove();
+  const occupied=world.entities.filter(e=>!e.carrier).map(e=>({left:e.pos.x-2,right:e.pos.x+2,top:e.pos.y-2,bottom:e.pos.y+2}));
   for(const ent of world.entities.filter(e=>!e.carrier)){
     let text=[...layer.children].find(el=>el.dataset.object===ent.id);
     if(!text){text=document.createElementNS(ns,'text');text.dataset.object=ent.id;text.setAttribute('text-anchor','middle');layer.append(text);}
-    const title=itemTitle(ent);text.textContent=title.length>18?title.slice(0,17)+'…':title;
-    const half=Math.max(3,text.textContent.length*.46);
-    text.setAttribute('x',Math.max(half,Math.min(world.size-half,ent.pos.x)));
-    text.setAttribute('y',ent.pos.y>world.size-5?ent.pos.y-3:ent.pos.y+3.6);
+    const title=itemTitle(ent),label=title.length>16?title.slice(0,15)+'…':title;
+    if(text.textContent!==label){text.textContent=label;text.dataset.width=String(text.getComputedTextLength());}
+    const half=Math.max(2,Number(text.dataset.width)/2),x=Math.max(half+.5,Math.min(world.size-half-.5,ent.pos.x));
+    let y=Math.min(world.size-1,ent.pos.y+3.6),box;
+    for(let attempt=0;attempt<8;attempt++){
+      const offset=Math.floor(attempt/2)*1.9;
+      y=ent.pos.y+(attempt%2===0?3.6+offset:-3-offset);
+      if(y<2||y>world.size-1)continue;
+      box={left:x-half-.3,right:x+half+.3,top:y-1.5,bottom:y+.3};
+      if(!occupied.some(b=>box.left<b.right&&box.right>b.left&&box.top<b.bottom&&box.bottom>b.top))break;
+    }
+    occupied.push(box);text.setAttribute('x',x);text.setAttribute('y',y);
   }
 }
 function stopSession(message){
