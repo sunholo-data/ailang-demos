@@ -14,7 +14,7 @@ const fixture=require('./test-provider-fixture.cjs');
    await route.fulfill({json:fixture(body)});
   });
   await page.goto(process.env.NOULS_PREVIEW_URL||'http://127.0.0.1:8959/decisions/');
-  await page.waitForFunction(()=>window.__demoReady,{timeout:120000});
+  await page.waitForFunction(()=>window.__demoReady,null,{timeout:120000});
   await page.locator('#connect-live').click();await page.locator('#api-key').fill('test-key');await page.locator('#key-form button').click();
   while(!release)await page.waitForTimeout(50);
   const tick=await page.evaluate(()=>world.tick);await page.waitForFunction(t=>world.tick>t,tick);

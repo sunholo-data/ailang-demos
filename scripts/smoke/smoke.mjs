@@ -28,7 +28,9 @@ const FAIL_FAST = process.env.FAIL_FAST === '1';
 // 'wasm' pages must signal __demoReady. 'static' pages just need to load
 // without console errors (no boot phase).
 const DEMOS = [
-  { name: 'decisions', kind: 'wasm', url: '/decisions/' },
+  // Nouls compiles its complete simulation/policy graph in a worker at startup.
+  // Match its dedicated browser check's cold-start allowance on shared runners.
+  { name: 'decisions', kind: 'wasm', url: '/decisions/', readyTimeoutMs: 120000 },
   { name: 'hub',                kind: 'static', url: '/' },
   { name: 'document-intelligence', kind: 'static', url: '/document-intelligence/' },
   { name: 'streaming', kind: 'static', url: '/streaming/' },

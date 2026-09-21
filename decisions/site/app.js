@@ -376,7 +376,7 @@ $('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)r
     if(localStorage.getItem('openrouter-api-key')) {
       await configure('live',localStorage.getItem('openrouter-api-key'));
     }
-  } catch(error){fail(error);$('#runtime').textContent='Live connection needs attention';}
+  } catch(error){if(!window.__demoReady)window.__demoError=error.message;fail(error);$('#runtime').textContent='Live connection needs attention';}
 })();
 
 

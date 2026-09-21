@@ -8,7 +8,7 @@ const assert=require('node:assert/strict');
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://openrouter.ai/**',r=>r.abort());
   await page.goto(process.env.NOULS_PREVIEW_URL||'http://127.0.0.1:8960/decisions/');
-  await page.waitForFunction(()=>window.__demoReady,{timeout:120000});
+  await page.waitForFunction(()=>window.__demoReady,null,{timeout:120000});
   for(const [width,height] of [[1440,900],[390,844],[320,568],[844,390]]){
    await page.setViewportSize({width,height});
    const layout=await page.evaluate(()=>{

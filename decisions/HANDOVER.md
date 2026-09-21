@@ -1,3 +1,34 @@
+## Latest continuation — 2026-09-21
+
+Experience-shaped self-image is implemented in world/souls/host/main and the
+mobile character panel. See IDENTITY_VALIDATION.md for mechanics, evidence and
+limits. Initial feature commit: 91fc23f. Deployment found a shared smoke-test
+30-second cold-start limit; Nouls now uses the dedicated browser check's
+120-second allowance, with startup errors explicitly exposed via __demoError.
+
+Next requested directions:
+
+- After gameplay tuning, add keyless recorded-session playback. Preserve Live
+  as the landing experience. Existing JSONL import inspects decisions; it is
+  **not** a saved habitat timeline. A recording must include initial world,
+  timed decisions, object/character additions, and relevant visuals, clearly
+  labeled Recorded session. No provider calls during playback. A real showcase
+  bank still requires an operator recording; do not present synthetic tests as
+  live model evidence.
+- Support visitors' direct TypeSafe/Jev keys when feasible. Official endpoint:
+  https://api.typesafe.ai/v1/systemone, model jev-latest; the decisions package
+  already supports direct transport. On 2026-09-21 an OPTIONS probe with origin
+  https://www.sunholo.com returned HTTP 400, body “Disallowed CORS origin”, and
+  no Access-Control-Allow-Origin. Chrome on the actual public page confirmed
+  preflight rejection using an invalid key (no paid model call). Ask TypeSafe
+  to allow the origin for POST with Authorization/Content-Type. A server relay
+  is an alternative, but changes the current browser-only key boundary; no
+  relay or nonworking provider picker has been introduced. Direct API usage
+  returns tokens, not OpenRouter's billed cost; any budget estimate must be
+  clearly labeled and verified against current provider pricing.
+
+---
+
 ## Public browser release update (supersedes relay notes below)
 
 The current UI uses `site/transport.js` to call OpenRouter directly with the

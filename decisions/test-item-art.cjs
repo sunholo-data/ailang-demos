@@ -18,7 +18,7 @@ const fs=require('node:fs'),path=require('node:path');
    await route.fulfill(result.ok?{json:{data:[{media_type:media,b64_json:fs.readFileSync(fixture).toString('base64')}],usage:{cost:result.cost}}}:{status:402,json:{error:result.error}}).catch(()=>{});
   });
   await page.goto(process.env.NOULS_PREVIEW_URL||'http://127.0.0.1:8954/decisions/');
-  await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),{timeout:120000});
+  await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),null,{timeout:120000});
   await page.evaluate(async()=>{await rpc('configure',[],{mode:'simulate'});mode='simulate';liveKey='test-key';const s=await(await publicTransport.request('api/session')).json();liveSession=s.session;sessionBudget=s.budget;running=true;});
   async function place(description){
    await page.locator('#add-item').tap();await page.locator('#artifact').fill(description);

@@ -8,7 +8,7 @@ const page=await browser.newPage({viewport:{width:1440,height:1080},deviceScaleF
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.goto(process.env.NOULS_PREVIEW_URL || 'http://127.0.0.1:8943/decisions/');
 await page.waitForSelector('.noul',{timeout:120000});
-await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),{timeout:120000});
+await page.waitForFunction(()=>document.querySelector('#runtime').textContent.includes('ready'),null,{timeout:120000});
 assert(await page.locator('.noul-label').evaluateAll(labels=>labels.every(label=>Number(label.getAttribute('y'))<0)));
 await page.evaluate(()=>{window.__image=document.querySelector('.sprite-a image');window.__original=JSON.stringify(world);});
 // Deterministic timestamps exercise interpolation without timing-flaky sleeps.
