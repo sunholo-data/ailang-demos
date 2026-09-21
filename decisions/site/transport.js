@@ -27,7 +27,7 @@ class NoulsTransport {
       const cached = session.pictures.get(payload.id);
       return cached.description === payload.description ? report(cached.result) : report({ok:false,error:'This item already has a different picture request.'},400);
     }
-    if (session.spent >= .10 || session.requests >= 10000) return report({ok:false,error:'The $0.10 session spending limit has been reached. Reset to begin a new session.'},402);
+    if (session.spent >= .10 || session.requests >= 10000) return report({ok:false,error:'The $0.10 session spending limit has been reached. Choose “Continue” to approve another session.'},402);
     if (image && (session.spent + .014 > .10 || session.images >= 8)) return report({ok:false,error:'Not enough budget for another picture, or eight pictures already requested.'},402);
     session.busy = true;
     let sent = false, accounted = false;

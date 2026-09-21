@@ -27,10 +27,13 @@ shared `openrouter-api-key` convention.
 - Each tab stops at $0.10 of reported session usage, with at most one request in
   flight, 10,000 calls and eight generated images. The last call can cross the
   dollar threshold. This client-side guard is not an OpenRouter account cap.
-  Reset/reload creates a new session. Unknown usage/network outcomes stop further
+  Reset keeps the current allowance; reload waits for approval even with a remembered key.
+  The pause card offers **Download session + bank** and **Continue · approve another $0.10**.
+  Unknown usage/network outcomes stop further
   spending conservatively; provider errors are never automatically retried.
 - Separate devices have separate worlds, keys and sessions. This is not shared
-  multiplayer. Imported banks reproduce decisions, not historical world positions.
+  multiplayer. **History → Load session / bank** restores a saved habitat without
+  spending. JSONL-only banks reproduce decisions, not historical world positions.
 
 `serve.py` and `live_server.ail` retain the earlier private/native relay for CLI
 integration tests. The public UI does not call it. That workaround was introduced
@@ -115,6 +118,27 @@ curiosity in its next ordinary judgment. It can also keep its existing view.
 Those beliefs inform future decisions, and later experiences can change them
 again. Wording comes from a bounded typed vocabulary, not generated prose.
 
-Self-image lasts for the current habitat; reset/reload begins again. Reflections
+Self-image lasts for the current habitat and is included in downloadable sessions. Reflections
 are included in the existing session budget and banked decision evidence.
 See [identity validation](IDENTITY_VALIDATION.md) for implementation and evidence.
+
+## Save, inspect and continue
+
+At the spending limit the world pauses. Download a `.json` session to preserve the
+current habitat, Nouls and self-images, decision bank, item titles/pictures and
+recent story. **History → Load session / bank** validates banked actions in AILANG
+and restores that snapshot without advancing a tick. Loading and inspecting need
+no key; continuing live requires explicit approval for another $0.10. The save
+contains no API key or spending approval. A new session retains the existing world
+and bank. Download `.jsonl` separately for CLI decision replay.
+
+Snapshots are resumable checkpoints, not a movie of the full past. Future random
+samples are fresh; already banked actions remain reproducible. Legacy JSONL files
+still open for evidence inspection, but cannot restore historical positions.
+Files must be under 64 MB. Downloads wait for active model/artwork requests to finish.
+
+Click/tap a Noul for **Now / Self / Story / Evidence**: current activity, needs,
+recorded alternatives and confidence, completed outcomes and changing beliefs.
+The habitat story separates model judgments from observed outcomes. Items have
+short map labels and full descriptions on hover/tap; player titles are optional
+(up to 32 characters), while the full description is what Jev interprets.

@@ -5,6 +5,11 @@ const artwork=new Map();
 const artJobs=new Map();
 let artworkWorld=0, artQueue=Promise.resolve();
 let socialViewKey='';
+let storyEvents=[], lastJudgments=new Map(), storySerial=0;
+let sessionStopped=false, renewingSession=false, importingSession=false;
+const itemTitles=new Map();
+const defaultTitles={tree:'Shady tree',path:'Footprint trail',food:'Fruit & seeds',water:'Clear spring',toilet:'Secluded compost',e1:'Grey mushroom',e2:'Humming berries',e3:'Rusted tin',e4:'Sweet puddle',e5:'Clean bones',e6:'Striped caterpillar',e7:'Warm burrow',e8:'Mirror shard',e9:'Glowing spores',e10:'Egg-shaped stone'};
+function itemTitle(ent){return itemTitles.get(ent.id)||defaultTitles[ent.id]||ent.desc.replace(/^a[n]? /i,'').split(/[,.;]/)[0].slice(0,32)||'Unknown object';}
 const motion = new NoulMotion($('#world'));
 const publicTransport = new NoulsTransport((fn,...args)=>call(fn,...args));
 const colors = {wary:'#287a63',bold:'#bd3012',paranoid:'#7953a4',curious:'#2474a8'};
@@ -24,7 +29,7 @@ function loadingProgress(message,completed){
 }
 $('#loading-retry').onclick=()=>location.reload();
 function createClient() {
-  const worker = new Worker('worker.js?v=ailang-21');
+  const worker = new Worker('worker.js?v=ailang-22');
   const pending = new Map();
   let nextId=0;
   worker.onmessage=({data})=>{
@@ -102,6 +107,8 @@ function draw(frame) {
   motion.update(world);
   updateVitals();
   updateIdentity(previousWorld);
+  collectStory(previousWorld);
+  updateMind();
   $('#tick').textContent=`Tick ${world.tick}`;
   $('#phase').textContent=['Early day','Late day','Dusk'][Math.floor(world.tick%120/40)];
   highlight();
@@ -118,11 +125,11 @@ function highlight(){
   if(c)$('.observation').style.setProperty('--creature',colors[c.soul]);
 }
 function tabs(){const root=$('#creature-tabs');root.replaceChildren();for(const c of world.creatures){const b=document.createElement('button');b.textContent=c.profile?c.name:c.soul[0].toUpperCase()+c.soul.slice(1);b.style.setProperty('--creature',colors[c.soul]);b.setAttribute('aria-pressed',c.id===selected);b.onclick=()=>{if(!busy)selectCreature(c.id).catch(fail);};root.append(b);}}
-async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();updateIdentity();
+async function selectCreature(id){const selectionEpoch=epoch;selected=id;highlight();tabs();const c=world.creatures.find(c=>c.id===id);$('#creature-name').textContent=c.name;$('#portrait').className=`portrait ${c.soul}`;$('#personality').textContent=c.profile?JSON.parse(c.profile).description:flavors[c.soul];$('#character-traits').hidden=!c.profile;if(c.profile)renderProfile($('#character-traits'),JSON.parse(c.profile));updateVitals();updateIdentity();updateMind();
  const ix=rows.findLastIndex(r=>r.creatureId===id);if(ix>=0)await showRow(ix);else{review=null;updateSocial();$('#watch').disabled=true;$('#source-badge').textContent='Awaiting Jev';$('#distribution').replaceChildren();$('#outcome').hidden=true;$('#verified').textContent='';$('#decision-stage').textContent=liveKey?'Waiting for this creature’s first Jev judgment.':'Connect Jev to watch a real decision.';const p=await call('perceptOf',JSON.stringify(world),id);$('#decision-context').textContent=`Current intent: ${p.intent}. Acts at confidence ${Math.round(p.threshold*100)}%.`;if(selectionEpoch===epoch&&selected===id)$('#evidence').textContent=JSON.stringify(p.state,null,2);}updateSocial();}
 function showEvidence(){if(!review)return;const raw=review.row[evidence];try{$('#evidence').textContent=JSON.stringify(JSON.parse(raw),null,2);}catch{$('#evidence').textContent=raw;}}
 function actionLabel(action){if(action.tag==='Do'){const target=review ? [...(JSON.parse(review.row.state).nearby||[]),...(JSON.parse(review.row.state).others||[]),...(JSON.parse(review.row.state).map||[])].find(e=>e.id===action.intent?.id) : null;return `${action.intent?.tag || 'Act'}${target ? ': '+(target.name||target.desc) : action.intent?.id ? ' '+action.intent.id : ''}`;};return action.tag||JSON.stringify(action);}
-async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();updateSocial();}
+async function showRow(index){const requestEpoch=epoch;const row=rows[index];const result=await call('review',JSON.stringify(row));if(requestEpoch!==epoch||selected!==row.creatureId)return;activeRow=index;review=result;$('#watch').disabled=false;$('#source-badge').textContent=review.row.source==='synthetic'?'Synthetic fixture':'Recorded';$('#verified').textContent=review.verified?'✓ Action reproduced':'Action diverged';$('#decision-context').textContent=`Recorded at tick ${review.row.tick}. Personality threshold ${Math.round(review.threshold*100)}%.`;$('#distribution').innerHTML=review.bars;$('#decision-stage').textContent='Perception → typed answers → policy → action';$('#outcome').hidden=false;$('#outcome').replaceChildren();const strong=document.createElement('strong');strong.textContent=`Final action: ${actionLabel(review.action)}`;const note=document.createElement('span');note.textContent=review.explanation;$('#outcome').append(strong,note);showEvidence();renderLedger();updateSocial();if(!lastJudgments.has(row.creatureId)||lastJudgments.get(row.creatureId).tick<=row.tick)lastJudgments.set(row.creatureId,NoulFeedback.judgment(row,result));updateMind();}
 function renderLedger(){const root=$('#timeline');root.replaceChildren();if(!rows.length){const empty=document.createElement('p');empty.className='ledger-empty';empty.textContent='The next decision is unwritten. Connect Jev and watch this fill with real judgments.';root.append(empty);}rows.slice(-80).forEach((r,offset)=>{const i=Math.max(0,rows.length-80)+offset;const b=document.createElement('button');b.className=i===activeRow?'active':'';const small=document.createElement('small');small.textContent=`Tick ${r.tick} / ${r.source==='synthetic'?'Synthetic fixture':'Recorded decision'}`;const strong=document.createElement('strong');strong.textContent=world.creatures.find(c=>c.id===r.creatureId)?.name||`${r.soul} Noul`;const sub=document.createElement('small');sub.textContent=`Roll ${Math.round(r.roll*100)}% · inspect decision`;b.append(small,strong,sub);b.onclick=async()=>{try{if(busy||addingItem)return;running=false;$('#play').textContent='Resume';selected=r.creatureId;await selectCreature(selected);await showRow(i);openGamePanel('observation-panel');}catch(e){fail(e)}};root.append(b)});$('#bank-count').textContent=`${rows.length} banked decision${rows.length===1?'':'s'}`;const total=rows.filter(r=>r.source!=='synthetic').reduce((sum,r)=>sum+(JSON.parse(r.decision).cost_usd||0),0);$('#cost').textContent=`Recorded cost $${total.toFixed(6)} / replay $0`;$('#download').disabled=!rows.length;}
 async function watchDecision() {
   if(busy||!review)return;
@@ -162,7 +169,7 @@ async function configure(next,key='',reset=false) {
     if(!response.ok)throw new Error('Unable to initialize browser transport.');
     const transport=await response.json();
     if(!transport.available)throw new Error('Live transport is unavailable.');
-    if(!liveSession||reset){
+    if(!liveSession){
       const sessionResponse=await publicTransport.request('api/session',{method:'POST'});
       const session=await sessionResponse.json();
       if(!session.ok)throw new Error(session.error);
@@ -184,12 +191,12 @@ async function configure(next,key='',reset=false) {
   $('#play').disabled=false;$('#reset').disabled=false;
   $('#play').textContent='Pause';
   await selectCreature(selected);
-  running=!addingItem;syncItemControls();
+  running=!addingItem&&!sessionStopped;$('#play').textContent=running?'Pause':sessionStopped?'Paused':'Resume';syncItemControls();
 }
 // AILANG prepares/parses the decision; browser fetch carries the bytes.
 // The worker is free to advance physics while OpenRouter responds.
 async function requestJudgment(id, snapshot, generation) {
-  livePending=true;
+  livePending=true;lastLiveId=id;updateMind();
   const started=Date.now();
   $('.observation').classList.add('thinking');
   const progress=setInterval(()=>{
@@ -203,10 +210,11 @@ async function requestJudgment(id, snapshot, generation) {
       signal:AbortSignal.timeout(45000)
     });
     const result=await response.json();
+    if(typeof result.sessionCost==='number')sessionCost=Math.max(sessionCost,result.sessionCost);
     if(generation!==epoch){if(result.ok){rows.push(result.row);renderLedger();}return;}
     if(response.status===429&&result.retryable){$('#decision-stage').textContent=result.error;await new Promise(resolve=>setTimeout(resolve,1500));return;}
     if(typeof result.sessionCost==='number')sessionCost=Math.max(sessionCost,result.sessionCost);
-    if(!result.ok)throw new Error(result.error);
+    if(!result.ok){if(response.status===402||sessionCost>=sessionBudget){stopSession(result.error);return;}throw new Error(result.error);}
     rows.push(result.row);renderLedger();
     resolvedDecision={row:result.row,snapshot};
     liveCount++;sessionCost=Math.max(sessionCost,result.sessionCost);
@@ -215,7 +223,7 @@ async function requestJudgment(id, snapshot, generation) {
     if(generation===epoch)fail(error);
   } finally {
     clearInterval(progress);
-    if(generation===epoch){livePending=false;$('.observation').classList.remove('thinking');}
+    if(generation===epoch){livePending=false;updateMind();$('.observation').classList.remove('thinking');}
   }
 }
 async function loop() {
@@ -233,6 +241,7 @@ async function loop() {
         if(current!==epoch)return;
         draw(frame);selected=completed.row.creatureId;
         await selectCreature(selected);
+        recordJudgment(completed.row,review);
       } else {
         const frame=await call('coast',JSON.stringify(world));
         if(current!==epoch)return;
@@ -248,17 +257,17 @@ async function loop() {
           lastLiveId=id;requestJudgment(id,JSON.stringify(world),current);
         }
       } else if(!livePending&&!resolvedDecision&&sessionCost>=sessionBudget){
-        running=false;$('#play').textContent='Resume';$('#status').textContent='The approved session budget has been reached. Download the bank, or reset to start a new session.';
+        stopSession('Your approved $0.10 session has finished. Keep this habitat and choose when to continue.');
       }
     }
   } catch(error) {if(current===epoch)fail(error);}
   finally {if(current===epoch)busy=false;}
 }
-$('#play').onclick=()=>{if(!liveKey){$('#connect-live').click();return;}running=!running;$('#play').textContent=running?'Pause':'Resume';};
+$('#play').onclick=()=>{if(sessionStopped){$('#session-stop').scrollIntoView({block:'nearest'});return;}if(!liveKey){$('#connect-live').click();return;}running=!running;$('#play').textContent=running?'Pause':'Resume';};
 $('#watch').onclick=()=>watchDecision().catch(fail);
-$('#reset').onclick=()=>{clearPlacementPing();hideDescription();resetGeneratedArt();imageGeneration++;imageBusy=false;artwork.clear();pendingArtwork=null;$('#artifact-image').value='';if(liveKey)configure('live',liveKey,true).catch(fail);else call('init').then(draw).catch(fail);};
+$('#reset').onclick=()=>{if(importingSession)return;selected='c2';itemTitles.clear();clearStory();clearPlacementPing();hideDescription();resetGeneratedArt();imageGeneration++;imageBusy=false;artwork.clear();pendingArtwork=null;$('#artifact-image').value='';if(liveKey)configure('live',liveKey,true).catch(fail);else call('init').then(draw).catch(fail);};
 $('#connect-live').onclick=()=>{$('#api-key').value=localStorage.getItem('openrouter-api-key')||'';$('#live-dialog').showModal();};
-$('#key-form').onsubmit=e=>{e.preventDefault();const key=$('#api-key').value.trim();localStorage.setItem('openrouter-api-key',key);$('#api-key').value='';$('#live-dialog').close();configure('live',key).then(()=>{running=!addingItem;$('#play').textContent='Pause';$('#decision-stage').textContent='Live session started. Waiting for the first judgment…';}).catch(fail);};
+$('#key-form').onsubmit=e=>{e.preventDefault();const key=$('#api-key').value.trim();localStorage.setItem('openrouter-api-key',key);$('#api-key').value='';$('#live-dialog').close();configure('live',key).then(async()=>{if(sessionStopped){await renewSession();return;}running=!addingItem&&!sessionStopped;$('#play').textContent=running?'Pause':'Paused';$('#decision-stage').textContent='Live session started. Waiting for the first judgment…';}).catch(fail);};
 $('#about-button').onclick=()=>$('#about').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
 function syncItemControls(){
   for(const id of ['play','reset','connect-live','create-noul','watch','import-bank']){
@@ -323,7 +332,7 @@ function placementPing(x,y,confirmed=false){
 function showPlacedDescription(entity){
   showDescription(entity);
   const popup=$('#object-description');popup.dataset.placement='true';
-  $('#object-description strong').textContent='Added to the habitat';
+  $('#object-description strong').textContent=`${itemTitle(entity)} · added`;
   popupCloseTimer=setTimeout(hideDescription,4000);
 }
 async function placeItem(x,y){
@@ -335,10 +344,11 @@ async function placeItem(x,y){
     const frame=await call('addEntity',JSON.stringify(world),$('#artifact').value.trim(),String(x),String(y));
     const entity=frame.world.entities.at(-1);
     const shouldDraw=$('#generate-art').checked&&!$('#generate-art').disabled&&!pendingArtwork;
+    itemTitles.set(entity.id,$('#artifact-title').value.trim()||itemTitle(entity));
     if(pendingArtwork)artwork.set(entity.id,pendingArtwork);
     draw(frame);
     if(shouldDraw)queueItemArt(entity);
-pendingArtwork=null;imageGeneration++;$('#artifact-image').value='';$('#artifact').value='';
+pendingArtwork=null;imageGeneration++;$('#artifact-image').value='';$('#artifact').value='';$('#artifact-title').value='';
     $('#image-note').textContent='PNG, JPEG or WebP, up to 4 MB. Pictures stay in this browser; Jev reads your description.';
     $('#item-picture').open=false;committingItem=false;finishItem(true);
     placementPing(entity.pos.x,entity.pos.y,true);
@@ -356,7 +366,7 @@ $('#world').onkeydown=e=>{if(placing&&(e.key==='Enter'||e.key===' ')){e.preventD
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&placing){e.preventDefault();finishItem();}});
 document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>{evidence=b.dataset.evidence;showEvidence();});
 $('#download').onclick=()=>{const url=URL.createObjectURL(new Blob([rows.map(r=>JSON.stringify(r)).join('\n')+'\n'],{type:'application/x-ndjson'}));const a=document.createElement('a');a.href=url;a.download='nouls-bank.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>64e6)throw new Error('Choose a bank smaller than 64 MB.');running=false;const imported=(await file.text()).trim().split('\n').map(JSON.parse);if(!imported.length||imported.length>10000)throw new Error('Use a bank with 1–10,000 decisions.');let restored={world};for(const row of imported){const checked=await call('review',JSON.stringify(row));if(!checked.verified)throw new Error('Import stopped: a banked action diverged.');if(!restored.world.creatures.some(c=>c.id===row.creatureId))restored=await call('restoreNoul',JSON.stringify(restored.world),JSON.stringify(row));}if(restored.svg)draw(restored);rows=imported;selected=rows[0].creatureId;running=false;await selectCreature(selected);await showRow(0);openGamePanel('observation-panel');$('#play').textContent='Resume';}catch(err){fail(err);}finally{e.target.value='';}};
+$('#import-bank').onchange=async e=>{try{await importSession(e.target.files[0]);}catch(err){$('#status').textContent=err.message;}finally{e.target.value='';}};
 (async()=>{
   try {
     startWorker();
@@ -373,9 +383,8 @@ $('#import-bank').onchange=async e=>{try{const file=e.target.files[0];if(!file)r
     $('#mode-note').textContent='Connect Jev to start making decisions';
     $('#world-note').textContent='Waiting for the first encounter';
     setInterval(loop,100);
-    if(localStorage.getItem('openrouter-api-key')) {
-      await configure('live',localStorage.getItem('openrouter-api-key'));
-    }
+    // A remembered key is convenience, never spending approval for another visit.
+    if(localStorage.getItem('openrouter-api-key'))$('#connect-live').textContent='Start Jev · $0.10 session';
   } catch(error){if(!window.__demoReady)window.__demoError=error.message;fail(error);$('#runtime').textContent='Live connection needs attention';}
 })();
 
@@ -428,11 +437,13 @@ function showItemActivity(previous){
 }
 function drawArtwork() {
   const svg=$('#nouls-world');if(!svg)return;
+  for(const id of itemTitles.keys())if(!world.entities.some(e=>e.id===id))itemTitles.delete(id);
   for(const id of artwork.keys())if(!world.entities.some(e=>e.id===id))artwork.delete(id);
   for(const ent of world.entities){
     const original=[...svg.querySelectorAll('.world-entity')].find(el=>el.querySelector('title')?.textContent.startsWith(ent.id+':'));
-    if(original){original.dataset.object=ent.id;original.dataset.kind=ent.kind;original.setAttribute('tabindex','0');original.setAttribute('role','button');original.setAttribute('aria-label',ent.desc);original.style.visibility=artwork.has(ent.id)||ent.carrier?'hidden':'';}
+    if(original){original.dataset.object=ent.id;original.dataset.kind=ent.kind;original.setAttribute('tabindex','0');original.setAttribute('role','button');original.setAttribute('aria-label',`${itemTitle(ent)}: ${ent.desc}`);original.style.visibility=artwork.has(ent.id)||ent.carrier?'hidden':'';}
   }
+  drawItemLabels(svg);
   const ns='http://www.w3.org/2000/svg';
   for(const layerId of ['player-art','carried-art']){
     let layer=svg.querySelector('#'+layerId);
@@ -574,7 +585,7 @@ let popupCloseTimer;
 function showDescription(ent,event) {
   clearTimeout(popupCloseTimer);
   const popup=$('#object-description');delete popup.dataset.placement;popup.hidden=false;
-  $('#object-description strong').textContent='Description Jev sees';
+  $('#object-description strong').textContent=itemTitle(ent);
   $('#object-description p').textContent=ent.desc;
   const hover=event&&event.type!=='focusin'&&matchMedia('(hover:hover)').matches;
   popup.classList.toggle('hover-popup',Boolean(hover));
@@ -703,3 +714,143 @@ function updateIdentity(previousWorld) {
   if(changed){const notice=$('#identity-activity');notice.hidden=false;notice.textContent=`${changed.name} sees themselves differently. Read their story →`;notice.onclick=async()=>{await selectCreature(changed.id);openGamePanel('observation-panel');};}
   else if(!world.creatures.some(c=>c.identity?.history.length))$('#identity-activity').hidden=true;
 }
+
+
+function clearStory(){storyEvents=[];lastJudgments.clear();storySerial++;renderStory();}
+function appendStory(event){
+  event.name=world.creatures.find(c=>c.id===event.id)?.name||event.id;
+  event.sequence=++storySerial;
+  storyEvents.push(event);if(storyEvents.length>80)storyEvents.shift();
+}
+function collectStory(previous){
+  if(previous&&world.tick<previous.tick)clearStory();
+  const events=NoulFeedback.outcomes(previous,world);
+  for(const event of events)appendStory(event);
+  if(events.length)renderStory();
+}
+function recordJudgment(row,checked){
+  const event=NoulFeedback.judgment(row,checked);
+  lastJudgments.set(row.creatureId,event);appendStory(event);renderStory();updateMind();
+}
+function storyElement(event,compact=false){
+  const root=document.createElement(compact?'button':'article');root.className=`story-event story-${event.kind}`;
+  const label=document.createElement('span');label.className='story-label';label.textContent=`${event.name||world.creatures.find(c=>c.id===event.id)?.name||event.id} · ${event.source} · tick ${event.tick}`;
+  const title=document.createElement('strong');title.textContent=event.title;
+  const detail=document.createElement('span');detail.className='story-detail';detail.textContent=event.detail;
+  root.append(label,title,detail);
+  if(compact){root.onclick=()=>{selectCreature(event.id).then(()=>openGamePanel('observation-panel')).catch(fail);};}
+  else {
+    if(event.explanation){const policy=document.createElement('p');policy.textContent=event.explanation;root.append(policy);}
+    if(event.facts?.length){const list=document.createElement('ul');for(const fact of event.facts){const li=document.createElement('li');li.textContent=fact;list.append(li);}root.append(list);}
+    if(event.row){const inspect=document.createElement('button');inspect.textContent='Inspect this judgment';inspect.onclick=async()=>{selected=event.id;await selectCreature(event.id);const index=rows.indexOf(event.row);if(index>=0)await showRow(index);openGamePanel('observation-panel');$('#decision-title').scrollIntoView({block:'start'});};root.append(inspect);}
+  }
+  return root;
+}
+function renderStory(){
+  const peek=$('#story-peek'),all=$('#story-events');peek.replaceChildren();all.replaceChildren();
+  $('#story-count').textContent=String(storyEvents.length);
+  if(!storyEvents.length){const p=document.createElement('p');p.className='story-empty';p.textContent='Connect Jev to see choices, outcomes and changing self-beliefs here.';peek.append(p);}
+  for(const event of storyEvents.slice(-2).reverse())peek.append(storyElement(event,true));
+  for(const event of [...storyEvents].reverse())all.append(storyElement(event));
+  renderNoulStory();
+}
+function renderNoulStory(){
+  const root=$('#noul-story-events');const events=storyEvents.filter(e=>e.id===selected).slice(-12).reverse();
+  const signature=`${selected}:${events[0]?.sequence||0}`;
+  if(root.dataset.signature===signature)return;root.dataset.signature=signature;root.replaceChildren();
+  if(!events.length){const p=document.createElement('p');p.textContent='Completed experiences and live judgments will appear here.';root.append(p);}
+  for(const event of events)root.append(storyElement(event));
+}
+function updateMind(){
+  const c=world?.creatures.find(c=>c.id===selected);if(!c)return;
+  $('#mind-action').textContent=c.health<=0?`Died of ${c.deathCause}`:NoulFeedback.action(c.pauseTicks>0?{tag:'Hesitate'}:{tag:'Do',intent:c.intent},{map:world.entities.map(e=>({...e,title:itemTitle(e)})),others:world.creatures});
+  const last=lastJudgments.get(c.id);
+  $('#mind-judgment').textContent=last?last.detail:'No Jev judgment recorded for this Noul yet.';
+  $('#mind-policy').textContent=last?`At tick ${last.tick}: ${last.explanation}`:'';
+  $('#mind-wait').textContent=livePending&&lastLiveId===c.id?'Considering the next move…':last?'This is the latest recorded judgment. The activity above follows the current world.':'Needs and experiences are visible below.';
+  renderNoulStory();
+}
+$('#open-story').onclick=()=>openGamePanel('story-panel');
+for(const button of document.querySelectorAll('[data-inner]'))button.onclick=()=>document.getElementById(button.dataset.inner).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+
+function drawItemLabels(svg){
+  const ns='http://www.w3.org/2000/svg';
+  let layer=svg.querySelector('#object-labels');
+  if(!layer){layer=document.createElementNS(ns,'g');layer.id='object-labels';svg.insertBefore(layer,svg.querySelector('#world-entities'));}
+  for(const el of [...layer.children])if(!world.entities.some(e=>e.id===el.dataset.object&&!e.carrier))el.remove();
+  for(const ent of world.entities.filter(e=>!e.carrier)){
+    let text=[...layer.children].find(el=>el.dataset.object===ent.id);
+    if(!text){text=document.createElementNS(ns,'text');text.dataset.object=ent.id;text.setAttribute('text-anchor','middle');layer.append(text);}
+    const title=itemTitle(ent);text.textContent=title.length>18?title.slice(0,17)+'…':title;
+    const half=Math.max(3,text.textContent.length*.46);
+    text.setAttribute('x',Math.max(half,Math.min(world.size-half,ent.pos.x)));
+    text.setAttribute('y',ent.pos.y>world.size-5?ent.pos.y-3:ent.pos.y+3.6);
+  }
+}
+function stopSession(message){
+  sessionStopped=true;running=false;resumeAfterItem=false;
+  $('#play').textContent='Paused';$('#session-stop').hidden=false;
+  $('#session-stop-title').textContent='Session paused';
+  $('#session-stop-note').textContent=message;
+  $('#status').textContent='';
+}
+async function renewSession(){
+  if(renewingSession||importingSession||busy||livePending||artJobs.size)return;
+  if(!liveKey){$('#connect-live').click();return;}
+  renewingSession=true;$('#continue-session').disabled=true;
+  try{
+    const response=await publicTransport.request('api/session',{method:'POST'}),session=await response.json();
+    if(!session.ok)throw Error(session.error);
+    liveSession=session.session;sessionBudget=session.budget;sessionCost=0;sessionStopped=false;
+    $('#session-stop').hidden=true;mode='live';running=true;$('#play').textContent='Pause';
+    $('#mode-note').textContent='Jev live · $0.000000 / $0.10';
+    $('#status').textContent='Continuing this habitat with a newly approved $0.10 session.';
+  }catch(error){$('#status').textContent=error.message;}
+  finally{renewingSession=false;$('#continue-session').disabled=false;}
+}
+async function saveSession(){
+  if(!world)return;
+  if(busy||livePending||artJobs.size||publicTransport.sessions.get(liveSession)?.busy){$('#status').textContent='Pause and let the current request finish, then download your session.';return;}
+  running=false;$('#play').textContent='Resume';
+  if(resolvedDecision){const pending=resolvedDecision;resolvedDecision=null;busy=true;try{draw(await call('applyDecision',JSON.stringify(world),pending.snapshot,JSON.stringify(pending.row)));recordJudgment(pending.row,await call('review',JSON.stringify(pending.row)));}catch(error){fail(error);return;}finally{busy=false;}}
+  const data=NoulSession.pack(world,rows,itemTitles,artwork,storyEvents);
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  if(blob.size>64e6){$('#status').textContent='This session exceeds the 64 MB import limit. Download the decision bank separately from History.';return;}
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`nouls-session-tick-${world.tick}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  $('#status').textContent='Session saved. Load this file from History to continue later; no API key is included.';
+}
+async function importSession(file){
+  if(!file)return;
+  if(busy||livePending||artJobs.size||resolvedDecision||importingSession)throw Error('Pause and let the current request finish before loading a session.');
+  importingSession=true;running=false;$('#play').textContent='Paused';
+  try{
+    if(file.size>64e6)throw Error('Choose a file smaller than 64 MB.');
+    const data=NoulSession.read(await file.text());
+    $('#status').textContent='Checking saved decisions…';
+    for(const row of data.rows){const checked=await call('review',JSON.stringify(row));if(!checked.verified)throw Error('Import stopped: a banked action diverged.');}
+    if(data.world){
+      const frame=await call('restoreWorld',JSON.stringify(data.world));
+      if(frame.world.creatures.length!==data.world.creatures.length)throw Error('The saved habitat contains an invalid Noul.');
+      epoch++;resetGeneratedArt();itemTitles.clear();artwork.clear();clearStory();
+      for(const [id,title] of data.titles)itemTitles.set(id,title);
+      for(const [id,image] of data.artwork)artwork.set(id,image);
+      world=undefined;draw(frame);rows=data.rows;selected=world.creatures[0].id;
+      for(const event of data.story){appendStory(event);}renderStory();
+      liveSession='';sessionCost=0;liveCount=rows.length;renderLedger();
+      await selectCreature(selected);
+      stopSession('Saved habitat restored, including its decision bank. Inspect it for free, or approve $0.10 to continue with Jev.');
+      $('#session-stop-title').textContent='Ready when you are';
+      $('#history-panel').close();
+    }else{
+      let restored={world};
+      for(const row of data.rows)if(!restored.world.creatures.some(c=>c.id===row.creatureId))restored=await call('restoreNoul',JSON.stringify(restored.world),JSON.stringify(row));
+      if(restored.svg)draw(restored);rows=data.rows;clearStory();selected=rows[0].creatureId;
+      await selectCreature(selected);await showRow(0);openGamePanel('observation-panel');
+      $('#status').textContent='Decision bank loaded for free inspection. This older format does not include a saved habitat. Use “Download session + bank” to resume a world later.';
+    }
+  }finally{importingSession=false;}
+}
+$('#continue-session').onclick=()=>renewSession();
+$('#save-session').onclick=()=>saveSession().catch(fail);
+$('#save-session-stop').onclick=()=>saveSession().catch(fail);

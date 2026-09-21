@@ -24,11 +24,11 @@ const check=await page.evaluate(()=>{
 assert(check.midpoint>check.start&&check.midpoint<check.final);assert.equal(check.walking,'true');assert.equal(check.stopped,'false');
 await page.evaluate(async()=>{draw(await call('coast',JSON.stringify(world)));});
 assert(await page.evaluate(()=>window.__image===document.querySelector('.sprite-a image')));
-await page.locator('[data-object="tree"]').hover();
+await page.locator('.world-entity[data-object="tree"]').hover();
 await page.waitForFunction(()=>document.querySelector('#object-description p').textContent.includes('leafy tree'));
 assert(await page.locator('#object-description').evaluate(el=>el.classList.contains('hover-popup')));
 const popup=await page.locator('#object-description').boundingBox();
-const tree=await page.locator('[data-object="tree"]').boundingBox();
+const tree=await page.locator('.world-entity[data-object="tree"]').boundingBox();
 assert(Math.abs(popup.y-tree.y)<180,'Hover popup should appear beside the object');
 await page.locator('#close-description').click();
 await page.locator('#add-item').click();
@@ -49,7 +49,7 @@ await page.waitForFunction(()=>document.querySelector('#image-note').textContent
 await page.locator('#cancel-item').click();
 await page.screenshot({path:'/tmp/nouls-living-desktop.png',fullPage:true});
 await page.setViewportSize({width:390,height:844});
-await page.locator('[data-object="water"]').click();
+await page.locator('.world-entity[data-object="water"]').click();
 assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)));
 await page.screenshot({path:'/tmp/nouls-living-mobile.png',fullPage:true});
 await page.evaluate(async()=>{const w=structuredClone(world);w.entities=w.entities.filter(e=>!artwork.has(e.id));draw(await call('coast',JSON.stringify(w)));});assert.equal(await page.locator('#player-art image').count(),0);
@@ -62,8 +62,8 @@ assert((await page.locator('#current-thought').innerText()).includes('Died of de
 assert.deepEqual(await page.evaluate(async()=>(await call('whoDeliberates',JSON.stringify(world))).ids),[]);
 const touch=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const mobile=await touch.newPage();await mobile.goto(process.env.NOULS_PREVIEW_URL || 'http://127.0.0.1:8943/decisions/');
-await mobile.waitForSelector('[data-object="tree"]',{timeout:120000});
-await mobile.locator('[data-object="tree"]').tap();
+await mobile.waitForSelector('.world-entity[data-object="tree"]',{timeout:120000});
+await mobile.locator('.world-entity[data-object="tree"]').tap();
 assert(await mobile.locator('#object-description').isVisible());
 assert(!(await mobile.locator('#object-description').evaluate(el=>el.classList.contains('hover-popup'))));
 assert(!(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth)));

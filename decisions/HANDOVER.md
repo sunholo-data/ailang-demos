@@ -1,3 +1,21 @@
+## Session checkpoints and visible inner life — 2026-09-21
+
+Added the habitat story, Now/Self/Story/Evidence inspector navigation, optional
+item titles and persistent map labels. `feedback.js` only presents AILANG state
+and recorded typed answers. No new gameplay policy in JavaScript.
+
+Budget exhaustion now exposes save/continue actions. Session JSON includes the
+canonical world, rows, titles, artwork and recent story; `restoreWorld` renders
+without advancing time. Imports verify each bank row before replacing the world.
+No keys or approval tokens are saved. Loading stays paused, renewal is an explicit
+$0.10 approval, and reset/reload no longer silently renew spending. Legacy JSONL
+remains inspection-only. This is a checkpoint, not full timeline playback.
+
+New checks: `node --test decisions/test-session.cjs`; real WASM restore assertions;
+`node decisions/test-session-browser.cjs` (synthetic paid responses, no real calls).
+The second deployment smoke exposed world's 8s type-check budget (269942 steps),
+so worker now grants a bounded 20s per module; 120s total browser readiness remains.
+
 ## Latest continuation — 2026-09-21
 
 Experience-shaped self-image is implemented in world/souls/host/main and the

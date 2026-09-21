@@ -12,7 +12,7 @@ require(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'), 'wasm_ex
   const go = new Go();
   const {instance} = await WebAssembly.instantiate(fs.readFileSync(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'),'ailang.wasm')), go.importObject);
   go.run(instance);
-  ailangSetTypeCheckBudget(8000);
+  ailangSetTypeCheckBudget(20000);
   for (const [name,file] of [['pkg/sunholo/decisions/decide',path.join(require('node:os').homedir(),'.ailang/cache/registry/sunholo/decisions/0.4.0/decide.ail')], ...['world','souls','render','oracle','bank','host'].map(n=>[n,`decisions/${n}.ail`])]) {
     const loaded = ailangLoadModule(name, fs.readFileSync(file,'utf8'));
     assert.equal(loaded.success,true,`${name}: ${loaded.error}`);
@@ -28,6 +28,10 @@ require(path.join(process.env.NOULS_WASM_DIR || path.join(root,'wasm'), 'wasm_ex
   assert.match(initial.svg,/role="button"/);
   fs.writeFileSync('/tmp/nouls-world.svg',initial.svg);
   const state = JSON.stringify(initial.world);
+  assert.deepEqual((await call('restoreWorld',state)).world,initial.world);
+  assert.equal((await call('restoreWorld',JSON.stringify({...initial.world,creatures:[]}))).ok,false);
+  assert.equal((await call('restoreWorld',JSON.stringify({...initial.world,size:500}))).ok,false);
+  console.log('PASS snapshot restore without advancing a tick; invalid world bounds rejected');
   const row = JSON.parse(fs.readFileSync('decisions/bank/synthetic.jsonl','utf8'));
   const review = await call('review',JSON.stringify(row));
   assert.equal(review.verified,true);

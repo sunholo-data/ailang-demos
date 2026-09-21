@@ -40,7 +40,8 @@ async function initialize() {
   postMessage({progress:'Waking the world…',completed:1});
   const { instance } = await WebAssembly.instantiate(bytes, go.importObject);
   go.run(instance);
-  self.ailangSetTypeCheckBudget(8000);
+  // Large world records need headroom on mobile and shared CI CPUs (8s exceeded in CI).
+  self.ailangSetTypeCheckBudget(20000);
   const modules = [['pkg/sunholo/decisions/decide', 'ailang/pkg/sunholo/decisions/decide.ail'], ...['world','souls','render','oracle','bank','host'].map(n => [n, `${n}.ail`])];
   const stages=['Teaching the Nouls to choose…','Growing their habitat…','Finding their personalities…','Painting the little world…','Preparing their intuition…','Making room for memories…','Welcoming the Nouls…'];
   for (const [index, [name, path]] of modules.entries()) {

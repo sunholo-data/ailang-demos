@@ -183,7 +183,7 @@ class Handler(SimpleHTTPRequestHandler):
             if name in {'wasm/ailang.wasm', 'wasm/wasm_exec.js'}: target = REPO / name
             elif name in MODULES: target = ROOT / name
             elif name.startswith('assets/') and name.removeprefix('assets/') in ASSETS: target = ROOT / 'site' / name
-            elif name in {'app.js', 'transport.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
+            elif name in {'app.js', 'feedback.js', 'session.js', 'transport.js', 'motion.js', 'worker.js', 'style.css'}: target = ROOT / 'site' / name
             elif name in {'bank/synthetic.jsonl', 'bank/recorded.jsonl'}: target = ROOT / name
             elif name == 'ailang/pkg/sunholo/decisions/decide.ail': target = Path(os.environ.get('AILANG_CACHE', str(Path.home() / '.ailang/cache/registry'))) / 'sunholo/decisions/0.4.0/decide.ail'
             else: self.send_error(404); return

@@ -21,6 +21,12 @@ pure func frame(w: World) -> string {
   encode(jo([kv("ok", jb(true)), kv("world", worldToJson(w)), kv("svg", js(renderWorld(json)))]))
 }
 export pure func init() -> string = frame(demoWorld())
+-- Restore a snapshot without advancing physiology or making a model call.
+export pure func restoreWorld(s: string) -> string = match readWorld(s) {
+  Err(m) => failure(m), Ok(w) =>
+    if length(w.creatures) < 1 || length(w.creatures) > 8 || length(w.entities) > 40 || w.size != 60.0 || w.tick < 0
+    then failure("Invalid habitat snapshot") else frame(w)
+}
 export func seed(n: int) -> string ! {Rand @limit=1} { rand_seed(n); "seeded" }
 
 func randomMove(c: Creature, w: World) -> Move ! {Rand @limit=1} {

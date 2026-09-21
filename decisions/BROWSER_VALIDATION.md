@@ -1,3 +1,18 @@
+## Current session/inner-life UI — 2026-09-21
+
+Session downloads now include world snapshots, bank, titles, artwork and story;
+JSONL downloads remain evidence-only. Restore is a pure AILANG adapter with no tick
+advance. The browser verifies recorded actions and validates file bounds before
+loading, and requires explicit spending approval after import or exhaustion.
+Remembered keys no longer auto-start spending on reload. The worker type-check
+budget is now 20 seconds per module after an 8-second CI failure in world.
+
+See `test-session.cjs`, `test-session-browser.cjs` and `test-wasm.cjs`. Browser tests
+use synthetic provider responses and assert one request at a crossed budget,
+lossless restore, no credentials in downloads, no request on import/reload, explicit
+renewal, preserved bank, item popups and 390/320px layouts. Older sections below
+are chronological records and may describe superseded UI/relay behavior.
+
 ## Full-window habitat (2026-09-20)
 
 The habitat fills the viewport with a compact control dock. Creature inspection

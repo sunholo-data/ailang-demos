@@ -124,7 +124,7 @@ jobs:
         run: scripts/build-decisions.sh .decisions-site/decisions
       - name: Test public transport and released WASM
         run: |
-          node --test decisions/test-transport.cjs
+          node --test decisions/test-transport.cjs decisions/test-session.cjs
           NOULS_WASM_DIR="$PWD/.decisions-site/decisions/wasm" node decisions/test-wasm.cjs
       - name: Install browser checks
         working-directory: scripts/smoke
@@ -140,6 +140,7 @@ jobs:
           export NOULS_PREVIEW_URL=http://127.0.0.1:8959/decisions/
           node decisions/test-public-browser.cjs
           node decisions/test-identity-browser.cjs
+          node decisions/test-session-browser.cjs
           node decisions/test-browser.cjs
           node decisions/test-fullscreen-browser.cjs
           node decisions/test-item-art.cjs
