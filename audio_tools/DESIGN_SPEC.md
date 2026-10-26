@@ -2,15 +2,18 @@
 
 Status: proposed design, revised 2026-10-26. Documentation only; no application
 implementation or deployment is included. **Loop Lab is the primary interactive
-audio demo.** The demos repo highlights its features and links to the application;
-a separate audio-processing workbench is optional follow-up work.
+audio application.** The demos page also includes a small, working audio demo
+so visitors can try AILANG audio in the same place as the other demos. A full
+processing workbench remains optional follow-up work.
 
 ## Outcome
 
 Add an audio card to the demos hub and a small feature page at
 `/ailang-demos/audio-tools/`. Show what visitors can do with Loop Lab, explain
-which reusable AILANG package features support it, and provide a clear destination:
-source/setup now, a public playable app when that deployment exists.
+which reusable AILANG package features support it, and let visitors make/process/
+play a short sound directly on the page. Link onward to Loop Lab: source/setup
+now, a public playable app when that deployment exists. The on-page demo must
+work independently of Loop Lab hosting.
 
 Keep one maintained Loop Lab application in
 [sunholo-data/ailang-loop-lab](https://github.com/sunholo-data/ailang-loop-lab).
@@ -37,27 +40,63 @@ and **public app deployment** in UI copy and release notes. A “Play Loop Lab�
 button must not point at a repo, localhost or private preview while suggesting an
 immediately playable website.
 
-## First delivery: highlight and link
+## First delivery: working quick demo, highlights and link
 
 This can ship before a browser-only port or hosted backend.
 
 1. Add **Audio · Loop Lab** to `site/index.html`, using existing Sunholo/AILANG
    branding and navigation. Describe it as a four-part loop instrument prototype.
 2. Link the card to `/audio-tools/` relative to the deployed demos root. The page
-   shows a small set of concrete features, an approved screenshot or original
-   fixture audio, and links to the public repo, source release and local setup.
-3. Primary action until deployment: **Run Loop Lab locally** → repo setup guide.
-   Secondary actions: **View source release** and **Explore the audio package**.
+   contains the working quick demo below, a small set of Loop Lab feature
+   highlights, and links to the public repo, source release and local setup.
+3. Primary on-page action: **Make a sound**, then **Play original / Play processed**.
+   The separate Loop Lab call to action is **Run Loop Lab locally** → repo setup
+   guide, with **View source release** and **Explore the audio package** links.
 4. Show a factual status label: **Open source · local setup required**. When a
    public app exists, change the primary action to **Play Loop Lab** using its
    canonical HTTPS URL; keep source/setup links available.
 5. Explain the broader processing package with concise examples/source links.
    Do not build a second instrument or JavaScript-only DSP simulation for the card.
 
-No WASM or microphone permission is required just to browse this feature page.
-It is a static showcase of a real AILANG consumer, not a replacement application.
-Implementation-only widgets require actual AILANG execution and tests before they
-can be presented as interactive demonstrations.
+Browsing the page requires no microphone permission or API key. The quick demo
+runs real AILANG in a worker, not a prerecorded playback or JavaScript DSP stand-in.
+It is a compact package example alongside the main application showcase.
+
+### Required quick demo: make, echo and play a sound
+
+Keep this small enough to finish and understand quickly:
+
+1. Choose an original **Tone / Pluck / Noise** preset and optionally enable **Echo**.
+2. Press **Make a sound**. AILANG checks and renders the recipe, applies the
+   package gain ramp/delay and an explicit peak policy, then encodes a WAV.
+3. Explicitly **Play original** or **Play processed**, with the same conservative
+   audition gain and a Stop control. No autoplay.
+4. Show duration, sample peak, applied effect and the package version. Offer
+   **Download WAV** for the prepared result and **Open Loop Lab** for the larger app.
+   Until that app is hosted, label its action **Run Loop Lab locally**.
+
+Initial proposal: 24 kHz mono, source at most one second, at most two recipe
+layers, delay at most 6,000 frames, and an explicit tail of at most 6,000 frames.
+Total output is at most 30,000 frames / 60,044 PCM16 WAV bytes. Dry/wet and
+feedback are bounded preset values (for example wet 0.35, feedback 0.35); do not
+start with a general effects graph. Apply an explicit 0.25 sample-peak ceiling
+before output. Re-preparing starts from the original, never the prior result.
+Report the explicit tail as deliberately truncated, not fully decayed. These are
+demo policy limits to validate during implementation, not heap/time proofs.
+
+A CLI `.ail` entry is the canonical reference. The browser uses the same pinned
+package calls via a dedicated WASM worker; JavaScript owns controls, transport,
+visualization and Web Audio playback. Keep one active job, a bounded replacement
+slot and job IDs so cancelled/stale results cannot replace the active audio.
+A proposed 30-second job watchdog terminates/reinitializes a stuck worker; measure
+and tune it on target browsers. Module/runtime loading needs a visible progress
+and failure state, with a separately bounded cold-start timeout.
+
+No microphone, local server, AI provider, upload or private network is needed.
+WAV import, arbitrary parameters, recording, track arrangement and AI generation
+are outside this first quick demo. Those remain Loop Lab or later package examples.
+If WASM package/byte bridging is missing, report the reproduced core gap and keep
+this deliverable pending; do not mark a source link or static clip as a working demo.
 
 ### Features to highlight accurately
 
@@ -82,15 +121,17 @@ no autoplay. Include keyboard-accessible links and text equivalents for visuals.
 ```mermaid
 flowchart LR
   H[AILANG demos hub] --> S[Audio feature page]
+  S --> Q[On-page AILANG quick demo]
+  Q --> P[sunholo/audio package docs and examples]
   S --> L[Loop Lab canonical app or setup]
-  S --> P[sunholo/audio package docs and examples]
+  S --> P
   L --> P
   A[AI speech / game / offline consumers] --> P
 ```
 
 | Repository/runtime | Owns |
 |---|---|
-| `ailang-demos` | Discovery, audio feature page, package highlights, source/app links; optional small headless package demonstrations later |
+| `ailang-demos` | Working quick demo, feature highlights, discovery and source/app links; optional deeper package demonstrations later |
 | `ailang-loop-lab` | The maintained instrument application, browser/device lifecycle, sessions, musical workflow and public deployment |
 | `ailang-packages/packages/audio` | Generic checked processing, synthesis, codecs/adapters, levels, effects and reusable reports |
 | `std/audio` / core | Shared runtime/codec/numeric boundaries; missing primitives reported upstream through AILANG messages |
@@ -133,11 +174,11 @@ local setup. Then update the demos page's call to action. Public microphone use
 needs HTTPS and explicit permission; opening the showcase page itself never
 requests microphone access.
 
-## Optional package-focused demonstrations
+## Runtime/build for the quick demo and optional extensions
 
-A separate offline workbench is not a prerequisite for the audio showcase.
-Add one only where a generic capability deserves a small demonstration beyond
-what Loop Lab already shows. Good candidates are:
+The short interactive example above is required in the first delivery. A larger
+offline workbench is optional. Once the quick demo is working, possible extensions
+include:
 
 - A short checked recipe → filter/delay → gain preparation → delivered WAV example.
 - A supported PCM16 WAV import with input/output measurements and explicit export.
@@ -149,11 +190,14 @@ playback and presentation; do not duplicate DSP in JavaScript when AILANG fails.
 No automatic uploads, model calls or keys are needed for an offline fixture.
 
 The demos root `.ailang-version` is v0.35.2 at the audited revision; audio 0.4.0
-requires v0.54.18+. If an interactive package widget is added, give it a dedicated
-pinned CLI/WASM pair and portable registry lock, following `decisions/` and its
-isolated artifact builder. Test actual bulk bytes/Array/Result conversions and
-module loading before promising browser support. Do not replace the shared
-runtime for all demos as a side effect of a landing page.
+requires v0.54.18+. Give the required quick demo a dedicated pinned CLI/WASM
+pair and portable registry lock, following `decisions/` and its isolated artifact
+builder. Add `audio_tools/ailang.toml`, `main.ail`, a bounded `host.ail`, native
+tests and `scripts/build-audio-tools.sh`; keep the page/worker assets under
+`site/audio-tools/`. Resolve exact `sunholo/audio@0.4.0` with source=registry.
+Test actual bulk bytes/Array/Result conversions, complete module loading and the
+delivered WAV against CLI/independent references before calling browser support
+complete. Do not replace the shared runtime for all demos.
 
 For any optional AI input, use one explicit provider adapter first, disclose what
 is sent and any cost, honor the repo's `<provider>-api-key` storage convention,
@@ -183,25 +227,36 @@ Audited demos main: `3e2a45688b0a30ac4830367162c70f2992123281`.
 
 | Milestone | Changes and concrete acceptance |
 |---|---|
-| A — feature showcase | Add hub card and `site/audio-tools/index.html`; approved copy/visuals/source-release links, clear local-setup status, no autoplay/mic/key prompt |
+| A0 — quick-demo CLI/WASM proof | Native fixture pipeline and independent WAV reference, exact package/runtime pins, actual worker module/byte bridge and measured bounds |
+| A1 — working demo + showcase | Hub card and feature page with make/echo/play/stop/download, accurate Loop Lab highlights and setup link; no autoplay/mic/key prompt; deploy the tested artifact |
 | B — public Loop Lab app | In its own repo, validate the chosen planner host, build/test the deployable artifact, deploy and record canonical public HTTPS URL; no local/private service required |
-| C — point to the live app | Update demos primary link/status; exercise an external link check and confirm a clean-browser session can start the app |
-| D — optional package/AI widgets | Only if useful beyond Loop Lab; CLI/WASM spike and independent reference tests first, with exact package/runtime pins and bounded inputs |
+| C — point to the live app | Update the Loop Lab link/status; confirm a clean-browser session can start the app; the quick demo stays on the demos page |
+| D — optional deeper package/AI examples | Add only after A1; reusable DSP remains in the package and the instrument remains in Loop Lab |
 
-For milestone A, reuse `scripts/serve.sh`'s existing support for `site/*/` pages
-and the Pages workflow's `site/**` path coverage. Its assembly currently copies
-selected sub-pages explicitly, so add a copy step from `site/audio-tools/` to
-`_site/audio-tools/`; the path filter alone does not deploy a new directory.
-Verify the assembled artifact. Add a `kind: 'static'` entry to
-`scripts/smoke/smoke.mjs`; a static feature page does not need a fake WASM readiness
-flag or a new audio package build job. Verify hub/card links under both local `/`
-and deployed `/ailang-demos/` base paths. Add a README source/discovery link.
+For A0/A1, add a dedicated pinned audio test/build job. It runs native
+checks/properties, applicable runtime contracts, full package quality and independent
+WAV comparisons, then builds one self-contained artifact with the required package
+modules and the exact checksum-verified WASM/runtime pair. Run actual worker/browser
+tests on that artifact. The public build requires no sibling checkout or operator key.
 
-Static-page checks cover labels, keyboard/mobile layout, accurate feature/release
-status, valid assets/source links and no private-preview/local URLs in public
-calls to action. If a fixture audio clip is used, check its license/provenance,
-metadata and explicit playback control. Do not require the current local Loop Lab
-server just to build or test the feature page.
+Use the Pages workflow's existing `site/**` trigger and add `audio_tools/**` plus
+`scripts/build-audio-tools.sh` path coverage. Make deployment depend on the audio
+job and download its exact tested artifact into `_site/audio-tools/`; its current
+assembly copies selected sub-pages explicitly, so a new source folder alone is
+not deployed. Update `scripts/serve.sh` to assemble the same audio artifact with
+its dedicated runtime, rather than the root's older shared runtime.
+
+Add a WASM entry to `scripts/smoke/smoke.mjs`. Set `__demoReady` only after the
+worker loads its modules and a tiny checked fixture round-trip succeeds;
+`__demoError` reports initialization failure without private data. Test the path
+under both local `/` and deployed `/ailang-demos/` bases. Add a README link.
+
+Browser acceptance must actually generate a preset, enable/disable echo, compare
+original/processed identity and playback controls, validate the downloaded WAV,
+stop/cancel/retry, reject stale results and clean up playback/object URLs. Also
+check keyboard/mobile layout, copy/link accuracy and no autoplay/microphone/API-key
+prompt or private/local endpoint. The quick demo remains usable even if the
+external Loop Lab destination is unavailable or not deployed yet.
 
 For B, Loop Lab CI must test planner parity/guards, renderer acknowledgements,
 permission cancellation, stale jobs, stop/reset, export ownership and actual
@@ -209,12 +264,12 @@ browser startup in the exact published artifact. Report physical microphone and
 audible-quality trials separately. Updating C requires a real public app URL, not
 merely a passing verification job or a GitHub source release.
 
-For D, the pinned demo CLI job runs native tests/properties, applicable runtime
+The pinned demo CLI job runs native tests/properties, applicable runtime
 contracts, quality and independent delivered-WAV comparisons. On v0.54.18,
 `ailang pkg quality` executes tests/smoke and invokes the verifier; repo prose
 saying it only inventories source is stale. Keep section counts, skips and
 warnings visible. The Pages build must deploy the exact tested widget artifact.
 
-This sequence gets Loop Lab visible as the main AILANG audio demo immediately,
-while keeping application deployment and optional package widgets independently
-reviewable and avoiding a second instrument to maintain.
+This sequence keeps a working audio example alongside the other demos in one
+location, with Loop Lab as the main application and clear onward destination.
+Application deployment and deeper examples remain independently reviewable.
