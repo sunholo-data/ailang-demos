@@ -1,0 +1,51 @@
+module sunholo/audio_tools_demo/host_test
+import std/result (Ok, Err)
+import std/bytes (length as byteLength, toBase64)
+import std/json (decode, getInt, getNumber, getBool, getString)
+import std/option (Some, None)
+import ./host (render, probe, presetValid, fixture)
+import pkg/sunholo/audio/clip (Mono, defaultClipLimits)
+import pkg/sunholo/audio/clip_pcm (fromWav16)
+import pkg/sunholo/audio/safety (InvalidRecipe)
+
+test "tiny real processing and WAV round-trip probe passes" { probe(0) }
+test "tone creates independent bounded WAVs and delivered metadata" {
+  match render("tone",false) {
+    Err(_) => false, Ok(out) => match (fromWav16(out.original,defaultClipLimits()),fromWav16(out.processed,defaultClipLimits()),decode(out.report)) {
+      (Ok(a),Ok(b),Ok(r)) => a.rate == 24000 && a.layout == Mono && a.frames == 15600 && b.frames == a.frames
+        && byteLength(out.processed) == 31244 && getInt(r,"frames") == Some(15600) && getBool(r,"echo") == Some(false)
+        && (match getNumber(r,"peak") { Some(p) => p > 0.1 && p <= 0.25, _ => false })
+        && getString(r,"originalSha256") != getString(r,"wavSha256"), _ => false
+    }
+  }
+}
+test "echo includes an explicit bounded tail and distinct output" {
+  match render("pluck",true) {
+    Err(_) => false, Ok(out) => match (fromWav16(out.processed,defaultClipLimits()),decode(out.report)) {
+      (Ok(c),Ok(r)) => c.frames == 21600 && byteLength(out.processed) == 43244 && getInt(r,"tailFrames") == Some(6000)
+        && getBool(r,"tailTruncated") == Some(true) && getBool(r,"echo") == Some(true), _ => false
+    }
+  }
+}
+test "fixed-seed noise is deterministic and never requires a random capability" {
+  match (render("noise",true),render("noise",true)) {
+    (Ok(a),Ok(b)) => a.report == b.report && toBase64(a.processed) == toBase64(b.processed), _ => false
+  }
+}
+test "echo toggle starts a fresh job instead of compounding previous state" {
+  match (render("tone",false),render("tone",true),render("tone",false)) {
+    (Ok(a),Ok(b),Ok(c)) => toBase64(a.processed) == toBase64(c.processed) && toBase64(a.processed) != toBase64(b.processed), _ => false
+  }
+}
+test "untrusted preset names fail before recipe parsing or rendering" {
+  (match render("",false) { Err(InvalidRecipe(_)) => true, _ => false })
+  && (match render("<script>noise</script>",true) { Err(InvalidRecipe(_)) => true, _ => false })
+  && (match render("../../tone",false) { Err(InvalidRecipe(_)) => true, _ => false })
+}
+test "CLI fixture is valid JSON on success and error" {
+  (match decode(fixture({preset:"bad",echo:false})) { Ok(r) => getString(r,"error") != None, _ => false })
+  && (match decode(fixture({preset:"pluck",echo:false})) { Ok(r) => getString(r,"original") != None && getString(r,"processed") != None, _ => false })
+}
+property "arbitrary unknown preset strings always return a typed failure" {
+  forall(n: int) => match render("unknown-${show(n)}",n%2 == 0) { Err(InvalidRecipe(_)) => true, _ => false }
+}

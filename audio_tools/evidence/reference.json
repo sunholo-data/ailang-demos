@@ -1,0 +1,49 @@
+{
+  "engine": "v0.54.18 strict bytecode; runtime contracts enabled",
+  "reference": "Independent scalar gain/feedback/PCM16 recurrence reconstructed from quantized original",
+  "allowedErrorS16": 2,
+  "results": [
+    {
+      "preset": "tone",
+      "echo": false,
+      "frames": 15600,
+      "wavSha256": "7918b8e313a0e4e57effe2a81df21caef99cb94622260224b02c11334d24074f",
+      "largestReferenceErrorS16": 1
+    },
+    {
+      "preset": "tone",
+      "echo": true,
+      "frames": 21600,
+      "wavSha256": "02bce524311d1ed44688e2dbcea6c2c6ada4e9abf72c940ceea87069c350d629",
+      "largestReferenceErrorS16": 1
+    },
+    {
+      "preset": "pluck",
+      "echo": false,
+      "frames": 15600,
+      "wavSha256": "20353347187e87be773323af5ce949dc477e1df076c75171d315cd6330ea78ee",
+      "largestReferenceErrorS16": 1
+    },
+    {
+      "preset": "pluck",
+      "echo": true,
+      "frames": 21600,
+      "wavSha256": "ab5ceeba67f5a9c48f4e2c477da45ef8e699020b181685e0bf8ac81590bdfbea",
+      "largestReferenceErrorS16": 1
+    },
+    {
+      "preset": "noise",
+      "echo": false,
+      "frames": 15600,
+      "wavSha256": "3d3b9ae197d491a05d12ba9965a2ddc00c67e11d869abe2bf0daa247a9c4fe38",
+      "largestReferenceErrorS16": 1
+    },
+    {
+      "preset": "noise",
+      "echo": true,
+      "frames": 21600,
+      "wavSha256": "7966bedbf4e52e9902951be11a28cefd44d0debdf10a3c97964e7560b8217a10",
+      "largestReferenceErrorS16": 1
+    }
+  ]
+}

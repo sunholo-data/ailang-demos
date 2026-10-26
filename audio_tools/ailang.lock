@@ -1,0 +1,37 @@
+{
+  "ailang_version": "v0.54.18",
+  "generated_at": "2026-10-26T08:04:51.133362Z",
+  "generator": "ailang lock v0.54.18",
+  "packages": [
+    {
+      "ailang": ">=0.54.18",
+      "content_hash": "sha256:67c03510f1402ff908b8a84c872e8bc6b508e6f5cbbab55f06382bcd613655f5",
+      "effects": [
+        "IO"
+      ],
+      "exports": [
+        "sunholo/audio/analysis",
+        "sunholo/audio/automation",
+        "sunholo/audio/block",
+        "sunholo/audio/clip",
+        "sunholo/audio/clip_pcm",
+        "sunholo/audio/delay",
+        "sunholo/audio/dsp",
+        "sunholo/audio/edit",
+        "sunholo/audio/levels",
+        "sunholo/audio/mix",
+        "sunholo/audio/noise",
+        "sunholo/audio/pcm",
+        "sunholo/audio/recipe",
+        "sunholo/audio/reference",
+        "sunholo/audio/safety"
+      ],
+      "interface_hash": "sha256:887f483dd5d75ba03983e37e5a08cd7d421e5135cfbb86c65218dbb63cd5d205",
+      "name": "sunholo/audio",
+      "source": "registry",
+      "version": "0.4.0"
+    }
+  ],
+  "schema": "ailang.lock/v1",
+  "schema_version": "1.0.0"
+}

@@ -1,7 +1,9 @@
 # AILANG audio showcase: Loop Lab as the main demo
 
-Status: proposed design, revised 2026-10-26. Documentation only; no application
-implementation or deployment is included. **Loop Lab is the primary interactive
+Status: sprint implementation in progress, 2026-10-26. Native processing, UI and
+build/integration are implemented; actual released-WASM/browser acceptance is
+blocked on upstream loader defects. See [sprint plan](SPRINT_PLAN.md) and
+[validation](VALIDATION.md). No public deployment has occurred. **Loop Lab is the primary interactive
 audio application.** The demos page also includes a small, working audio demo
 so visitors can try AILANG audio in the same place as the other demos. A full
 processing workbench remains optional follow-up work.

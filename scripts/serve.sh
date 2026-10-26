@@ -136,6 +136,10 @@ for demo in claude_chat gemini_live safe_agent voice_docparse ambient_assistant;
   fi
 done
 
+# Audio quick demo uses its own pinned runtime and registry dependency.
+(cd "$REPO_ROOT/audio_tools" && ailang lock)
+"$REPO_ROOT/scripts/build-audio-tools.sh" "$SITE/audio-tools"
+
 # Ecommerce landing page (CLI demo — no WASM)
 mkdir -p "$SITE/ecommerce"
 ln -s "$REPO_ROOT/ecommerce/browser/index.html" "$SITE/ecommerce/index.html"

@@ -1,0 +1,82 @@
+{
+  "schema": "ailang.package-quality/v1",
+  "package": "sunholo/audio_tools_demo",
+  "version": "0.1.0",
+  "stability": "",
+  "mode": "publisher",
+  "compile": {
+    "source": "server",
+    "ok": true,
+    "files": 3
+  },
+  "contracts": {
+    "source": "server",
+    "evidence_schema": "ailang.verification-evidence/v1",
+    "numeric_model": {
+      "float_sort": "Real",
+      "int_sort": "Int",
+      "runtime_equivalence": "not_established"
+    },
+    "runtime_contracts": "not_measured",
+    "reason_counts": {
+      "unsupported_encoding": 3
+    },
+    "verified": 1,
+    "total": 4,
+    "counterexample": 0,
+    "skipped": 3,
+    "errors": 0,
+    "uncontracted_exports": 0,
+    "wall_seconds": 0.045060584
+  },
+  "tests": {
+    "source": "attested",
+    "files": 1,
+    "passed": 8,
+    "failed": 0
+  },
+  "smoke": {
+    "source": "attested",
+    "present": true,
+    "passed": true,
+    "seconds": 0.657292
+  },
+  "interface": {
+    "source": "server",
+    "hash_v1": "sha256:365023599e9ebe30186387008ab2c515db4258a4956404e095f256594cc8cead",
+    "hash_v2": "sha256:ifacev2:298b32189e160b660385dd852fbc8ae7b281076168ebf18cb16d2e0e116deb63",
+    "signatures": 6
+  },
+  "effects": {
+    "source": "server",
+    "max": [
+      "IO"
+    ],
+    "ceiling_declared": true,
+    "rank_max": "IO"
+  },
+  "release": {
+    "source": "server",
+    "kind": "feature",
+    "changelog_section": true,
+    "notes": "Feature: bounded on-page sound generation, echo and WAV output using sunholo/audio.\nApplication/source release only; no registry publication."
+  },
+  "docs": {
+    "agent_md": true,
+    "ai_summary": true,
+    "agent_doc_exports_covered": 1
+  },
+  "style": {
+    "exported_funcs": 4,
+    "pure_exports": 4,
+    "pure_ratio": 1
+  },
+  "gates": [],
+  "badges": [
+    {
+      "code": "PUB016",
+      "level": "info",
+      "msg": "3 contract(s) skipped by the verifier — not proved; `ailang verify --package .` lists the reason per function"
+    }
+  ]
+}

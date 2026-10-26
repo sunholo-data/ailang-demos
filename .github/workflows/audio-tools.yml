@@ -1,0 +1,91 @@
+name: Verify Audio Tools
+on:
+  pull_request:
+    paths:
+      - 'audio_tools/**'
+      - 'site/audio-tools/**'
+      - 'scripts/build-audio-tools.*'
+      - 'scripts/serve.sh'
+      - 'scripts/smoke/**'
+      - '.github/workflows/audio-tools.yml'
+      - '.github/workflows/deploy-invoice-processor.yml'
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  audio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pinned native runtime and solver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(tr -d '[:space:]' < audio_tools/.ailang-version)
+          mkdir -p "$RUNNER_TEMP/audio-cli"
+          gh release download "$VERSION" --repo sunholo-data/ailang -p linux.x64.ailang.tar.gz -p SHA256SUMS -D "$RUNNER_TEMP/audio-cli"
+          cd "$RUNNER_TEMP/audio-cli"
+          sha256sum --ignore-missing -c SHA256SUMS
+          tar xzf linux.x64.ailang.tar.gz
+          echo "$RUNNER_TEMP/audio-cli" >> "$GITHUB_PATH"
+          sudo apt-get update -qq
+          sudo apt-get install -y z3
+      - name: Native checks and strict quality
+        working-directory: audio_tools
+        run: |
+          ailang version
+          ailang lock
+          ailang lock --check
+          ailang check --package .
+          ailang test --strict-bytecode --package .
+          ailang pkg quality --strict --json . > quality-local.json
+      - name: Independent reference and worker lifecycle
+        run: |
+          python3 audio_tools/test/reference.py
+          node --test audio_tools/test/controller.test.mjs
+      - name: Build exact static artifact
+        id: build
+        run: scripts/build-audio-tools.sh .audio-tools-site/audio-tools
+      - name: Real pinned WASM acceptance
+        env:
+          AUDIO_ARTIFACT: ${{ github.workspace }}/.audio-tools-site/audio-tools
+        run: node audio_tools/test/wasm.cjs
+      - name: Install locked browser tools
+        id: browser
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          npm ci --prefix scripts/smoke
+          scripts/smoke/node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser UI and actual runtime acceptance
+        if: always() && steps.build.outcome == 'success' && steps.browser.outcome == 'success'
+        run: |
+          python3 -m http.server 8984 --bind 127.0.0.1 --directory .audio-tools-site > /tmp/audio-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8984/audio-tools/ -o /dev/null && break || sleep 0.5; done
+          AUDIO_UI_FIXTURES=1 node audio_tools/test/browser.cjs
+          mkdir -p .audio-tools-site/ailang-demos
+          ln -s ../audio-tools .audio-tools-site/ailang-demos/audio-tools
+          AUDIO_UI_FIXTURES=1 AUDIO_PREVIEW_URL=http://127.0.0.1:8984/ailang-demos/audio-tools/ node audio_tools/test/browser.cjs
+          node audio_tools/test/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audio-tools-evidence
+          retention-days: 7
+          path: |
+            audio_tools/quality-local.json
+            audio_tools/evidence/reference.json
+            audio_tools/evidence/screenshots/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audio-tools-public
+          retention-days: 7
+          path: .audio-tools-site/audio-tools

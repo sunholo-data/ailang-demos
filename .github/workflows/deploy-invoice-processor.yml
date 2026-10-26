@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths:
+      - 'audio_tools/**'
+      - 'site/audio-tools/**'
+      - 'scripts/build-audio-tools.*'
+      - '.github/workflows/audio-tools.yml'
       - 'decisions/**'
       - 'scripts/build-decisions.sh'
       - 'wasm/**'
@@ -97,6 +101,9 @@ jobs:
       - name: Type-check all demo entry points
         run: scripts/check_demos.sh --verbose
 
+  test-audio-tools:
+    uses: ./.github/workflows/audio-tools.yml
+
   test-decisions:
     runs-on: ubuntu-latest
     steps:
@@ -152,7 +159,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [test, test-decisions]
+    needs: [test, test-decisions, test-audio-tools]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -527,6 +534,12 @@ jobs:
           find _site -type f | head -60 || true
           echo "::endgroup::"
           echo "Assembled $(find _site -type f | wc -l) files into _site/"
+
+      - name: Include tested audio artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: audio-tools-public
+          path: _site/audio-tools
 
       - name: Include tested decisions artifact
         uses: actions/download-artifact@v4
