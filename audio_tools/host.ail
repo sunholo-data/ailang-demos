@@ -1,0 +1,120 @@
+module sunholo/audio_tools_demo/host
+import std/array (fromList, toList, get)
+import std/list (map, range, mapAccumL, flatMap)
+import std/result (Result, Ok, Err)
+import std/bytes (length as byteLength, toBase64)
+import std/crypto (sha256Bytes)
+import std/json (decode, encode, jo, kv, js, jnum, jint, jb)
+import pkg/sunholo/audio/clip (Clip, ClipLimits, Mono, fromMono)
+import pkg/sunholo/audio/edit (pad, trim)
+import pkg/sunholo/audio/recipe (parseRecipesChecked, renderChecked)
+import pkg/sunholo/audio/safety (AudioError, InvalidRecipe, InvalidClip)
+import pkg/sunholo/audio/clip_pcm (Reject, toWav16, fromWav16)
+import pkg/sunholo/audio/levels (LevelReport, PeakSafe, defaultConfig, prepare, measure)
+import pkg/sunholo/audio/block (defaultBlockLimits)
+import pkg/sunholo/audio/automation (GainState, startGain, setGain, processGain)
+import pkg/sunholo/audio/delay (DelayState, defaultDelayLimits, startDelay, processDelay)
+
+export type AudioOutput = {original: bytes, processed: bytes, report: string}
+type Effects = {gain: GainState, delay: DelayState}
+
+pure func limits() -> ClipLimits = {maxFrames: 30000, maxSamples: 30000}
+
+export func presetValid(name: string) -> bool ! {}
+ensures { result == (name == "tone" || name == "pluck" || name == "noise") }
+{ name == "tone" || name == "pluck" || name == "noise" }
+
+pure func recipeText(name: string) -> string {
+  let layers = if name == "tone" then "[{\"kind\":\"sine\",\"freq\":440,\"amp\":1},{\"kind\":\"sine\",\"freq\":660,\"amp\":0.25}]"
+    else if name == "pluck" then "[{\"kind\":\"sine\",\"freq\":220,\"amp\":1,\"env\":{\"attack\":0.002,\"tau\":0.08}}]"
+    else "[{\"kind\":\"white\",\"amp\":1,\"seed\":7,\"lowpass_hz\":1400,\"env\":{\"attack\":0.003,\"tau\":0.1}}]";
+  "{\"schema\":\"sunholo.audio.recipes/1\",\"recipes\":[{\"id\":\"quick-demo\",\"rate\":24000,\"seconds\":0.65,\"peak_db\":-18,\"fade_ms\":12,\"layers\":${layers}}]}"
+}
+
+pure func source(name: string) -> Result[Clip, AudioError] {
+  let budget = {maxInputBytes: 16384, maxFrames: 24000, maxLayers: 2, maxLayerFrames: 96000};
+  if not presetValid(name) then Err(InvalidRecipe("Choose tone, pluck or noise"))
+  else match parseRecipesChecked(recipeText(name), budget) {
+    Err(e) => Err(e), Ok(recipes) => match recipes {
+      r :: [] => match renderChecked(r,budget) { Err(e) => Err(e), Ok(xs) => fromMono(r.rate,xs,limits()) },
+      _ => Err(InvalidRecipe("Expected exactly one preset"))
+    }
+  }
+}
+
+pure func process(input: Clip, echo: bool) -> Result[Clip, AudioError] {
+  let b = {defaultBlockLimits() | maxTotalFrames: 30000};
+  let d = {defaultDelayLimits() | block: b, maxDelayFrames: 6000, maxDelaySamples: 6000};
+  match (startGain(24000,Mono,0.0,b),startDelay(24000,Mono,{delayFrames:3000,feedback:if echo then 0.35 else 0.0,dry:1.0,wet:if echo then 0.35 else 0.0},d)) {
+    (Ok(g),Ok(delay)) => match setGain(g,1.0,128,b) {
+      Err(e) => Err(e), Ok(gain) => {
+        let count = (input.frames + 4095) / 4096;
+        match mapAccumL(\acc i. match acc {
+          Err(e) => ([],Err(e)), Ok(s) => {
+            let end = if input.frames - i*4096 < 4096 then input.frames else (i+1)*4096;
+            match trim(input,i*4096,end,limits()) {
+              Err(e) => ([],Err(e)), Ok(chunk) => match processGain(s.gain,chunk,b) {
+                Err(e) => ([],Err(e)), Ok(faded) => match processDelay(s.delay,faded.clip,d) {
+                  Err(e) => ([],Err(e)), Ok(out) => (toList(get(fromList(out.clip.planes),0)),Ok({gain:faded.state,delay:out.state}))
+                }
+              }
+            }
+          }
+        },Ok({gain:gain,delay:delay}),range(0,count)) {
+          (_,Err(e)) => Err(e), (chunks,Ok(_)) => fromMono(24000,flatMap(\xs. xs,chunks),limits())
+        }
+      }
+    }, (Err(e),_) => Err(e), (_,Err(e)) => Err(e)
+  }
+}
+
+pure func encodeClip(c: Clip) -> Result[bytes, AudioError] = match prepare(c,defaultConfig(),PeakSafe(0.25),limits()) {
+  Err(e) => Err(e), Ok(p) => toWav16(p.clip,Reject,limits())
+}
+pure func delivered(b: bytes) -> Result[LevelReport, AudioError] = match fromWav16(b,limits()) {
+  Err(e) => Err(e), Ok(c) => measure(c,defaultConfig(),limits())
+}
+
+export func render(preset: string, echo: bool) -> Result[AudioOutput, AudioError] ! {}
+ensures { match result { Ok(out) => byteLength(out.original) <= 60044 && byteLength(out.processed) <= 60044 && byteLength(out.processed) >= 44, Err(_) => true } }
+{
+  match source(preset) {
+    Err(e) => Err(e), Ok(c) => match pad(c,0,if echo then 6000 else 0,limits()) {
+      Err(e) => Err(e), Ok(input) => match process(input,echo) {
+        Err(e) => Err(e), Ok(out) => match (encodeClip(input),encodeClip(out)) {
+          (Ok(original),Ok(processed)) => match (delivered(original),delivered(processed)) {
+            (Ok(before),Ok(after)) => Ok({original:original,processed:processed,report:encode(jo([
+              kv("schema",js("audio-tools-report/v1")),kv("preset",js(preset)),kv("echo",jb(echo)),kv("package",js("sunholo/audio@0.4.0")),
+              kv("rate",jint(after.rate)),kv("frames",jint(after.frames)),kv("channels",jint(1)),kv("sourceFrames",jint(c.frames)),kv("tailFrames",jint(if echo then 6000 else 0)),
+              kv("tailTruncated",jb(echo)),kv("originalPeak",jnum(before.peak)),kv("peak",jnum(after.peak)),kv("rms",jnum(after.rms)),
+              kv("originalSha256",js(sha256Bytes(original))),kv("wavSha256",js(sha256Bytes(processed))),kv("wavBytes",jint(byteLength(processed)))]))}),
+            (Err(e),_) => Err(e), (_,Err(e)) => Err(e)
+          }, (Err(e),_) => Err(e), (_,Err(e)) => Err(e)
+        }
+      }
+    }
+  }
+}
+
+export func probe(n: int) -> bool ! {}
+ensures { result }
+{
+  match fromMono(24000,[0.0,0.125,-0.125],limits()) {
+    Err(_) => false, Ok(c) => match process(c,false) {
+      Err(_) => false, Ok(out) => match encodeClip(out) { Err(_) => false, Ok(wav) => match delivered(wav) {
+        Ok(r) => r.frames == 3 && r.rate == 24000 && r.peak > 0.0 && r.peak < 0.01, _ => false
+      } }
+    }
+  }
+}
+
+-- Portable CLI fixture transport. Browser render() uses binary Uint8Array values.
+export type FixtureRequest = {preset: string, echo: bool}
+export func fixture(request: FixtureRequest) -> string ! {}
+ensures { match decode(result) { Ok(_) => true, Err(_) => false } }
+{
+  match render(request.preset,request.echo) {
+    Err(e) => encode(jo([kv("error",js(show(e)))])),
+    Ok(out) => encode(jo([kv("report",js(out.report)),kv("original",js(toBase64(out.original))),kv("processed",js(toBase64(out.processed)))]))
+  }
+}

@@ -52,3 +52,10 @@ firebase-debug.log
 # Package lock holds machine-absolute sibling paths; regenerate with `ailang lock`.
 # CI regenerates it too (see deploy workflows), so it is never relied on in git.
 /discord/ailang.lock
+
+# Generated audio quick-demo artifacts and large local fixture transport
+/.audio-tools-site/
+/audio_tools/evidence/native-fixtures.json
+/audio_tools/evidence/screenshots/
+/audio_tools/quality-local.json
+**/__pycache__/

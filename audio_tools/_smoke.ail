@@ -1,0 +1,6 @@
+module sunholo/audio_tools_demo/_smoke
+import std/io (println)
+import ./host (probe)
+export func main() -> () ! {IO @limit=1} {
+ if probe(0) then println("OK: checked preset demo processing and delivered WAV") else println("FAIL: audio demo probe")
+}

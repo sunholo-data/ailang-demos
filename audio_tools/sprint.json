@@ -1,0 +1,15 @@
+{
+  "id": "audio-tools-quick-demo",
+  "status": "blocked_on_upstream_runtime",
+  "steps": {
+    "S1": "complete",
+    "S2": "blocked: released WASM relative imports and imported Eq instance propagation",
+    "S3": "implemented; UI checks pass with native-fixture worker; real runtime blocked",
+    "S4": "integrated; public deployment gated on real runtime acceptance",
+    "S5": "partial: native/strict-quality/reference/controller/UI checks pass; actual WASM/browser fail"
+  },
+  "design": "DESIGN_SPEC.md",
+  "plan": "SPRINT_PLAN.md",
+  "scope": "A0/A1; on-page demo and Loop Lab showcase",
+  "upstreamMessage": "inbox_1793002335344_d807adcf"
+}

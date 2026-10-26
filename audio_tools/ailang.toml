@@ -1,0 +1,19 @@
+[package]
+name = "sunholo/audio_tools_demo"
+version = "0.1.0"
+edition = "1"
+ailang = ">=0.54.18"
+description = "On-page AILANG audio example with checked presets, gain ramps, echo, delivered WAV measurements and a Loop Lab showcase; application, not a registry release"
+license = "Apache-2.0"
+[exports]
+modules = ["sunholo/audio_tools_demo/host"]
+[dependencies]
+"sunholo/audio" = "0.4.0"
+[effects]
+max = ["IO"]
+[metadata]
+license_url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+repository = "https://github.com/sunholo-data/ailang-demos/tree/main/audio_tools"
+ai_summary = "Pure bounded preset generation and processing using registry sunholo/audio 0.4.0. Browser worker returns original/processed PCM16 WAV bytes plus measurements of decoded delivered audio. No inference or microphone. IO only in smoke."
+[release]
+kind = "feature"

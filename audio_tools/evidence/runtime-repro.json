@@ -1,0 +1,46 @@
+{
+  "runtime": "v0.54.18",
+  "runtimeArchiveSha256": "e375ec1127ecc0d5d4f3b2f0775aa321d35dcc3a07f5a9a19f7857b618b160b0",
+  "results": [
+    {
+      "name": "demo/foo",
+      "source": "module demo/foo\nexport pure func f(x: int) -> int { x + 1 }\n",
+      "typeCheckSteps": 12,
+      "budgetMs": 2000,
+      "success": true,
+      "exports": [
+        "f"
+      ],
+      "typeCheckMs": 3.761664
+    },
+    {
+      "name": "demo/bar",
+      "source": "module demo/bar\nimport ./foo (f)\nexport pure func g(x: int) -> int { f(x) }\n",
+      "typeCheckMs": 3.883776,
+      "typeCheckSteps": 4,
+      "budgetMs": 2000,
+      "success": false,
+      "error": "type error in g: undefined global variable: f from ./foo"
+    },
+    {
+      "name": "demo/model",
+      "source": "module demo/model\nexport type Layout = MyMono | MyStereo deriving (Eq)\nexport pure func ident(x: Layout) -> Layout { x }\n",
+      "typeCheckMs": 2.685696,
+      "typeCheckSteps": 6,
+      "budgetMs": 2000,
+      "success": true,
+      "exports": [
+        "ident"
+      ]
+    },
+    {
+      "name": "demo/client",
+      "source": "module demo/client\nimport demo/model (Layout)\nexport pure func same(a: Layout, b: Layout) -> bool { a == b }\n",
+      "typeCheckMs": 2.782464,
+      "typeCheckSteps": 10,
+      "budgetMs": 2000,
+      "success": false,
+      "error": "type error in same: at demo/client.ail:3:57: No instance for Eq[Layout] in scope. Equality (==, !=) is not defined on Layout. If this is your own type, declare it with `deriving (Eq)`, e.g. `type T = A | B(int) deriving (Eq)`."
+    }
+  ]
+}

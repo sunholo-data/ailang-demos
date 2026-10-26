@@ -73,6 +73,17 @@ Parse, extract, and validate documents with formal safety guarantees. Every extr
 | **Z3 Verify** | [Try it](https://www.sunholo.com/ailang-demos/verify.html) | Static contract verification showcase with Z3 theorem prover |
 | **AI + Contracts** | [Try it](https://www.sunholo.com/ailang-demos/contracts-ai.html) | Schema extraction with contract validation and AI integration |
 
+### Audio Tools and Loop Lab
+
+[Try the audio quick demo](https://www.sunholo.com/ailang-demos/audio-tools/) —
+make an original tone, pluck or noise, add echo, compare playback and download a
+WAV. The page uses the published `sunholo/audio@0.4.0` package through a dedicated
+AILANG WASM worker. No key, microphone or local server is required by the demo.
+
+[Loop Lab](https://github.com/sunholo-data/ailang-loop-lab) is the main instrument
+application, maintained in its own repo. Its v0.2.0 source release currently needs
+local AILANG/Python setup. [Audio build, tests and current acceptance](audio_tools/README.md).
+
 ### Streaming & Voice
 
 <p align="center">
